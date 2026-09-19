@@ -56,13 +56,21 @@ client ◄──hello_ack── { "v": "1.1", "server_versions": ["1.0","1.1"], 
 - 回放（C4/C5/T2）基于世界事件流与确定性 RNG，与协议版本正交：旧版本回放仍可由新 sim 重放，因为世界真相（事件 seq/branch）独立于对外协议。
 - 协议版本只管"对外呈现的字段集合"，不动世界内部因果——这与 §11「seed/tick/seq 不进任何戏内接口」一致：内部真相不随版本外泄。
 
-## 7. 变更登记（初稿留空，随演进追加）
+## 7. 变更登记（随演进追加）
 
 | 版本 | 变更 | 影响端 | 日期 |
 |---|---|---|---|
-| 1.0 | 协议基线（ws-protocol.md 全量消息） | client+sim | 2026-09-19 |
+| 1.0 | 协议基线（ws-protocol.md 全量消息 + rtoken/时间口径裁决） | client+sim | 2026-09-19 |
 
-## 8. 不在本文件范围
+## 8. 已批裁决记录（Claude 评审 TASK-001，2026-09-19）
+
+1. **rtoken 口径**：render 通道用 `rtoken`（不透明渲染替身）替代内部 `entity_id`。服务端维护 `rtoken ↔ 内部 id` 映射表（属世界真相，留在 sim）；前端只接触 `rtoken`，永不接触真实 id。`rtoken` 连接生命周期内有效、不可反查游戏状态、重连由 `full_snapshot` 重分配。与 C3/C10 对齐。
+2. **时间口径**：信封用 `ws_seq`（传输层单调计数，仅丢帧/乱序检测），**不是世界 tick**。世界 `tick`/`seed`/事件 `seq` 一律不进任何 WS 载荷（§11）。anchor 戏外元数据用叙事化 `story_label`，不回传原始 `tick`/`seq`（比 §11 更保守，已批）。
+3. **WS schema 进 OpenAPI**：WS 消息与 HTTP 端点共用同一 OpenAPI（`components/schemas`），经 `openapi-typescript` 生成单一生成物 `shared/protocol.ts`；前端 `net/protocol.ts` 一个 re-export 拿全。FastAPI 端 WS 路由复用同一 pydantic 模型（落地由 Claude 架构域 + cline 配置域；codegen 脚本由 kilo）。
+
+> 上述裁决已落进 `shared/openapi.json`（mock）与 `tools/gen-protocol.ts`、`client/src/net/protocol.ts`，并被类型断言单测守护（`client/src/net/__tests__/protocol-types.test.ts`）。
+
+## 9. 不在本文件范围
 
 - 消息字段定义 → `ws-protocol.md`；HTTP 端点 → `openapi.md`；生成管线 → `codegen.md`。
 - 回放/确定性内部机制 → 架构域（Claude）+ 测试域。
