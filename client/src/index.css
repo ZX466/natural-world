@@ -1,0 +1,14 @@
+@import 'tailwindcss';
+
+/* Phaser canvas 填满 CanvasHost；body 不滚（世界由摄像机管）。 */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+canvas {
+  display: block;
+}
