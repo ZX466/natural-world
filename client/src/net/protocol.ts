@@ -44,8 +44,16 @@ export type Hit = Schemas['Hit'];
 export type RToken = Schemas['RToken'];
 
 // ── HTTP（戏外 meta shell）──────────────────────────────────────
+/** 碰撞层静态资产（codex 意见⑤：HTTP 不走 WS）；前端解码 collision_b64 → Uint8Array 填 MapStatic.collision */
+export type WorldMapResponse = Schemas['WorldMapResponse'];
+export type MapChunk = Schemas['MapChunk'];
+export type MapInfo = Schemas['MapInfo'];
 export type ProfileCreate = Schemas['ProfileCreate'];
+export type ProfileUpdate = Schemas['ProfileUpdate'];
 export type ProfileListItem = Schemas['ProfileListItem'];
 export type AnchorListItem = Schemas['AnchorListItem'];
 export type AnchorCreate = Schemas['AnchorCreate'];
 export type HealthStatus = Schemas['HealthStatus'];
+
+// ── M1 叙事/控制子结构 ─────────────────────────────────────────
+export type MonologueReaction = Schemas['MonologueReaction'];

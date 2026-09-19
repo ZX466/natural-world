@@ -22,6 +22,22 @@
         }
       }
     },
+    "/api/world/map": {
+      "get": {
+        "operationId": "getWorldMap",
+        "summary": "碰撞层静态资产（codex 意见⑤：走 HTTP 不走 WS；kilo chunk 提案已批）。形状对齐 sim/api/main.py::world_map → map_static_payload",
+        "responses": {
+          "200": {
+            "description": "map",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WorldMapResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/profiles": {
       "get": {
         "operationId": "listProfiles",
@@ -255,6 +271,29 @@
           "tileset": { "type": "string" },
           "w": { "type": "integer", "minimum": 0 },
           "h": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      },
+      "MapChunk": {
+        "type": "object",
+        "description": "碰撞层 chunk：collision_b64 = base64(每格 1 字节 0/1，顺序按 chunk 内行优先)，只读静态资产",
+        "required": ["cx", "cy", "collision_b64"],
+        "properties": {
+          "cx": { "type": "integer", "minimum": 0 },
+          "cy": { "type": "integer", "minimum": 0 },
+          "collision_b64": { "type": "string", "description": "base64 编码的可通行位（1=可通行），不含 seed/tick/entity_id" }
+        },
+        "additionalProperties": false
+      },
+      "WorldMapResponse": {
+        "type": "object",
+        "description": "/api/world/map 响应：碰撞层静态资产（戏外 meta shell，对齐 sim map_static_payload）",
+        "required": ["w", "h", "tileset", "chunks"],
+        "properties": {
+          "w": { "type": "integer", "minimum": 0 },
+          "h": { "type": "integer", "minimum": 0 },
+          "tileset": { "type": "string" },
+          "chunks": { "type": "array", "items": { "$ref": "#/components/schemas/MapChunk" } }
         },
         "additionalProperties": false
       },
@@ -509,6 +548,7 @@
       },
       "MonologueMessage": {
         "type": "object",
+        "description": "M1 独白三形态呈现（§8）；content 必须第一人称世界内语言、无数值无系统词，永不直接渲染 LLM 原始思维链",
         "required": ["v", "ws_seq", "channel", "type", "form", "content"],
         "properties": {
           "v": { "type": "string" },
@@ -516,14 +556,14 @@
           "channel": { "type": "string", "enum": ["narrative"] },
           "type": { "type": "string", "enum": ["monologue"] },
           "form": { "type": "string", "enum": ["bubble", "thought", "plan"] },
-          "content": { "type": "string" },
-          "anchor_ref": { "oneOf": [{ "type": "string" }, { "type": "null" }] }
+          "content": { "type": "string", "description": "第一人称叙事化独白，无数值无系统词" }
         },
         "additionalProperties": false
       },
       "ImpulseFeedbackMessage": {
         "type": "object",
-        "required": ["v", "ws_seq", "channel", "type", "injected", "cue", "delay_ms", "reaction_monologue"],
+        "description": "M1 念头注入即时反馈（§10 意愿冲突度表现）；cue 是表现提示而非冲突度数值，reaction_monologue 为第一人称自我怀疑（非被操纵感）",
+        "required": ["v", "ws_seq", "channel", "type", "injected", "cue", "reaction_monologue"],
         "properties": {
           "v": { "type": "string" },
           "ws_seq": { "type": "integer", "minimum": 0 },
@@ -531,7 +571,6 @@
           "type": { "type": "string", "enum": ["impulse_feedback"] },
           "injected": { "type": "boolean" },
           "cue": { "type": "string", "enum": ["accepted", "hesitation", "complaint", "resistance"] },
-          "delay_ms": { "type": "integer", "minimum": 0 },
           "reaction_monologue": { "$ref": "#/components/schemas/MonologueReaction" }
         },
         "additionalProperties": false
@@ -634,49 +673,44 @@
       },
       "ProfileCreate": {
         "type": "object",
-        "required": ["name", "provider", "base_url", "model", "api_key", "params"],
+        "description": "新建 LLM Profile。api_key 明文入、后端即 Fernet 加密落库（codex K1/K2）；形状对齐 sim LLMProfile 表",
+        "required": ["name", "base_url", "model", "api_key"],
         "properties": {
           "name": { "type": "string" },
-          "provider": { "type": "string", "enum": ["openai", "deepseek", "qwen", "ollama", "lmstudio"] },
           "base_url": { "type": "string" },
           "model": { "type": "string" },
-          "api_key": { "type": "string", "description": "明文入，后端即加密；响应永不回传" },
-          "params": { "$ref": "#/components/schemas/LlmParams" }
+          "api_key": { "type": "string", "description": "明文入，后端即加密；响应永不回传（K4/K5）" },
+          "temperature": { "type": "number" },
+          "max_tokens": { "type": "integer", "minimum": 0 }
         },
         "additionalProperties": false
       },
       "ProfileUpdate": {
         "type": "object",
+        "description": "更新 Profile；字段全可选，api_key 省略即保留原密钥（K1/K3）",
         "properties": {
           "name": { "type": "string" },
-          "provider": { "type": "string", "enum": ["openai", "deepseek", "qwen", "ollama", "lmstudio"] },
           "base_url": { "type": "string" },
           "model": { "type": "string" },
           "api_key": { "type": "string", "description": "可选，省略即保留原密钥" },
-          "params": { "$ref": "#/components/schemas/LlmParams" }
+          "temperature": { "type": "number" },
+          "max_tokens": { "type": "integer", "minimum": 0 }
         },
         "additionalProperties": false
       },
       "ProfileListItem": {
         "type": "object",
-        "required": ["id", "name", "provider", "base_url", "model", "api_key_hint", "active", "params"],
+        "description": "Profile 序列化白名单（codex K5）：绝不含 api_key 明文字段；api_key_hint 仅掩码（如 sk-***last4），前端无法据此调用 LLM",
+        "required": ["id", "name", "base_url", "model", "temperature", "max_tokens", "active", "api_key_hint"],
         "properties": {
           "id": { "type": "string" },
           "name": { "type": "string" },
-          "provider": { "type": "string", "enum": ["openai", "deepseek", "qwen", "ollama", "lmstudio"] },
           "base_url": { "type": "string" },
           "model": { "type": "string" },
-          "api_key_hint": { "type": "string", "description": "仅掩码，前端无法据此调用 LLM" },
-          "active": { "type": "boolean" },
-          "params": { "$ref": "#/components/schemas/LlmParams" }
-        },
-        "additionalProperties": false
-      },
-      "LlmParams": {
-        "type": "object",
-        "properties": {
           "temperature": { "type": "number" },
-          "max_tokens": { "type": "integer", "minimum": 0 }
+          "max_tokens": { "type": "integer", "minimum": 0 },
+          "active": { "type": "boolean", "description": "单 profile 手动切换用（DESIGN §4）" },
+          "api_key_hint": { "type": "string", "description": "仅掩码 sk-***last4；不是密钥，不能用于调用" }
         },
         "additionalProperties": false
       },

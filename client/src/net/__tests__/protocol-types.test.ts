@@ -20,6 +20,7 @@ import type {
   MoveRequestMessage,
   PerceptionMessage,
   MonologueMessage,
+  ImpulseFeedbackMessage,
   Actor,
   ActorDelta,
   Structure,
@@ -27,6 +28,9 @@ import type {
   Hit,
   AnchorListItem,
   ProfileListItem,
+  ProfileCreate,
+  WorldMapResponse,
+  MapChunk,
 } from '../protocol';
 
 describe('ws-protocol 类型与出戏边界', () => {
@@ -112,5 +116,62 @@ describe('ws-protocol 类型与出戏边界', () => {
     expectTypeOf<AnchorListItem>().not.toHaveProperty('branch_id');
     expectTypeOf<ProfileListItem>().toHaveProperty('api_key_hint'); // 仅掩码
     expectTypeOf<ProfileListItem>().not.toHaveProperty('api_key'); // 明文永不回传
+  });
+
+  it('K02 #1 /api/world/map：chunk 模式、仅静态资产（无 seed/tick/entity_id）', () => {
+    expectTypeOf<WorldMapResponse>().toHaveProperty('w');
+    expectTypeOf<WorldMapResponse>().toHaveProperty('h');
+    expectTypeOf<WorldMapResponse>().toHaveProperty('tileset');
+    expectTypeOf<WorldMapResponse['chunks']>().toMatchTypeOf<readonly MapChunk[]>();
+    // chunk：cx/cy 整数 + collision_b64（base64 字符串）
+    expectTypeOf<MapChunk['cx']>().toEqualTypeOf<number>();
+    expectTypeOf<MapChunk['cy']>().toEqualTypeOf<number>();
+    expectTypeOf<MapChunk['collision_b64']>().toEqualTypeOf<string>();
+    // 出戏边界：静态资产不含世界真相
+    expectTypeOf<MapChunk>().not.toHaveProperty('seed');
+    expectTypeOf<MapChunk>().not.toHaveProperty('tick');
+    expectTypeOf<MapChunk>().not.toHaveProperty('entity_id');
+    expectTypeOf<WorldMapResponse>().not.toHaveProperty('seed');
+  });
+
+  it('K02 #2 M1 三消息：content 为第一人称字符串、无数值/系统字段', () => {
+    // perception：sense 五通道 + content（第一人称叙事）
+    expectTypeOf<PerceptionMessage['type']>().toEqualTypeOf<'perception'>();
+    expectTypeOf<PerceptionMessage['channel']>().toEqualTypeOf<'narrative'>();
+    expectTypeOf<PerceptionMessage['sense']>().toEqualTypeOf<
+      'sight' | 'sound' | 'smell' | 'touch' | 'interoception'
+    >();
+    expectTypeOf<PerceptionMessage['content']>().toEqualTypeOf<string>();
+    // monologue：三形态 + content（W7：删除戏外 anchor_ref）
+    expectTypeOf<MonologueMessage['form']>().toEqualTypeOf<'bubble' | 'thought' | 'plan'>();
+    expectTypeOf<MonologueMessage['content']>().toEqualTypeOf<string>();
+    expectTypeOf<MonologueMessage>().not.toHaveProperty('anchor_ref');
+    // impulse_feedback：cue 表现提示（W7：删除数值 delay_ms）
+    expectTypeOf<ImpulseFeedbackMessage['cue']>().toEqualTypeOf<
+      'accepted' | 'hesitation' | 'complaint' | 'resistance'
+    >();
+    expectTypeOf<ImpulseFeedbackMessage>().toHaveProperty('reaction_monologue');
+    expectTypeOf<ImpulseFeedbackMessage>().not.toHaveProperty('delay_ms');
+    // content 一律是字符串，且不携带数值型世界真相字段
+    expectTypeOf<ImpulseFeedbackMessage>().not.toHaveProperty('conflict');
+    expectTypeOf<PerceptionMessage>().not.toHaveProperty('salience');
+    expectTypeOf<PerceptionMessage>().not.toHaveProperty('uncertainty');
+  });
+
+  it('K02 #3 settings/profiles：K5 白名单、无 api_key/provider/params', () => {
+    // 响应白名单（codex K5）：绝不含 api_key 明文
+    expectTypeOf<ProfileListItem>().toHaveProperty('api_key_hint');
+    expectTypeOf<ProfileListItem>().not.toHaveProperty('api_key');
+    expectTypeOf<ProfileListItem>().not.toHaveProperty('api_key_enc');
+    // 与 sim LLMProfile 表对齐：扁平 temperature/max_tokens，无 provider/params
+    expectTypeOf<ProfileListItem>().toHaveProperty('temperature');
+    expectTypeOf<ProfileListItem>().toHaveProperty('max_tokens');
+    expectTypeOf<ProfileListItem>().toHaveProperty('active');
+    expectTypeOf<ProfileListItem>().not.toHaveProperty('provider');
+    expectTypeOf<ProfileListItem>().not.toHaveProperty('params');
+    // 创建请求：api_key 明文入（后端即加密落库）
+    expectTypeOf<ProfileCreate>().toHaveProperty('api_key');
+    expectTypeOf<ProfileCreate>().not.toHaveProperty('provider');
+    expectTypeOf<ProfileCreate>().not.toHaveProperty('params');
   });
 });
