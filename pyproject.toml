@@ -1,0 +1,39 @@
+[project]
+name = "linhe-town"
+version = "0.1.0"
+description = "临河镇 — 2D 像素模拟世界（LLM 驱动、坚信自己是人的 Agent）；DESIGN.md v2.1 冻结基线"
+requires-python = ">=3.12"
+dependencies = [
+    # --- 内核（DESIGN §4 锁定） ---
+    "pydantic>=2.9,<3",             # 数据校验，唯一真相源
+    "pydantic-settings>=2.6,<3",    # 配置与环境变量
+    "numpy>=2.1,<3",                # L0 统计模拟批量推进 + RNG（PCG64）
+    "structlog>=24.4,<26",          # 结构化日志（成本治理：每次调用记 tokens/延迟）
+    # --- API 网关 ---
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.32,<1",             # 注意：不装 uvloop（Windows 硬约束）；WS 支持靠 websockets
+    "websockets>=13,<16",           # uvicorn WS 协议实现（显式声明，替代 uvicorn[standard] 的 uvloop 依赖链）
+    # --- 持久化 ---
+    "sqlalchemy[asyncio]>=2.0.36,<3",
+    "aiosqlite>=0.20,<1",
+    "sqlite-vec>=0.1.6",            # 记忆向量检索（M3）
+    # --- LLM 客户端（OpenAI 协议通吃：OpenAI / DeepSeek / 通义 / Ollama / LM Studio） ---
+    "openai>=1.57,<2",
+    "httpx>=0.27,<1",
+    "tenacity>=9,<10",
+    # --- 密钥安全 ---
+    "cryptography>=43",             # Fernet 加密 api_key 落 SQLite
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8,<1",
+    "pyright>=1.1.390",
+    "pytest>=8.3,<9",
+    "pytest-asyncio>=0.24,<2",
+    "hypothesis>=6.120,<7",         # 属性测试（DESIGN §4 工具链）
+]
+
+[tool.uv]
+# 非可分发包：仓库根即导入根（sim/ 与 client/ 平级）。避免把 sim 装成 wheel。
+package = false

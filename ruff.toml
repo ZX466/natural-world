@@ -1,0 +1,47 @@
+# Ruff 配置（依赖/配置域 — cline TASK-001）
+# 对齐 DESIGN.md §19 禁止事项 与 docs/arch/m0-core.md §2（分流 RNG）/§4（唯一写路径）。
+
+target-version = "py312"
+line-length = 100
+src = ["sim"]
+exclude = [".venv", "client/node_modules", "**/__pycache__"]
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "RET",  # flake8-return
+    "PIE",  # flake8-pie
+    "PTH",  # flake8-use-pathlib
+    "DTZ",  # flake8-datetimez：禁 naive datetime（C5「禁 datetime.now()」）
+    "ASYNC",# flake8-async：asyncio 反模式
+    "RUF",  # ruff 自身规则
+    "TID",  # flake8-tidy-imports：banned-api 用于强制 C5 与 Windows 硬约束
+]
+
+# 本项目文档与注释用中文书写（DESIGN.md 起），全角标点与乘号是正文而非形近字错误。
+# 只白名单这些 CJK 标点/数学符号，RUF001/RUF002/RUF003 继续拦截真正危险的形近字符（如西里尔 а）。
+allowed-confusables = ["（", "）", "：", "，", "；", "×"]
+
+
+[format]
+quote-style = "double"
+indent-style = "space"
+# DESIGN.md / docs/ 是冻结基线（§18），且含示意性代码块：ruff 0.16 会格式化 Markdown 内的
+# Python 代码块，故显式排除，避免设计文档被自动改写。
+exclude = ["*.md", "docs"]
+
+[lint.isort]
+known-first-party = ["sim"]
+
+# C5 / DESIGN §19：随机性只能来自 sim.core.rng 的分流 RNG，禁 stdlib random。
+# DESIGN §4 硬约束：Windows 无 uvloop，不装。
+[lint.flake8-tidy-imports.banned-api]
+"random".msg = "C5 禁止 stdlib random：随机性必须走 sim.core.rng 的分流 RNG（DESIGN §19、docs/arch/m0-core.md §2）"
+"uvloop".msg = "Windows 硬约束：不装 uvloop（DESIGN §4）"
