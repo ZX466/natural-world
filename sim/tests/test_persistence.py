@@ -257,6 +257,7 @@ class TestReplayDeterministic:
 # T1: codex 必须项 #2 — entropy rows 同事务原子性（append 预留接口）
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.t1
 class TestEntropyRows:
     """append 支持随批携带 entropy rows，与事件同事务原子写入。"""
@@ -308,6 +309,7 @@ class TestEntropyRows:
 # ---------------------------------------------------------------------------
 # T1: codex 必须项 #3 — 快照 seq 与事件流对齐
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.t1
 class TestSnapshotSeqAlignment:
