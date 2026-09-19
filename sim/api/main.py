@@ -12,6 +12,7 @@ from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
+from sim.api.settings import router as settings_router
 from sim.api.ws import (
     ConnectionManager,
     handle_client_message,
@@ -88,6 +89,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="临河镇 sim", version="0.1.0", lifespan=lifespan)
+app.include_router(settings_router)
 
 
 @app.get("/api/health")
