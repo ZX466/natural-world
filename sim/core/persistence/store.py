@@ -20,9 +20,11 @@ from sim.core.persistence.models import Event, Snapshot
 # Protocol 定义（m0-core.md §8）
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class SnapshotData:
     """快照的数据表示。"""
+
     branch_id: str
     seq: int
     tick: int
@@ -37,21 +39,15 @@ class EventStore(Protocol):
         """分配分支内 seq，append-only 写入。events 为 WorldEvent 字典列表。"""
         ...
 
-    async def read_range(
-        self, branch_id: str, frm: int, to: int
-    ) -> list[dict]:
+    async def read_range(self, branch_id: str, frm: int, to: int) -> list[dict]:
         """读取 [frm, to] 闭区间内的事件，按 seq 升序。"""
         ...
 
-    async def write_snapshot(
-        self, branch_id: str, tick: int, blob: bytes
-    ) -> None:
+    async def write_snapshot(self, branch_id: str, tick: int, blob: bytes) -> None:
         """写入快照（gzip 压缩的全量状态）。"""
         ...
 
-    async def latest_snapshot(
-        self, branch_id: str, before_tick: int
-    ) -> SnapshotData | None:
+    async def latest_snapshot(self, branch_id: str, before_tick: int) -> SnapshotData | None:
         """获取 before_tick 之前（含）的最新快照。"""
         ...
 
@@ -59,6 +55,7 @@ class EventStore(Protocol):
 # ---------------------------------------------------------------------------
 # SQLAlchemy 实现
 # ---------------------------------------------------------------------------
+
 
 class SqlEventStore:
     """基于 SQLAlchemy 2.0 async + aiosqlite 的 EventStore 实现。"""
@@ -78,9 +75,7 @@ class SqlEventStore:
         async with self._session_factory() as session:
             # 获取当前最大 seq
             result = await session.execute(
-                select(func.coalesce(func.max(Event.seq), 0)).where(
-                    Event.branch_id == branch_id
-                )
+                select(func.coalesce(func.max(Event.seq), 0)).where(Event.branch_id == branch_id)
             )
             max_seq: int = result.scalar() or 0
 
@@ -101,9 +96,7 @@ class SqlEventStore:
 
             await session.commit()
 
-    async def read_range(
-        self, branch_id: str, frm: int, to: int
-    ) -> list[dict]:
+    async def read_range(self, branch_id: str, frm: int, to: int) -> list[dict]:
         """读取 [frm, to] 闭区间内的事件，按 seq 升序。"""
         async with self._session_factory() as session:
             result = await session.execute(
@@ -116,9 +109,7 @@ class SqlEventStore:
             rows = result.scalars().all()
             return [_event_to_dict(r) for r in rows]
 
-    async def write_snapshot(
-        self, branch_id: str, tick: int, blob: bytes
-    ) -> None:
+    async def write_snapshot(self, branch_id: str, tick: int, blob: bytes) -> None:
         """写入快照。seq 由当前最大 seq + 1 分配。"""
         compressed = gzip.compress(blob, compresslevel=6)
 
@@ -140,9 +131,7 @@ class SqlEventStore:
             session.add(snap)
             await session.commit()
 
-    async def latest_snapshot(
-        self, branch_id: str, before_tick: int
-    ) -> SnapshotData | None:
+    async def latest_snapshot(self, branch_id: str, before_tick: int) -> SnapshotData | None:
         """获取 before_tick 之前（含）的最新快照。"""
         async with self._session_factory() as session:
             result = await session.execute(
@@ -166,6 +155,7 @@ class SqlEventStore:
 # ---------------------------------------------------------------------------
 # 辅助函数
 # ---------------------------------------------------------------------------
+
 
 def _event_to_dict(event: Event) -> dict:
     """将 ORM Event 对象转为字典。"""
