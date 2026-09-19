@@ -16,7 +16,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run --passWithNoTests",
-    "codegen:protocol": "openapi-typescript ../openapi.json -o ../shared/protocol.ts"
+    "gen:protocol": "openapi-typescript ../shared/openapi.json -o ../shared/protocol.ts --immutable --export-type"
   },
   "dependencies": {
     "phaser": "^3.87.0",

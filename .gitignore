@@ -13,6 +13,8 @@ build/
 # Environment & secrets
 .env
 .env.*
+# 例外：示例文件只含键名不含值，必须入库（否则安全清单 G4 不可执行）
+!.env.example
 *.local.json
 credentials.json
 

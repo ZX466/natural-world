@@ -23,6 +23,8 @@ dependencies = [
     "tenacity>=9,<10",
     # --- 密钥安全 ---
     "cryptography>=43",             # Fernet 加密 api_key 落 SQLite
+    # --- 数据库迁移（opencode 数据域需求：docs/data/migration.md，Alembic + SQLAlchemy async） ---
+    "alembic>=1.20.0",
 ]
 
 [dependency-groups]
@@ -32,6 +34,7 @@ dev = [
     "pytest>=8.3,<9",
     "pytest-asyncio>=0.24,<2",
     "hypothesis>=6.120,<7",         # 属性测试（DESIGN §4 工具链）
+    "pytest-benchmark>=5.3.0",      # 性能基准（pi 性能域：docs/perf/bench-plan.md，nightly 跑 -m bench）
 ]
 
 [tool.uv]
