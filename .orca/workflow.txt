@@ -1,0 +1,59 @@
+# Workflow — 多 Agent 协作规范（.orca/workflow.txt）
+
+> **每个 agent 行动前必须先读本文档**，找到自己负责的内容，不要越界。
+> Claude 占主导，起组织作用。
+
+## 1. 核心要点
+
+- 每个能力域有一个 agent 负责，一个 agent 一个工作树。
+- 每个能力域只指定一个推荐 Agent，不重复分配。
+- Agent 注册表：`.orca/agent-registry.md`（内容仅由用户决定，不得随意更改；未覆盖能力保持空白，后续按需补充）。
+
+## 2. 沟通规则（重要）
+
+- **各 agent 之间尽量不要直接交流。**
+- 通过各自工作树里的 `.orca/talking.txt` 间接留言（每个工作树都有）。
+- 先不要通过 orca-cli 发信息。
+- Claude 通过 talking.txt 分配任务；agent 通过 talking.txt 接受任务，接受后即执行。
+- 每几轮对话，Claude 检查所有工作树的 `.orca/talking.txt`：删除没用的内容（避免干扰执行任务），同步精简版更新各工作树的 talking.txt —— **工作流一一对应**。
+
+## 3. Agent 分工（概览，详见 agent-registry.md）
+
+| Agent | 工作树 | 负责能力域 |
+|-------|--------|-----------|
+| Claude（主导/组织） | 主工作树 E:/zxdevelop/project7 | 架构/代码质量/逻辑/测试 + 前端/体验/发布/运维 |
+| cline | .orca/worktrees/project7/cline | 依赖/配置/文档 |
+| codex | .orca/worktrees/project7/codex | 安全/合规/风险 |
+| pi | .orca/worktrees/project7/pi | 性能 |
+| opencode | .orca/worktrees/project7/opencode | 数据/数据库 |
+| kilo | .orca/worktrees/project7/kilo | 接口/兼容性 |
+
+评审配对（谁评审谁的工作）：见 `.orca/agent-registry.md`。
+
+## 4. Git 规范
+
+- 提交身份（全局已配，无需仓库级配置）：`ZX666X <zx19836980213@outlook.com>`
+  - Gitee 账号: ZX666X；GitHub 账号: ZX466；同一邮箱绑定两账号，一条提交同时归属两平台。
+- 远程：
+  - origin = https://github.com/ZX466/natural-world.git
+  - gitee  = https://gitee.com/ZX666X/natural-world.git
+  - 推送：`git push origin main && git push gitee main`
+- GitHub 网络不通，走代理 `127.0.0.1:7897`（全局已按域名配置，仅 github.com 生效）。
+- **除 `.orca` 外，其他 `.` 开头的文件夹一律不入 git、不推送到仓库**（.gitignore 已排除）。
+
+## 5. 环境约束
+
+- **Python 项目必须用 uv 构建虚拟环境**，在虚拟环境中构建（用 uv 是必要的）。
+- Agent 用 playwright 调浏览器时只用 `D:\develop\hermes\chrome` 里的，不要访问其他地方。
+- npm 包和 venv 的删除需要先询问用户。
+
+## 6. Context 管理
+
+- 各 agent 上下文达到 **50%** 时提醒用户切换新对话，最大程度使用用户的 token。
+
+## 7. 任务流转
+
+1. Claude 分解任务 → 写入目标 agent 工作树的 `.orca/talking.txt`（任务内容 + 负责能力域）。
+2. Agent 行动前读本文件 + agent-registry.md，确认任务属于自己 → 接受并执行。
+3. 完成后在同一 talking.txt 回写结果（简短）。
+4. 越界的任务不要做；不在注册表里的能力保持空白，等用户决定。
