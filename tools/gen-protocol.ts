@@ -12,12 +12,13 @@
  *   --check 模式：生成到临时文件，与已提交的 shared/protocol.ts 比对，漂移则非零退出（CI 守卫）。
  *
  * 运行（在 client/ 下，复用其 node_modules）：
- *   npm run gen:protocol          # 生成
+ *   npm run gen:protocol          # 生成（脚本别名由 cline 配置域提供，见 client/package.json）
  *   npm run gen:protocol:check    # CI 漂移检测
  *   node tools/gen-protocol.ts --src http://127.0.0.1:8000/api/openapi.json   # 切真实源
  *
- * 仅用 node 内置模块（CJS 风格，靠 Node 24 类型擦除运行），不 import npm 包；
- * openapi-typescript / prettier 通过 client/node_modules/.bin 调用。
+ * 仅用 node 内置模块（CJS 风格，靠无旗标类型擦除运行），不 import npm 包；
+ * openapi-typescript / prettier 通过 client/node_modules 的真实 JS 入口调用。
+ * 依赖 Node ≥ 24（类型擦除自 23.6 起无旗标可用；与 client/package.json engines 对齐）。
  */
 
 const fs = require("node:fs");
