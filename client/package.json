@@ -5,7 +5,7 @@
   "type": "module",
   "description": "临河镇前端：Phaser 只画 canvas 内的世界，React 只画 canvas 外的 UI（DESIGN.md §4 硬约束）",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "dev": "vite",
@@ -16,7 +16,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run --passWithNoTests",
-    "gen:protocol": "openapi-typescript ../shared/openapi.json -o ../shared/protocol.ts --immutable --export-type"
+    "gen:protocol": "node ../tools/gen-protocol.ts",
+    "gen:protocol:check": "node ../tools/gen-protocol.ts --check",
+    "codegen:protocol": "npm run gen:protocol"
   },
   "dependencies": {
     "phaser": "^3.87.0",

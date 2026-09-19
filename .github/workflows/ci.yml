@@ -62,7 +62,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Node 24：kilo 的 tools/gen-protocol.ts 以 `node` 直接运行 .ts（无旗标类型剥离需 ≥23.6；
+          # 本地开发环境 24.19.0 实测通过）。降级到 22 会让 gen:protocol 系列脚本失效。
+          node-version: 24
           cache: npm
           cache-dependency-path: client/package-lock.json
 

@@ -70,14 +70,16 @@ uv run pytest -m bench --benchmark-compare=perf/baseline.json --benchmark-compar
 - 阈值与机器档位口径见 `docs/perf/budget.md` §1 与 `docs/perf/bench-plan.md` §3；跨机器不要直接比绝对值。
 - 所有 bench 必须固定 seed（C5：禁 `random.*`，ruff banned-api 会拦）。
 
-## 4. 协议类型生成（接口域，落地中）
+## 4. 协议类型生成（接口域）
 
 ```bash
-npm run gen:protocol     # client/ 下执行：openapi-typescript → shared/protocol.ts
+npm run gen:protocol         # 生成 shared/protocol.ts（banner + prettier 已含）
+npm run gen:protocol:check   # 漂移检测：生成到临时文件比对，不一致则非零退出（CI 守卫候选）
 ```
 
 - 真相源是 sim 端 pydantic 模型；`shared/protocol.ts` **只读、不手写**（DESIGN §19）。
-- 管线契约与 CI 守卫见 `docs/api/codegen.md`；脚本本体由接口域（kilo）补全，当前为占位（依赖 `shared/openapi.json` 尚未产出）。
+- 脚本本体 `tools/gen-protocol.ts` 由接口域（kilo）维护；M0 阶段源为手写 mock `shared/openapi.json`，sim 起服务后切真实导出（切换点见 `docs/api/codegen.md`）。
+- **要求 Node ≥ 24**：脚本以 `node` 直接运行 `.ts`（无旗标类型剥离；`engines` 与 CI 的 setup-node 均已对齐）。
 - 前端引用一律走 `@shared/protocol`（ESLint 已禁相对路径引 `shared/`）。
 
 ## 5. 密钥与本地配置
