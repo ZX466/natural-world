@@ -28,9 +28,9 @@ jobs:
       - name: 同步虚拟环境（严格按锁文件）
         run: uv sync --frozen
 
-      - name: 记录机器档位（bench-plan §3 口径要求）
+      - name: 记录机器档位（bench-plan §3 口径要求；写入 docs/perf/runner.txt，属入库基线信息）
         run: |
-          mkdir -p perf
+          mkdir -p docs/perf
           {
             echo "date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "runner: ubuntu-latest"
@@ -38,8 +38,8 @@ jobs:
             echo "cpu: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs)"
             echo "python: $(uv run python -V)"
             echo "uv: $(uv --version)"
-          } > perf/runner.txt
-          cat perf/runner.txt
+          } > docs/perf/runner.txt
+          cat docs/perf/runner.txt
 
       - name: 跑基准
         run: uv run pytest -m bench --benchmark-json=perf/bench.json
@@ -51,7 +51,7 @@ jobs:
           path: perf/
           if-no-files-found: warn
 
-      - name: 基线对比（首个基线建立后启用）
+      - name: 基线对比（docs/perf/baseline.json 入库后启用）
         run: |
-          echo "首个基线（perf/bench.json）入库前，本步骤只提示，不做回归判定。"
-          echo "建立基线后改为：uv run pytest -m bench --benchmark-compare=perf/baseline.json --benchmark-compare-fail=median:20%"
+          echo "首个基线（docs/perf/baseline.json，由性能域在审阅 nightly 产物后提交入库）建立前，本步骤只提示，不做回归判定。"
+          echo "建立基线后改为：uv run pytest -m bench --benchmark-compare=docs/perf/baseline.json --benchmark-compare-fail=median:20%"
