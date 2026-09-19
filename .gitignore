@@ -35,3 +35,14 @@ logs/
 *.log
 *.db
 *.sqlite
+
+# Dot-folders: all stay out of git per user rule (except .orca which is also ignored).
+# If the repo was seeded before this rule, untrack with: git rm -r --cached <dir>
+.agents/
+.claude/
+.codex/
+.kiro/
+.opencode/
+
+# Orca workflow files (user rule: .orca stays out of git)
+.orca/
