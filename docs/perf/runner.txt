@@ -1,0 +1,3 @@
+# 本文件由 .github/workflows/nightly-bench.yml 自动生成并随仓库更新（机器档位口径：docs/perf/bench-plan.md §3）。
+# 字段：date / runner / nproc / cpu / python / uv —— 跨机器比对阈值时按此档位线性缩放，勿拿不同档位硬比。
+# 首个真实产物将在 nightly 首跑后由性能域（pi）审阅更新，并同步提交 docs/perf/baseline.json 作为回归基线。
