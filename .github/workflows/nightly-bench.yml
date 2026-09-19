@@ -1,0 +1,57 @@
+name: Nightly Bench
+
+# 性能基准（性能域 pi 的约束：bench 不进每提交 CI，见 docs/perf/bench-plan.md §0）
+# - 每提交 CI：ci.yml 用 `-m "not bench"` 明确排除
+# - 本工作流：每天固定时刻 + 手动触发，跑 `-m bench` 并归档结果
+#
+# 阈值口径：bench-plan §3 要求记录机器档位（CPU 型号/核数/Python 版本）后再比对，
+# 故结果 JSON 与机器信息一并上传，不做跨机器硬断言（runner 机型与开发机不同）。
+
+on:
+  schedule:
+    # UTC 18:00 = 北京时间 02:00（避开白天开发高峰）
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+jobs:
+  bench:
+    name: pytest-benchmark（-m bench）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: 同步虚拟环境（严格按锁文件）
+        run: uv sync --frozen
+
+      - name: 记录机器档位（bench-plan §3 口径要求）
+        run: |
+          mkdir -p perf
+          {
+            echo "date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "runner: ubuntu-latest"
+            echo "nproc: $(nproc)"
+            echo "cpu: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs)"
+            echo "python: $(uv run python -V)"
+            echo "uv: $(uv --version)"
+          } > perf/runner.txt
+          cat perf/runner.txt
+
+      - name: 跑基准
+        run: uv run pytest -m bench --benchmark-json=perf/bench.json
+
+      - name: 上传基线结果
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-result
+          path: perf/
+          if-no-files-found: warn
+
+      - name: 基线对比（首个基线建立后启用）
+        run: |
+          echo "首个基线（perf/bench.json）入库前，本步骤只提示，不做回归判定。"
+          echo "建立基线后改为：uv run pytest -m bench --benchmark-compare=perf/baseline.json --benchmark-compare-fail=median:20%"
