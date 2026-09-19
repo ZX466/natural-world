@@ -25,6 +25,10 @@ credentials.json
 __coverage__/
 coverage/
 
+# Performance benchmark artifacts (pi 裁决：基线与 runner 信息入 docs/perf/ 入库；每日 JSON 不入库)
+perf/*.json
+.benchmarks/
+
 # Editor / OS
 .vscode/
 .idea/
