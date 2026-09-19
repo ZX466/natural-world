@@ -60,7 +60,8 @@ class Runtime {
     }
   }
 
-  /** WorldScene 点击寻路请求（M0：真实链路暂以 impulse 占位，见 ws.ts 注释）。 */
+  /** WorldScene 点击寻路请求：专用 move_request 消息（TASK-K01；W5 红线——
+   *  移动绝不走 impulse 文本旁路，codex C04 抽查记账项）。 */
   requestMove(x: number, y: number): void {
     if (this.mockTimer !== null) {
       // mock：直线走过去（模拟 sim 寻路回放）
@@ -70,12 +71,13 @@ class Runtime {
       this.mockY += dy;
       return;
     }
-    const impulse: { type: 'player_impulse'; channel: 'control'; text: string } = {
-      type: 'player_impulse',
-      channel: 'control',
-      text: `（移动请求：${x},${y}）`, // M0 占位；kilo 待补 move 专用消息
+    const move: { type: 'move_request'; channel: 'render'; target_x: number; target_y: number } = {
+      type: 'move_request',
+      channel: 'render',
+      target_x: x,
+      target_y: y,
     };
-    this.ws?.send(impulse);
+    this.ws?.send(move);
   }
 
   // ── mock 驱动（TASK-C05 起服务后删除）─────────────────────────
