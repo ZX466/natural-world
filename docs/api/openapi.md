@@ -27,9 +27,10 @@
 | 方法 | 路径 | 用途 | 阶段 |
 |---|---|---|---|
 | GET | `/api/health` | 存活探针 | M0 |
-| GET | `/api/settings/profiles` | LLM Profile 列表（api_key 掩码） | M1 |
+| GET | `/api/world/map` | 碰撞层静态资产（chunk 模式；走 HTTP 不走 WS） | M0 |
+| GET | `/api/settings/profiles` | LLM Profile 列表（api_key 仅掩码） | M1 |
 | POST | `/api/settings/profiles` | 新建 Profile（提交 api_key，加密落库） | M1 |
-| GET | `/api/settings/profiles/{id}` | Profile 详情（api_key 掩码） | M1 |
+| GET | `/api/settings/profiles/{id}` | Profile 详情（api_key 仅掩码） | M1 |
 | PATCH | `/api/settings/profiles/{id}` | 更新（api_key 可选，缺省保留） | M1 |
 | DELETE | `/api/settings/profiles/{id}` | 删除 | M1 |
 | POST | `/api/settings/profiles/{id}/activate` | 设为活动 Profile（单 profile 手动切换） | M1 |
@@ -43,40 +44,61 @@
 
 ## 4. 请求 / 响应 schema
 
-### 4.1 LLM Profile
+### 4.1 世界地图碰撞层（`GET /api/world/map`，M0）
 
-`POST /api/settings/profiles`（请求）
+碰撞层是**静态资产**，走 HTTP 不走 WS（codex 意见⑤）。形状对齐 `sim/api/main.py::world_map` → `map_static_payload`：
+
+```jsonc
+// GET /api/world/map → 200
+{
+  "w": 32,
+  "h": 32,
+  "tileset": "grid",
+  "chunks": [
+    { "cx": 0, "cy": 0, "collision_b64": "AQEBAQ…" }   // base64(每格 1 字节 0/1，chunk 内行优先)
+  ]
+}
+```
+
+- `collision_b64` 解码后为可通行位（1=可通行），前端填入 `MapStatic.collision: Uint8Array`，供点击寻路的目标合法性预检（WorldScene）。
+- 只读静态资产：**不含** `seed` / `tick` / `entity_id`（出戏边界不变）。
+- `full_snapshot.map` 只带 `{tileset, w, h}`（尺寸/风格），碰撞层不在 WS 流里。
+
+### 4.2 LLM Profile（M1 定稿，codex K 系列）
+
+`POST /api/settings/profiles`（请求）——字段对齐 sim `LLMProfile` 表，扁平化：
 
 ```jsonc
 {
   "name": "deepseek-local",
-  "provider": "deepseek",          // openai|deepseek|qwen|ollama|lmstudio（§4 通吃）
   "base_url": "https://api.deepseek.com",
   "model": "deepseek-chat",
-  "api_key": "sk-xxxxxxxx",         // 明文入，后端即加密；响应永不回传
-  "params": { "temperature": 0.9, "max_tokens": 1800 }   // 单决策 <2k tok（§17 M1）
+  "api_key": "sk-xxxxxxxx",        // 明文入，后端即 Fernet 加密落库（K1/K2）；响应永不回传
+  "temperature": 0.9,               // 可选，缺省 0.7
+  "max_tokens": 1800                // 可选，缺省 2048；单决策 <2k tok（§17 M1）
 }
 ```
 
-`GET /api/settings/profiles`（响应，列表项）
+`GET /api/settings/profiles`（响应，列表项）——**K5 序列化白名单，绝不含 api_key 明文字段**：
 
 ```jsonc
 {
   "id": "prof_01",
   "name": "deepseek-local",
-  "provider": "deepseek",
   "base_url": "https://api.deepseek.com",
   "model": "deepseek-chat",
-  "api_key_hint": "sk-…3Xy",       // 仅掩码；前端无法据此调用任何 LLM
-  "active": true,
-  "params": { "temperature": 0.9, "max_tokens": 1800 }
+  "temperature": 0.9,
+  "max_tokens": 1800,
+  "active": true,                   // 单 profile 手动切换用
+  "api_key_hint": "sk-***3Xy"       // 仅掩码（K5）；不是密钥，不能用于调用
 }
 ```
 
-- `PATCH`：`api_key` 字段可选——省略即保留原密钥不变，提供则重新加密替换。
-- `POST …/activate`：无 body；服务端把该 profile 置为唯一活动（§4「单 profile 手动切换」），其余置 `active:false`。返回 200 + 更新后的 `active` 状态。
+- **无 `api_key` / `api_key_enc` / `provider` / `params`**：与 sim 表对齐（无 provider 列），符合 W7 字段最小化。
+- `PATCH`：`api_key` 省略即保留原密钥（K1/K3）；提供则重新加密替换。
+- `POST …/activate`：置唯一活动，其余 `active:false`（§4「单 profile 手动切换」）。
 
-### 4.2 玩家档 Anchor（戏外元数据）
+### 4.3 玩家档 Anchor（戏外元数据）
 
 `POST /api/anchors`（请求）
 
@@ -100,7 +122,7 @@
 - `DELETE`：仅删玩家游标，**世界档 append-only 永不删除**（C6/§12）；`protected` 为 true 时拒绝删除并返回 409。
 - `story_label` 由 sim 用 calendar/§13 叙事化产出，UI 直接显示，绝不显示"tick 86400"。
 
-### 4.3 健康与 schema
+### 4.4 健康与 schema
 
 `GET /api/health` → `{ "status": "ok", "world_running": true, "in_combat": false }`
 （`in_combat` 戏外只读，供 meta shell 显示当前状态，不回流戏内。）

@@ -114,6 +114,23 @@ export type paths = {
     readonly patch?: never;
     readonly trace?: never;
   };
+  readonly '/api/world/map': {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    /** 碰撞层静态资产（codex 意见⑤：走 HTTP 不走 WS；kilo chunk 提案已批）。形状对齐 sim/api/main.py::world_map → map_static_payload */
+    readonly get: operations['getWorldMap'];
+    readonly put?: never;
+    readonly post?: never;
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
 };
 export type webhooks = Record<string, never>;
 export type components = {
@@ -222,12 +239,12 @@ export type components = {
       readonly rtoken: components['schemas']['RToken'];
       readonly visual: string;
     };
+    /** @description M1 念头注入即时反馈（§10 意愿冲突度表现）；cue 是表现提示而非冲突度数值，reaction_monologue 为第一人称自我怀疑（非被操纵感） */
     readonly ImpulseFeedbackMessage: {
       /** @enum {string} */
       readonly channel: 'control';
       /** @enum {string} */
       readonly cue: 'accepted' | 'hesitation' | 'complaint' | 'resistance';
-      readonly delay_ms: number;
       readonly injected: boolean;
       readonly reaction_monologue: components['schemas']['MonologueReaction'];
       /**
@@ -250,10 +267,6 @@ export type components = {
       readonly flicker?: number;
       readonly rtoken: components['schemas']['RToken'];
     };
-    readonly LlmParams: {
-      readonly max_tokens?: number;
-      readonly temperature?: number;
-    };
     readonly LoadAnchorMessage: {
       readonly anchor_id: string;
       /** @enum {string} */
@@ -266,15 +279,23 @@ export type components = {
       readonly v: string;
       readonly ws_seq: number;
     };
+    /** @description 碰撞层 chunk：collision_b64 = base64(每格 1 字节 0/1，顺序按 chunk 内行优先)，只读静态资产 */
+    readonly MapChunk: {
+      /** @description base64 编码的可通行位（1=可通行），不含 seed/tick/entity_id */
+      readonly collision_b64: string;
+      readonly cx: number;
+      readonly cy: number;
+    };
     readonly MapInfo: {
       readonly h: number;
       readonly tileset: string;
       readonly w: number;
     };
+    /** @description M1 独白三形态呈现（§8）；content 必须第一人称世界内语言、无数值无系统词，永不直接渲染 LLM 原始思维链 */
     readonly MonologueMessage: {
-      readonly anchor_ref?: string | null;
       /** @enum {string} */
       readonly channel: 'narrative';
+      /** @description 第一人称叙事化独白，无数值无系统词 */
       readonly content: string;
       /** @enum {string} */
       readonly form: 'bubble' | 'thought' | 'plan';
@@ -343,37 +364,38 @@ export type components = {
       readonly title: string;
       readonly type?: string;
     };
+    /** @description 新建 LLM Profile。api_key 明文入、后端即 Fernet 加密落库（codex K1/K2）；形状对齐 sim LLMProfile 表 */
     readonly ProfileCreate: {
-      /** @description 明文入，后端即加密；响应永不回传 */
+      /** @description 明文入，后端即加密；响应永不回传（K4/K5） */
       readonly api_key: string;
       readonly base_url: string;
+      readonly max_tokens?: number;
       readonly model: string;
       readonly name: string;
-      readonly params: components['schemas']['LlmParams'];
-      /** @enum {string} */
-      readonly provider: 'openai' | 'deepseek' | 'qwen' | 'ollama' | 'lmstudio';
+      readonly temperature?: number;
     };
+    /** @description Profile 序列化白名单（codex K5）：绝不含 api_key 明文字段；api_key_hint 仅掩码（如 sk-***last4），前端无法据此调用 LLM */
     readonly ProfileListItem: {
+      /** @description 单 profile 手动切换用（DESIGN §4） */
       readonly active: boolean;
-      /** @description 仅掩码，前端无法据此调用 LLM */
+      /** @description 仅掩码 sk-***last4；不是密钥，不能用于调用 */
       readonly api_key_hint: string;
       readonly base_url: string;
       readonly id: string;
+      readonly max_tokens: number;
       readonly model: string;
       readonly name: string;
-      readonly params: components['schemas']['LlmParams'];
-      /** @enum {string} */
-      readonly provider: 'openai' | 'deepseek' | 'qwen' | 'ollama' | 'lmstudio';
+      readonly temperature: number;
     };
+    /** @description 更新 Profile；字段全可选，api_key 省略即保留原密钥（K1/K3） */
     readonly ProfileUpdate: {
       /** @description 可选，省略即保留原密钥 */
       readonly api_key?: string;
       readonly base_url?: string;
+      readonly max_tokens?: number;
       readonly model?: string;
       readonly name?: string;
-      readonly params?: components['schemas']['LlmParams'];
-      /** @enum {string} */
-      readonly provider?: 'openai' | 'deepseek' | 'qwen' | 'ollama' | 'lmstudio';
+      readonly temperature?: number;
     };
     readonly Projectile: {
       readonly dur: number;
@@ -464,6 +486,13 @@ export type components = {
     readonly Weather: {
       readonly ambient_light: number;
       readonly visual: string;
+    };
+    /** @description /api/world/map 响应：碰撞层静态资产（戏外 meta shell，对齐 sim map_static_payload） */
+    readonly WorldMapResponse: {
+      readonly chunks: readonly components['schemas']['MapChunk'][];
+      readonly h: number;
+      readonly tileset: string;
+      readonly w: number;
     };
     /** @description 通用信封；具体消息见各 *Message schema 的 oneOf WsMessage */
     readonly WsEnvelope: {
@@ -774,6 +803,26 @@ export interface operations {
         };
       };
       readonly 404: components['responses']['Problem'];
+    };
+  };
+  readonly getWorldMap: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly requestBody?: never;
+    readonly responses: {
+      /** @description map */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly 'application/json': components['schemas']['WorldMapResponse'];
+        };
+      };
     };
   };
 }

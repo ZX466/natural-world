@@ -137,12 +137,12 @@ sim/api/ws  (FastAPI WebSocket 网关)
 ```jsonc
 {
   "form": "thought",              // bubble（头顶气泡）| thought（思维面板）| plan（计划看板）
-  "content": "我干嘛要干这个……算了，先走着。",
-  "anchor_ref": null              // 戏外调试才用；默认 null，不进戏内
+  "content": "我干嘛要干这个……算了，先走着。"   // 第一人称叙事化，无数值无系统词
 }
 ```
 
 - §8 铁律：独白永不直接渲染 LLM 原始输出；原始思维链只进开发日志。
+- **M1 定稿（W7 字段最小化）**：独白只含 `form` + `content`；戏外调试字段（如 anchor_ref）不入 M1 契约。
 
 ### 4.3 control 通道
 
@@ -164,12 +164,12 @@ sim/api/ws  (FastAPI WebSocket 网关)
 {
   "injected": true,
   "cue": "complaint",             // accepted|hesitation|complaint|resistance（映射 §10 冲突度区间）
-  "delay_ms": 1200,              // 表现延迟（客户端据此安排迟疑/拖延节奏），非世界数值
   "reaction_monologue": { "form": "thought", "content": "……行吧。" }
 }
 ```
 
 - `cue` 是表现提示，**不是冲突度数值**；客户端据此选 UI 节奏，绝不显示"抵触度 0.7"。
+- **M1 定稿（W7 字段最小化）**：删除 `delay_ms`——节奏由客户端按 `cue` 自行安排，契约不携带数值。
 - §10：抱怨必须是自我怀疑（"我干嘛要干这个"），绝不能是被操纵感（"谁在指使我"）——后者即出戏，由 sim 文风化保证，协议层不承载操纵感语义。
 
 #### set_control.data（C→S）
