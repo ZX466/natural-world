@@ -44,6 +44,9 @@ logs/
 .kiro/
 .opencode/
 
+# CodeGraph index (local per-machine database)
+.codegraph/
+
 # .orca is the exception (user rule #4): the workflow contract files ARE tracked.
 #   tracked:   .orca/workflow.txt, .orca/agent-registry.md
 #   ignored:   .orca/talking.txt (per-worktree local inbox -> avoids cross-branch conflicts)
