@@ -70,7 +70,12 @@ class Event(TimestampMixin, Base):
 
 
 class Snapshot(TimestampMixin, Base):
-    """快照 — gzip 压缩的全量状态。§12 双轨存档。"""
+    """快照 — gzip 压缩的全量状态。§12 双轨存档。
+
+    seq 语义（codex 必须项 #3 修正）：等于快照点当前事件流的 events 最大 seq，
+    不是 snapshots 表内自增。读档时 `start_seq = snapshot.seq` 可直接衔接
+    `events.seq > start_seq`，保证重放窗口不错位。
+    """
 
     __tablename__ = "snapshots"
 
@@ -79,6 +84,7 @@ class Snapshot(TimestampMixin, Base):
     tick: Mapped[int] = mapped_column(Integer, nullable=False)
     snapshot_data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     is_cold: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     __table_args__ = (
         PrimaryKeyConstraint("branch_id", "seq"),

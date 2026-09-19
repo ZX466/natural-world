@@ -14,7 +14,10 @@ from typing import Protocol, runtime_checkable
 
 from sqlalchemy import func, select
 
-from sim.core.persistence.models import Event, Snapshot
+from sim.core.persistence.models import EntropyLog, Event, Snapshot
+
+# 快照 payload 结构版本（codex 建议项：schema_version，M5 前必须）
+SNAPSHOT_SCHEMA_VERSION = 1
 
 # ---------------------------------------------------------------------------
 # Protocol 定义（m0-core.md §8）
@@ -23,28 +26,46 @@ from sim.core.persistence.models import Event, Snapshot
 
 @dataclass(frozen=True)
 class SnapshotData:
-    """快照的数据表示。"""
+    """快照的数据表示。
+
+    seq 语义：等于快照点的事件流最大 events.seq（codex 必须项 #3）。
+    """
 
     branch_id: str
-    seq: int
+    seq: int  # = 快照点 events 最大 seq
     tick: int
     data: bytes  # gzip 压缩的 JSON
+    schema_version: int = 1
 
 
 @runtime_checkable
 class EventStore(Protocol):
     """持久化接口 — m0-core.md §8。"""
 
-    async def append(self, branch_id: str, events: list[dict]) -> None:
-        """分配分支内 seq，append-only 写入。events 为 WorldEvent 字典列表。"""
+    async def append(
+        self,
+        branch_id: str,
+        events: list[dict],
+        entropy_rows: list[dict] | None = None,
+    ) -> None:
+        """分配分支内 seq，append-only 写入。
+
+        events 为 WorldEvent 字典列表。
+        entropy_rows（codex 必须项 #2 预留）：可选的熵日志行，与事件在同一事务内
+        原子写入；None 时仅写 events（当前内核把熵材料存于 event payload，无需双写）。
+        """
         ...
 
     async def read_range(self, branch_id: str, frm: int, to: int) -> list[dict]:
         """读取 [frm, to] 闭区间内的事件，按 seq 升序。"""
         ...
 
-    async def write_snapshot(self, branch_id: str, tick: int, blob: bytes) -> None:
-        """写入快照（gzip 压缩的全量状态）。"""
+    async def write_snapshot(self, branch_id: str, tick: int, event_seq: int, blob: bytes) -> None:
+        """写入快照（gzip 压缩的全量状态）。
+
+        event_seq：快照点当前事件流的最大 events.seq，落库为 snapshots.seq，
+        读档时 `start_seq = snapshot.seq` 直接衔接 `events.seq > start_seq`。
+        """
         ...
 
     async def latest_snapshot(self, branch_id: str, before_tick: int) -> SnapshotData | None:
@@ -67,9 +88,19 @@ class SqlEventStore:
         """
         self._session_factory = session_factory
 
-    async def append(self, branch_id: str, events: list[dict]) -> None:
-        """分配分支内 seq，批量写入 events 表。"""
-        if not events:
+    async def append(
+        self,
+        branch_id: str,
+        events: list[dict],
+        entropy_rows: list[dict] | None = None,
+    ) -> None:
+        """分配分支内 seq，批量写入 events 表。
+
+        entropy_rows（codex 必须项 #2 预留）：与事件同事务原子写入 entropy_log。
+        当前内核把熵材料存于 event payload（entropy_inject 事件自带 material），
+        故通常传 None；保留该参数以支持后续「显式熵日志表」的原子落库。
+        """
+        if not events and not entropy_rows:
             return
 
         async with self._session_factory() as session:
@@ -94,6 +125,18 @@ class SqlEventStore:
                 )
                 session.add(ev)
 
+            # 熵日志行：与事件同事务提交（原子性）
+            for row in entropy_rows or []:
+                session.add(
+                    EntropyLog(
+                        branch_id=branch_id,
+                        stream=row["stream"],
+                        reason=row.get("reason", ""),
+                        tick=row["tick"],
+                        value=row["value"],
+                    )
+                )
+
             await session.commit()
 
     async def read_range(self, branch_id: str, frm: int, to: int) -> list[dict]:
@@ -109,24 +152,22 @@ class SqlEventStore:
             rows = result.scalars().all()
             return [_event_to_dict(r) for r in rows]
 
-    async def write_snapshot(self, branch_id: str, tick: int, blob: bytes) -> None:
-        """写入快照。seq 由当前最大 seq + 1 分配。"""
+    async def write_snapshot(self, branch_id: str, tick: int, event_seq: int, blob: bytes) -> None:
+        """写入快照。seq = event_seq（快照点事件流最大 seq），与 events.seq 语义对齐。
+
+        codex 必须项 #3：读档伪代码 `start_seq = snapshot.seq` 衔接
+        `events.seq > start_seq`；若用表内自增会错位。
+        """
         compressed = gzip.compress(blob, compresslevel=6)
 
         async with self._session_factory() as session:
-            result = await session.execute(
-                select(func.coalesce(func.max(Snapshot.seq), 0)).where(
-                    Snapshot.branch_id == branch_id
-                )
-            )
-            max_seq: int = result.scalar() or 0
-
             snap = Snapshot(
                 branch_id=branch_id,
-                seq=max_seq + 1,
+                seq=event_seq,
                 tick=tick,
                 snapshot_data=compressed,
                 is_cold=False,
+                schema_version=SNAPSHOT_SCHEMA_VERSION,
             )
             session.add(snap)
             await session.commit()
@@ -149,6 +190,7 @@ class SqlEventStore:
                 seq=snap.seq,
                 tick=snap.tick,
                 data=snap.snapshot_data,
+                schema_version=snap.schema_version,
             )
 
 

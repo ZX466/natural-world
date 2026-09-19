@@ -140,18 +140,20 @@ class TestSnapshot:
         state = {"tick": 100, "entities": {"player": {"hp": 100}}}
         blob = json.dumps(state).encode()
 
-        await store.write_snapshot(branch, tick=100, blob=blob)
+        await store.write_snapshot(branch, tick=100, event_seq=42, blob=blob)
 
         snap = await store.latest_snapshot(branch, before_tick=200)
         assert snap is not None
         assert snap.tick == 100
+        assert snap.seq == 42  # seq 与事件流对齐
+        assert snap.schema_version == 1
         assert decompress_snapshot(snap) == state
 
     async def test_latest_snapshot_returns_most_recent(self, store):
         """latest_snapshot 返回 before_tick 之前最新的快照。"""
         branch = "b"
-        await store.write_snapshot(branch, tick=100, blob=b"snap100")
-        await store.write_snapshot(branch, tick=200, blob=b"snap200")
+        await store.write_snapshot(branch, tick=100, event_seq=100, blob=b"snap100")
+        await store.write_snapshot(branch, tick=200, event_seq=200, blob=b"snap200")
 
         snap = await store.latest_snapshot(branch, before_tick=150)
         assert snap is not None
@@ -231,7 +233,8 @@ class TestReplayDeterministic:
 
         # 写入快照（模拟 tick 19 的状态）
         snap_state = {"tick": 19, "accumulated": list(range(20))}
-        await store.write_snapshot(branch, tick=19, blob=json.dumps(snap_state).encode())
+        snap_blob = json.dumps(snap_state).encode()
+        await store.write_snapshot(branch, tick=19, event_seq=20, blob=snap_blob)
 
         # 写入后 30 个事件
         events2 = [_make_event(tick=i, payload={"val": i}) for i in range(20, 50)]
@@ -248,3 +251,107 @@ class TestReplayDeterministic:
         inc_events = await store.read_range(branch, 21, 50)
         assert len(inc_events) == 30
         assert [e["payload"]["val"] for e in inc_events] == list(range(20, 50))
+
+
+# ---------------------------------------------------------------------------
+# T1: codex 必须项 #2 — entropy rows 同事务原子性（append 预留接口）
+# ---------------------------------------------------------------------------
+
+@pytest.mark.t1
+class TestEntropyRows:
+    """append 支持随批携带 entropy rows，与事件同事务原子写入。"""
+
+    async def test_append_with_entropy_rows_atomic(self, store, engine):
+        """事件 + 熵日志行在同一事务提交，均可读回。"""
+        from sqlalchemy import select
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+        from sim.core.persistence.models import EntropyLog
+
+        branch = "b-entropy"
+        events = [_make_event(tick=5, kind="entropy_inject")]
+        entropy_rows = [
+            {"stream": "world", "reason": "turn 5 coin flip", "tick": 5, "value": "deadbeef"},
+        ]
+
+        await store.append(branch, events, entropy_rows=entropy_rows)
+
+        # 事件已写
+        got_events = await store.read_range(branch, 1, 1)
+        assert len(got_events) == 1
+
+        # 熵日志行已写（同事务）
+        sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with sf() as session:
+            rows = (await session.execute(select(EntropyLog))).scalars().all()
+            assert len(rows) == 1
+            assert rows[0].stream == "world"
+            assert rows[0].value == "deadbeef"
+            assert rows[0].branch_id == branch
+
+    async def test_append_without_entropy_rows(self, store, engine):
+        """不传 entropy_rows 时只写事件（当前内核路径）。"""
+        from sqlalchemy import select
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+        from sim.core.persistence.models import EntropyLog
+
+        branch = "b-noentropy"
+        await store.append(branch, [_make_event(tick=1)])
+
+        sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with sf() as session:
+            rows = (await session.execute(select(EntropyLog))).scalars().all()
+            assert rows == []
+
+
+# ---------------------------------------------------------------------------
+# T1: codex 必须项 #3 — 快照 seq 与事件流对齐
+# ---------------------------------------------------------------------------
+
+@pytest.mark.t1
+class TestSnapshotSeqAlignment:
+    """snapshots.seq 必须等于快照点事件流最大 events.seq，读档窗口不错位。"""
+
+    async def test_snapshot_seq_matches_event_stream(self, store):
+        """写入事件流 → 快照 seq = 当前最大 events.seq。"""
+        branch = "b-align"
+
+        # 写 10 个事件
+        await store.append(branch, [_make_event(tick=i) for i in range(10)])
+        all_events = await store.read_range(branch, 1, 10)
+        max_seq = all_events[-1]["seq"]
+        assert max_seq == 10
+
+        # 快照点 seq = 事件流最大 seq
+        await store.write_snapshot(branch, tick=9, event_seq=max_seq, blob=b"state@seq10")
+
+        snap = await store.latest_snapshot(branch, before_tick=100)
+        assert snap is not None
+        assert snap.seq == max_seq == 10
+
+        # 读档衔接：snapshot.seq 之后的事件（应为空，快照点在末尾）
+        later = await store.read_range(branch, snap.seq + 1, 1000)
+        assert later == []
+
+    async def test_snapshot_resume_window_not_shifted(self, store):
+        """连续多次快照：seq 始终取事件流值，不随快照份数漂移。"""
+        branch = "b-window"
+
+        # 5 事件 + 快照(seq=5)
+        await store.append(branch, [_make_event(tick=i) for i in range(5)])
+        await store.write_snapshot(branch, tick=4, event_seq=5, blob=b"snap1")
+
+        # 再 5 事件 + 快照(seq=10)
+        await store.append(branch, [_make_event(tick=i) for i in range(5, 10)])
+        await store.write_snapshot(branch, tick=9, event_seq=10, blob=b"snap2")
+
+        # 第三份快照的 seq 不应因前两份而变成 3；应仍绑定事件流
+        snap1 = await store.latest_snapshot(branch, before_tick=4)
+        snap2 = await store.latest_snapshot(branch, before_tick=9)
+        assert snap1.seq == 5
+        assert snap2.seq == 10
+
+        # 从 snap1 续读第 6..10 个事件，共 5 条（窗口正确）
+        resumed = await store.read_range(branch, snap1.seq + 1, snap2.seq)
+        assert len(resumed) == 5

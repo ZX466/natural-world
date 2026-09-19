@@ -25,6 +25,10 @@ def create_session_factory(
 
 
 async def init_database(engine: AsyncEngine) -> None:
-    """创建所有 M0 表（Alembic 就位后改用迁移）。"""
+    """创建所有 M0 表。
+
+    生产/持久库走 Alembic 迁移（`uv run alembic upgrade head`，见 alembic.ini）；
+    本函数仅供测试内存库与开发快速起步使用（Base.metadata.create_all）。
+    """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
