@@ -71,6 +71,9 @@ jobs:
       - name: 按锁文件安装（ci 不解析新版本）
         run: npm ci --no-audit --no-fund
 
+      - name: gen:protocol 漂移守卫（shared/protocol.ts 必须与 openapi.json 一致）
+        run: node tools/gen-protocol.ts --check
+
       - name: tsc --noEmit（类型）
         run: npx tsc --noEmit
 
