@@ -38,7 +38,12 @@
 
 状态图例：✅ main = 已在 main 分支；⏳ 待收编 = 已在对应 agent 分支产出，等 Claude（主导）统一收编（**当前为 0**：TASK-001/002 交付已全数收编）。
 
-## 3. 跨域接口对接点（改了要同时通知对方）
+## 3. 源码落点速查（M0，随里程碑更新）
+
+- **前端（TASK-C04，`8c81b53`）**：`client/src/` — `game/world-mirror.ts`（高频实体镜像：普通 TS 类，完全绕开 React）+ `net/ws.ts`（指数退避重连，重连即 `sync_request` 全量重置镜像）+ `store/uiStore.ts`（薄 Zustand 白名单：只暴露戏内时间/相位/连接态，字段对齐 m1-checklist W1）+ `game/scenes/WorldScene.ts` / `game/main.ts`（Phaser）+ `ui/TopBar.tsx` / `ui/CanvasHost.tsx`（React 壳）+ `net/protocol.ts`（`@shared/protocol` 生成物的 re-export）。
+- **mock 双模式（临时，删除时机 = TASK-C05）**：`game/runtime.ts` 在 sim 的 WS 网关未起时自动进入 mock 模式（本地假数据驱动镜像，保证前端可独立验收「可走动 + 昼夜调色 + 重连重置」）；**C05 的真实网关上线后删除 mock 分支切真实**。
+
+## 4. 跨域接口对接点（改了要同时通知对方）
 
 | 接口 | 提供方 → 消费方 | 契约落点 |
 |---|---|---|
@@ -48,7 +53,7 @@
 | tick 预算 | 性能（Pi）→ 内核（Claude） | `docs/perf/budget.md` §1 ↔ `docs/arch/m0-core.md` §5 固定执行序 |
 | 依赖与 CI | 配置（cline）→ 全员 | `pyproject.toml` / `uv.lock` / `client/package.json` / `.github/workflows/` |
 
-## 4. 约束提醒（写文档时最容易破的两条）
+## 5. 约束提醒（写文档时最容易破的两条）
 
 - `DESIGN.md` §18：**本文档为冻结基线**，新想法先进「MVP 后清单」，不回写里程碑——改基线要走 v2.x 修订记录。
 - `DESIGN.md` §19 禁止事项与 §10 界面双层铁律是**文档也必须遵守**的：设计文档里不要引入「把结构化世界状态喂给 LLM」「戏内界面出元信息」这类写法。
