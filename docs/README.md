@@ -25,9 +25,9 @@
 | `docs/perf/budget.md` | 性能（Pi） | ⏳ 待收编（pi 分支） | 每 tick 16.6ms（1x=60tick/s）预算表：7 子系统名义 6.95ms / 上限 12.15ms；4x/16x 与战斗时间尺特例；采集告警点 |
 | `docs/perf/hotspots.md` | 性能（Pi） | ⏳ 待收编（pi 分支） | 热点预判 H-1–H-6：感知传播分区/增量、L0 向量化、SQLite append-only 批量写与索引、WS 增量合批、超速倍率、LLM 异步延迟（信息性） |
 | `docs/perf/bench-plan.md` | 性能（Pi） | ⏳ 待收编（pi 分支） | 基准方案：M0 必带 bench 清单、pytest-benchmark/真实 tick loop harness 选型、回归阈值、nightly 节奏、已知不可测项 |
-| `docs/data/schema.md` | 数据/数据库（opencode） | ⏳ 待收编（opencode 分支） | SQLite schema：事件日志（append-only）/分支树/快照分层/玩家 anchor/NPC 记忆 + sqlite-vec 占位；索引与约束对齐 §6 契约 |
-| `docs/data/event-sourcing.md` | 数据/数据库（opencode） | ⏳ 待收编（opencode 分支） | 事件溯源：`apply(event)` 唯一写路径、读档重放流程、回放确定性（RNG/熵随事件落库） |
-| `docs/data/migration.md` | 数据/数据库（opencode） | ⏳ 待收编（opencode 分支） | Alembic 迁移策略（async env.py / alembic.ini / 首版迁移骨架） |
+| `docs/data/schema.md` | 数据/数据库（opencode） | ✅ main | SQLite schema：事件日志（append-only）/分支树/快照分层/玩家 anchor/NPC 记忆 + sqlite-vec 占位；索引与约束对齐 §6 契约 |
+| `docs/data/event-sourcing.md` | 数据/数据库（opencode） | ✅ main | 事件溯源：`apply(event)` 唯一写路径、读档重放流程、回放确定性（RNG/熵随事件落库） |
+| `docs/data/migration.md` | 数据/数据库（opencode） | ✅ main | Alembic 迁移策略（async env.py / alembic.ini / 首版迁移骨架） |
 | `docs/api/ws-protocol.md` | 接口/兼容性（kilo） | ⏳ 待收编（kilo 分支） | WS 消息协议：消息类型清单与字段 schema、出戏边界（哪些字段绝不外发） |
 | `docs/api/openapi.md` | 接口/兼容性（kilo） | ⏳ 待收编（kilo 分支） | HTTP 端点设计：设置页 / Profile 管理 / 存档 anchor CRUD；api_key 只在后端流转 |
 | `docs/api/codegen.md` | 接口/兼容性（kilo） | ⏳ 待收编（kilo 分支） | OpenAPI → `shared/protocol.ts` 生成管线（openapi-typescript）、CI 三道守卫（漂移/banner/禁手写） |
@@ -40,7 +40,7 @@
 
 | 接口 | 提供方 → 消费方 | 契约落点 |
 |---|---|---|
-| 事件/快照存储 | 数据（opencode）→ 内核（Claude） | `EventStore` Protocol（`docs/arch/m0-core.md` §8）↔ `docs/data/schema.md` |
+| 事件/快照存储 | 数据（opencode）→ 内核（Claude） | `EventStore` Protocol（`docs/arch/m0-core.md` §8）↔ `docs/data/schema.md`；实现：`sim/core/persistence/`（已进 main） |
 | WS 消息 schema | 接口（kilo）→ 前端（Claude） | `docs/api/ws-protocol.md` → `shared/protocol.ts`（生成物） |
 | 禁词表 | 安全（Codex）→ 认知层（Claude） | `docs/security/m1-checklist.md` M1-A/B/D ↔ prompt 装配唯一出口 |
 | tick 预算 | 性能（Pi）→ 内核（Claude） | `docs/perf/budget.md` §1 ↔ `docs/arch/m0-core.md` §5 固定执行序 |
