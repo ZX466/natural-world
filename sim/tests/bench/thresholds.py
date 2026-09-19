@@ -26,3 +26,9 @@ RNG_1M_DRAWS_LIMIT_MS = 300.0
 RNG_TICK_LIMIT_MS = 0.10
 # 快照单次 ≤ 500ms（后台可见，不进 tick 临界区）
 SNAPSHOT_LIMIT_MS = 500.0
+# LLM 预取调度（M1）：tick 内确定性部分（触发门控+Intent 入队+二次校验），
+# = budget.md §1/§2.8 上限 0.20ms；异步推理墙钟量纲不进 tick（见 llm-monitoring.md）
+LLM_SCHED_TICK_LIMIT_MS = 0.20
+# 感知传播每 tick 上限 = budget.md §1 M1 表「感知传播（视/听/触）」上限 3.00ms；
+# 基准对标参考实现（H-1 走势），真实引擎合入后仍卡同一阈值
+PERCEPTION_TICK_LIMIT_MS = 3.0

@@ -40,13 +40,17 @@
 |---|---|---|---|
 | tick p99（1x） | ≤ 8.3ms（预算 16.6ms 的 50%） | nightly | 超则告警 + 性能域接手定位 |
 | tick p999 | ≤ 13ms | nightly | 抖动追踪（GC/快照/IO 峰值） |
-| 各子系统占比 | clock+rng+apply+utility+perception ≤ 名义表 6.95ms 或 ≤ 上限表 | nightly | 占比漂移 >20% 即查 |
+| 各子系统占比 | clock+rng+apply+utility+perception+llm_sched ≤ 名义表 7.00ms 或 ≤ 上限表 12.35ms | nightly | 占比漂移 >20% 即查 |
 | apply(event) 单事件 p99 | ≤ 0.04ms（50 事件 ≈ 2ms） | nightly | 超预算 §2.3 |
 | L1 50 NPC utility | ≤ 6ms p99 | nightly（M2 起） | 破限先砍节拍再优化 |
+| 感知传播 50 NPC（视觉/听觉） | 听觉 ≤ 3ms；视觉**记录基线不判红**（参考实现实测分区剪枝 4.57ms > 3ms → 真实引擎验收线，见 test_bench_perception.py） | nightly | 引擎合入后恢复红线；关注分区 vs 朴素比值 |
+| LLM 预取调度（M1） | ≤ 0.20ms/tick（触发门控+入队+二次校验） | nightly（M1 起） | 破限先查 L2 常驻 NPC 门控扫描 |
 | RNG 每 tick 成本(200 draws, L1) | ≤ 0.10ms | nightly | 超限回退向量化批量抽取 |
 | RNG 1M draws 聚合（警戒） | ≤ 300ms（先行实测 219ms） | nightly | 追查逐调用路径 |
 | 快照 5MB gzip | ≤ 500ms 单次；≤ 0.5ms/tick 摊销 | nightly | 异步卸载失效检查 |
 | WS 编码 增量 patch | ≤ 0.5ms/tick 编码 | nightly（M2 起） | 合并批次参数 |
+| LLM 决策延迟 P95 | < 8000 ms（墙钟，独立看板） | 日汇总 | 见 docs/perf/llm-monitoring.md |
+| LLM 单决策 tokens | < 2000 tok（sum 口径） | 日汇总 | 见 docs/perf/llm-monitoring.md |
 | 4x / 16x | 各自 p99 ≤ 对应预算的一半（2.08ms / 0.52ms，L1 降采后口径） | nightly | 降采策略失效检查 |
 
 **口径固定**：所有阈值绑定「机器档位」——记录 CPU 型号/核数/内存 + Python/uv 版本进基线头，跨机器对比按基线线性缩放，避免拿笔记本数据当服务器红线。

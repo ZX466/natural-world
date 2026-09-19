@@ -30,6 +30,7 @@ uv run pytest -m bench --benchmark-columns=min,mean,max,median
 | `test_bench_clock.py` | GameClock：每 tick 均耗（空世界 / 50 NPC）+ 契约守卫 |
 | `test_bench_rng.py` | 分流 RNG：1M 聚合、L1 每 tick 成本、向量化对比 + 确定性/重放契约 |
 | `test_bench_apply.py` | EventBus.apply：单事件 / 50 事件批 + 唯一写路径契约守卫 |
+| `test_bench_perception.py` | M1 感知传播：视觉分区剪枝（记录基线）/朴素 O(N²) 哨兵/听觉（≤3ms）+ 模型形状契约 |
 
 ## 阈值修订记录
 
