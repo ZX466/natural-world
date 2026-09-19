@@ -17,6 +17,7 @@ import type {
   FullSnapshotMessage,
   PlayerImpulseMessage,
   SetControlMessage,
+  MoveRequestMessage,
   PerceptionMessage,
   MonologueMessage,
   Actor,
@@ -54,6 +55,26 @@ describe('ws-protocol 类型与出戏边界', () => {
     expectTypeOf<SetControlMessage['type']>().toEqualTypeOf<'set_control'>();
     expectTypeOf<SetControlMessage['action']>().toEqualTypeOf<'pause' | 'resume' | 'set_speed'>();
     expectTypeOf<SetControlMessage>().not.toHaveProperty('tick');
+  });
+
+  it('move_request：目标必须是整数格坐标，无 rtoken', () => {
+    expectTypeOf<MoveRequestMessage['channel']>().toEqualTypeOf<'render'>();
+    expectTypeOf<MoveRequestMessage['type']>().toEqualTypeOf<'move_request'>();
+    // target_x / target_y 必须是整数（格坐标），非浮点/字符串
+    expectTypeOf<MoveRequestMessage['target_x']>().toEqualTypeOf<number>();
+    expectTypeOf<MoveRequestMessage['target_y']>().toEqualTypeOf<number>();
+    expectTypeOf<MoveRequestMessage['target_x']>().toMatchTypeOf<number>();
+    expectTypeOf<MoveRequestMessage>().not.toMatchTypeOf<{ target_x: string }>();
+    expectTypeOf<MoveRequestMessage>().not.toMatchTypeOf<{
+      target_x: number;
+      target_y: number;
+      target_z: number;
+    }>();
+    // 客户端只发目标格，无 rtoken（服务端知道主角是谁）
+    expectTypeOf<MoveRequestMessage>().not.toHaveProperty('rtoken');
+    expectTypeOf<MoveRequestMessage>().not.toHaveProperty('entity_id');
+    // 属于 WsMessage 判别联合
+    expectTypeOf<MoveRequestMessage>().toMatchTypeOf<WsMessage>();
   });
 
   it('WsMessage 是判别联合，按 type 收窄', () => {

@@ -435,6 +435,20 @@
         },
         "additionalProperties": false
       },
+      "MoveRequestMessage": {
+        "type": "object",
+        "description": "玩家点击寻路：客户端只发目标格坐标，sim 负责寻路并驱动主角；无 rtoken（服务端知道主角是谁）",
+        "required": ["v", "ws_seq", "channel", "type", "target_x", "target_y"],
+        "properties": {
+          "v": { "type": "string" },
+          "ws_seq": { "type": "integer", "minimum": 0 },
+          "channel": { "type": "string", "enum": ["render"] },
+          "type": { "type": "string", "enum": ["move_request"] },
+          "target_x": { "type": "integer", "description": "目标格 X（整数格坐标）" },
+          "target_y": { "type": "integer", "description": "目标格 Y（整数格坐标）" }
+        },
+        "additionalProperties": false
+      },
       "SyncRequestMessage": {
         "type": "object",
         "required": ["v", "ws_seq", "channel", "type", "reason"],
@@ -586,6 +600,7 @@
           { "$ref": "#/components/schemas/PlayerImpulseMessage" },
           { "$ref": "#/components/schemas/SetControlMessage" },
           { "$ref": "#/components/schemas/LoadAnchorMessage" },
+          { "$ref": "#/components/schemas/MoveRequestMessage" },
           { "$ref": "#/components/schemas/SyncRequestMessage" },
           { "$ref": "#/components/schemas/FullSnapshotMessage" },
           { "$ref": "#/components/schemas/StateDeltaMessage" },
@@ -603,6 +618,7 @@
             "player_impulse": "#/components/schemas/PlayerImpulseMessage",
             "set_control": "#/components/schemas/SetControlMessage",
             "load_anchor": "#/components/schemas/LoadAnchorMessage",
+            "move_request": "#/components/schemas/MoveRequestMessage",
             "sync_request": "#/components/schemas/SyncRequestMessage",
             "full_snapshot": "#/components/schemas/FullSnapshotMessage",
             "state_delta": "#/components/schemas/StateDeltaMessage",

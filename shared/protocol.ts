@@ -291,6 +291,22 @@ export type components = {
       /** @enum {string} */
       readonly form: 'bubble' | 'thought' | 'plan';
     };
+    /** @description 玩家点击寻路：客户端只发目标格坐标，sim 负责寻路并驱动主角；无 rtoken（服务端知道主角是谁） */
+    readonly MoveRequestMessage: {
+      /** @enum {string} */
+      readonly channel: 'render';
+      /** @description 目标格 X（整数格坐标） */
+      readonly target_x: number;
+      /** @description 目标格 Y（整数格坐标） */
+      readonly target_y: number;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      readonly type: 'move_request';
+      readonly v: string;
+      readonly ws_seq: number;
+    };
     readonly PerceptionMessage: {
       /** @enum {string} */
       readonly channel: 'narrative';
@@ -479,6 +495,7 @@ export type components = {
       | components['schemas']['PlayerImpulseMessage']
       | components['schemas']['SetControlMessage']
       | components['schemas']['LoadAnchorMessage']
+      | components['schemas']['MoveRequestMessage']
       | components['schemas']['SyncRequestMessage']
       | components['schemas']['FullSnapshotMessage']
       | components['schemas']['StateDeltaMessage']

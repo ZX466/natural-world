@@ -20,6 +20,8 @@ export type PlayerImpulseMessage = Schemas['PlayerImpulseMessage'];
 /** 暂停/倍速（1x/4x/16x）；战斗时间尺由 sim 自动切，不可客户端设。 */
 export type SetControlMessage = Schemas['SetControlMessage'];
 export type LoadAnchorMessage = Schemas['LoadAnchorMessage'];
+/** 玩家点击寻路：客户端只发目标格坐标，sim 寻路并驱动主角；无 rtoken。 */
+export type MoveRequestMessage = Schemas['MoveRequestMessage'];
 export type SyncRequestMessage = Schemas['SyncRequestMessage'];
 
 // ── sim → client ───────────────────────────────────────────────
