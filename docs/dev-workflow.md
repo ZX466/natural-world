@@ -74,7 +74,7 @@ uv run pytest -m bench --benchmark-compare=perf/baseline.json --benchmark-compar
 
 ```bash
 npm run gen:protocol         # 生成 shared/protocol.ts（banner + prettier 已含）
-npm run gen:protocol:check   # 漂移检测：生成到临时文件比对，不一致则非零退出（CI 守卫候选）
+npm run gen:protocol:check   # 漂移检测：生成到临时文件比对，不一致则非零退出（已接进 ci.yml）
 ```
 
 - 真相源是 sim 端 pydantic 模型；`shared/protocol.ts` **只读、不手写**（DESIGN §19）。
