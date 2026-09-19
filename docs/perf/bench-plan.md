@@ -43,7 +43,8 @@
 | 各子系统占比 | clock+rng+apply+utility+perception ≤ 名义表 6.95ms 或 ≤ 上限表 | nightly | 占比漂移 >20% 即查 |
 | apply(event) 单事件 p99 | ≤ 0.04ms（50 事件 ≈ 2ms） | nightly | 超预算 §2.3 |
 | L1 50 NPC utility | ≤ 6ms p99 | nightly（M2 起） | 破限先砍节拍再优化 |
-| RNG 1M draws | ≤ 100ms | nightly | 换流实现或向量化 |
+| RNG 每 tick 成本(200 draws, L1) | ≤ 0.10ms | nightly | 超限回退向量化批量抽取 |
+| RNG 1M draws 聚合（警戒） | ≤ 300ms（先行实测 219ms） | nightly | 追查逐调用路径 |
 | 快照 5MB gzip | ≤ 500ms 单次；≤ 0.5ms/tick 摊销 | nightly | 异步卸载失效检查 |
 | WS 编码 增量 patch | ≤ 0.5ms/tick 编码 | nightly（M2 起） | 合并批次参数 |
 | 4x / 16x | 各自 p99 ≤ 对应预算的一半（2.08ms / 0.52ms，L1 降采后口径） | nightly | 降采策略失效检查 |

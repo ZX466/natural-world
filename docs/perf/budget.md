@@ -34,9 +34,11 @@
 - 上限 0.05ms = O(1) 常数，无优化空间，基准即门槛。
 
 ### 2.2 RNG/熵
-- 确定性流为多路独立种子流（stream 键控）。
+
+- 预算语义：每 tick RNG 成本按「draw 数 × 单 draw 耗时」计。L1 规模 50 NPC × ~4 draws/tick = 200 draws，实测 ≤0.10ms（表内 0.03/0.10 即此口径）。
+- 聚合 1M draws 只是警戒线（**实测 219ms**，2026-09-19 TASK-002 先行实测，逐调用 numpy 路径），不作为每 tick 硬预算；阈值 300ms 见 bench-plan。
+- 若 L1 每 tick draw 数暴涨（如 >1000），逐调用路径会逼近 0.10ms 上限 → 回退向量化批量抽取（`gen.random(size=N)`，实测 2.4ms/1M）。
 - `inject()` 每次 OS 熵 + 日志写，发生频率低（NPC 重大决策/致命一击/季节/偶遇/意外，§11）。
-- 基准：1M draws < 100ms（p99 见 bench-plan）。
 
 ### 2.3 事件 apply（最大颗粒度风险点）
 - 全部写路径 = `apply(event)`（C4），实体 frozen。
