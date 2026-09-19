@@ -50,7 +50,7 @@ Push-Location client; npx tsc --noEmit; npx eslint .; npx prettier --check .; np
 |---|---|---|---|
 | T1 | 六类不变量断言（无 LLM，秒级） | `uv run pytest -m t1` | 每次提交（CI 含） |
 | T2 | 回放确定性（无 LLM） | `uv run pytest -m t2` | 每次提交（CI 含） |
-| T3 | 闸门对抗样本（录制 fixture） | `uv run pytest -m t3` | 每次提交（CI 含） |
+| T3 | 闸门对抗样本（录制 fixture，codex S03-3；**无 marker，按文件选**） | `uv run pytest sim/tests/test_t3_gate.py` | 每次提交（随 `-m "not bench"` 全量跑；ci.yml 另有命名独立门禁步骤，文件未收编前自适应跳过） |
 | T4 | 出戏探针（真模型，烧钱） | nightly（无 CI 门禁） | 每日，锁定模型版本 |
 | T5 | golden 场景（10 种子 × 10 游戏日） | `uv run pytest -m t5` | 每日 |
 | bench | 性能基准 | `uv run pytest -m bench` | **nightly，不进每提交 CI** |
