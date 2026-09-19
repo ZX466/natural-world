@@ -1,0 +1,84 @@
+name: CI
+
+# 每提交门禁（依赖/配置/文档域 — cline TASK-002）
+# 对应 DESIGN.md §16 测试分级：CI 只跑 T1/T2/T3（无 LLM，秒级）；
+# T4（真模型出戏探针）与 T5（golden 场景）进 nightly，不进本工作流。
+# 性能基准（bench）同理不进本工作流：`-m "not bench"`，见 nightly-bench.yml。
+#
+# 平台选 ubuntu-latest：uv.lock 为通用锁（无平台专属钉死），lint/类型/单测跨平台等价，
+# Linux runner 更快更省。若后续需要验证 Windows 专属行为（§4「Windows 无 uvloop」等），
+# 再加一个 windows-latest job 即可，不要改动本 job 的检查项。
+#
+# 网络：GitHub runner 直连 PyPI/npm，无需代理；本地推送 GitHub 走 127.0.0.1:7897（GIT-SETUP.md）。
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python（锁校验 / ruff / pyright / pytest）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: 校验锁文件与 pyproject 一致（uv.lock 可复现）
+        run: uv lock --check
+
+      - name: 同步虚拟环境（严格按锁文件，CI 不解析新版本）
+        run: uv sync --frozen
+
+      - name: ruff check（含 C5 守卫：banned-api 禁 random / uvloop）
+        run: uv run ruff check
+
+      - name: ruff format --check
+        run: uv run ruff format --check
+
+      - name: pyright（类型）
+        run: uv run pyright
+
+      - name: pytest（T1/T2/T3；排除 bench —— 性能基准进 nightly）
+        run: uv run pytest -m "not bench"
+
+  frontend:
+    name: 前端（锁 / tsc / eslint / vitest / prettier）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Node 24：kilo 的 tools/gen-protocol.ts 以 `node` 直接运行 .ts（无旗标类型剥离需 ≥23.6；
+          # 本地开发环境 24.19.0 实测通过）。降级到 22 会让 gen:protocol 系列脚本失效。
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: 按锁文件安装（ci 不解析新版本）
+        run: npm ci --no-audit --no-fund
+
+      - name: tsc --noEmit（类型）
+        run: npx tsc --noEmit
+
+      - name: eslint
+        run: npx eslint .
+
+      - name: prettier --check
+        run: npx prettier --check .
+
+      - name: vitest
+        run: npx vitest run --passWithNoTests
