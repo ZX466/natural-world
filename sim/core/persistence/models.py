@@ -27,9 +27,8 @@ class Base(DeclarativeBase):
 
 class TimestampMixin:
     """公共时间戳字段。"""
-    created_at: Mapped[float] = mapped_column(
-        Float, nullable=False, default=lambda: time.time()
-    )
+
+    created_at: Mapped[float] = mapped_column(Float, nullable=False, default=lambda: time.time())
 
 
 class Branch(TimestampMixin, Base):
@@ -43,9 +42,7 @@ class Branch(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String, nullable=False, default="active")
     abandoned_at: Mapped[float | None] = mapped_column(Float, nullable=True)
 
-    __table_args__ = (
-        Index("idx_branches_status", "status"),
-    )
+    __table_args__ = (Index("idx_branches_status", "status"),)
 
 
 class Event(TimestampMixin, Base):
@@ -101,13 +98,9 @@ class PlayerAnchor(TimestampMixin, Base):
     tick: Mapped[int] = mapped_column(Integer, nullable=False)
     seq: Mapped[int] = mapped_column(Integer, nullable=False)
     agent_override: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
-    updated_at: Mapped[float] = mapped_column(
-        Float, nullable=False, default=lambda: time.time()
-    )
+    updated_at: Mapped[float] = mapped_column(Float, nullable=False, default=lambda: time.time())
 
-    __table_args__ = (
-        Index("idx_anchors_branch", "branch_id"),
-    )
+    __table_args__ = (Index("idx_anchors_branch", "branch_id"),)
 
 
 class EntropyLog(TimestampMixin, Base):
@@ -122,9 +115,7 @@ class EntropyLog(TimestampMixin, Base):
     value: Mapped[str] = mapped_column(String, nullable=False)
     branch_id: Mapped[str] = mapped_column(String, nullable=False)
 
-    __table_args__ = (
-        Index("idx_entropy_branch_tick", "branch_id", "tick"),
-    )
+    __table_args__ = (Index("idx_entropy_branch_tick", "branch_id", "tick"),)
 
 
 class LLMProfile(TimestampMixin, Base):

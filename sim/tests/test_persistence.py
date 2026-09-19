@@ -20,6 +20,7 @@ from sim.core.persistence.store import SqlEventStore, decompress_snapshot
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 async def engine():
     """内存 SQLite 引擎。"""
@@ -53,6 +54,7 @@ def _make_event(tick: int, kind: str = "move", actor: str = "player", **kwargs) 
 # ---------------------------------------------------------------------------
 # T1: append-only 约束
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.t1
 class TestAppendOnly:
@@ -91,6 +93,7 @@ class TestAppendOnly:
 # T1: read_range 正确性
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.t1
 class TestReadRange:
     """读取范围查询正确性。"""
@@ -125,6 +128,7 @@ class TestReadRange:
 # ---------------------------------------------------------------------------
 # T1: snapshot 写入/读取往返
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.t1
 class TestSnapshot:
@@ -163,6 +167,7 @@ class TestSnapshot:
 # T2: 回放验证雏形（50 事件逐位一致）
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.t2
 class TestReplayDeterministic:
     """回放确定性：同一事件流重放 → 状态一致。"""
@@ -183,12 +188,14 @@ class TestReplayDeterministic:
                 x += 1
             else:
                 y += 1
-            events.append(_make_event(
-                tick=i,
-                kind="move",
-                actor="player",
-                payload={"x": x, "y": y},
-            ))
+            events.append(
+                _make_event(
+                    tick=i,
+                    kind="move",
+                    actor="player",
+                    payload={"x": x, "y": y},
+                )
+            )
         await store.append(branch, events)
 
         # --- 读回全部事件 ---
