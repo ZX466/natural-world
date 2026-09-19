@@ -13,7 +13,13 @@ from typing import Any
 import structlog
 from pydantic import BaseModel, ConfigDict, Field
 
-from sim.core.events import EventKind, WorldEvent
+from sim.core.events import (
+    CombatScaleChangePayload,
+    EventKind,
+    MovePayload,
+    WorldCreatePayload,
+    WorldEvent,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -101,33 +107,36 @@ class EventBus:
 
 
 def _apply_world_create(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
-    """创世：payload {seed, entities: [{entity_id, pos}]}。只能作用于空白状态。"""
+    """创世：payload 白名单（WorldCreatePayload）。只能作用于空白状态。"""
     if state.entities or state.tick != 0:
         msg = "创世事件只能作用于空白世界状态"
         raise ValueError(msg)
-    entities = {
-        str(e["entity_id"]): EntityState(
-            entity_id=str(e["entity_id"]), pos=(int(e["pos"][0]), int(e["pos"][1]))
-        )
-        for e in event.payload.get("entities", [])
-    }
-    new_state = state.model_copy(
-        update={"world_seed": int(event.payload["seed"]), "entities": entities}
-    )
+    p = WorldCreatePayload.model_validate(event.payload)
+    # M0：实体初始位形由创世方以 entity_id 为序默认置 (0,0)（简化；位形事件 M1 细化）
+    entities = {eid: EntityState(entity_id=eid, pos=(0, 0)) for eid in p.entities}
+    new_state = state.model_copy(update={"world_seed": p.seed, "entities": entities})
     return ApplyResult(state=new_state)
 
 
 def _apply_move(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
-    """路径段移动：payload {entity_id, path: [[x,y],...]}。终点=路径最后一格。"""
-    entity_id = str(event.payload["entity_id"])
-    entity = state.entities.get(entity_id)
+    """路径段移动：payload 白名单（MovePayload）。终点=路径最后一格。"""
+    p = MovePayload.model_validate(event.payload)
+    entity = state.entities.get(p.entity_id)
     if entity is None:
-        msg = f"未知实体: {entity_id}"
+        msg = f"未知实体: {p.entity_id}"
         raise ValueError(msg)
-    path = tuple((int(x), int(y)) for x, y in event.payload.get("path", []))
-    new_entity = entity.model_copy(update={"path": path})
-    new_state = state.model_copy(update={"entities": {**state.entities, entity_id: new_entity}})
+    new_entity = entity.model_copy(update={"path": p.path})
+    new_state = state.model_copy(update={"entities": {**state.entities, p.entity_id: new_entity}})
     return ApplyResult(state=new_state)
+
+
+def _apply_combat_scale(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    """战斗尺切换的状态层语义：校验 payload；实际 rate 换算由 GameClock 执行。
+
+    事件进日志保证回放时能重建时间尺序列（codex 意见 1）。状态层 no-op。
+    """
+    CombatScaleChangePayload.model_validate(event.payload)
+    return ApplyResult(state=state)
 
 
 def _apply_entropy_inject(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
@@ -146,6 +155,7 @@ def build_default_bus() -> EventBus:
     bus = EventBus()
     bus.register(EventKind.WORLD_CREATE, _apply_world_create)
     bus.register(EventKind.MOVE, _apply_move)
+    bus.register(EventKind.COMBAT_SCALE_CHANGE, _apply_combat_scale)
     bus.register(EventKind.ENTROPY_INJECT, _apply_entropy_inject)
     bus.register(EventKind.TILE_CHANGED, _apply_tile_changed)
     return bus

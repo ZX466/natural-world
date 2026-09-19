@@ -13,7 +13,7 @@ import pytest
 from sim.core.calendar import game_time, is_market_day, phase_of_day
 from sim.core.clock import GameClock, TimeScale
 from sim.core.entropy import EntropyMixer
-from sim.core.events import EventKind, WorldEvent
+from sim.core.events import EventKind, WorldEvent, combat_scale_event, world_create_event
 from sim.core.rng import RngRegistry
 from sim.core.tick import TickLoop
 from sim.core.world import WorldState, build_default_bus
@@ -30,11 +30,7 @@ def make_loop(seed: int = 42) -> TickLoop:
     bus = build_default_bus()
     state = WorldState(world_seed=seed)
     loop = TickLoop(clock=clock, bus=bus, state=state)
-    create = WorldEvent(
-        tick=0,
-        event_type=EventKind.WORLD_CREATE,
-        payload={"seed": seed, "entities": [{"entity_id": "chenmo", "pos": [2, 2]}]},
-    )
+    create = world_create_event(tick=0, seed=seed, entity_ids=("chenmo",))
     loop.enqueue(create)
     loop.drain_events()
     return loop
@@ -304,3 +300,51 @@ class TestReplay:
             return loop.state.tick, loop.state.state_hash()
 
         assert run() == run()
+
+
+# ---------------------------------------------------------------------------
+# codex 评审补强（2026-09-19）：payload schema 化 + 战斗尺事件
+# ---------------------------------------------------------------------------
+
+
+class TestPayloadSchema:
+    def test_move_payload_rejects_extra_fields(self):
+        """白名单外字段被拒绝（extra=forbid）——LLM/玩家不可夹带键值。"""
+        from pydantic import ValidationError
+
+        from sim.core.events import MovePayload
+
+        with pytest.raises(ValidationError):
+            MovePayload.model_validate(
+                {
+                    "entity_id": "chenmo",
+                    "start": [0, 0],
+                    "goal": [1, 1],
+                    "path": [[0, 0], [1, 1]],
+                    "speed_hack": 999,  # 白名单外
+                }
+            )
+
+    def test_move_event_consistency(self):
+        """path 首/末与 start/goal 不一致 → 工厂拒绝。"""
+        from sim.core.events import move_event
+
+        with pytest.raises(ValueError, match="路径与起终点不一致"):
+            move_event(tick=1, actor_id="x", start=(0, 0), goal=(5, 5), path=((0, 0), (1, 1)))
+
+    def test_combat_scale_event_registered(self):
+        """战斗尺切换事件：入日志 + 状态层可 apply（codex 意见 1）。"""
+        loop = make_loop()
+        ev = combat_scale_event(tick=loop.state.tick + 1, entering=True)
+        loop.enqueue(ev)
+        loop.drain_events()
+        assert ev.event_type is EventKind.COMBAT_SCALE_CHANGE
+
+    def test_issue_combat_scale_switches_clock(self):
+        """issue_combat_scale：clock 即时切 + 事件落 pending。"""
+        loop = make_loop()
+        loop.issue_combat_scale(entering=True)
+        assert loop.clock.timescale is TimeScale.COMBAT
+        assert loop.context.combat_active is True
+        events = loop.drain_events()
+        assert any(e.event_type is EventKind.COMBAT_SCALE_CHANGE for e in events)

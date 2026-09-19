@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from sim.core.clock import GameClock
-from sim.core.events import EventKind, WorldEvent
+from sim.core.events import WorldEvent, combat_scale_event, move_event
 from sim.core.world import EventBus, TickContext, WorldState
 from sim.world.pathfinding import Pathfinder
 
@@ -74,13 +74,30 @@ class TickLoop:
             self.pending_events.append(d)
 
     def issue_move(self, entity_id: str, path: list[tuple[int, int]]) -> WorldEvent:
-        """便捷入口：外部请求移动（如 WS 的 move_intent）→ 路径段 MOVE 事件。"""
-        event = WorldEvent(
+        """便捷入口：外部请求移动（如 WS 的 move_intent）→ 路径段 MOVE 事件。
+
+        payload 白名单与 start/goal 一致性校验在 move_event 工厂内强制。
+        """
+        if not path:
+            msg = "空路径"
+            raise ValueError(msg)
+        event = move_event(
             tick=self.state.tick + 1,
-            event_type=EventKind.MOVE,
             actor_id=entity_id,
-            payload={"entity_id": entity_id, "path": [list(p) for p in path]},
+            start=path[0],
+            goal=path[-1],
+            path=tuple(path),
         )
+        self.enqueue(event)
+        return event
+
+    def issue_combat_scale(self, entering: bool) -> WorldEvent:
+        """战斗时间尺切换：clock 即时切换 + 事件落日志（codex 意见 1：回放语义）。"""
+        event = combat_scale_event(tick=self.state.tick + 1, entering=entering)
+        if entering:
+            self.enter_combat()
+        else:
+            self.exit_combat()
         self.enqueue(event)
         return event
 
