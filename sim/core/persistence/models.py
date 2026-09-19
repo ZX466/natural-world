@@ -110,7 +110,11 @@ class PlayerAnchor(TimestampMixin, Base):
 
 
 class EntropyLog(TimestampMixin, Base):
-    """熵日志 — 开发模式。§11 混合熵。"""
+    """熵日志 — 开发模式。§11 混合熵 + §4 C5 熵注入审计。
+
+    event_seq（codex 终审记账项，0002 迁移加入）：关联触发本次熵注入的
+    events.seq —— M1 由 Claude 接 EntropyMixer 时回填，用于事件-熵对账。
+    """
 
     __tablename__ = "entropy_log"
 
@@ -120,8 +124,12 @@ class EntropyLog(TimestampMixin, Base):
     tick: Mapped[int] = mapped_column(Integer, nullable=False)
     value: Mapped[str] = mapped_column(String, nullable=False)
     branch_id: Mapped[str] = mapped_column(String, nullable=False)
+    event_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    __table_args__ = (Index("idx_entropy_branch_tick", "branch_id", "tick"),)
+    __table_args__ = (
+        Index("idx_entropy_branch_tick", "branch_id", "tick"),
+        Index("idx_entropy_event", "branch_id", "event_seq"),
+    )
 
 
 class LLMProfile(TimestampMixin, Base):
@@ -137,3 +145,74 @@ class LLMProfile(TimestampMixin, Base):
     temperature: Mapped[float] = mapped_column(Float, nullable=False, default=0.7)
     max_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=2048)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+# ---------------------------------------------------------------------------
+# M3 预留表（0002 迁移先建空表+索引，M3 填业务）
+# 对齐 docs/data/schema.md §5/§6/§7/§8
+# ---------------------------------------------------------------------------
+
+
+class NpcMemory(TimestampMixin, Base):
+    """NPC 记忆 — schema.md §5。§6 MemoryEntry：第一人称叙事记忆。M3 启用。"""
+
+    __tablename__ = "npc_memories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    npc_id: Mapped[str] = mapped_column(String, nullable=False)
+    event_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)  # NULL = 推理/转述
+    branch_id: Mapped[str] = mapped_column(String, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    importance: Mapped[float] = mapped_column(Float, nullable=False)  # 0.0-1.0
+    emotion_tag: Mapped[str | None] = mapped_column(String, nullable=True)
+    distortion: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    embedding: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)  # M3 填
+    created_at_tick: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_accessed_tick: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    __table_args__ = (
+        Index("idx_memories_npc", "npc_id", "branch_id"),
+        Index("idx_memories_importance", "npc_id", "importance"),
+        Index("idx_memories_event", "branch_id", "event_seq"),
+    )
+
+
+class Relationship(TimestampMixin, Base):
+    """NPC 有向不对称关系 — schema.md §7。双向存储（A→B、B→A 各一行）。"""
+
+    __tablename__ = "relationships"
+
+    owner_id: Mapped[str] = mapped_column(String, nullable=False)
+    other_id: Mapped[str] = mapped_column(String, nullable=False)
+    trust: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    affection: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    fear: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    debt: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    face: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    last_interaction: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    branch_id: Mapped[str] = mapped_column(String, nullable=False)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("branch_id", "owner_id", "other_id"),
+        Index("idx_rel_owner", "branch_id", "owner_id"),
+        Index("idx_rel_other", "branch_id", "other_id"),
+    )
+
+
+class Knowledge(TimestampMixin, Base):
+    """NPC 事实性知识 — schema.md §8。带可信度与来源。"""
+
+    __tablename__ = "knowledge"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    holder_id: Mapped[str] = mapped_column(String, nullable=False)
+    fact: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)  # 0.0-1.0
+    source: Mapped[str] = mapped_column(String, nullable=False)  # witnessed/told/inferred
+    learned_at: Mapped[int] = mapped_column(Integer, nullable=False)
+    branch_id: Mapped[str] = mapped_column(String, nullable=False)
+
+    __table_args__ = (
+        Index("idx_knowledge_holder", "branch_id", "holder_id"),
+        Index("idx_knowledge_source", "branch_id", "source"),
+    )
