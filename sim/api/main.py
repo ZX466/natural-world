@@ -70,8 +70,14 @@ def _make_clock():
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     import asyncio
 
+    from sim.perception.senses import run_perception_step
+
     loop, store = await build_loop()
     tile_map = _default_map()
+    # C06-③：感知挂载进 tick 固定执行序第 3 步（帧键=rtoken，WS 不广播）
+    loop.attach_perception(
+        lambda state, tick_events: run_perception_step(state, tile_map, tick_events)
+    )
 
     async def on_flush(events: list[Any]) -> None:
         from sim.core.flush import flush_events

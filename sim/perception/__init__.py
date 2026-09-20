@@ -1,10 +1,21 @@
-"""感知层 — Agent 与世界的唯一出口（C2，M1 落地，M0 仅占位）。
+"""sim.perception — 感知层（DESIGN §7，C06-③）。
 
-模块划分：
-- senses        感官通道：视/听/触/内感受（M1 全开；嗅觉与语言判定 M2）
-- propagation   传播引擎（通道无关：衰减 + 阻断 + 修正三要素）
-- language      语言判定（识字率/行话/阶层用语，M2）
-- salience      显著性（只报告值得注意的）
-- impulse       念头注入
-- profiles/     物种级 profile（不是角色级）：human(M1) | cat·dog·raven(M6 前仅占位）
+M1 落地：传播三要素（propagation）+ 感知帧（frame）+ 显著性（salience）
++ 叙事化（narrate）+ 引擎（senses）+ human profile（profiles.human）。
+嗅觉/语言判定 M2（language.py 届时落地）。
 """
+
+from sim.perception.frame import Channel, Observation, PerceptionFrame
+from sim.perception.profiles.base import PerceptionProfile
+from sim.perception.profiles.human import HUMAN
+from sim.perception.senses import PerceptionEngine, rtoken_of
+
+__all__ = [
+    "HUMAN",
+    "Channel",
+    "Observation",
+    "PerceptionEngine",
+    "PerceptionFrame",
+    "PerceptionProfile",
+    "rtoken_of",
+]

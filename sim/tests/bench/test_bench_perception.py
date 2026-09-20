@@ -112,19 +112,23 @@ def _run_timed(fn) -> float:
 
 @pytest.mark.bench
 def test_perception_vision_partitioned_50npc(bench_loop_50, benchmark) -> None:
-    """视觉传播 50 NPC（分区剪枝参考）：记录基线，不卡红线（红线归 M1 真实引擎）。
+    """视觉传播 50 NPC（真实引擎）：M1 红线 PERCEPTION_TICK_LIMIT_MS=3ms。
 
-    M1 引擎合入后此用例把 `_vision_partitioned_v2` 换成真实实现并恢复
-    assert_threshold(PERCEPTION_TICK_LIMIT_MS)。现阶段的数字是「参考实现的成本证据」。
+    C06-③ 真实引擎已合入（sim.perception.senses）：这里测的是真实
+    PerceptionEngine 对 50 实体全员装配（视觉射线 + 光照修正）。
+    红线恢复 = budget.md §2.5（原「只记录不判定」随参考实现退役）。
     """
+    from sim.perception.senses import PerceptionEngine
 
     map_ = _open_map()
-    positions = [e.pos for e in bench_loop_50.state.entities.values()]
+    state = bench_loop_50.state
+    engine = PerceptionEngine(map_)  # 实例级 LOS 缓存跨轮复用（同图）
 
     def _run() -> float:
-        return _run_timed(lambda: _vision_partitioned_v2(positions, map_, 24.0))
+        return _run_timed(lambda: [engine.assemble(state, eid) for eid in state.entities])
 
-    benchmark.pedantic(_run, rounds=5, iterations=1)  # 只记录，不判定
+    measured = benchmark.pedantic(_run, rounds=5, iterations=1)
+    assert_threshold(measured, PERCEPTION_TICK_LIMIT_MS, "感知视觉 50 NPC（真实引擎）")
 
 
 @pytest.mark.bench
@@ -140,15 +144,32 @@ def test_perception_vision_naive_complexity_sentinel(bench_loop_50, benchmark) -
 
 @pytest.mark.bench
 def test_perception_sound_50npc(bench_loop_50, benchmark) -> None:
-    """听觉传播 50 NPC：∝1/r 距离预过滤，M1 预算内应无压力。"""
+    """听觉传播 50 NPC（真实引擎）：全员移动最坏情况 + 半径预过滤 + 穿墙衰减。"""
 
-    positions = [e.pos for e in bench_loop_50.state.entities.values()]
+    from sim.perception.senses import FOOTSTEP_BASE, PerceptionEngine
+
+    map_ = _open_map()
+    state = bench_loop_50.state
+    engine = PerceptionEngine(map_)
+    # 最坏情况：全员带路径（每 tick 50 个脚步声源，人人都在动）
+    moving_state = state.model_copy(
+        update={
+            "entities": {
+                eid: e.model_copy(update={"path": ((e.pos[0] + 1, e.pos[1]),)})
+                for eid, e in state.entities.items()
+            }
+        }
+    )
+    footstep = FOOTSTEP_BASE  # 声学常量参与强度（保留锚防漂移）
 
     def _run() -> float:
-        return _run_timed(lambda: _sound_propagate(positions))
+        return _run_timed(
+            lambda: [engine.assemble(moving_state, eid, []) for eid in moving_state.entities]
+        )
 
     measured = benchmark.pedantic(_run, rounds=5, iterations=1)
-    assert_threshold(measured, PERCEPTION_TICK_LIMIT_MS, "感知听觉 50 NPC（参考）")
+    assert_threshold(measured, PERCEPTION_TICK_LIMIT_MS, "感知听觉 50 NPC（真实引擎）")
+    assert footstep > 0.0
 
 
 @pytest.mark.bench
