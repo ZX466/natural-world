@@ -29,15 +29,11 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     with op.batch_alter_table("npc_memories") as batch_op:
         batch_op.add_column(sa.Column("entry_id", sa.String, nullable=False, server_default=""))
-        batch_op.add_column(
-            sa.Column("source", sa.String, nullable=False, server_default="event")
-        )
+        batch_op.add_column(sa.Column("source", sa.String, nullable=False, server_default="event"))
         batch_op.add_column(sa.Column("superseded_by", sa.String, nullable=True))
         batch_op.add_column(sa.Column("invalid_reason", sa.String, nullable=True))
         batch_op.create_index("idx_memories_entry", ["entry_id"], unique=True)
-        batch_op.create_index(
-            "idx_memories_visible", ["npc_id", "branch_id", "superseded_by"]
-        )
+        batch_op.create_index("idx_memories_visible", ["npc_id", "branch_id", "superseded_by"])
 
 
 def downgrade() -> None:

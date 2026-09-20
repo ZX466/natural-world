@@ -1,3 +1,4 @@
+
 # memory.md — kilo（接口 / 兼容性域）
 
 > 用户规则 #7：本文件保存 **kilo 自己的记忆**，供新对话继续任务。本地保存、**不入 git**
@@ -13,7 +14,7 @@
 
 ## 1. 项目一句话
 
-临河镇：2D 像素 LLM 模拟世界。设计基线 `DESIGN.md`（v2.1 冻结）。多 agent：Claude 主导/组织（架构·质量·逻辑·测试·前端），cline=依赖/配置/文档，codex=安全/合规/风险，pi=性能，opencode=数据/库，kilo=接口/兼容性。沟通靠各树 `.orca/talking.txt`（被 gitignore）。
+临河镇：2D 像素 LLM 模拟世界。设计基线 `DESIGN.md`（v2.1 冻结）。多 agent：Claude 主导/组织（架构·质量·逻辑·测试·前端），cline=依赖/配置/文档，codex=安全/合规/风险，pi=性能，opencode=数据/库，kilo=接口/兼容性。沟通靠各树 `.orca/talking.txt`（本地保存不入库）。
 
 ## 2. 我的交付物与命令（接口域）
 
