@@ -30,10 +30,13 @@ uv run pytest -m bench --benchmark-columns=min,mean,max,median
 | `test_bench_clock.py` | GameClock：每 tick 均耗（空世界 / 50 NPC）+ 契约守卫 |
 | `test_bench_rng.py` | 分流 RNG：1M 聚合、L1 每 tick 成本、向量化对比 + 确定性/重放契约 |
 | `test_bench_apply.py` | EventBus.apply：单事件 / 50 事件批 + 唯一写路径契约守卫 |
-| `test_bench_perception.py` | M1 感知传播：视觉分区剪枝（记录基线）/朴素 O(N²) 哨兵/听觉（≤3ms）+ 模型形状契约 |
+| `test_bench_perception.py` | M1 感知传播（真实引擎）：视觉/听觉暖态 ≤3.6ms + 朴素 O(N²) 哨兵 + 模型形状契约 |
 
 ## 阈值修订记录
 
 - RNG 1M 逐调用聚合量纲实测 219ms（原 100ms 不可达且与每 tick 预算脱节）→
   回调为 300ms 警戒线，并新增「每 tick RNG 成本（L1 规模 200 draws ≤ 0.10ms）」
   作为真预算口径；详见 `thresholds.py` 头注与本树 `docs/perf/budget.md` §2.2。
+- 感知红线 3.0→3.6（C06-③ 真实引擎合入 + F06 复核）：预算目标值仍 3.00ms，红线
+  3.6 = +20% 慢机余量；bench 加 `warmup_rounds=1` 剔除首轮 LOS 缓存冷启动（7.6-8.2ms），
+  暖态 mean 实测 3.0-3.3ms 在 3.6 内。详见 `thresholds.py` 与 budget §2.5/§4。

@@ -29,9 +29,8 @@ SNAPSHOT_LIMIT_MS = 500.0
 # LLM 预取调度（M1）：tick 内确定性部分（触发门控+Intent 入队+二次校验），
 # = budget.md §1/§2.8 上限 0.20ms；异步推理墙钟量纲不进 tick（见 llm-monitoring.md）
 LLM_SCHED_TICK_LIMIT_MS = 0.20
-# 感知传播每 tick 上限 = budget.md §1 M1 表「感知传播（视/听/触）」上限 3.00ms；
-# 基准对标参考实现（H-1 走势），真实引擎合入后仍卡同一阈值。
-# 修订（C06-③ 真实引擎合入，2026-09-20）：真实 PerceptionEngine 50 NPC 全员移动
-# 稳态实测 3.0-3.06ms，紧贴 3.0 红线（CI 慢机/抖动会假红）。回归红线放宽到
-# 3.6 = 实测 +20% 余量（同 RNG_1M 先例）；budget.md §2.5 的 3.00ms 仍是预算目标值。
+# 感知传播每 tick 红线。预算目标值 3.00ms（budget.md §1/§2.5）；红线 3.6 = +20% 慢机余量。
+# F06 复核（真实引擎，2026-09-20）：暖态 mean 实测 3.0-3.3ms（在 3.6 内，余量 8-17%），
+# 首轮 LOS 对称缓存冷启动 7.6-8.2ms（一次性）；bench 已 `warmup_rounds=1` 剔除冷启动，
+# 否则 mean 会被拉到 3.8-4.4ms 越过红线假红。暖态口径下红线成立。
 PERCEPTION_TICK_LIMIT_MS = 3.6
