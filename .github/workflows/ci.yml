@@ -57,7 +57,7 @@ jobs:
           # codex 建议不新增 job）。此处按【文件路径】选择，把门禁提升为命名独立信号。
           # 若改用 `-m t3`，因该文件无 marker 会永久收集 0 用例（退出码 5）→ 假绿灯，故不用。
           if [ ! -f sim/tests/test_t3_gate.py ]; then
-            echo "T3 门禁文件尚未收编（codex TASK-003 S03-3，分支 ZX466/codex）→ 占位跳过；文件到位后本步自动生效"
+            echo "::warning::T3 门禁文件缺失（已随 codex S03 进 main，疑似被误删/改名）→ 跳过"
             exit 0
           fi
           set +e
@@ -69,6 +69,13 @@ jobs:
             exit 0
           fi
           exit $code
+
+      - name: pytest M1 指标跑分（差事 100% / P95<8s / <2k tok / 出戏 100%）
+        run: |
+          # TASK-004 P05：M1 四指标验收跑分（C06-⑥，`5c08c74`）。假 LLM 零网络，纯 T1，秒级。
+          # 按【文件路径】选择：该文件无专属 marker（随 `-m "not bench"` 全量跑），
+          # 按路径可保证即使日后给它加 marker 或改 addopts，也不会被静默排除出 CI。
+          uv run pytest sim/tests/test_m1_metrics.py
 
   frontend:
     name: 前端（锁 / tsc / eslint / vitest / prettier）

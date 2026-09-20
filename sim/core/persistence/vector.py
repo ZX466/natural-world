@@ -46,9 +46,7 @@ def create_memory_vec_table(conn: sqlite3.Connection, dim: int = DEFAULT_EMBEDDI
 
         sqlite_vec.load(conn)
         conn.execute(
-            f"CREATE VIRTUAL TABLE IF NOT EXISTS {VEC_TABLE} USING vec0("
-            f"embedding FLOAT32[{dim}]"
-            f")"
+            f"CREATE VIRTUAL TABLE IF NOT EXISTS {VEC_TABLE} USING vec0(embedding FLOAT32[{dim}])"
         )
         conn.commit()
     finally:

@@ -149,8 +149,7 @@ def _redact_value(value: Any) -> Any:
     """递归脱敏：dict/list 深入；命中敏感键的值替换为 ***。"""
     if isinstance(value, dict):
         return {
-            k: (REDACTED if _is_sensitive_key(k) else _redact_value(v))
-            for k, v in value.items()
+            k: (REDACTED if _is_sensitive_key(k) else _redact_value(v)) for k, v in value.items()
         }
     if isinstance(value, (list, tuple)):
         return type(value)(_redact_value(v) for v in value)
