@@ -154,26 +154,40 @@ class LLMProfile(TimestampMixin, Base):
 
 
 class NpcMemory(TimestampMixin, Base):
-    """NPC 记忆 — schema.md §5。§6 MemoryEntry：第一人称叙事记忆。M3 启用。"""
+    """NPC 记忆 — schema.md §5 + memory-scan.md §4 治理列。§6 MemoryEntry。
+
+    治理列（0003 迁移加入）：
+    - entry_id：MemoryEntry.id 的稳定字符串句柄（uuid hex），供 supersede 关联；
+    - source：reason/dialogue/event/interoception（写入来源）；
+    - superseded_by：指向替代条目 entry_id；NULL = 有效（retrieval 过滤）；
+    - invalid_reason：'banned_word' / 'manual_review'。
+    append-only 纪律：supersede 只 UPDATE 这两个治理列，永不改 content（S5）。
+    """
 
     __tablename__ = "npc_memories"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entry_id: Mapped[str] = mapped_column(String, nullable=False)  # MemoryEntry.id（uuid hex）
     npc_id: Mapped[str] = mapped_column(String, nullable=False)
     event_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)  # NULL = 推理/转述
     branch_id: Mapped[str] = mapped_column(String, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String, nullable=False, default="event")
     importance: Mapped[float] = mapped_column(Float, nullable=False)  # 0.0-1.0
     emotion_tag: Mapped[str | None] = mapped_column(String, nullable=True)
     distortion: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     embedding: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)  # M3 填
     created_at_tick: Mapped[int] = mapped_column(Integer, nullable=False)
     last_accessed_tick: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    superseded_by: Mapped[str | None] = mapped_column(String, nullable=True)
+    invalid_reason: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
         Index("idx_memories_npc", "npc_id", "branch_id"),
         Index("idx_memories_importance", "npc_id", "importance"),
         Index("idx_memories_event", "branch_id", "event_seq"),
+        Index("idx_memories_entry", "entry_id", unique=True),
+        Index("idx_memories_visible", "npc_id", "branch_id", "superseded_by"),
     )
 
 

@@ -22,10 +22,15 @@ class EventStoreLike(Protocol):
 
 
 def flush_rows(events: list[WorldEvent]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """事件 → (store 行, entropy 行)。熵行与事件行同 tick 同源，append 同事务写入。"""
+    """事件 → (store 行, entropy 行)。熵行与事件行同 tick 同源，append 同事务写入。
+
+    每条 entropy 行带 ``event_index``（= 派生它的 ``entropy_inject`` 事件在 events
+    列表中的下标）；``store.append`` 分配 seq 后据此把 ``event_seq`` 回填到
+    entropy_log（D04 记账项），事件与熵行同事务，无半写。
+    """
     store_rows: list[dict[str, Any]] = []
     entropy_rows: list[dict[str, Any]] = []
-    for e in events:
+    for i, e in enumerate(events):
         store_rows.append(e.to_store_dict())
         if e.event_type is EventKind.ENTROPY_INJECT:
             payload = e.payload
@@ -35,6 +40,7 @@ def flush_rows(events: list[WorldEvent]) -> tuple[list[dict[str, Any]], list[dic
                     "reason": "entropy_inject",
                     "tick": e.tick,
                     "value": str(payload.get("material", "")),
+                    "event_index": i,
                 }
             )
     return store_rows, entropy_rows
