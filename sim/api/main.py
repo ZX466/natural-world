@@ -70,8 +70,10 @@ def _make_clock():
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     import asyncio
 
+    from sim.core.logsetup import setup_logging
     from sim.perception.senses import run_perception_step
 
+    setup_logging()  # K8：redact_sensitive 进全局日志链（第二道防线）
     loop, store = await build_loop()
     tile_map = _default_map()
     # C06-③：感知挂载进 tick 固定执行序第 3 步（帧键=rtoken，WS 不广播）

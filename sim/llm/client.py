@@ -114,7 +114,7 @@ class LlmClient:
     ) -> LlmCallResult:
         """单次补全调用：监控事件 + 重试一次 + 结构化错误。"""
         client = self._ensure_client(profile)
-        cache_hit = _prefix_cache_probe(messages)
+        cache_hit = _prefix_cache_probe(profile.profile_name, messages)
         last_error: tuple[str, str] | None = None
 
         for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -198,12 +198,23 @@ def _status_kind(exc: APIStatusError) -> str:
     return "http_5xx"
 
 
-def _prefix_cache_probe(messages: list[dict[str, str]]) -> bool:
-    """身份锚前缀缓存探针（M1 简化口径）：非流式响应里供应商回报 cached_tokens
-    之前，用「首段消息与上次相同」近似。M1 先恒 False 保字段在，C06-④ 接身份锚
-    后按 messages[0] 指纹判定。
+def _prefix_cache_probe(profile_name: str, messages: list[dict[str, str]]) -> bool:
+    """身份锚前缀缓存探针（M1 口径）：messages[0] 指纹与该 profile 上次相同
+    → 判定前缀命中（供应商 cached_tokens 回报前的近似，非精确值）。
+
+    状态按 (profile_name, fingerprint) 记忆：同锚连发 → True；换锚 → False。
     """
-    return False
+    import hashlib
+
+    if not messages:
+        return False
+    fingerprint = hashlib.sha256(messages[0].get("content", "").encode()).hexdigest()
+    cached = _LAST_ANCHOR_FP.get(profile_name)
+    _LAST_ANCHOR_FP[profile_name] = fingerprint
+    return cached == fingerprint
+
+
+_LAST_ANCHOR_FP: dict[str, str] = {}
 
 
 def load_profile_snapshot(
