@@ -44,8 +44,11 @@ logs/
 *.db
 *.sqlite
 
-# Dot-folders: per user rule all dot-prefixed folders stay out of git EXCEPT .orca.
+# Dot-folders: per user rule all dot-prefixed agent-config folders stay out of git EXCEPT .orca.
 # If the repo was seeded before this rule, untrack with: git rm -r --cached <dir>
+# （用户规则 #4，2026-09-20：agent 配置目录不入 git 也不推送；但本地须存在——
+#   所有工作树都要有 .codegraph 与 .agents，.claude/.opencode/.codex 只在其对应工作树，主工作树全有）
+.agent/
 .agents/
 .claude/
 .codex/
@@ -57,5 +60,8 @@ logs/
 
 # .orca is the exception (user rule #4): the workflow contract files ARE tracked.
 #   tracked:   .orca/workflow.txt, .orca/agent-registry.md
-#   ignored:   .orca/talking.txt (per-worktree local inbox -> avoids cross-branch conflicts)
+#   ignored:   .orca/talking.txt   (per-worktree local inbox -> avoids cross-branch conflicts)
+#   ignored:   .orca/memory.md     (用户规则 #7，2026-09-20：各 agent 记忆，每工作树一份本地保存；
+#                               与 talking.txt 同理忽略——否则 5 个分支各自新增同路径文件，收编必冲突)
 .orca/talking.txt
+.orca/memory.md
