@@ -53,13 +53,14 @@ M1 范围与量化验收：DESIGN §17（认知闭环：LLM 客户端 + Profile 
 | 指标 | 门槛 | 实测（本机 `uv run pytest sim/tests/test_m1_metrics.py`） | 结论 |
 |---|---|---|---|
 | 脚本差事完成率 | ≥80% | **20/20 = 100%** | ✅ |
-| 决策延迟 P95 | <8s | **≈0.23ms**（链路计算耗时下界） | ✅ |
+| 决策延迟 P95 | <8s | **≈0.25ms**（链路计算耗时下界） | ✅ |
 | 单决策 prompt | <2k tok | **232–274 字符 ≈ 145–171 tok**（messages[0]+[1] 全量） | ✅ |
 | T3 出戏对抗 | 100% 安全 | **4/4 = 100%**（E17–E20） | ✅ |
 
 > **口径（写作时勿丢）**：延迟与完成率是**假 LLM（脚本应答、零网络）**下的**下界**；真实线上墙钟延迟由 `docs/perf/llm-monitoring.md` 日汇总看板监控（P95<8s / <2k tok）。两者量纲不同，不可互相替代。
 > **数字纠偏**：此前口头引用的「prompt ≈600 tok」与 test 实测不符——`prompt_chars` 实测 messages[0]+messages[1] 为 232–274 字符（≈145–171 tok）。**以 test 实测为准**（差事语料短锚+短感知文本；真实跑分若加长记忆/多 NPC 感知会上升，仍远低于 2k）。
 > **CI**：`ci.yml` 新增命名步骤「pytest M1 指标跑分」，按**文件路径**跑该文件；该文件无专属 marker（本已随 `-m "not bench"` 全量跑），按路径可保证日后加 marker / 改 addopts 也不会把它静默排除。
+> **补充门禁**：T3 语料门禁 `sim/tests/test_t3_gate.py` = **69 条实弹 × 多路径 + 5 结构攻击，78 断言全绿**（codex S04；ci.yml 另有命名步骤按文件路径跑它）。
 
 ### 已交付（C06，Claude → ✅ main）
 
@@ -75,7 +76,7 @@ M1 范围与量化验收：DESIGN §17（认知闭环：LLM 客户端 + Profile 
 
 - `sim/llm/prompts/banned_words.py` — 禁词单一数据源（prompt 扫描与记忆扫描共用，落实 cline 评审建议）
 - `sim/tests/test_banned_words.py` / `sim/tests/test_memory_scan.py` — 禁词表与 MemoryWritePipeline 测试
-- `sim/tests/fixtures/t3_corpus.py` + `sim/tests/test_t3_gate.py` — 36 条对抗样本 / 45 条断言（T3 门禁）。**无 `t3` marker**，ci.yml 按**文件路径**接入（不是 `-m t3`，否则永久收集 0 用例=假绿灯）；文件已进 main，CI 门禁步骤已由占位**转为实跑**（本机实测 45 passed）
+- `sim/tests/fixtures/t3_corpus.py` + `sim/tests/test_t3_gate.py` — **69 条对抗样本 / 78 条断言**（T3 门禁；S03 建库 36 条 → **S04 扩到 69 条实弹，★ 也打**）。**无 `t3` marker**，ci.yml 按**文件路径**接入（不是 `-m t3`，否则永久收集 0 用例=假绿灯）；CI 门禁步骤已**实跑**（本机实测 **78 passed**）
 - `docs/security/m1-checklist.md` 增补 **W6**（WS 鉴权 M1 前置）/ **W7**（消息字段逐条白名单）
 
 ### 已交付（F05，pi → ✅ main）
@@ -95,16 +96,17 @@ M1 范围与量化验收：DESIGN §17（认知闭环：LLM 客户端 + Profile 
 - 握手校验 Origin/Host（防 DNS rebinding / localhost CSRF）：uvicorn/starlette 原生支持（已锁）；绑定保持默认 127.0.0.1 即满足「禁 0.0.0.0」
 - 前端：原生 WebSocket/fetch，token 由后端同源 HTTP 下发，不落 localStorage 之外的位置
 - **结论：Python 无新包、npm 无新包** —— M1 实现按此清单走，无需再过依赖评审
+- **实施状态（codex S04，main `66f3f18`）**：token + `hello` 握手 hmac 比对 + Origin 白名单已在 `sim/api/ws.py` 落地，测试 8 项全绿 —— **「零新依赖」结论被实现验证成立**。**遗留**：前端 `client/src/net/ws.ts` 尚未接 token（需后端提供 `/api/ws-token` 下发端点），归 Claude/kilo 后续对接。
 
 ### P3 加固 3 项记账（codex C05 终审 → 均为代码/测试层；ruff / ESLint 无对应规则可兜，配置域不代兜）
 
-| # | 项 | 精确修法 | 责任 | P05 复核状态 |
+| # | 项 | 精确修法 | 责任 | 状态（2026-09-20 终校） |
 |---|---|---|---|---|
-| 1 | bool 穿透 | `isinstance(tx, int) and not isinstance(tx, bool)`（否则 JSON `true/false` 被当 1/0 可寻路） | Claude（M1 闸门） | ❌ **未落地** —— `sim/api/ws.py:164` 仍是 `isinstance(tx, int) and isinstance(ty, int)`，缺 `not isinstance(..., bool)`；`{"target_x":true,"target_y":false}` 仍会被当作 (1,0) 送入寻路 |
-| 2 | rtoken 规模注释 | `_rtoken` docstring 补「48-bit 适用规模 ≤10^4，超规模前复审」 | Claude（ws 网关） | ❌ **未落地** —— `_rtoken` docstring 仍为原句 |
-| 3 | 键白名单断言 | 对外载荷断言从文本 grep 升级为「键白名单快照断言」（M1 引入新字段时） | codex（契约测试） | ⏳ 已并入 S04 顺手项 |
+| 1 | bool 穿透 | `isinstance(tx, int) and not isinstance(tx, bool)`（否则 JSON `true/false` 被当 1/0 可寻路） | Claude（M1 闸门） | ✅ **已收口**（codex S04）——`sim/api/ws.py:222-227` 增 `not isinstance(tx/ty, bool)`，带 P3 #1 注释 |
+| 2 | rtoken 规模注释 | `_rtoken` docstring 补「48-bit 适用规模 ≤10^4，超规模前复审」 | Claude（ws 网关） | ✅ **已收口**（codex S04）——`sim/api/ws.py:89-90` 已写明 12 hex = 48 bit、≤10^4 可忽略、扩容前复审 |
+| 3 | 键白名单断言 | 对外载荷断言从文本 grep 升级为「键白名单快照断言」（M1 引入新字段时） | codex（契约测试） | ✅ **已入**（codex S04） |
 
-> 第 1、2 项属**跨域改动**（`sim/api/ws.py` 归 Claude 架构域），P05（配置/文档域）只做复核与记账，**不代改**——已在 talking.txt 报告主树。
+> 复核经过：P05 终校时（当时 main 尚未含 S04）第 1、2 项**确实仍缺**，已在 P05 报告主树；**codex S04 合入（main `66f3f18`）后三项全部收口**，本表已按终态更新。教训：**跨域状态以 main 实际代码为准**（我复查 `git grep 'not isinstance'` / `_rtoken` docstring 逐条确认，未凭留言采信）。
 
 ## 5. 跨域接口对接点（改了要同时通知对方）
 
