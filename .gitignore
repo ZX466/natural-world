@@ -9,6 +9,8 @@ venv/
 dist/
 build/
 *.egg-info/
+# tsc -b 增量编译产物（kilo K03 请求：不入库；`tsc --noEmit` 不产生，`-b` 才产生）
+*.tsbuildinfo
 
 # Environment & secrets
 .env

@@ -11,6 +11,13 @@ import type { WorldMirror } from '../game/world-mirror';
 const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
 
+/**
+ * WS 信封 `v`（versioning.md §1：major.minor，基线 1.0）。
+ * 必须与 sim 侧 `sim/api/ws.py::_PROTOCOL_VERSION` 一致——此前两处各写各的
+ * （sim 0.1 / client 0.1）已漂移，P05 统一为 1.0（kilo K03：前端以 sim 为准）。
+ */
+const PROTOCOL_VERSION = '1.0';
+
 export type WsStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
 
 export interface WsCallbacks {
@@ -50,7 +57,7 @@ export class WsClient {
         type: 'sync_request',
         channel: 'session',
         reason: 'reconnect',
-        v: '0.1',
+        v: PROTOCOL_VERSION,
         ws_seq: this.nextSeq(),
       });
     };
@@ -99,7 +106,7 @@ export class WsClient {
    *  注：Omit 对联合不分发（会坍缩成公共键），所以用可分配性宽松的入参 +
    *  序列化前统一附加信封字段；消息形状由调用方与生成的类型保证。 */
   send(msg: Record<string, unknown>): void {
-    this.sendRaw({ ...msg, v: '0.1', ws_seq: this.nextSeq() });
+    this.sendRaw({ ...msg, v: PROTOCOL_VERSION, ws_seq: this.nextSeq() });
   }
 
   private sendRaw(payload: unknown): void {

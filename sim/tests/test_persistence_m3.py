@@ -1,4 +1,4 @@
-﻿"""M3 预留表 + 0002 迁移 + sqlite-vec 脚手架测试（TASK-003 / D03）。
+"""M3 预留表 + 0002 迁移 + sqlite-vec 脚手架测试（TASK-003 / D03）。
 
 覆盖：
 - M3 空表建表（npc_memories / relationships / knowledge）可插入
@@ -82,14 +82,10 @@ class TestM3ReservedTables:
     async def test_relationship_insert_directed(self, session: AsyncSession) -> None:
         """有向关系双向存储：A→B 与 B→A 各一行。"""
         session.add(
-            Relationship(
-                branch_id="main", owner_id="a", other_id="b", trust=0.5, affection=0.2
-            )
+            Relationship(branch_id="main", owner_id="a", other_id="b", trust=0.5, affection=0.2)
         )
         session.add(
-            Relationship(
-                branch_id="main", owner_id="b", other_id="a", trust=-0.1, fear=0.4
-            )
+            Relationship(branch_id="main", owner_id="b", other_id="a", trust=-0.1, fear=0.4)
         )
         await session.commit()
 

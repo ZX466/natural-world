@@ -6,6 +6,14 @@ name: Nightly Bench
 #
 # 阈值口径：bench-plan §3 要求记录机器档位（CPU 型号/核数/Python 版本）后再比对，
 # 故结果 JSON 与机器信息一并上传，不做跨机器硬断言（runner 机型与开发机不同）。
+#
+# 阈值来源（单一真相源）：`sim/tests/bench/thresholds.py` —— 本 yml **不复制阈值表**，
+# 避免同一红线两处维护而漂移（历史教训：codex S03 无 marker 时 `-m t3` 曾成假门禁）。
+# - 感知传播红线 `PERCEPTION_TICK_LIMIT_MS = 3.6ms`（C06-③ 真实引擎合入后修订；
+#   budget.md §2.5 的 3.00ms 仍是预算目标值，3.6 = 实测 +20% 余量）
+# - 判定口径：**暖态中位**（`warmup_rounds=1` + median，`harness.assert_median_threshold`）——
+#   冷启动首轮（LOS 对称缓存未预热，7.6–8.2ms）不得经 mean 把感知拉过红线（pi F06 裁决）
+# - LLM 预取调度 `LLM_SCHED_TICK_LIMIT_MS = 0.20ms`（仅 tick 内确定性部分；异步推理不进 tick）
 
 on:
   schedule:

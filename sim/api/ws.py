@@ -24,7 +24,7 @@ from sim.world.pathfinding import Pathfinder
 
 logger = structlog.get_logger(__name__)
 
-_PROTOCOL_VERSION = "0.1"
+_PROTOCOL_VERSION = "1.0"  # versioning.md §1 基线 1.0（major.minor）；与前端 net/ws.ts 同步
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 
 _ALLOWED_CLIENT_TYPES = {"move_request", "set_control", "sync_request", "hello"}

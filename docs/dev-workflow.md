@@ -50,13 +50,14 @@ Push-Location client; npx tsc --noEmit; npx eslint .; npx prettier --check .; np
 |---|---|---|---|
 | T1 | 六类不变量断言（无 LLM，秒级） | `uv run pytest -m t1` | 每次提交（CI 含） |
 | T2 | 回放确定性（无 LLM） | `uv run pytest -m t2` | 每次提交（CI 含） |
-| T3 | 闸门对抗样本（录制 fixture，codex S03-3；**无 marker，按文件选**） | `uv run pytest sim/tests/test_t3_gate.py` | 每次提交（随 `-m "not bench"` 全量跑；ci.yml 另有命名独立门禁步骤，文件未收编前自适应跳过） |
+| T3 | 闸门对抗样本（录制 fixture，codex S03-3；**无 marker，按文件选**） | `uv run pytest sim/tests/test_t3_gate.py` | 每次提交（随 `-m "not bench"` 全量跑；ci.yml 另有命名独立门禁步骤，已实跑 45 passed） |
 | T4 | 出戏探针（真模型，烧钱） | nightly（无 CI 门禁） | 每日，锁定模型版本 |
 | T5 | golden 场景（10 种子 × 10 游戏日） | `uv run pytest -m t5` | 每日 |
 | bench | 性能基准 | `uv run pytest -m bench` | **nightly，不进每提交 CI** |
 
 - CI 里 pytest 一律带 `-m "not bench"`：性能基准抖动大，放进来只会把 CI 变成红灯制造机（`docs/perf/bench-plan.md` §0）。
 - marker 在 `pytest.ini` 注册，`--strict-markers` 生效：写测试必须带正确 marker，拼错会直接失败。
+- **M1 指标跑分**（`sim/tests/test_m1_metrics.py`：差事完成率 / 链路 P95 / 单决策 tok / T3 出戏，假 LLM 零网络，纯 T1 秒级）：本已随 `-m "not bench"` 全量跑，ci.yml 另有命名步骤「pytest M1 指标跑分」——两个命名门禁步骤（T3 对抗、M1 指标）都按**文件路径**选择，不用 marker，以免 marker/addopts 变化把门禁静默排除成假绿灯。实测数字见 `docs/README.md` §4。
 
 ### bench 跑法（性能域）
 
