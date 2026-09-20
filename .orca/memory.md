@@ -1,8 +1,6 @@
-
 # memory.md — kilo（接口 / 兼容性域）
 
-> 用户规则 #7：本文件保存 **kilo 自己的记忆**，供新对话继续任务。本地保存、**不入 git**
-> （理由同 .orca/talking.txt：各工作树各 agent 各自维护同路径文件，入 git 收编必冲突）。
+> 用户规则 #7：本文件保存 **kilo 自己的记忆**，供新对话继续任务。**已入库**（main `3e320b9` 裁决），改动走提交；跨树融合由主导方（Claude）收编时合并（本树本地版 = 权威来源）。
 > 新对话开场先读：`.orca/talking.txt`（Claude 派活/回执）→ 本文件 → `.orca/workflow.txt` + `.orca/agent-registry.md`。
 
 ## 0. 我是谁 / 在哪
