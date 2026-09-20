@@ -4,8 +4,8 @@
 > 环境硬约束：Python 一律用 **uv** 建虚拟环境；playwright 调浏览器只用 `D:\develop\hermes\chrome`；
 > **删除 npm 包或 venv 前必须先问用户**；agent 配置目录（`.agent/.agents/.claude/.codex/.kiro/.opencode/.codegraph`）
 > **不入 git 也不推送，但本地须存在**（用户规则 #4：所有工作树都要有 `.codegraph`+`.agents`，
-> `.claude/.opencode/.codex` 只在对应工作树，主树全有）；`.orca` 例外——`workflow.txt`/`agent-registry.md`
-> 入库，`talking.txt`/`memory.md` 本地保存（用户规则 #7，跨工作树记忆交接）。
+> `.claude/.opencode/.codex` 只在对应工作树，主树全有）；`.orca` 例外——`workflow.txt`/`agent-registry.md`/
+> `memory.md` 入库（main `3e320b9` 裁决），仅 `talking.txt` 本地保存。
 
 ## 1. 环境与一次初始化
 

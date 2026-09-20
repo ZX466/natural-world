@@ -58,10 +58,7 @@ logs/
 # CodeGraph index (local per-machine database)
 .codegraph/
 
-# .orca is the exception (user rule #4): the workflow contract files ARE tracked.
-#   tracked:   .orca/workflow.txt, .orca/agent-registry.md
-#   ignored:   .orca/talking.txt   (per-worktree local inbox -> avoids cross-branch conflicts)
-#   ignored:   .orca/memory.md     (用户规则 #7，2026-09-20：各 agent 记忆，每工作树一份本地保存；
-#                               与 talking.txt 同理忽略——否则 5 个分支各自新增同路径文件，收编必冲突)
+# .orca is the exception (user rule #4/#7): workflow contract files ARE tracked.
+#   tracked:   .orca/workflow.txt, .orca/agent-registry.md, .orca/memory.md (rule #7: per-agent memory)
+#   ignored:   .orca/talking.txt (per-worktree local inbox -> avoids cross-branch conflicts)
 .orca/talking.txt
-.orca/memory.md
