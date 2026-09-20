@@ -24,7 +24,9 @@ from sim.core.world import WorldState
 logger = structlog.get_logger(__name__)
 
 #: M1 支持动作白名单外的动作（build/demolish 等无引擎支撑）一律拒绝。
-M1_SUPPORTED_ACTIONS = frozenset({"move_to", "wait", "talk_to", "flee", "investigate", "attack"})
+M1_SUPPORTED_ACTIONS = frozenset(
+    {"move_to", "wait", "talk_to", "take", "give", "flee", "investigate", "attack"}
+)
 
 #: talk_to / take 等目标动作的目标最大距离（M1 简化：视觉半径内语义）。
 _TARGET_MAX_DISTANCE = 12.0
