@@ -43,7 +43,7 @@
 | 各子系统占比 | clock+rng+apply+utility+perception+llm_sched ≤ 名义表 7.00ms 或 ≤ 上限表 12.35ms | nightly | 占比漂移 >20% 即查 |
 | apply(event) 单事件 p99 | ≤ 0.04ms（50 事件 ≈ 2ms） | nightly | 超预算 §2.3 |
 | L1 50 NPC utility | ≤ 6ms p99 | nightly（M2 起） | 破限先砍节拍再优化 |
-| 感知传播 50 NPC（视觉/听觉） | 听觉 ≤ 3ms；视觉**记录基线不判红**（参考实现实测分区剪枝 4.57ms > 3ms → 真实引擎验收线，见 test_bench_perception.py） | nightly | 引擎合入后恢复红线；关注分区 vs 朴素比值 |
+| 感知传播 50 NPC（视觉/听觉） | 暖态 mean ≤ 3.6ms（红线，+20% 慢机余量；预算目标 3.00ms）。bench 已 `warmup_rounds=1` 剔除首轮 LOS 缓存冷启动（冷 7.6–8.2ms） | nightly | 超限查 LOS 缓存命中率/分区粒度；冷启动不计 |
 | LLM 预取调度（M1） | ≤ 0.20ms/tick（触发门控+入队+二次校验） | nightly（M1 起） | 破限先查 L2 常驻 NPC 门控扫描 |
 | RNG 每 tick 成本(200 draws, L1) | ≤ 0.10ms | nightly | 超限回退向量化批量抽取 |
 | RNG 1M draws 聚合（警戒） | ≤ 300ms（先行实测 219ms） | nightly | 追查逐调用路径 |

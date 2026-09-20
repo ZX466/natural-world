@@ -66,3 +66,20 @@ def assert_threshold(measured_ms: float, limit_ms: float, label: str) -> None:
         f"{label} 超阈值: 实测 {measured_ms:.3f}ms > 上限 {limit_ms:.3f}ms"
         f"（差值 {(measured_ms - limit_ms):.3f}ms）"
     )
+
+
+def assert_median_threshold(meta: object, limit_ms: float, label: str) -> None:
+    """中位口径阈值断言（抗单轮离群）。
+
+    meta 为 pytest-benchmark 的 `benchmark.stats`（Metadata 对象）；
+    真正统计量在其 `.stats` 属性（Stats：median/mean 单位为**秒**）。
+    用于热敏感项：首轮/偶发离群会把 mean 拉过红线（感知 LOS 冷启动、RNG GC 抖动），
+    稳态由 median 反映（bench-plan §2「至少 3 轮取中位」的落地）。仍打印 mean 作参考。
+    """
+    stats = meta.stats  # type: ignore[attr-defined]
+    median_ms = stats.median * 1000.0
+    mean_ms = stats.mean * 1000.0
+    assert median_ms <= limit_ms, (
+        f"{label} 中位超阈值: median {median_ms:.3f}ms > 上限 {limit_ms:.3f}ms"
+        f"（差值 {(median_ms - limit_ms):.3f}ms；mean {mean_ms:.3f}ms 仅参考）"
+    )
