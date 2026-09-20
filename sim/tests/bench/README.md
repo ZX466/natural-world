@@ -31,9 +31,14 @@ uv run pytest -m bench --benchmark-columns=min,mean,max,median
 | `test_bench_rng.py` | 分流 RNG：1M 聚合、L1 每 tick 成本、向量化对比 + 确定性/重放契约 |
 | `test_bench_apply.py` | EventBus.apply：单事件 / 50 事件批 + 唯一写路径契约守卫 |
 | `test_bench_perception.py` | M1 感知传播（真实引擎）：视觉/听觉暖态 ≤3.6ms + 朴素 O(N²) 哨兵 + 模型形状契约 |
+| `test_bench_l1_utility.py` | M2 L1 效用 50 NPC：全量/单 NPC 红线 ≤6.0ms/0.12ms + 断线兜底队列 ≤0.20ms + 向量化哨兵 |
+| `test_bench_smell.py` | M2 嗅觉传播（∝1/r² 风向）：网格扩散+采样 ≤0.15ms + 逐对 O(N²) 哨兵 + 形状契约 |
 
 ## 阈值修订记录
 
+- **M2-P1（2026-09-20）新增**：L1 效用 `L1_UTILITY_TICK_LIMIT_MS=6.0` / `L1_UTILITY_PER_NPC_LIMIT_MS=0.12` /
+  `L1_OFFLINE_FALLBACK_LIMIT_MS=0.20`；嗅觉 `SMELL_TICK_LIMIT_MS=0.15`（+哨兵下界 `SMELL_NAIVE_SENTINEL_MS=3.0`）。
+  实测均远低于红线（L1 ~0.02ms、嗅觉 ~0.01ms）——红线是「M2 满属性 + 未向量化写法」的回归天花板，不按实测缩小。
 - RNG 1M 逐调用聚合量纲实测 219ms（原 100ms 不可达且与每 tick 预算脱节）→
   回调为 300ms 警戒线，并新增「每 tick RNG 成本（L1 规模 200 draws ≤ 0.10ms）」
   作为真预算口径；详见 `thresholds.py` 头注与本树 `docs/perf/budget.md` §2.2。

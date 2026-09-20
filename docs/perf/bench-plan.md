@@ -19,6 +19,8 @@
 | `world/pathfinding` | A* 最坏：全图跨角 + 障碍密集；chunk 增量失效 | pytest-benchmark | ms/query |
 | `persistence` | 批量 INSERT（WAL）：单事务 20/100 条；快照 5MB gzip 序列化 | 计时 harness | ms/batch |
 | `perception`（M1 起） | 50 NPC 感知传播（视觉射线/听觉 1/r）全对 vs 分区后 | 计时 harness | ms/tick |
+| `npc.utility`（M2 起） | L1 效用 50 NPC 全量/单 NPC + 断线兜底计划队列 | 计时 harness | ms/tick |
+| `perception.smell`（M2 起） | 嗅觉 ∝1/r² 风向扩散（网格）+ 50 接收采样 | 计时 harness | ms/tick |
 | **整个 tick loop** | 组合：clock+rng+apply+utility（L1）| **真实 tick loop 计时** | ms/tick，p99 |
 
 **M0 的必测三件套**（任务指定）：`clock`、`rng`、`apply(event)`——这三个是 M0 里程碑（§17 M0：RNG/时钟/apply）且是确定性内核底座，C5/C4 的守卫。寻路与渲染从 M0 即有 bench，防止「地图大 → 每移动一下卡死」。
@@ -40,10 +42,13 @@
 |---|---|---|---|
 | tick p99（1x） | ≤ 8.3ms（预算 16.6ms 的 50%） | nightly | 超则告警 + 性能域接手定位 |
 | tick p999 | ≤ 13ms | nightly | 抖动追踪（GC/快照/IO 峰值） |
-| 各子系统占比 | clock+rng+apply+utility+perception+llm_sched ≤ 名义表 7.00ms 或 ≤ 上限表 12.35ms | nightly | 占比漂移 >20% 即查 |
+| 各子系统占比 | clock+rng+apply+utility+perception+smell+llm_sched ≤ 名义表 7.05ms 或 ≤ 上限表 12.50ms | nightly | 占比漂移 >20% 即查 |
 | apply(event) 单事件 p99 | ≤ 0.04ms（50 事件 ≈ 2ms） | nightly | 超预算 §2.3 |
-| L1 50 NPC utility | ≤ 6ms p99 | nightly（M2 起） | 破限先砍节拍再优化 |
+| L1 50 NPC utility（全量） | 暖态中位 ≤ 6.0ms（上限表）；M2-P1 实测 ~0.02ms | nightly（M2 起） | 破限先砍 memory 衰减节拍再优化（不调红线） |
+| L1 单 NPC utility | ≤ 0.12ms/npc（= 6.0/50） | nightly（M2 起） | 逐人超限查是否退化为逐对象热循环 |
+| L1 断线兜底计划队列 | ≤ 0.20ms/tick（LLM 断线降级路径） | nightly（M2 起） | 降级路径写回热循环即超限 |
 | 感知传播 50 NPC（视觉/听觉） | 暖态 mean ≤ 3.6ms（红线，+20% 慢机余量；预算目标 3.00ms）。bench 已 `warmup_rounds=1` 剔除首轮 LOS 缓存冷启动（冷 7.6–8.2ms） | nightly | 超限查 LOS 缓存命中率/分区粒度；冷启动不计 |
+| 嗅觉传播（∝1/r² 风向，M2） | 暖态中位 ≤ 0.15ms/tick（扩散+采样）；M2-P1 实测 ~0.01ms | nightly（M2 起） | 超限查是否退化为逐对 O(N²) |
 | LLM 预取调度（M1） | ≤ 0.20ms/tick（触发门控+入队+二次校验） | nightly（M1 起） | 破限先查 L2 常驻 NPC 门控扫描 |
 | RNG 每 tick 成本(200 draws, L1) | ≤ 0.10ms | nightly | 超限回退向量化批量抽取 |
 | RNG 1M draws 聚合（警戒） | ≤ 300ms（先行实测 219ms） | nightly | 追查逐调用路径 |

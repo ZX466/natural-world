@@ -34,3 +34,26 @@ LLM_SCHED_TICK_LIMIT_MS = 0.20
 # 首轮 LOS 对称缓存冷启动 7.6-8.2ms（一次性）；bench 已 `warmup_rounds=1` 剔除冷启动，
 # 否则 mean 会被拉到 3.8-4.4ms 越过红线假红。暖态口径下红线成立。
 PERCEPTION_TICK_LIMIT_MS = 3.6
+
+# --- M2-P1：L1 效用 AI（50 NPC）与嗅觉传播（∝1/r² 风向）预算红线 ---
+# 依据：budget.md §1 表 + §2.4/§2.9，M2-P1 定案（2026-09-20，本机暖态中位实测）。
+# 口径统一「暖态中位」（warmup_rounds=1 + assert_median_threshold），与感知红线同源。
+
+# L1 效用 50 NPC 全量每 tick 上限。budget.md §1 上限 6.00ms（名义 4.00ms）。
+# 实测（代表性满属性载荷：needs6+OCEAN5+PAD3+关系+R32 记忆显著性，向量化）
+# 暖态中位 ~0.02ms —— 6.00 为「M2 满属性 + 未向量化写法」的回归天花板，
+# 破限先砍 memory 衰减节拍（budget §2.4），再优化，不得放宽红线。
+L1_UTILITY_TICK_LIMIT_MS = 6.0
+# 单 NPC 单 tick 效用评估上限 = 6.00ms / 50 npc（budget §2.4 逐人预算口径）。
+L1_UTILITY_PER_NPC_LIMIT_MS = 0.12
+# LLM 断线降级路径（L1 兜底执行计划队列：每股 pop 一步 + 常数校验）上限。
+# 量级校验项：实测 ~0.001ms；0.20 = O(N) 上界，防降级路径写回热循环。
+L1_OFFLINE_FALLBACK_LIMIT_MS = 0.20
+
+# 嗅觉传播（M2 新通道）每 tick 扩散上限。budget.md §2.9：名义 0.05ms / 上限 0.15ms。
+# 口径：Eulerian 网格半拉格朗日平流 + 衰减 + 持续源发射（64×64，K≈20 活跃源），
+# 一次 np.roll 全图 —— 不逐对计算（逐对 O(N²)·1/r² 是 naive 哨兵，见下）。
+# 暖态中位实测 ~0.01ms；0.15 留「风场非恒定→需双线性插值平移」的余量。
+SMELL_TICK_LIMIT_MS = 0.15
+# 嗅觉 naive O(N²) ∝1/r² 哨兵下界：断言其明显慢于网格版（H-1 动机证据，不卡预算）。
+SMELL_NAIVE_SENTINEL_MS = 3.0
