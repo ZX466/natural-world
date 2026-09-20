@@ -18,12 +18,19 @@ from pathlib import Path
 
 import pytest
 
-from sim.llm.prompts.banned_words import BANNED_WORDS_META, scan
+from sim.llm.prompts.banned_words import BANNED_WORDS_META
+
+# 引用式豁兄实现在安全域共享 util（闸门与测试同口径）：
+from sim.llm.prompts.echo_scan import (
+    quoted_echo_scan,
+)
+from sim.llm.prompts.echo_scan import (
+    strip_stage_direction as _strip_stage_direction,
+)
 from sim.tests.fixtures.t3_corpus import CORPUS, T3Case, cases_by_difficulty, category_counts
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 T3_DOC = REPO_ROOT / "docs" / "security" / "t3-corpus.md"
-
 
 # ---------------------------------------------------------------------------
 # 完整性：每类 ≥5（t3-corpus.md 使用方式 §2）
@@ -37,7 +44,7 @@ class TestCorpusIntegrity:
             assert counts.get(cat, 0) >= 5, f"{cat} 类仅 {counts.get(cat, 0)} 条 <5"
 
     def test_total_at_least_thirty(self):
-        assert len(CORPUS) >= 30
+        assert len(CORPUS) == 69
 
     def test_gate_subset_excludes_star(self):
         """CI 门禁只取 ◆/◇；★ 属 T4 nightly。"""
@@ -73,63 +80,28 @@ class TestDocSync:
 # 门禁主体：期望安全响应文本零禁词（语料自身的出戏卫生）
 # ---------------------------------------------------------------------------
 
-
 #: 期望响应文本中的「引用式」禁词（样本在引用攻击者原话或明说「哪有『重开』」——
 #: 这是 t3-corpus 期望形态的设计特征：否定/转译攻击词，而非复述元信息）。
 #: 自动化口径：命中处于引号配对区间内=引用式，允许；引号外出现禁词=失败。
 #: 句首以禁词反问开头（如 A01「AI？」C01「重开一局？」）视作对攻击词的
 #: 即时否定转译，同样属于安全形态——t3-corpus 期望响应列的正文是安全基线。
-_QUOTES_PAIRS = {"「": "」", "『": "』", '"': '"'}
 
 
-def _inside_quotes(text: str, start: int, end: int) -> bool:
-    """命中区间是否处于引号配对区间内（「」『』""）。"""
-    for open_q, close_q in _QUOTES_PAIRS.items():
-        i = 0
-        while True:
-            i = text.find(open_q, i)
-            if i == -1:
-                break
-            j = text.find(close_q, i + 1)
-            if j == -1:
-                break
-            if i <= start and end <= j + 1:
-                return True
-            i = j + 1
-    return False
-
-
-def _is_leading_echo(text: str, hit_start: int, hit_end: int) -> bool:
-    """句首反问式复述：响应以攻击词开头立即否定（期望形态列的设计惯例）。
-
-    C09「什么『存档』不存档的」类句式：闭引号后紧邻的重复词面也是
-    对攻击词的否定式重复（『X』不X 的世界内惯用反驳结构），放行。
-    """
-    if hit_start == 0:
-        return True
-    # 引号结构的紧邻延续（『X』不X 的世界内反驳句式：前缀窗口含引号即放行）
-    prefix = text[max(0, hit_start - 4) : hit_start]
-    quotes = (*_QUOTES_PAIRS.keys(), *_QUOTES_PAIRS.values())
-    return any(q in prefix for q in quotes)
-
-
-@pytest.mark.parametrize("case", cases_by_difficulty("◆", "◇"), ids=lambda c: c.case_id)
+@pytest.mark.parametrize("case", cases_by_difficulty("◆", "◇", "★"), ids=lambda c: c.case_id)
 class TestGateResponses:
     def test_no_banned_words(self, case: T3Case):
-        """期望安全响应文本不得含「非引用、非句首反问」的禁词词面。
+        """期望安全响应正文不得含「非引用、非句首反问」的禁词词面。
 
         允许两类引用式出现（t3-corpus 设计特征——转译/否定攻击词）：
         1. 引号配对区间内（哪有『重开』）；
         2. 句首反问复述（AI？没听过。/ 存档？你指账房存银子的柜子？）。
         其余位置出现禁词 = 语料自身出戏泄漏 = 门禁失败。
+        括注（断言参考）不参与断言。变体池样本 expected 为指针，跳过。
         """
-        result = scan(case.expected_response)
-        leaking = [
-            h
-            for h in result.hits
-            if not _inside_quotes(case.expected_response, h.start, h.end)
-            and not _is_leading_echo(case.expected_response, h.start, h.end)
-        ]
+        if case.case_id.endswith("b"):
+            return  # 变体池 expected=指针文本，门禁断言在 test_live_fire 做
+        text = _strip_stage_direction(case.expected_response)
+        leaking = quoted_echo_scan(text)
         assert not leaking, (
             f"{case.case_id} 响应文本含出戏禁词: "
             f"{[(h.word, case.expected_response[h.start : h.end]) for h in leaking]}"
@@ -142,10 +114,10 @@ class TestGateResponses:
 
 
 class TestSamplingQuality:
-    def test_star_cases_not_in_gate_file(self):
-        """本文件（CI 消费）不应收录 ★ 样本。"""
+    def test_star_cases_are_marked_for_t4(self):
+        """★ 样本全量入实弹（S04 口径），但须保留难度标注供 T4 nightly 分层。"""
         stars = [c for c in CORPUS if c.difficulty == "★"]
-        assert not stars
+        assert len(stars) == 21  # t3-corpus.md 难度分布行同步
 
     def test_paths_are_valid(self):
         valid = {"P1", "P2", "P3", "P1/P2", "P1/P3", "P2/P3", "P1/P2/P3"}

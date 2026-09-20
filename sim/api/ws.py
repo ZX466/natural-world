@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hmac
+import secrets
 import time
 from typing import Any
 
@@ -29,9 +31,64 @@ FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.adv
 
 _ALLOWED_CLIENT_TYPES = {"move_request", "set_control", "sync_request", "hello"}
 
+# ---------------------------------------------------------------------------
+# W6 WS 鉴权（codex M1 终审前置项；cline P04 结论：零新依赖）
+# 方案：启动期本地 token + Origin/Host 白名单双层。
+# - token：进程启动生成，M0/M1 单机形态下经同源 HTTP 端点下发（/api/ws-token）；
+#   客户端 connect 后首条消息必须为 {"type":"hello","token": ...}，hmac 比对。
+# - Origin：握手前校验，白名单 = 同机来源（localhost/127.0.0.1 + 扩展）。
+#   防：恶意网页探测 ws://127.0.0.1:8000/ws（浏览器会带真实 Origin）。
+#   已知边界：非浏览器客户端可伪造 Origin——对 M1 本机威胁模型（防网页
+#   匿名接入）足够；M2 若开放局域网需升级 token 为每连接一次性挑战。
+# ---------------------------------------------------------------------------
+_ALLOWED_ORIGINS = frozenset(
+    {
+        "http://localhost:5173",  # Vite dev
+        "http://127.0.0.1:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "null",  # file:// 页面（E2E 冒烟用）——仅 localhost 绑定下无实害
+    }
+)
+
+_WS_AUTH_TOKEN: str | None = None  # 懒生成（首次取用时）
+
+
+def ws_auth_token() -> str:
+    """进程级 WS 鉴权 token（启动后不变；测试可用 reset_ws_auth_token 重置）。"""
+    global _WS_AUTH_TOKEN
+    if _WS_AUTH_TOKEN is None:
+        _WS_AUTH_TOKEN = secrets.token_urlsafe(32)
+    return _WS_AUTH_TOKEN
+
+
+def reset_ws_auth_token() -> None:
+    """测试辅助：清空 token（下个请求重新生成）。"""
+    global _WS_AUTH_TOKEN
+    _WS_AUTH_TOKEN = None
+
+
+def check_origin(origin: str | None) -> bool:
+    """握手 Origin 校验。None（非浏览器/同源直连）放行——绑定 127.0.0.1 下无实害。"""
+    if origin is None:
+        return True
+    return origin in _ALLOWED_ORIGINS
+
+
+def check_hello_auth(raw: dict[str, Any]) -> bool:
+    """hello 消息携带的 token 比对（hmac.compare_digest 防时序侧信道）。"""
+    provided = raw.get("token")
+    if not isinstance(provided, str):
+        return False
+    return hmac.compare_digest(provided, ws_auth_token())
+
 
 def _rtoken(entity_id: str) -> str:
-    """内部 id → 不透明替身。M0 用固定前缀哈希；映射表属世界真相不出网关。"""
+    """内部 id → 不透明替身。M0 用固定前缀哈希；映射表属世界真相不出网关。
+
+    12 hex = 48 bit，碰撞期望在实体规模 ≤10^4 时可忽略（n²/2^49）；
+    超过该规模或出现实体身份安全语义前，扩到 16 hex 并复审。
+    """
     import hashlib
 
     return "rt-" + hashlib.sha256(entity_id.encode()).hexdigest()[:12]
@@ -161,7 +218,13 @@ def handle_client_message(
         if protagonist_id is None:
             return None
         tx, ty = raw.get("target_x"), raw.get("target_y")
-        if not (isinstance(tx, int) and isinstance(ty, int)):
+        # bool 是 int 子类：JSON true/false 会被当 1/0 送寻路（codex P3 #1）
+        if not (
+            isinstance(tx, int)
+            and isinstance(ty, int)
+            and not isinstance(tx, bool)
+            and not isinstance(ty, bool)
+        ):
             return None
         try:
             path = pf.find(loop.state.entities[protagonist_id].pos, (tx, ty))
@@ -169,6 +232,24 @@ def handle_client_message(
             return None  # 不可达/不可通行：静默忽略（客户端已预检）
         loop.issue_move(protagonist_id, list(path))
         return None
+
+    if msg_type == "hello":
+        # W6：hello 是鉴权握手。token 对 → 确认；错/缺 → auth_error（客户端应重连取新 token）
+        if check_hello_auth(raw):
+            return {
+                "type": "hello_ack",
+                "channel": "session",
+                "v": _PROTOCOL_VERSION,
+                "ws_seq": 0,
+            }
+        return {
+            "type": "error",
+            "channel": "error",
+            "v": _PROTOCOL_VERSION,
+            "ws_seq": 0,
+            "code": "auth_error",
+            "message": "authentication failed",
+        }
 
     if msg_type == "sync_request":
         return {

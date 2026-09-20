@@ -119,6 +119,36 @@ class TestOutOfCharacterBoundary:
         assert "chenmo" not in text  # 内部 id 不可见
         assert "rt-" in text  # rtoken 在
 
+    def test_snapshot_key_whitelist(self, loop: TickLoop, tile_map: TileMap):
+        """键白名单快照断言（codex P3 #3）：载荷键封闭集合，
+        新增字段必须过本测试 + 安全域评审，防文本 grep 漏报。"""
+        payload = snapshot_payload(loop, tile_map)
+        top_keys = set(payload.keys())
+        assert top_keys == {
+            "type",
+            "channel",
+            "v",
+            "ws_seq",
+            "actors",
+            "lights",
+            "structures",
+            "map",
+            "weather",
+            "combat",
+        }
+        for actor in payload["actors"]:
+            assert set(actor.keys()) == {"rtoken", "x", "y", "facing", "sprite", "anim"}
+        assert set(payload["map"].keys()) == {"w", "h", "tileset"}
+
+    def test_delta_key_whitelist(self, loop: TickLoop):
+        """delta 键白名单同口径。"""
+        loop.issue_move("chenmo", [(1, 0), (2, 0)])
+        loop.advance_frame(1.0)
+        payload = delta_payload(loop, loop.drain_delta())
+        assert set(payload.keys()) == {"type", "channel", "v", "ws_seq", "actors"}
+        for actor in payload["actors"]:
+            assert set(actor.keys()) == {"rtoken", "x", "y"}
+
     def test_delta_clean(self, loop: TickLoop):
         loop.issue_move("chenmo", [(1, 0), (2, 0)])
         loop.advance_frame(1.0)

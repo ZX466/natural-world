@@ -15,6 +15,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from sim.api.settings import router as settings_router
 from sim.api.ws import (
     ConnectionManager,
+    check_origin,
     handle_client_message,
     map_static_payload,
     run_world_driver,
@@ -122,6 +123,11 @@ async def world_map() -> dict[str, Any]:
 
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket) -> None:
+    # W6 握手层：Origin 白名单（防恶意网页 localhost CSRF / DNS rebinding）。
+    # token 校验在 hello 消息层（见 handle_client_message）。
+    if not check_origin(ws.headers.get("origin")):
+        await ws.close(code=4003)  # 4003 = origin rejected（自定义码段 4000+）
+        return
     await ws.accept()
     manager.register(ws)
     pf = _pathfinder()

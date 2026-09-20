@@ -20,6 +20,7 @@ import structlog
 
 from sim.agent.intent import REPLAN_CONFIDENCE_THRESHOLD, Intent
 from sim.core.world import WorldState
+from sim.llm.prompts.echo_scan import quoted_echo_scan
 
 logger = structlog.get_logger(__name__)
 
@@ -63,6 +64,12 @@ class IntentGate:
             return GateVerdict(False, "unsupported_action")
         if not intent.reason.strip():
             return GateVerdict(False, "empty_reason")
+        # M1-D（codex S04）：reason 是独白唯一来源，出戏词面在闸门处死。
+        # 引用式豁免（句首反问/引号转译）与 T3 门禁断言同口径——
+        # 同一词表同一工具，禁两处维护。
+        real_hits = quoted_echo_scan(intent.reason)
+        if real_hits:
+            return GateVerdict(False, "banned_reason")
         if intent.confidence < REPLAN_CONFIDENCE_THRESHOLD:
             return GateVerdict(False, "low_confidence")
         if intent.action in ("talk_to", "take", "give", "attack", "use") and (
