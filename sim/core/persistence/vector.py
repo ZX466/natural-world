@@ -60,3 +60,14 @@ def memory_vec_exists(conn: sqlite3.Connection) -> bool:
         (VEC_TABLE,),
     ).fetchone()
     return row is not None
+
+
+def memory_vec_rowid(npc_memory_id: int) -> int:
+    """npc_memories.id → npc_memory_vec.rowid 关联键（schema.md §6）。
+
+    D04 约定：npc_memories 与 memory_vec 的**业务关联键**为
+    ``(event_seq, entry_id)``（entry_id = npc_memories.entry_id，稳定句柄）；
+    vec0 表只存向量，其 ``rowid`` 直接取 ``npc_memories.id`` 自增主键。
+    嵌入生成 M3 再做，本函数固定关联语义，避免返工。
+    """
+    return npc_memory_id

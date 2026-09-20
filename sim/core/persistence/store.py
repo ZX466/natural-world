@@ -99,6 +99,9 @@ class SqlEventStore:
         entropy_rows（codex 必须项 #2 预留）：与事件同事务原子写入 entropy_log。
         当前内核把熵材料存于 event payload（entropy_inject 事件自带 material），
         故通常传 None；保留该参数以支持后续「显式熵日志表」的原子落库。
+
+        D04 记账项：entropy 行可通过 ``event_index`` 关联到 events 列表下标，
+        本方法分配 seq 后把对应 ``event_seq`` 回填（同一事务）。
         """
         if not events and not entropy_rows:
             return
@@ -110,10 +113,14 @@ class SqlEventStore:
             )
             max_seq: int = result.scalar() or 0
 
+            # event_index → 分配到的 seq（供 entropy 行回填 event_seq）
+            seq_by_index: dict[int, int] = {}
             for i, event in enumerate(events):
+                assigned_seq = max_seq + i + 1
+                seq_by_index[i] = assigned_seq
                 ev = Event(
                     branch_id=branch_id,
-                    seq=max_seq + i + 1,
+                    seq=assigned_seq,
                     tick=event["tick"],
                     event_type=event["event_type"],
                     actor_id=event.get("actor_id", ""),
@@ -125,8 +132,10 @@ class SqlEventStore:
                 )
                 session.add(ev)
 
-            # 熵日志行：与事件同事务提交（原子性）
+            # 熵日志行：与事件同事务提交（原子性），event_seq 回填（D04）
             for row in entropy_rows or []:
+                idx = row.get("event_index")
+                backfilled = seq_by_index.get(idx) if idx is not None else row.get("event_seq")
                 session.add(
                     EntropyLog(
                         branch_id=branch_id,
@@ -134,6 +143,7 @@ class SqlEventStore:
                         reason=row.get("reason", ""),
                         tick=row["tick"],
                         value=row["value"],
+                        event_seq=backfilled,
                     )
                 )
 

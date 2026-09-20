@@ -17,7 +17,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Protocol, runtime_checkable
 
 import structlog
 
@@ -64,15 +64,137 @@ class WriteResult:
     reason: str | None = None
 
 
-class MemoryWritePipeline:
-    """记忆写入唯一入口（S1）。持有条目表并暴露治理/检索 API（S5）。
+def make_entry(
+    *,
+    entry_id: str,
+    npc_id: str,
+    content: str,
+    source: MemorySource,
+    event_seq: int | None,
+    importance: float,
+    emotion_tag: str | None,
+    superseded_by: str | None = None,
+    invalid_reason: str | None = None,
+) -> MemoryEntry:
+    """MemoryEntry 唯一构造工厂（S1 守卫：构造点只允许在 memory_scan.py）。
 
-    M0 阶段 entries 为内存 list；opencode D03 落 npc_memories 表后，
-    store 侧实现同一接口即可，扫描/处置逻辑不变。
+    store 实现（内存/SQLite）一律经此构造，避免绕开 Pipeline 的审计面。
     """
+    return MemoryEntry(
+        id=entry_id,
+        npc_id=npc_id,
+        content=content,
+        source=source,
+        event_seq=event_seq,
+        importance=importance,
+        emotion_tag=emotion_tag,
+        superseded_by=superseded_by,
+        invalid_reason=invalid_reason,
+    )
+
+
+@runtime_checkable
+class MemoryStore(Protocol):
+    """记忆持久化接口（memory-scan.md §4/§5）。
+
+    Pipeline 负责扫描/处置决策；store 负责落库与治理列。实现须保持语义一致：
+    - ``persist``：插入一条已通过扫描的记忆，返回含稳定 id 的 MemoryEntry。
+    - ``supersede``：只更新治理列（superseded_by/invalid_reason），永不改 content。
+    - ``iter_visible``：过滤 ``superseded_by IS NOT NULL``（检索视图）。
+    - ``get``：含被取代条目（审计视图）。
+    """
+
+    def persist(
+        self,
+        *,
+        npc_id: str,
+        content: str,
+        source: MemorySource,
+        event_seq: int | None,
+        importance: float,
+        emotion_tag: str | None,
+    ) -> MemoryEntry: ...
+
+    def get(self, entry_id: str) -> MemoryEntry: ...
+
+    def supersede(self, old_id: str, new_id: str, reason: str) -> MemoryEntry: ...
+
+    def iter_visible(self, npc_id: str) -> Iterator[MemoryEntry]: ...
+
+    def __len__(self) -> int: ...
+
+
+class InMemoryStore:
+    """内存实现（M0 默认；与 SQLite 实现行为一致，供对照）。"""
 
     def __init__(self) -> None:
         self._entries: dict[str, MemoryEntry] = {}
+
+    def persist(
+        self,
+        *,
+        npc_id: str,
+        content: str,
+        source: MemorySource,
+        event_seq: int | None,
+        importance: float,
+        emotion_tag: str | None,
+    ) -> MemoryEntry:
+        entry = make_entry(
+            entry_id=uuid.uuid4().hex,
+            npc_id=npc_id,
+            content=content,
+            source=source,
+            event_seq=event_seq,
+            importance=importance,
+            emotion_tag=emotion_tag,
+        )
+        self._entries[entry.id] = entry
+        return entry
+
+    def get(self, entry_id: str) -> MemoryEntry:
+        return self._entries[entry_id]
+
+    def supersede(self, old_id: str, new_id: str, reason: str) -> MemoryEntry:
+        old = self._entries[old_id]
+        if new_id not in self._entries:
+            raise KeyError(f"replacement entry {new_id} does not exist")
+        updated = make_entry(
+            entry_id=old.id,
+            npc_id=old.npc_id,
+            content=old.content,
+            source=old.source,
+            event_seq=old.event_seq,
+            importance=old.importance,
+            emotion_tag=old.emotion_tag,
+            superseded_by=new_id,
+            invalid_reason=reason,
+        )
+        self._entries[old_id] = updated
+        return updated
+
+    def iter_visible(self, npc_id: str) -> Iterator[MemoryEntry]:
+        for e in self._entries.values():
+            if e.npc_id == npc_id and e.superseded_by is None:
+                yield e
+
+    def __len__(self) -> int:
+        return len(self._entries)
+
+
+class MemoryWritePipeline:
+    """记忆写入唯一入口（S1）。扫描/处置后委托 store 持久化（D04 接口化）。
+
+    store 未传时用 InMemoryStore（M0 兼容）；SQLite 实现见
+    ``sim.core.persistence.memory_store.SqlMemoryStore``。扫描逻辑与 store 无关。
+    """
+
+    def __init__(self, store: MemoryStore | None = None) -> None:
+        self._store: MemoryStore = store if store is not None else InMemoryStore()
+
+    @property
+    def store(self) -> MemoryStore:
+        return self._store
 
     # ------------------------------------------------------------------
     # S1-S4：写入路径
@@ -125,8 +247,7 @@ class MemoryWritePipeline:
         importance: float,
         emotion_tag: str | None,
     ) -> MemoryEntry:
-        entry = MemoryEntry(
-            id=uuid.uuid4().hex,
+        return self._store.persist(
             npc_id=npc_id,
             content=content,
             source=source,
@@ -134,8 +255,6 @@ class MemoryWritePipeline:
             importance=importance,
             emotion_tag=emotion_tag,
         )
-        self._entries[entry.id] = entry
-        return entry
 
     def _reject(
         self, npc_id: str, source: MemorySource, hit_words: tuple[str, ...], reason: str
@@ -157,33 +276,17 @@ class MemoryWritePipeline:
 
     def supersede(self, old_id: str, new_id: str, reason: str) -> MemoryEntry:
         """标记旧条目无效并指向替代条目。只动两列治理列，不碰内容。"""
-        old = self._entries[old_id]
-        if new_id not in self._entries:
-            raise KeyError(f"replacement entry {new_id} does not exist")
-        updated = MemoryEntry(
-            id=old.id,
-            npc_id=old.npc_id,
-            content=old.content,
-            source=old.source,
-            event_seq=old.event_seq,
-            importance=old.importance,
-            emotion_tag=old.emotion_tag,
-            superseded_by=new_id,
-            invalid_reason=reason,
-        )
-        self._entries[old_id] = updated
+        updated = self._store.supersede(old_id, new_id, reason)
         logger.info("memory_scan.superseded", old=old_id, new=new_id, reason=reason)
         return updated
 
     def iter_visible(self, npc_id: str) -> Iterator[MemoryEntry]:
         """检索视图：跳过被取代条目（superseded_by IS NOT NULL 语义）。"""
-        for e in self._entries.values():
-            if e.npc_id == npc_id and e.superseded_by is None:
-                yield e
+        return self._store.iter_visible(npc_id)
 
     def get(self, entry_id: str) -> MemoryEntry:
         """审计视图：含被取代条目（S5 验收：审计可见）。"""
-        return self._entries[entry_id]
+        return self._store.get(entry_id)
 
     def __len__(self) -> int:
-        return len(self._entries)
+        return len(self._store)

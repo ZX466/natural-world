@@ -52,6 +52,8 @@ class TestM3ReservedTables:
     async def test_npc_memory_insert(self, session: AsyncSession) -> None:
         m = NpcMemory(
             npc_id="npc-1",
+            entry_id="e-0001",
+            source="event",
             event_seq=42,
             branch_id="main",
             content="我看见篝火在雨里熄灭。",
@@ -68,6 +70,8 @@ class TestM3ReservedTables:
         """event_seq NULL = 推理/转述（schema §5）。"""
         m = NpcMemory(
             npc_id="npc-1",
+            entry_id="e-0002",
+            source="reason",
             event_seq=None,
             branch_id="main",
             content="我猜他撒谎了。",
