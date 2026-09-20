@@ -19,7 +19,7 @@ function phaseLabel(phase: string): string {
   return { dawn: '黎明', day: '白天', dusk: '黄昏', night: '夜晚' }[phase] ?? phase;
 }
 
-export function TopBar(): ReactElement {
+export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }): ReactElement {
   const wsStatus = useUiStore((s) => s.wsStatus);
   const gameClock = useUiStore((s) => s.gameClock);
   const speed = useUiStore((s) => s.speed);
@@ -40,6 +40,13 @@ export function TopBar(): ReactElement {
         </span>
       )}
       <div className="ml-auto flex items-center gap-1">
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="rounded bg-stone-700 px-3 py-1 text-sm hover:bg-stone-600"
+        >
+          设置
+        </button>
         <button
           type="button"
           onClick={() => runtime.sendControl(paused ? 'resume' : 'pause')}

@@ -15,5 +15,13 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // 开发代理：前端 HTTP 走同源 /api → sim（http://127.0.0.1:8000），避免 CORS；
+    // WS 仍由 runtime.ts 直连 ws://127.0.0.1:8000/ws（WS 不受 CORS 限制）。
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+    },
   },
 });

@@ -132,7 +132,7 @@ function main() {
   fs.writeFileSync(outPath, generated, "utf8");
   console.log(`[gen-protocol] 已生成 ${path.relative(REPO_ROOT, outPath)}（源: ${src.startsWith("http") ? src : path.relative(REPO_ROOT, src)}）`);
   if (!args.src) {
-    console.log("[gen-protocol] 提示：当前为 mock 源（shared/openapi.json）。sim 起服务后用 --src http://127.0.0.1:8000/api/openapi.json 切真实，切换点见 docs/api/codegen.md。");
+    console.log("[gen-protocol] 提示：当前为 mock 源（shared/openapi.json，已对齐 sim 真实 HTTP 形状）。sim 起服务后用 --src http://127.0.0.1:8000/openapi.json 校验对齐（注意 FastAPI 默认 /openapi.json，非 /api/openapi.json；且 sim 当前 OpenAPI 仅含 HTTP 请求体，WS 消息与响应模型由本协议快照增补——见 docs/api/codegen.md §4）。");
   }
 }
 
