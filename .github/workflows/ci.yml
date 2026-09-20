@@ -70,6 +70,25 @@ jobs:
           fi
           exit $code
 
+      - name: pytest T1 自我未知门禁（信息边界双路径采样，M2-S1）
+        run: |
+          # codex 的 test_t1_self_unknown.py 无专属 marker（随 `-m "not bench"` 全量跑），
+          # 按【文件路径】选择，把 M2-S1 自我未知信息边界门禁提升为独立命名信号
+          # （沿用 test_t3_gate.py 做法，避免日后加 marker 被静默排除出 CI）。
+          if [ ! -f sim/tests/test_t1_self_unknown.py ]; then
+            echo "::warning::T1 自我未知门禁文件缺失（M2-S1 交付，疑似被误删/改名）→ 跳过"
+            exit 0
+          fi
+          set +e
+          uv run pytest sim/tests/test_t1_self_unknown.py
+          code=$?
+          # 文件在但收集到 0 用例（退出码 5）留痕跳过，避免误红
+          if [ "$code" -eq 5 ]; then
+            echo "::warning::T1 自我未知门禁文件已存在但未收集到任何用例（检查文件内容）"
+            exit 0
+          fi
+          exit $code
+
       - name: pytest M1 指标跑分（差事 100% / P95<8s / <2k tok / 出戏 100%）
         run: |
           # TASK-004 P05：M1 四指标验收跑分（C06-⑥，`5c08c74`）。假 LLM 零网络，纯 T1，秒级。

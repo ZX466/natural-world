@@ -10,6 +10,8 @@
 - S5 补救：永不改内容字段；supersede(old, new) 只更新治理列
   （superseded_by / invalid_reason）；检索用 iter_visible 过滤。
 - S6 观测：每次命中走 structlog dev 通道（npc_id/source/命中词/处置）。
+- M2-S1 自我未知扩展：hidden 提供时，未触发隐藏属性直陈内容 → 拒写
+  （reason=REASON_HIDDEN_LEAK；docs/security/self-unknown.md §4）。
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ from typing import Literal, Protocol, runtime_checkable
 import structlog
 
 from sim.llm.prompts.banned_words import REWRITE_MAP, scan
+from sim.npc.hidden import HiddenProfile, hidden_leak_scan
 
 logger = structlog.get_logger(__name__)
 
@@ -33,6 +36,8 @@ REWRITE_MAX_HITS = 2
 #: superseded_by / invalid_reason 取值（S5 治理列）。
 REASON_BANNED_WORD = "banned_word"
 REASON_MANUAL_REVIEW = "manual_review"
+#: M2-S1 自我未知：未触发隐藏属性直陈（docs/security/self-unknown.md §3/§4）。
+REASON_HIDDEN_LEAK = "hidden_attribute_leak"
 
 
 @dataclass(frozen=True)
@@ -209,8 +214,19 @@ class MemoryWritePipeline:
         event_seq: int | None,
         importance: float,
         emotion_tag: str | None,
+        hidden: HiddenProfile | None = None,
+        triggered: frozenset[str] = frozenset(),
     ) -> WriteResult:
-        """唯一写入入口。上游只允许传叙事化产物（不得传 LLM 原始输出）。"""
+        """唯一写入入口。上游只允许传叙事化产物（不得传 LLM 原始输出）。
+
+        M2-S1：hidden 提供时，未触发隐藏属性的直陈内容 → 拒写
+        （reason=REASON_HIDDEN_LEAK；不改写——直陈面不是机械词，S4 拒写保底）。
+        """
+        if hidden is not None:
+            leaks = hidden_leak_scan(content, hidden, triggered)
+            if leaks:
+                words = tuple(dict.fromkeys(leak.word for leak in leaks))
+                return self._reject(npc_id, source, words, REASON_HIDDEN_LEAK)
         result = scan(content)
         if result.ok:
             entry = self._persist(npc_id, content, source, event_seq, importance, emotion_tag)
