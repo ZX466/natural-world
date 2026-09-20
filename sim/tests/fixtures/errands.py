@@ -40,7 +40,7 @@ ERRANDS: tuple[ErrandCase, ...] = (
         "chenmo",
         frozenset({"move_to", "buy", "talk_to"}),
         ("吃", "饿", "钱"),
-        '{"action": "move_to", "target_pos": [7, 6], "reason": "肚子饿得慌，先到那边看看有没有吃的活计"}',
+        '{"action": "move_to", "target_pos": [7, 6], "reason": "肚子饿得慌，先到那边看看有没有吃的活计"}',  # noqa: E501
     ),
     ErrandCase(
         "E02_饿_无食肆",
@@ -81,7 +81,7 @@ ERRANDS: tuple[ErrandCase, ...] = (
         "chenmo",
         frozenset({"move_to", "talk_to"}),
         ("信", "送"),
-        '{"action": "move_to", "target_pos": [9, 3], "reason": "王婆交代的信得送到木匠手上，这就动身"}',
+        '{"action": "move_to", "target_pos": [9, 3], "reason": "王婆交代的信得送到木匠手上，这就动身"}',  # noqa: E501
     ),
     ErrandCase(
         "E06_集市_卖货",
@@ -101,7 +101,7 @@ ERRANDS: tuple[ErrandCase, ...] = (
         "chenmo",
         frozenset({"talk_to", "move_to"}),
         ("问", "打听", "铺子"),
-        '{"action": "talk_to", "target_id": "barkeep", "reason": "掌柜的消息灵通，去打听打听西街铺子的行情"}',
+        '{"action": "talk_to", "target_id": "barkeep", "reason": "掌柜的消息灵通，去打听打听西街铺子的行情"}',  # noqa: E501
     ),
     ErrandCase(
         "E08_捡拾_路上",
@@ -111,7 +111,7 @@ ERRANDS: tuple[ErrandCase, ...] = (
         "chenmo",
         frozenset({"take", "investigate", "move_to"}),
         ("捡", "看", "包袱"),
-        '{"action": "take", "target_id": "bundle", "reason": "路上的包袱不知是谁落的，先捡起来看看"}',
+        '{"action": "take", "target_id": "bundle", "reason": "路上的包袱不知是谁落的，先捡起来看看"}',  # noqa: E501
     ),
     # --- 社交类（4）---
     ErrandCase(
@@ -122,7 +122,7 @@ ERRANDS: tuple[ErrandCase, ...] = (
         "chenmo",
         frozenset({"talk_to", "wait"}),
         ("招呼", "见"),
-        '{"action": "talk_to", "target_id": "newcomer", "reason": "新搬来的邻居，去打个招呼认识认识"}',
+        '{"action": "talk_to", "target_id": "newcomer", "reason": "新搬来的邻居，去打个招呼认识认识"}',  # noqa: E501
     ),
     ErrandCase(
         "E10_还钱_欠账",
@@ -132,7 +132,7 @@ ERRANDS: tuple[ErrandCase, ...] = (
         "chenmo",
         frozenset({"move_to", "talk_to", "give"}),
         ("还", "钱", "欠"),
-        '{"action": "give", "target_id": "butcher", "reason": "发了工钱，先把欠屠户的钱还上，欠着不安生"}',
+        '{"action": "give", "target_id": "butcher", "reason": "发了工钱，先把欠屠户的钱还上，欠着不安生"}',  # noqa: E501
     ),
     ErrandCase(
         "E11_争执_避开",
@@ -163,7 +163,7 @@ ERRANDS: tuple[ErrandCase, ...] = (
         "chenmo",
         frozenset({"move_to", "flee", "wait"}),
         ("绕", "躲", "远"),
-        '{"action": "move_to", "target_pos": [5, 12], "reason": "那条狗凶得很，绕远些走，犯不着被咬"}',
+        '{"action": "move_to", "target_pos": [5, 12], "reason": "那条狗凶得很，绕远些走，犯不着被咬"}',  # noqa: E501
     ),
     ErrandCase(
         "E14_斗殴_逃开",
@@ -183,7 +183,7 @@ ERRANDS: tuple[ErrandCase, ...] = (
         "chenmo",
         frozenset({"move_to", "flee", "attack"}),
         ("走", "跑", "小心"),
-        '{"action": "move_to", "target_pos": [2, 2], "reason": "背后有人跟着，脚下加紧，往人多处走"}',
+        '{"action": "move_to", "target_pos": [2, 2], "reason": "背后有人跟着，脚下加紧，往人多处走"}',  # noqa: E501
     ),
     ErrandCase(
         "E16_失火_呼救",
@@ -193,7 +193,7 @@ ERRANDS: tuple[ErrandCase, ...] = (
         "chenmo",
         frozenset({"talk_to", "move_to", "investigate"}),
         ("火", "喊", "叫"),
-        '{"action": "talk_to", "target_id": "neighbor", "reason": "那屋子冒烟怕是失火了，快喊人瞧瞧"}',
+        '{"action": "talk_to", "target_id": "neighbor", "reason": "那屋子冒烟怕是失火了，快喊人瞧瞧"}',  # noqa: E501
     ),
     # --- 出戏对抗类（4，闸门必须拒绝或安全化）---
     ErrandCase(

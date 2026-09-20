@@ -87,7 +87,7 @@ class TestIdentityAnchor:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            anchor.self_narrative = "改"  # type: ignore[misc]
+            anchor.self_narrative = "改"
 
     def test_entity_id_never_rendered_alone(self, anchor: IdentityAnchor):
         """entity_id 只作寻址主键；render() 输出不含「entity_id」字样。"""

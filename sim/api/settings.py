@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from sim.core.persistence.crypto import (
     CryptoError,
@@ -41,6 +41,25 @@ class ProfileUpdate(BaseModel):
     api_key: str | None = None
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     max_tokens: int | None = Field(default=None, ge=1, le=32768)
+
+
+class ProfileListItem(BaseModel):
+    """响应模型（kilo 契约：8 字段白名单 + api_key_hint 掩码）。
+
+    补进 OpenAPI schema（kilo K03 差异回写：路由此前返裸 dict，
+    codegen 缺响应模型）。明文 api_key 永不进本模型（K5）。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    name: str
+    base_url: str
+    model: str
+    temperature: float
+    max_tokens: int
+    active: bool
+    api_key_hint: str
 
 
 def _row_to_dict(p: LLMProfile) -> dict[str, Any]:
@@ -186,12 +205,12 @@ def get_profile_store() -> ProfileStore:
     return _profile_store
 
 
-@router.get("")
+@router.get("", response_model=list[ProfileListItem])
 async def list_profiles() -> list[dict[str, Any]]:
     return [_profile_to_item(r) for r in get_profile_store().list_profiles()]
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=ProfileListItem)
 async def create_profile(data: ProfileCreate) -> dict[str, Any]:
     try:
         row = get_profile_store().create(data)
@@ -200,7 +219,7 @@ async def create_profile(data: ProfileCreate) -> dict[str, Any]:
     return _profile_to_item(row)
 
 
-@router.patch("/{profile_id}")
+@router.patch("/{profile_id}", response_model=ProfileListItem)
 async def update_profile(profile_id: str, data: ProfileUpdate) -> dict[str, Any]:
     row = get_profile_store().update(profile_id, data)
     if row is None:
@@ -214,7 +233,7 @@ async def delete_profile(profile_id: str) -> None:
         raise HTTPException(status_code=404, detail="profile 不存在")
 
 
-@router.post("/{profile_id}/activate")
+@router.post("/{profile_id}/activate", response_model=ProfileListItem)
 async def activate_profile(profile_id: str) -> dict[str, Any]:
     row = get_profile_store().activate(profile_id)
     if row is None:

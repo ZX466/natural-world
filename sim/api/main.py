@@ -99,6 +99,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="临河镇 sim", version="0.1.0", lifespan=lifespan)
 app.include_router(settings_router)
 
+from sim.api.openapi_ext import install as _install_openapi_ext  # noqa: E402
+
+_install_openapi_ext()  # WS components 进 OpenAPI（kilo K03 差异回写）
+
 
 @app.get("/api/health")
 async def health() -> dict[str, Any]:

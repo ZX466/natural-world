@@ -175,7 +175,7 @@ class TestM1Metrics:
         """指标 3：单决策 prompt ≤2k tok（1.6 字符/tok 粗估 + 200 tok 输出预算）。"""
         budget_chars = int((TOK_BUDGET - _COMPLETION_TOK_ALLOWANCE) * _CHARS_PER_TOK)
         for case in ERRANDS:
-            ok, _, _, chars = _run_errand(case)
+            _, _, _, chars = _run_errand(case)
             assert chars < budget_chars, (
                 f"{case.case_id} prompt {chars} 字符 ≈ {chars / _CHARS_PER_TOK:.0f} tok ≥ 2k"
             )
