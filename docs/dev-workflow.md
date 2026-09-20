@@ -2,7 +2,10 @@
 
 > 能力域：依赖 / 配置 / 文档（cline）。本文只讲「怎么跑」，讲「为什么」看 `DESIGN.md`。
 > 环境硬约束：Python 一律用 **uv** 建虚拟环境；playwright 调浏览器只用 `D:\develop\hermes\chrome`；
-> **删除 npm 包或 venv 前必须先问用户**；除 `.orca` 外 `.` 开头目录不入 git。
+> **删除 npm 包或 venv 前必须先问用户**；agent 配置目录（`.agent/.agents/.claude/.codex/.kiro/.opencode/.codegraph`）
+> **不入 git 也不推送，但本地须存在**（用户规则 #4：所有工作树都要有 `.codegraph`+`.agents`，
+> `.claude/.opencode/.codex` 只在对应工作树，主树全有）；`.orca` 例外——`workflow.txt`/`agent-registry.md`/
+> `memory.md` 入库（main `3e320b9` 裁决），仅 `talking.txt` 本地保存。
 
 ## 1. 环境与一次初始化
 
@@ -94,3 +97,29 @@ npm run gen:protocol:check   # 漂移检测：生成到临时文件比对，不�
 - Conventional Commits：`feat|fix|refactor|docs|test|chore|perf|ci`。
 - 每个 agent 只在自己的工作树改自己能力域的东西；跨域需求走 `.orca/talking.txt` 间接留言。
 - 提交身份：`ZX666X <zx19836980213@outlook.com>`（全局已配）；推送双远程 `git push origin <branch>` + `git push gitee <branch>`（GitHub 走 `127.0.0.1:7897`）。
+
+## 7. 本机检查陷阱：Windows 行尾（CRLF）假红
+
+> 2026-09-20（cline P05）实测记录。**Windows 上跑本机检查前先读本节**——否则会把假红当真红去改代码，或反过来放过真红。
+
+- **成因**：仓库 `core.autocrlf=true` 且**无 `.gitattributes`** → 检出后工作副本是 CRLF，而 git 索引与 CI（ubuntu）是 LF。
+- **典型假红（LF 内容下实际全过，不要改代码）**：
+  - `cd client && npx prettier --check .` —— 一次报了 17 个文件「code style issues found」；
+  - `node tools/gen-protocol.ts --check` —— 报「生成物与提交不一致」（生成器写 LF、工作副本 CRLF，逐字节比对必然不等）。
+- **典型真红（LF 内容下同样失败，必须修）**：`uv run ruff format --check` —— ruff 给的是**内容级**建议（拆行 / 合并行 / 去 BOM），与行尾无关。P05 实测：opencode D03 的 3 个文件就是这样漏过门禁的真红。
+
+**自证办法**（导出 git 索引的 LF 内容再跑检查，一步定性，不必猜）：
+
+```bash
+git -c core.autocrlf=false checkout-index -a -f --prefix=.tmp-lf/   # 整仓 LF 副本
+uv run ruff format --check .tmp-lf                                   # Python 侧
+cd client && npx prettier --check ../.tmp-lf/client                  # TS 侧（配置按文件路径解析，仍读 client/.prettierrc）
+rm -rf .tmp-lf                                                       # 用完即删（否则显示为未跟踪）
+```
+
+- LF 副本下**仍失败** ⇒ 真红，改代码；LF 副本下**通过** ⇒ 本机行尾假阳性，**不要改代码**。
+- `gen:protocol --check` 的假阳性也可用 `node tools/gen-protocol.ts` 重生成消除——内容与提交一致时 `git diff` 为空，**不会产生提交**。
+- 同理：`git status` 偶尔把内容未变的文件显示为 ` M`（mtime/stat 缓存假象）。用 `git hash-object <f>` 与 `git rev-parse :<f>` 对比，相同即无实际改动。
+
+**待裁（主树 Claude）**：加 `.gitattributes`（`* text=auto eol=lf`）可让本机检查与 CI 完全一致；因会触发各工作树重签出，P05 未擅自加。
+
