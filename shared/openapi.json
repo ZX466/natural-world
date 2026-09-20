@@ -673,28 +673,28 @@
       },
       "ProfileCreate": {
         "type": "object",
-        "description": "新建 LLM Profile。api_key 明文入、后端即 Fernet 加密落库（codex K1/K2）；形状对齐 sim LLMProfile 表",
+        "description": "新建 LLM Profile。api_key 明文入、后端即 Fernet 加密落库（codex K1/K2）。字段与约束对齐 sim/api/settings.py::ProfileCreate（真相源）",
         "required": ["name", "base_url", "model", "api_key"],
         "properties": {
-          "name": { "type": "string" },
-          "base_url": { "type": "string" },
-          "model": { "type": "string" },
-          "api_key": { "type": "string", "description": "明文入，后端即加密；响应永不回传（K4/K5）" },
-          "temperature": { "type": "number" },
-          "max_tokens": { "type": "integer", "minimum": 0 }
+          "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "base_url": { "type": "string", "minLength": 1 },
+          "model": { "type": "string", "minLength": 1 },
+          "api_key": { "type": "string", "minLength": 1, "description": "明文入，后端即加密；响应永不回传（K4/K5）" },
+          "temperature": { "type": "number", "minimum": 0, "maximum": 2, "default": 0.7 },
+          "max_tokens": { "type": "integer", "minimum": 1, "maximum": 32768, "default": 2048 }
         },
         "additionalProperties": false
       },
       "ProfileUpdate": {
         "type": "object",
-        "description": "更新 Profile；字段全可选，api_key 省略即保留原密钥（K1/K3）",
+        "description": "更新 Profile；字段全可选，api_key 省略即保留原密钥（K1/K3）。对齐 sim/api/settings.py::ProfileUpdate",
         "properties": {
-          "name": { "type": "string" },
-          "base_url": { "type": "string" },
-          "model": { "type": "string" },
-          "api_key": { "type": "string", "description": "可选，省略即保留原密钥" },
-          "temperature": { "type": "number" },
-          "max_tokens": { "type": "integer", "minimum": 0 }
+          "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "base_url": { "type": "string", "minLength": 1 },
+          "model": { "type": "string", "minLength": 1 },
+          "api_key": { "type": "string", "minLength": 1, "description": "可选，省略即保留原密钥" },
+          "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+          "max_tokens": { "type": "integer", "minimum": 1, "maximum": 32768 }
         },
         "additionalProperties": false
       },

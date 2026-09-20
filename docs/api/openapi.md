@@ -38,7 +38,7 @@
 | POST | `/api/anchors` | 新建游标（在当前会话点分叉标记） | M5 |
 | PATCH | `/api/anchors/{id}` | 重命名 | M5 |
 | DELETE | `/api/anchors/{id}` | 删除游标（不动世界档，见 §12） | M5 |
-| GET | `/api/openapi.json` | FastAPI 自动生成的 OpenAPI schema（codegen 源） | M0 |
+| GET | `/openapi.json` | FastAPI 自动生成的 OpenAPI schema（codegen 源；FastAPI 默认路径，非 `/api/openapi.json`） | M0 |
 
 > 锚点**载入**（触发世界分叉+重放）不经 HTTP，而经 WS `load_anchor`（见 ws-protocol.md §4.4）——因为载入需在长连接上重建渲染流。CRUD（建/列/改名/删）是元数据操作，归 HTTP。
 
@@ -127,7 +127,7 @@
 `GET /api/health` → `{ "status": "ok", "world_running": true, "in_combat": false }`
 （`in_combat` 戏外只读，供 meta shell 显示当前状态，不回流戏内。）
 
-`GET /api/openapi.json` → FastAPI 原生 OpenAPI 3.1 文档，作为 `codegen.md` 的类型源。
+`GET /openapi.json` → FastAPI 原生 OpenAPI 3.1 文档（默认路径），作为 `codegen.md` 的类型源。**注意**：当前 sim OpenAPI 只含 HTTP 请求体，WS 消息与响应模型（ProfileListItem/WorldMapResponse）由 `shared/openapi.json` 协议快照增补（见 codegen.md §4）。
 
 ## 5. 错误约定
 

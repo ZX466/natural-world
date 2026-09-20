@@ -174,4 +174,34 @@ describe('ws-protocol 类型与出戏边界', () => {
     expectTypeOf<ProfileCreate>().not.toHaveProperty('provider');
     expectTypeOf<ProfileCreate>().not.toHaveProperty('params');
   });
+
+  it('K03 #1 ProfileListItem 与 sim 实际响应一致（8 字段，实测回包对齐）', () => {
+    // sim POST /api/settings/profiles 实测回包键：
+    // {id,name,base_url,model,temperature,max_tokens,active,api_key_hint}
+    expectTypeOf<ProfileListItem>().toHaveProperty('id');
+    expectTypeOf<ProfileListItem>().toHaveProperty('name');
+    expectTypeOf<ProfileListItem>().toHaveProperty('base_url');
+    expectTypeOf<ProfileListItem>().toHaveProperty('model');
+    expectTypeOf<ProfileListItem['temperature']>().toEqualTypeOf<number>();
+    expectTypeOf<ProfileListItem['max_tokens']>().toEqualTypeOf<number>();
+    expectTypeOf<ProfileListItem['active']>().toEqualTypeOf<boolean>();
+    expectTypeOf<ProfileListItem['api_key_hint']>().toEqualTypeOf<string>();
+    // 不泄漏密钥与内部列
+    expectTypeOf<ProfileListItem>().not.toHaveProperty('api_key');
+    expectTypeOf<ProfileListItem>().not.toHaveProperty('api_key_enc');
+    expectTypeOf<ProfileListItem>().not.toHaveProperty('is_active'); // sim 用 active
+  });
+
+  it('K03 #2 ProfileCreate 与 sim 约束一致（name 1–64 / temperature 0–2 / max_tokens 1–32768）', () => {
+    expectTypeOf<ProfileCreate>().toHaveProperty('name');
+    expectTypeOf<ProfileCreate>().toHaveProperty('base_url');
+    expectTypeOf<ProfileCreate>().toHaveProperty('model');
+    expectTypeOf<ProfileCreate>().toHaveProperty('api_key'); // 明文入，后端加密
+    expectTypeOf<ProfileCreate>().toHaveProperty('temperature'); // 可选（默认 0.7）
+    expectTypeOf<ProfileCreate>().toHaveProperty('max_tokens'); // 可选（默认 2048）
+    expectTypeOf<ProfileCreate['name']>().toEqualTypeOf<string>();
+    // 与 sim settings.py::ProfileCreate 对齐：无 provider/params
+    expectTypeOf<ProfileCreate>().not.toHaveProperty('provider');
+    expectTypeOf<ProfileCreate>().not.toHaveProperty('params');
+  });
 });

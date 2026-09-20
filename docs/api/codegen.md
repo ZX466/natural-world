@@ -14,7 +14,7 @@
 sim/api/*.py  (pydantic v2 模型：HTTP 请求/响应 + WS 信封 + 各 WS 消息 data)
         │  FastAPI 启动时聚合
         ▼
-  /api/openapi.json   (OpenAPI 3.1，含 components/schemas：HTTP 与 WS 一并)
+  /openapi.json   (OpenAPI 3.1，FastAPI 默认路径；当前含 HTTP 请求体，WS 消息待 sim 侧 custom_openapi 补全)
         │  openapi-typescript
         ▼
   shared/protocol.ts  (单一生成物)
@@ -52,14 +52,18 @@ npm run gen:protocol:check     # CI 漂移检测：生成到临时文件比对�
 - `--immutable`：生成 `readonly` 字段，契合 §6 实体 frozen / 不可变更新约定。
 - `--export-type`：输出 `type` 而非 `interface`，便于联合判别（WS `type` 字段的字面量联合 + discriminator）。
 
-**mock → 真实源切换点（协调 Claude TASK-C03）**：
+**真实源对齐（K03 已完成，2026-09-20）**：
 
-- M0 阶段 sim 未起服务，`shared/openapi.json` 为手写 mock（按 ws-protocol.md/openapi.md schema 落地，WS 消息 + HTTP 端点 components 一并）。
-- sim 起服务后，切真实源：
+- sim 的 OpenAPI 地址是 **`http://127.0.0.1:8000/openapi.json`**（FastAPI 默认；**不是** `/api/openapi.json`）。
+- `shared/openapi.json` 已按 sim 真实形状对齐（抽查 ProfileCreate/ProfileUpdate 约束：name 1–64、temperature 0–2 默认 0.7、max_tokens 1–32768 默认 2048）。
+- **重要缺口**：sim 当前 OpenAPI **仅含 HTTP 请求体** —— 既无 WS 消息（`WsMessage`/`state_delta`/…），也无响应模型（`ProfileListItem`/`WorldMapResponse` 等，因路由返回 `dict[str, Any]` 而非 `response_model`）。故 `shared/openapi.json` 同时承担「sim 未导出部分（WS 消息 + 响应契约）」的协议契约，由本域维护。
+- **sim 侧待补**（归 Claude 架构域，切换彻底化的前置）：`sim/api/main.py` 加 `custom_openapi` 注入 WS 消息 components；settings 路由加 `response_model`（`ProfileListItem`）。补全后 `npm run gen:protocol -- --src http://127.0.0.1:8000/openapi.json` 可直接产出完整生成物。
+- 对齐校验命令：
   ```bash
-  npm run gen:protocol -- --src http://127.0.0.1:8000/api/openapi.json
+  uv run uvicorn sim.api.main:app --port 8000   # 需 LZ_MASTER_KEY（codex K2）
+  npm run gen:protocol -- --src http://127.0.0.1:8000/openapi.json
   ```
-  或 FastAPI 导出快照覆盖 `shared/openapi.json` 后照常 `npm run gen:protocol`。切换时一次性把 mock 替换为真实 schema 并重新生成提交。
+  逐字段比对与 `shared/openapi.json` 的差异，以 sim 为准回写（HTTP 请求体）；WS/响应契约以本快照为准。
 
 ## 5. CI 守卫：「协议类型未手写」
 

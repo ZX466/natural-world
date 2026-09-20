@@ -364,15 +364,17 @@ export type components = {
       readonly title: string;
       readonly type?: string;
     };
-    /** @description 新建 LLM Profile。api_key 明文入、后端即 Fernet 加密落库（codex K1/K2）；形状对齐 sim LLMProfile 表 */
+    /** @description 新建 LLM Profile。api_key 明文入、后端即 Fernet 加密落库（codex K1/K2）。字段与约束对齐 sim/api/settings.py::ProfileCreate（真相源） */
     readonly ProfileCreate: {
       /** @description 明文入，后端即加密；响应永不回传（K4/K5） */
       readonly api_key: string;
       readonly base_url: string;
-      readonly max_tokens?: number;
+      /** @default 2048 */
+      readonly max_tokens: number;
       readonly model: string;
       readonly name: string;
-      readonly temperature?: number;
+      /** @default 0.7 */
+      readonly temperature: number;
     };
     /** @description Profile 序列化白名单（codex K5）：绝不含 api_key 明文字段；api_key_hint 仅掩码（如 sk-***last4），前端无法据此调用 LLM */
     readonly ProfileListItem: {
@@ -387,7 +389,7 @@ export type components = {
       readonly name: string;
       readonly temperature: number;
     };
-    /** @description 更新 Profile；字段全可选，api_key 省略即保留原密钥（K1/K3） */
+    /** @description 更新 Profile；字段全可选，api_key 省略即保留原密钥（K1/K3）。对齐 sim/api/settings.py::ProfileUpdate */
     readonly ProfileUpdate: {
       /** @description 可选，省略即保留原密钥 */
       readonly api_key?: string;
