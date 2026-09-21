@@ -18,17 +18,26 @@
 ### 项目状态（2026-09-20 同步自 main `3e320b9`）
 - M0+M1 全部收官（TASK-004 五路全部交付并收编），589 passed 55 skipped。
 - 你的 TASK-004 交付已收编（收编回执曾写在你树 talking.txt，现已轮换清空；结论可查 git log「merge: 收编 cline」）。
+- **M2 已开工（2026-09-21）**：我的 M2-C1 配套已交付（分支 `ZX466/cline`）——docs/README.md §5 M2 区块（含四路依赖对账=**零新包**）+ ci.yml M2 占位步骤（文件路径纪律）+ nightly M2 红线接入点注释 + `.gitattributes` 正式提议（dev-workflow §7）。M2 四路（codex M2-S1 / pi M2-P1 / opencode M2-D1 / kilo K04）交付在手，均待 Claude 收编。
 ### 已内化教训（实测过，别再踩）
 1. **Windows CRLF 假红**：本机 `prettier --check` / `gen:protocol --check` 报格式漂移，先用 `git -c core.autocrlf=false checkout-index -a -f --prefix=.tmp-lf/` 导出 LF 副本复测；LF 下过 = 假红别改代码（详见 docs/dev-workflow.md §7）。已建议 Claude 加 `.gitattributes`（待裁）。
-2. **CI 跑分按文件路径接**：无 marker 的专项测试（如 test_m1_metrics.py）在 ci.yml 用文件路径跑，不用 `-m xxx`——加 marker 前后语义会漂移，路径接法防静默排除（P04 教训）。
+   - M2-C1 补实测数据（2026-09-21）：跟踪 163 文件 = 索引 161 `i/lf` + 2 空 `__init__.py`；工作副本 161 `w/crlf`。加 `.gitattributes` 后 `git add --renormalize .` **0 文件**（索引本就 LF）⇒ 无内容重写、无 hash 断言风险；但 `git status` 仍干净 ⇒ **假红不会自动消失，必须重签出**。重签出**只有** `git rm -r --cached . && git reset --hard` 管用（`git checkout-index -f -a` 实测无效）。
+2. **CI 跑分按文件路径接**：无 marker 的专项测试（如 test_m1_metrics.py）在 ci.yml 用文件路径跑，不用 `-m xxx`——加 marker 前后语义会漂移，路径接法防静默排除（P04 教训）。M2 沿用：M2 占位步骤用 `sim/tests/test_m2_*.py` glob（`nullglob` + 空集合 warning + 退出码 5 留痕）。
 3. **跨域代改须留言**：opencode D03 的 3 文件 ruff 格式偏差属数据域文件，修复前在其树 talking.txt 留言说明（f775b91）。
 4. **与主导方裁决冲突时，以 main 实际决策为准**：memory.md 入库裁决（`3e320b9`）推翻我此前「移出跟踪」提交（cb2d85e），已在 76d6a03 反转并恢复入库。
-### 常用命令（M1 收官口径）
+5. **量纲先算再写门槛**：写 CI/验收前先按 DESIGN 推 tick 数。M2 完整验收「50 NPC × 7 游戏日」= 604,800 tick（1 tick = 1 游戏秒），**不属于每提交 CI**——所以 M2 步骤是占位 + `timeout-minutes: 15` 护栏，而不是写死路径。
+6. **别在他域分支上重复接门禁**：codex 的 M2-S1 已自带 ci.yml 步骤（其分支内），M2 占位步骤不重复接同一文件；同一门禁两处维护会漂移。
+7. **`.gitignore` 的 catch-all `.*/` 连 `.github/`、`.orca/` 一起忽略**（M2-C1 实测踩到）：**已跟踪文件不受影响**（本批 5 文件提交成功），但**新增**文件落在这两个目录下时 `git add` 会失败并提示 ignored（`git check-ignore` 显示 `.gitignore:62:.*/`），必须 `git add -f`。→ 未决：是否补 `!.github/` `!.orca/` 例外（规则 #4 语义，交用户裁），当前做法＝`-f` 强制添加 + 在本节/文档留痕。
+### 常用命令（M2-C1 口径）
 - 本树开工第一步：`git merge origin/main`（常落后 main，P05/P04 都遇到过）。
-- 全量：`uv run pytest -m "not bench"`（589 passed 55 skipped）；bench：`uv run pytest -m bench`。
-- LF 自证：见上 1。
+- 全量：`uv run pytest -m "not bench"`；bench：`uv run pytest -m bench`；M2 bench 单跑：`uv run pytest sim/tests/bench -q`（pi M2-P1 新文件）。
+  - 实测基线（2026-09-21 本树 main，M2-C1 提交前）：`-m "not bench"` = **578 passed / 55 skipped**（选中 633 / 收集 644，11 个 bench 被排除）。⚠ 与 M1 收官写的「589 passed / 55 skipped」**口径不同**：589 = 含 11 个 bench 的口径（578+11），别再混用。
+- M2 指标（占位）：`uv run pytest sim/tests/test_m2_*.py`（文件未落库时无匹配）。
+- LF 自证：见上 1；M2-C1 起 `.gitattributes` 提议见 docs/dev-workflow.md §7（含各树重签出方案 A）。
 ### 未决项
-- `.gitattributes`（`* text=auto eol=lf`）建议已提给 Claude，待裁——加了之后各工作树要重签出。
+- `.gitattributes`（`* text=auto eol=lf`）：**已从口头建议转为正式提议**（docs/dev-workflow.md §7「正式提议」表：实测影响面 + 方案 A/B/C，cline 建议 A）。待用户/主导裁决；裁决前不动仓库行尾配置，采纳后由我落一次提交 + 通知各树重签出。
+- M2 完整 7 日自转验收（604,800 tick）的定期接法（nightly job 还是 `-m m2full` 类 marker）：待 Claude 裁，裁决后我在 ci.yml 注释 + nightly yml 回填。
+- M2 验收跑分文件（`sim/tests/test_m2_*.py`）落库后：把 ci.yml M2 占位步骤的 glob 换成显式路径、步骤名去掉「占位」、同步 docs/README.md §5 实测数字。
 
 （以下各节由对应 agent 维护——cline 节以上为 2026-09-20 收编版。）
 

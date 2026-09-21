@@ -14,6 +14,19 @@ name: Nightly Bench
 # - 判定口径：**暖态中位**（`warmup_rounds=1` + median，`harness.assert_median_threshold`）——
 #   冷启动首轮（LOS 对称缓存未预热，7.6–8.2ms）不得经 mean 把感知拉过红线（pi F06 裁决）
 # - LLM 预取调度 `LLM_SCHED_TICK_LIMIT_MS = 0.20ms`（仅 tick 内确定性部分；异步推理不进 tick）
+#
+# M2 红线接入点（cline M2-C1 留接口；数值由性能域给，本 yml 不复制）：
+# 1. 已就位（pi M2-P1，分支 ZX466/pi `adaf0c5`，待 Claude 收编）：
+#    `sim/tests/bench/thresholds.py` 新增 5 常量 —— `L1_UTILITY_TICK_LIMIT_MS = 6.0`（50 NPC 每 tick）/
+#    `L1_UTILITY_PER_NPC_LIMIT_MS = 0.12`（单 NPC） / `L1_OFFLINE_FALLBACK_LIMIT_MS = 0.20`（LLM 断线降级）/
+#    `SMELL_TICK_LIMIT_MS = 0.15`（嗅觉传播每 tick） / `SMELL_NAIVE_SENTINEL_MS = 3.0`（naive 哨兵，不卡预算）。
+#    对应 bench 文件 `sim/tests/bench/test_bench_l1_utility.py` / `test_bench_smell.py` 随 `-m bench`
+#    自动纳入本工作流 —— **无需改本 yml**；判定口径统一「暖态中位」（warmup_rounds=1 + median）。
+# 2. 待裁（Claude）/ 待回填：M2 完整验收「50 NPC × 7 游戏日自转无崩溃」= 604,800 tick（DESIGN §10：
+#    1 tick = 1 游戏秒），**不进每提交 CI**（ci.yml 的 M2 占位步骤只接缩样/采样文件）。
+#    若要做成定期跑，接入点在本工作流（新增 job 或给该验收文件加专属 marker 后在此跑，
+#    如 `-m m2full`）；marker 语义属配置域、接法由 Claude 裁决后，cline 在此回填命令。
+# 3. 机器档位口径不变：跨机器不硬断言绝对值，结果 JSON 与机器信息一并归档（见 §机器档位步骤）。
 
 on:
   schedule:
