@@ -23,6 +23,13 @@ class EventKind(StrEnum):
     COMBAT_SCALE_CHANGE = "combat.scale_change"  # 战斗尺切换必须进事件流（codex 意见 1）
     ENTROPY_INJECT = "entropy_inject"
     TILE_CHANGED = "tile_changed"  # M3 可变底座预留
+    # ---- M2（m2-npc-cognition §1.2/§2.1/§4.1）----
+    NPC_LOD_CHANGE = "npc.lod_change"  # LOD 升降格（变更只走事件，不直改列）
+    NPC_ACT = "npc.act"  # L1 效用/计划队列产出的动作（白名单见 sim/npc/actions.py）
+    MATTER_DECAY = "matter.decay"  # 物质熵增：自然衰减（批量结算）
+    MATTER_DAMAGE = "matter.damage"  # 物质熵增：交互损伤
+    MATTER_BUILD = "matter.build"  # 物质熵增：建造（M4 承重前为简化版）
+    MATTER_COLLAPSE = "matter.collapse"  # 物质熵增：耐久归零坍塌（简化版）
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +86,41 @@ class TileChangedPayload(BaseModel):
     x: int
     y: int
     tile_id: int
+
+
+class NpcLodChangePayload(BaseModel):
+    """LOD 升降格（M2，m2-npc-cognition §1.2）。from_lod/to_lod ∈ {0,1,2}。"""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    npc_id: str
+    from_lod: int = Field(ge=0, le=2)
+    to_lod: int = Field(ge=0, le=2)
+    reason: str  # 升降格原因（enter_range/leave_range/dialogue_end/...）
+
+
+class NpcActPayload(BaseModel):
+    """L1 效用动作（M2，§2.1）。action 白名单在 sim/npc/actions.py。"""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    npc_id: str
+    action: str
+    target: str = ""
+    params: dict[str, str] = {}  # 白名单键见 actions.ACTION_PAYLOAD_KEYS
+
+
+class MatterPayload(BaseModel):
+    """物质熵增（M2，§4.1）。matter_state 表 = 事件流持久化投影。"""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    matter_id: str
+    x: int = -1
+    y: int = -1
+    amount: float = 0.0  # 变化量（decay/damage 为负损，build 为增量）
+    durability: float = -1.0  # 结算后耐久（-1=不变更）
+    note: str = ""
 
 
 class WorldEvent(BaseModel):
@@ -188,4 +230,63 @@ def tile_changed_event(
         tick=tick,
         event_type=EventKind.TILE_CHANGED,
         payload=p.model_dump(mode="json"),
+    )
+
+
+# ---- M2 工厂（m2-npc-cognition §1.2/§2.1/§4.1）----
+
+
+def npc_lod_change_event(
+    tick: int, npc_id: str, from_lod: int, to_lod: int, reason: str, branch_id: str = "main"
+) -> WorldEvent:
+    p = NpcLodChangePayload(npc_id=npc_id, from_lod=from_lod, to_lod=to_lod, reason=reason)
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.NPC_LOD_CHANGE,
+        payload=p.model_dump(mode="json"),
+    )
+
+
+def npc_act_event(
+    tick: int,
+    npc_id: str,
+    action: str,
+    target: str = "",
+    params: dict[str, str] | None = None,
+    branch_id: str = "main",
+) -> WorldEvent:
+    p = NpcActPayload(npc_id=npc_id, action=action, target=target, params=params or {})
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.NPC_ACT,
+        payload=p.model_dump(mode="json"),
+    )
+
+
+def matter_event(
+    tick: int,
+    kind: EventKind,
+    matter_id: str,
+    x: int = -1,
+    y: int = -1,
+    amount: float = 0.0,
+    durability: float = -1.0,
+    note: str = "",
+    branch_id: str = "main",
+) -> WorldEvent:
+    """物质熵增事件（kind ∈ MATTER_DECAY/DAMAGE/BUILD/COLLAPSE）。"""
+    if kind not in (
+        EventKind.MATTER_DECAY,
+        EventKind.MATTER_DAMAGE,
+        EventKind.MATTER_BUILD,
+        EventKind.MATTER_COLLAPSE,
+    ):
+        raise ValueError(f"kind 必须为 MATTER_*: {kind}")
+    p = MatterPayload(
+        matter_id=matter_id, x=x, y=y, amount=amount, durability=durability, note=note
+    )
+    return WorldEvent(
+        branch_id=branch_id, tick=tick, event_type=kind, payload=p.model_dump(mode="json")
     )
