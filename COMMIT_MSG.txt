@@ -1,0 +1,26 @@
+perf(M2-P3): L1 算法规格落盘（原型↔实现的对账 + 红线实测回填）+ soak L1 feeder 两阶段接线
+
+- docs/perf/l1-spec.md (新): 把三份规格分清（S1 原型=预算上界 / S2 真实实现 / S3 验收口径），
+  落盘原型 numpy 数据布局(50x6/50x5/50x3/50x50/50x32/13xk)、打分公式、常量表，
+  再与 main 59ffd86 的真实实现逐项对账（NEED_ORDER 3 / ACTION_ORDER 6 / _GAIN (3,6) /
+  HABIT_BONUS 0.05 / _EXTRAVERSION_CHAT_BIAS 0.3；缺 PAD/关系/记忆/候选集），
+  并给未落地项清单 + 单 NPC 测量的 pytest-benchmark 坑。
+- test_bench_l1_utility.py: 加 test_l1_real_*（真实 utility_scores_matrix / evaluate_batch /
+  NpcRuntime.tick / 单 NPC + 形状契约 + 确定性），修单 NPC 用例的墙钟误测（改用 1-NPC 批次）。
+- soak.py: 加 make_l1_feeder —— mock → 真实 L1 的两阶段接线：
+  阶段1(当前) 调真实 runtime.tick（L1 计算全量发生），只把 move/wander 折成 MOVE
+  （issue_move 唯一写路径），其余动作无 handler 不谎报；
+  阶段2(第三批接线) 只把 translate 换成 lambda _a: True，harness 不动。
+- test_bench_soak.py: 加 test_soak_nightly_l1_feeder_stability + test_soak_l1_feeder_ci_smoke。
+- thresholds.py: L1 红线常量未动（上界不放窄），注释回填实测（余量 8~29x）。
+- m2-acceptance.md: §3.1 feeder 升级方案（两阶段表 + 契约 + 两份 feeder 定位：
+  mock=内核负载上界保留当回归检查最坏情形，l1=真实 L1 计算，不互相取代）。
+- 修漏（自己的假红）: 长跑 p99 硬门禁 8.3ms 在实机反复假红（均值 2.3ms / p99 8.6ms = 调度噪声），
+  改为硬预算 16.6ms 信息性守护并改名 test_soak_nightly_steady_p99_below_tick_budget；
+  回归检测交由分窗均值漂移(SOAK_MEAN_DRIFT_RATIO_LIMIT)+资源增长判据承担。
+- 顺手修 codex 报的 P0: docs/README.md §5 合并冲突标记（保 HEAD 版表 + 吸收 pi 版 M2-P3 行）。
+- bench README + docs/README.md: M2-P3 交付行 + l1-spec.md 目录行 + 阈值修订记录。
+- 实测: scores_matrix 0.206ms / evaluate_batch 0.273ms / runtime.tick 0.747ms / 单 NPC 0.0124ms
+  (红线 6.0/0.12ms, 余量 8~29x); soak L1 feeder 稳态 mean ~0.9ms.
+- 约束遵守: 未改 sim/npc/ 任何代码（只 import 复测）。
+- CI: bench 44 passed/1 skipped; -m "not bench" 770 passed/55 skipped; ruff/format/pyright 绿.

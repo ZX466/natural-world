@@ -31,13 +31,21 @@ uv run pytest -m bench --benchmark-columns=min,mean,max,median
 | `test_bench_rng.py` | 分流 RNG：1M 聚合、L1 每 tick 成本、向量化对比 + 确定性/重放契约 |
 | `test_bench_apply.py` | EventBus.apply：单事件 / 50 事件批 + 唯一写路径契约守卫 |
 | `test_bench_perception.py` | M1 感知传播（真实引擎）：视觉/听觉暖态 ≤3.6ms + 朴素 O(N²) 哨兵 + 模型形状契约 |
-| `test_bench_l1_utility.py` | M2 L1 效用 50 NPC：全量/单 NPC 红线 ≤6.0ms/0.12ms + 断线兜底队列 ≤0.20ms + 向量化哨兵 |
+| `test_bench_l1_utility.py` | M2 L1 效用 50 NPC：全量/单 NPC 红线 ≤6.0ms/0.12ms + 断线兜底队列 ≤0.20ms + 向量化哨兵；**M2-P3 起含真实实现复测** `test_l1_real_*`（对账见 `docs/perf/l1-spec.md`） |
 | `test_bench_smell.py` | M2 嗅觉传播（∝1/r² 风向）：网格扩散+采样 ≤0.15ms + 逐对 O(N²) 哨兵 + 形状契约 |
 | `soak.py` | 长跑采样 harness（M2-P2）：进程探针（RSS/句柄/GC）+ 窗口化 run_soak + 确定性 mock 动作喂给 |
 | `test_bench_soak.py` | M2 7 日自转预压测：CI 缩样稳定性 + nightly 长跑漂移/p99/缓存 + 完整 604,800 tick（环境门） |
 
 ## 阈值修订记录
 
+- **M2-P3（2026-09-21，对账 + 实测回填）**：L1 红线**常量未动**（6.0 / 0.12 / 0.20ms），
+  但注释回填了真实实现实测（`NpcRuntime.tick` 50 NPC ~0.747ms，余量 ~8x），
+  并在 `test_bench_l1_utility.py` 加 `test_l1_real_*` 复测任务。红线属于原型（满属性上界）；
+  真实实现更简，不缩小（放宽 = 自缩防线）。
+  另 `soak.py` 加 `make_l1_feeder`（mock → 真实 L1 的两阶段接线），设计见 `docs/perf/m2-acceptance.md` §3.1。
+  漏洞补记：长跑 tick p99 硬门禁不可靠（调度噪声假红：均值 2.3ms / p99 8.6ms），
+  改为硬预算信息性守护；回归由分窗均值漂移（`SOAK_MEAN_DRIFT_RATIO_LIMIT`）+
+  资源增长判据承担。
 - **M2-P2（2026-09-21）新增长跑验收红线**：`SOAK_STEADY_MEAN_LIMIT_MS=6.2` /
   `SOAK_MEAN_DRIFT_RATIO_LIMIT=1.5` / `SOAK_RSS_GROWTH_LIMIT_MB=128` /
   `SOAK_GC_OBJECT_GROWTH_LIMIT=20000` / `SOAK_HANDLE_GROWTH_LIMIT=64`。

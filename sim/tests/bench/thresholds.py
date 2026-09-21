@@ -43,8 +43,16 @@ PERCEPTION_TICK_LIMIT_MS = 3.6
 # 实测（代表性满属性载荷：needs6+OCEAN5+PAD3+关系+R32 记忆显著性，向量化）
 # 暖态中位 ~0.02ms —— 6.00 为「M2 满属性 + 未向量化写法」的回归天花板，
 # 破限先砍 memory 衰减节拍（budget §2.4），再优化，不得放宽红线。
+# M2-P3 对账（main `59ffd86` 已落地真实实现，规格见 docs/perf/l1-spec.md）：真实实现是精简形
+# （3 needs / 6 actions / `_GAIN (3,6)`，无 PAD/关系/记忆），但开销大头在 Python 侧
+# （建矩阵逐 profile 循环 + scores dict + pydantic 事件），实测慢于原型一个数量级：
+#   utility_scores_matrix 50 NPC ~0.206ms / evaluate_batch ~0.273ms / NpcRuntime.tick ~0.747ms
+#   单 NPC（1-NPC 批次）~0.0124ms —— 全部远低本红线（~29x / ~22x / ~8x / ~10x）。
+# 红线不缩小（上界放羄 = 自缩防线）。单 NPC 测量坑：pytest-benchmark 计调用墙钟、
+# 不吃返回值，故必须用 1-NPC 批次（别除 n）。
 L1_UTILITY_TICK_LIMIT_MS = 6.0
 # 单 NPC 单 tick 效用评估上限 = 6.00ms / 50 npc（budget §2.4 逐人预算口径）。
+# 真实实现实测 ~0.0124ms（余量 ~10x）。
 L1_UTILITY_PER_NPC_LIMIT_MS = 0.12
 # LLM 断线降级路径（L1 兜底执行计划队列：每股 pop 一步 + 常数校验）上限。
 # 量级校验项：实测 ~0.001ms；0.20 = O(N) 上界，防降级路径写回热循环。
@@ -62,10 +70,13 @@ SMELL_NAIVE_SENTINEL_MS = 3.0
 # 依据：DESIGN §17 M2 验收「50 NPC × 7 游戏日自转无崩溃」。
 # 口径：**分窗稳定性**，而非单轮 p99 —— 长跑里单窗口离群（GC/OS 抖动）不应误红；
 # 判据 = 末窗均值相对首稳态窗的漂移有界 + 内存/句柄/缓存不无界增长。
-# 实测（M2-P1 内核 + 感知 + mock 动作，本机 50 NPC×64×64，持续走动负载）：
-# 稳态 mean ~1.9ms（< TICK_P99_LIMIT_MS 8.3，含感知挂载）。
+# 实测（本机 50 NPC×64×64，含感知挂载，两种 feeder 见 soak.py）：
+#   make_mock_feeder（50 全走，内核负载上界）稳态 mean ~1.9ms
+#   make_l1_feeder（真实 NpcRuntime.tick，L1 计算 ~0.75ms/tick）稳态 mean ~0.9ms
 # （早期错峰空转原型为 4.5ms —— 负载保真差异见 soak.py make_mock_feeder 注释。）
-# 604,800 tick 完整跑不进每提交 CI，接 nightly（接法由 cline）。
+# L1 feeder 不取代 mock feeder 当上界：当前内容常量下 hunger 主导 → eat 占多数
+# → move/wander 少 → 内核负载反而低于 mock。两者测不同的事（见 m2-acceptance.md §3.1）。
+# 604,800 tick 完整跑不进每提交 CI，接 nightly（接法已裁方案 A）。
 #
 # 稳态均值上限：含感知的全内核长跑须远低于 16.6ms 预算；取 6.2ms（约为 tick p99 红线 8.3 的 75%）。
 SOAK_STEADY_MEAN_LIMIT_MS = 6.2

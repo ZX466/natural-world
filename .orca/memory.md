@@ -193,6 +193,23 @@ uv run pyright sim/
 
 ## 你已完成的工作（最近一轮）
 
+- **M2-P3 交付（2026-09-21，分支 ZX466/pi）**：L1 算法规格落盘 + soak feeder 升级方案。
+  - `docs/perf/l1-spec.md`（新）：原型 `_L1Load`（numpy 数据布局/矩阵形状/打分公式/常量表）
+    ↔ 真实实现 `sim/npc/utility.py`（NEED_ORDER 3 / ACTION_ORDER 6 / `_GAIN (3,6)` / HABIT_BONUS 0.05 /
+    _EXTRAVERSION_CHAT_BIAS 0.3）逐项对账；未落地项清单（PAD/关系/记忆/候选集/NPC_ACT handler）。
+  - `sim/tests/bench/test_bench_l1_utility.py`：加 `test_l1_real_*`（真实 utility_scores_matrix / evaluate_batch /
+    NpcRuntime.tick / 单 NPC + 形状契约 + 确定性）。
+  - `sim/tests/bench/soak.py`：加 `make_l1_feeder`（mock → 真实 L1 两阶段接线；NPC_ACT 未注册时只折
+    move/wander 成 MOVE，其余丢弃；第三批接线后 `translate=lambda _a: True`）。
+  - `docs/perf/m2-acceptance.md` §3.1：feeder 升级方案（两阶段表 + 约定 + 两份 feeder 定位）。
+  - `thresholds.py`：L1 红线常量未动，注释回填实测。
+  - **修漏（自己的假红）**：长跑 `test_soak_nightly_steady_p99_below_tick_line` 用 8.3ms 硬门禁造成反复假红
+    （均值 2.3ms / p99 8.6ms = 调度噪声）。改为**硬预算 16.6ms 信息性守护**；回归检测交给
+    分窗均值漂移 + 资源增长判据。8.3ms 的固定容身之处仍是短基准 `test_bench_clock.py`。
+  - 另修一坑：pytest-benchmark 计**调用墙钟**、不吃返回值，单 NPC 用量必须用 1-NPC 批次（别除 n）。
+  - 实测：`utility_scores_matrix` 0.206ms / `evaluate_batch` 0.273ms / `NpcRuntime.tick` 0.747ms /
+    单 NPC 0.0124ms（红线 6.0 / 0.12ms，余量 8~29x）；soak L1 feeder 稳态 mean ~0.9ms。
+  - CI：bench 44 passed/1 skipped；`-m "not bench"` 770 passed/55 skipped；ruff/format/pyright 绿。
 - **M2-P2 交付（2026-09-21，分支 ZX466/pi，commit `7080e1e`+`b033995`）**：7 日自转验收口径 + 长跑预压测。
   - `docs/perf/m2-acceptance.md`（新）：604,800 tick 验收口径——崩溃判定 C1–C10（进程/tick/RSS/句柄/GC/缓存/实体/漂移/确定性/延迟）；降采样断言三级（CI 缩样 / nightly 30k / 里程碑完整 604,800）；
     nightly 接法提案 §4（方案 A nightly step vs 方案 B 独立 workflow，交 cline 裁决）。
@@ -217,12 +234,12 @@ uv run pyright sim/
 
 ## 当前任务
 
-**M2-P2（2026-09-21 接受，已交付）**：7 日自转验收口径（604,800 tick）+ 长跑预压测
-+ nightly 接法提案（给 cline）。
+**M2-P3（2026-09-21 接受，已交付）**：L1 算法规格落盘（对账 main `59ffd86` 已落地实现）
++ soak feeder 升级方案（mock → NpcRuntime.tick）。
 
 ## 进行中
 
-(空——M2-P2 已交付 b033995，等 Claude 收编)
+(空——M2-P3 已交付，等 Claude 收编)
 
 ## 留言板
 

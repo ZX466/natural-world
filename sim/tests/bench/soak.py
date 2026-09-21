@@ -114,7 +114,7 @@ def sample_proc() -> ProcSample:
 
 
 # ---------------------------------------------------------------------------
-# mock 动作喂给器（implementation 未落地时的替身；确定性，无 stdlib random）
+# 动作喂给器：mock（实现未落地的替身） / l1（真实 NpcRuntime.tick 接线）
 # ---------------------------------------------------------------------------
 
 
@@ -167,6 +167,71 @@ def make_mock_feeder(
             )
             queued += 1
         return queued
+
+    return feeder
+
+
+def make_l1_feeder(
+    runtime,
+    *,
+    grid_w: int = 64,
+    grid_h: int = 64,
+    path_len: int = 4,
+    branch_id: str = "main",
+    translate: Callable[[str], bool] | None = None,
+) -> Callable[[TickLoop], int]:
+    """L1 决策喂给器（M2-P3）：`NpcRuntime.tick` 输出 → 内核事件。
+
+    这是 `make_mock_feeder` 的升级版：mock 只产生「走」负载；本函数跑**真实 L1**
+    （needs 推进 + 效用向量化 + 事件产出，`sim/npc/runtime.py`），把决策接线进内核。
+
+    接线事实（M2-P3 对账）：`NpcRuntime.tick` 产出 NPC_ACT 事件，但当前
+    `build_default_bus()` **未注册 `NPC_ACT` handler**（架构第三批接 tick 固定序时注册）。
+    故本设计分两阶段：
+    - **阶段 1（当前）**：只把内核已注册的可执行动作（`move`/`wander`）折成 MOVE 事件
+      （唯一写路径 `issue_move`）；其余动作（`eat`/`rest`/`work`/`request_chat`）无 handler
+      → 丢弃。**L1 的计算成本仍全量发生**（needs/效用/事件构造都跑），量到的就是真实负载。
+    - **阶段 2（第三批接线）**：架构在 `TickLoop._tick_once` 预留挂载点调 `runtime.tick`
+      并注册 `NPC_ACT` handler 后，本 feeder 退化为「全部入队」——把 `translate` 传
+      `lambda _a: True` 即可，无需改 harness。
+
+    契约：`runtime.profiles` 的 npc_id 必须与 `loop.state.entities` 的 id 同名（映射一致）；
+    runtime 确定性、固定序（C5），本 feeder 不引入 stdlib random。
+    """
+    from sim.core.events import EventKind
+
+    def feeder(loop: TickLoop) -> int:
+        tick = loop.state.tick + 1
+        events = runtime.tick(tick)
+        enqueued = 0
+        for ev in events:
+            payload = ev.payload
+            if ev.event_type is not EventKind.NPC_ACT:
+                continue
+            action = str(payload.get("action", ""))
+            if action not in ("move", "wander"):
+                continue  # 内核暂无该动作 handler；L1 计算已发生，不谎报事件
+            npc_id = str(payload.get("npc_id", ""))
+            entity = loop.state.entities.get(npc_id)
+            if entity is None or entity.path:
+                continue
+            ex, ey = entity.pos
+            # 确定性方向（仅分散落点，不涉随机语义）：由 npc_id 字符和 + tick 派生
+            seed = (sum(ord(c) for c in npc_id) + tick * 7) & 0xFFFF
+            dx = (seed % 3) - 1
+            dy = ((seed // 3) % 3) - 1
+            if dx == 0 and dy == 0:
+                dx = 1
+            path = tuple(
+                (
+                    max(0, min(grid_w - 1, ex + round(dx * k))),
+                    max(0, min(grid_h - 1, ey + round(dy * k))),
+                )
+                for k in range(path_len + 1)
+            )
+            loop.issue_move(npc_id, list(path))
+            enqueued += 1
+        return enqueued
 
     return feeder
 

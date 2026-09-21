@@ -28,7 +28,8 @@
 | `docs/perf/hotspots.md` | 性能（Pi） | ✅ main | 热点预判 H-1–H-6：感知传播分区/增量、L0 向量化、SQLite append-only 批量写与索引、WS 增量合批、超速倍率、LLM 异步延迟（信息性） |
 | `docs/perf/bench-plan.md` | 性能（Pi） | ✅ main | 基准方案：M0 必带 bench 清单、pytest-benchmark/真实 tick loop harness 选型、回归阈值、nightly 节奏、已知不可测项 |
 | `docs/perf/llm-monitoring.md` | 性能（Pi） | ✅ main | LLM 异步延迟监控口径：structlog 事件名 `llm.request/response/retry/timeout/error/cache_hit/decision` + 字段清单（不记 api_key/prompt 明文）；P95<8s、单决策<2k tok、cache_hit>50%；**C06 LLM 客户端照抄接入**（口径非 tick 量纲） |
-| `docs/perf/m2-acceptance.md` | 性能（Pi） | ✅ main | M2 验收口径：604,800 tick（50 NPC × 7 游戏日）自转无崩溃；崩溃判定 C1–C10（进程/RSS/句柄/GC/缓存/实体/漂移/确定性/延迟）；降采样断言三级（CI 缩样/nightly 30k/里程碑完整）；nightly 接法提案 §4 |
+| `docs/perf/m2-acceptance.md` | 性能（Pi） | ✅ main | M2 验收口径：604,800 tick（50 NPC × 7 游戏日）自转无崩溃；崩溃判定 C1–C10（进程/RSS/句柄/GC/缓存/实体/漂移/确定性/延迟）；降采样断言三级（CI 缩样/nightly 30k/里程碑完整）；nightly 接法 §4 |
+| `docs/perf/l1-spec.md` | 性能（Pi） | ✅ main | L1 效用算法规格（M2-P3）：原型 `_L1Load` numpy 数据布局/矩阵形状/打分公式/常量表 vs 真实实现 `utility.py`（`(n,3)@(3,6)` `_GAIN` 矩阵）逐项对账 + 红线实测回填（runtime.tick 50 NPC ~0.75ms，红线 6.0ms）；未落地项清单（PAD/关系/记忆/候选集/NPC_ACT handler） |
 | `docs/data/schema.md` | 数据/数据库（opencode） | ✅ main | SQLite schema：事件日志（append-only）/分支树/快照分层/玩家 anchor/NPC 记忆 + sqlite-vec 占位；索引与约束对齐 §6 契约 |
 | `docs/data/event-sourcing.md` | 数据/数据库（opencode） | ✅ main | 事件溯源：`apply(event)` 唯一写路径、读档重放流程、回放确定性（RNG/熵随事件落库） |
 | `docs/data/migration.md` | 数据/数据库（opencode） | ✅ main | Alembic 迁移策略（async env.py / alembic.ini / 首版迁移骨架） |
@@ -121,7 +122,6 @@ M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI
 
 ### M2 派单与交付状态（2026-09-21 盘点）
 
-<<<<<<< HEAD
 | 路 | Agent | 交付物（提交） | 状态 | 实测 / 结论 |
 |---|---|---|---|---|
 | M2-A1 架构稿 | Claude | `docs/arch/m2-npc-cognition.md`（NPC 底座/L1 效用/非理性/物质熵增/嗅觉+风场接口/语言判定 + 实施顺序与分工） | ✅ main `3ab8c71` | 两项配置裁决同批落地（`.gitattributes` + `.gitignore` 的 `.github` 例外） |
@@ -136,17 +136,7 @@ M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI
 | M2-P2 长跑验收口径 + 预压测 | pi | `docs/perf/m2-acceptance.md`（C1-C10）+ `sim/tests/bench/soak.py` + `test_bench_soak.py` + thresholds 5 SOAK_* | ✅ 已收编 | 100k tick 实测均值无漂移（1.86→1.86ms）、RSS/句柄/GC 有界；三级降采样；nightly 接法提案 §4（待裁） |
 | M2-K1 复核 | kilo | language 叙事边界复核 4 条意见（memory.md ⑥节） | ✅ 已收编 | openapi_ext 复核等 Claude 改写通知 |
 | M2-A2 后续批次 | Claude | utility 向量化 / matter 结算 / smell.py / language.py | ⏳ 在途 | 下一批见主树 talking.txt |
-=======
-| 路 | Agent | 交付物（分支 / 提交） | 实测 / 结论 |
-|---|---|---|---|
-| M2-A1 架构稿 | Claude | `docs/arch/` 下 M2 稿（进行中） | — |
-| M2-S1 自我未知安全边界 | codex | `docs/security/self-unknown.md` + `sim/npc/hidden.py` + `gate.py`/`memory_scan.py` 扩展 + `sim/tests/test_t1_self_unknown.py`（`ZX466/codex` `581ae78`） | 28 用例（未触发零泄露 / 触发正常浮现双路径）；全量 606 passed / 55 skipped；自带 ci.yml 文件路径门禁 |
-| M2-P1 性能预算 | pi | `docs/perf/{budget,bench-plan,hotspots}.md` + `thresholds.py` 5 常量 + `sim/tests/bench/test_bench_l1_utility.py` / `test_bench_smell.py`（`ZX466/pi` `adaf0c5`） | bench 29 passed；暖态中位 L1 向量化 ~0.02ms/tick、嗅觉 ~0.01ms；红线 L1 6.0ms / 单 NPC 0.12ms / 断线兜底 0.20ms / 嗅觉 0.15ms |
-| M2-P2 长跑验收口径 | pi | `docs/perf/m2-acceptance.md` + `hotspots.md` H-7 + `thresholds.py` 5 SOAK_* 常量 + `sim/tests/bench/soak.py` / `test_bench_soak.py`（`ZX466/pi`） | 50 NPC × 604,800 tick 无崩溃口径 C1–C10；实测 100k tick 均值无漂移（1.86→1.86ms）、RSS/句柄/GC 有界；三级降采样（CI 缩样/nightly 30k/里程碑完整 604,800）；nightly 接法提案 §4（待 cline 裁决） |
-| M2-D1 数据层 | opencode | `docs/data/schema.md` + `0004_m2_npc_attributes` + `models.py` + `sim/tests/test_persistence_m2.py`（`ZX466/opencode` `2876933`） | 582 passed / 55 skipped；alembic 零漂移；`npc_memory_vec` 仍锁 M3（D04 保留项不变） |
-| K04 WS 类型生成 | kilo | `client/src/net/__tests__/protocol-types.test.ts` + `docs/api/ws-protocol.md` §3.1（`ZX466/kilo` `ab39dc1`） | `gen:protocol --check` / typecheck / lint / vitest 13 / build 全绿；4 项跨域发现（`components.wsMessages` 不被 openapi-typescript 读取等）待 sim 侧裁决 |
-| M2-C1 配套（本域） | cline | ci.yml M2 占位步骤 + nightly 接入点注释 + 本节 + `docs/dev-workflow.md` §3/§7 | 依赖对账 **零新包**（下表）；`.gitattributes` **正式提议**见 dev-workflow §7 |
->>>>>>> ZX466/pi
+| M2-P3 L1 算法规格 + feeder 接线 | pi | `docs/perf/l1-spec.md`（新） + `docs/perf/m2-acceptance.md` §3.1 + `sim/tests/bench/soak.py` 的 `make_l1_feeder` + `test_bench_l1_utility.py::test_l1_real_*` + `test_bench_soak.py::test_soak_*_l1_feeder` + `thresholds.py` 注释回填（`ZX466/pi`） | ⏳ 待收编 | 原型（_l1Load，6 needs/13 actions/PAD/关系/记忆） ↔ 真实实现（main `59ffd86`，3 needs/6 actions/`_GAIN (3,6)`）逐项对账；实测回填 `utility_scores_matrix` 0.206ms / `evaluate_batch` 0.273ms / `NpcRuntime.tick` 0.747ms （红线 6.0ms，余量 8~29x）；mock → L1 feeder 两阶段接线设计（NPC_ACT handler 未注册，等架构第三批） |
 
 ### M2 依赖对账（M2-C1 结论：**零新依赖**）
 
