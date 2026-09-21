@@ -267,16 +267,16 @@ uv run pyright sim/
 
 ## 5. 当前任务 / 进行中
 
-- **K04（2026-09-21 已正式派发+接受，范围 1-3 已由前序提交落地，本次补 4-5）**：
+- **K04（2026-09-21 已派发+接受+交付，已收编 main `8dd8355`）**：
   WS 消息类型全量生成进 `shared/protocol.ts`。核验结论：`shared/protocol.ts` 的 `WsMessage`
   判别联合（14 成员：C→S 5 = player_impulse/set_control/move_request/load_anchor/sync_request；
   S→C 9 = full_snapshot/state_delta/perception/monologue/impulse_feedback/combat_event/
   timescale/control_ack/error）早已生成；`client/src/net/protocol.ts` re-export 齐全；
   `ws.ts` 已用生成类型（仅 `WsStatus`/`WsCallbacks` 手写 = 传输层，非协议）。
-  本次交付：`protocol-types.test.ts` 补 K04 #1/#2（WsMessage['type'] 14 枚举 + 每成员必填
+  交付：`protocol-types.test.ts` 补 K04 #1/#2（WsMessage['type'] 14 枚举 + 每成员必填
   字段形状 + 五通道判别字面量 + 出戏边界），`docs/api/ws-protocol.md` §3.1 补 `move_request`
   行（快照 `c48358f` 早加但文档漏更的偏差）。
-- **⚠ 跨域发现（待 Claude/sim 域裁决，已回写 talking.txt）**：
+- **⚠ 跨域发现（K04 回执已写 talking.txt；Claude 已收进架构稿 §6，M2-A2 待办）**：
   1. `sim/api/openapi_ext.py` 的 `components.wsMessages` **openapi-typescript 完全不读**（只读
      `components.schemas`）→ 实测 `--src` 指 sim `/openapi.json` 生成 0 个 WS 类型。该注入对
      前端类型源无效。
@@ -288,7 +288,22 @@ uv run pyright sim/
   4. 结论：`shared/openapi.json` 的 oneOf+discriminator 联合方式是唯一可行前端类型源；要真正
      消除 sim↔前端漂移，需 sim 侧把 §3 清单写进 `components.schemas.WsMessage`（sim 域改动）。
   5. `sim/api/ws.py` 与快照的另一处差：`error` 消息 sim 不发 `ref`（快照 required 含 ref）。
-- 其他：等 Claude 派 M2/TASK-005。
+- **M2-K1（2026-09-21 派发+接受，两项）**：
+  1. openapi_ext 复核——**等 Claude 改写 `components.schemas.WsMessage` 的通知**再动手；届时
+     验 `--src` 全量生成 14 成员 + `--check`。
+  2. language.py 叙事边界复核——**已交付**（意见写 talking.txt 留言板 2026-09-21）。要点：
+     - 架构稿 §5.2「LanguageProfile 挂 species/阶层 profile」**会误导成物种级**；数据层既定
+       `npc_profiles.knowledge_boundary`（0004 迁移 + `models.py:293` + `sim/tests/test_persistence_m2.py:69`
+       夹具）= 每角色 JSON `{"literacy","jargon","class_register"}`。DESIGN §229「人类共用一套」
+       指感知参数（`PerceptionProfile`）非语言能力。→ 须按角色构造；`species_language` 才是物种级枚举位。
+     - 命名待 sim 域定：`register`（架构）vs `class_register`（夹具，倾向后者）；`jargon: set[str]`
+       （架构）vs JSON list（夹具，建议 `Sequence[str]`）。
+     - 出戏边界 4 红线：降质文案零数值零系统词（架构三条候选已实测过 `banned_words.scan()` 0 命中）；
+       `literacy` 只做阈值绝不进文本；降质只动叙事层文本、`Observation`/`PerceptionFrame` 原始数据
+       保持完整（M3 知识传播前提）；挂载点应为 `PerceptionFrame.narrated()` 内而非 `Observation` 构造处。
+     - 接口域增量：语言降质文本走现有 `perception` 消息 `content`（string），**schema 不变**；
+       `species_language`/`class_register` 等判据不出 WS。K04 的 14 成员联合无需改。
+- 其他：等 Claude 派 M2 后续 / TASK-005。
 
 ## 6. 留言板 / 待回执
 
