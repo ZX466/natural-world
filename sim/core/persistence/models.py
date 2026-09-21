@@ -230,3 +230,142 @@ class Knowledge(TimestampMixin, Base):
         Index("idx_knowledge_holder", "branch_id", "holder_id"),
         Index("idx_knowledge_source", "branch_id", "source"),
     )
+
+
+# ---------------------------------------------------------------------------
+# M2 表（0004 迁移：NPC 完整属性 + 物质熵增状态）
+# 对齐 DESIGN.md §13（NPC 完整属性）+ §11（物质熵增）+ §14（结构 integrity）
+# + docs/data/schema.md §9/§12/§13 + codex docs/security/self-unknown.md §6。
+#
+# 范围说明（M2-D1）：健康档以外的完整属性用宽表 npc_profiles 承载；健康档
+# （疾病/旧伤/成瘾/残疾 + 创伤应激）独立成 npc_health，为「自我未知」隐藏
+# 标注留 hidden / descriptors / trigger_conditions 三列——字段映射对齐 codex
+# sim/npc/hidden.py 的 HiddenAttribute（id/category/label/descriptors/triggers）。
+# 物质熵增以 matter_state 表持久化（可重放），熵增过程本身走 events 流的
+# tile_changed / matter.* 事件（事件模型见 docs/data/schema.md §13）。
+# 注意：npc_memory_vec 是 sqlite-vec 虚拟表，仍锁 M3（vector.py），不在 0004 范围。
+# ---------------------------------------------------------------------------
+
+
+class NpcProfile(TimestampMixin, Base):
+    """NPC 完整属性宽表（DESIGN §13；M2）。健康档见 NpcHealth。
+
+    OCEAN 人格与 PAD 情绪为数值列（对齐 §6 契约 + prompt 装配需要）；
+    需求/技能/目标/物品/知识边界是低频变动集合，JSON 文本承载避免表爆炸。
+
+    字段域（DESIGN §13）：身份 / 需求（带权重）/ OCEAN / PAD / 技能树 / 目标 /
+    物品 / 知识边界（语言判定用识字率与行话）。关系 / 记忆 / 知识分别落
+    relationships / npc_memories / knowledge。
+    """
+
+    __tablename__ = "npc_profiles"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # NPC entity_id
+    branch_id: Mapped[str] = mapped_column(String, nullable=False)
+
+    # ---- 身份（DESIGN §13 身份）----
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    species: Mapped[str] = mapped_column(String, nullable=False, default="human")
+    gender: Mapped[str] = mapped_column(String, nullable=False, default="unknown")
+    age: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    occupation: Mapped[str] = mapped_column(String, nullable=False, default="")
+    identity_anchor: Mapped[str] = mapped_column(Text, nullable=False, default="")  # 自述锚
+
+    # ---- OCEAN 人格（0-100，DESIGN §13）----
+    ocean_openness: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    ocean_conscientiousness: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    ocean_extraversion: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    ocean_agreeableness: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    ocean_neuroticism: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+
+    # ---- PAD 情绪（-1..1，DESIGN §13）----
+    pad_pleasure: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    pad_arousal: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    pad_dominance: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    emotion_updated_tick: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # ---- 集合型属性（JSON 文本，DESIGN §13）----
+    needs: Mapped[str] = mapped_column(Text, nullable=False, default="[]")  # [{name,value,weight}]
+    skills: Mapped[str] = mapped_column(Text, nullable=False, default="{}")  # {skill: level}
+    goals: Mapped[str] = mapped_column(Text, nullable=False, default="{}")  # {short,long}
+    inventory: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    # knowledge_boundary：§7 语言判定用（识字率/行话/阶层用语）
+    knowledge_boundary: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+
+    # ---- LOD 与游标（DESIGN §13 LOD：0/1/2）----
+    lod: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at_tick: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at_tick: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        Index("idx_profiles_branch", "branch_id"),
+        Index("idx_profiles_branch_lod", "branch_id", "lod"),
+    )
+
+
+class NpcHealth(TimestampMixin, Base):
+    """NPC 健康档 — 疾病/旧伤/成瘾/残疾 + 创伤应激（DESIGN §13/§14，M2）。
+
+    一行 = 一条健康属性。可为「隐藏」（自我未知）属性：
+    - hidden=1 时默认不进任何 LLM/戏内输出面，仅情境触发命中才浮现；
+    - descriptors 是直陈词面（泄漏扫描面），trigger_conditions 是情境触发关键词；
+    字段与语义对齐 codex sim/npc/hidden.py HiddenAttribute + self-unknown.md §1/§6。
+    category 取值：disease / old_injury / addiction / disability / trauma。
+    """
+
+    __tablename__ = "npc_health"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    npc_id: Mapped[str] = mapped_column(String, nullable=False)
+    branch_id: Mapped[str] = mapped_column(String, nullable=False)
+    category: Mapped[str] = mapped_column(String, nullable=False)  # codex HiddenCategory
+    label: Mapped[str] = mapped_column(String, nullable=False)  # 世界内指称
+    severity: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)  # 0.0-1.0
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    descriptors: Mapped[str] = mapped_column(Text, nullable=False, default="[]")  # 直陈词面
+    # trigger_conditions：情境触发关键词 JSON（浮现代码用）
+    trigger_conditions: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at_tick: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        Index("idx_health_npc", "branch_id", "npc_id"),
+        Index("idx_health_hidden", "branch_id", "hidden"),
+        Index("idx_health_category", "branch_id", "category"),
+    )
+
+
+class MatterState(TimestampMixin, Base):
+    """物质熵增状态 — 可损耗对象的完整性/质量/腐朽进度（DESIGN §11/§14，M2）。
+
+    物质熵增是慢变量：结构/物品随 tick 自发衰减（integrity↓、decay↑），
+    施工与破坏改变其数值；integrity 归零变 rubble 永不恢复（§14）。
+    本表只持久化「当前物质熵状态」，每次变更仍由 events 流的 tile_changed /
+    matter.* 事件驱动（§19 禁止直接赋值；§11 熵材料随事件落库）——迁移与
+    事件模型说明见 docs/data/schema.md §12/§13。
+
+    subject_kind：structure / item / terrain / natural（树/水土等慢变量 M5）。
+    """
+
+    __tablename__ = "matter_state"
+
+    subject_id: Mapped[str] = mapped_column(String, primary_key=True)  # 对象稳定 id
+    branch_id: Mapped[str] = mapped_column(String, nullable=False)
+    subject_kind: Mapped[str] = mapped_column(String, nullable=False, default="structure")
+    material: Mapped[str] = mapped_column(String, nullable=False, default="")
+    integrity: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)  # 0.0-1.0
+    quality: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)  # 手艺，影响衰减
+    decay_rate: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)  # 每 tick 衰减
+    load_bearing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # JSON 支撑结构 id 列表（承重依赖图，§14）
+    supported_by: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    is_rubble: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    last_decay_tick: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at_tick: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("subject_id"),
+        Index("idx_matter_branch", "branch_id"),
+        Index("idx_matter_branch_kind", "branch_id", "subject_kind"),
+    )
