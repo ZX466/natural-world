@@ -96,35 +96,34 @@ jobs:
           # 按路径可保证即使日后给它加 marker 或改 addopts，也不会被静默排除出 CI。
           uv run pytest sim/tests/test_m1_metrics.py
 
-      - name: pytest M2 指标跑分（占位 — 等 M2 交付后按文件路径填实）
-        # M2-C1（cline，2026-09-21）：M2 量化验收的命名门禁**占位步骤**。
-        # timeout 是刻意设置的护栏，理由见下（604,800 tick 量纲）——不是随手写的数。
+      - name: pytest M2 验收测试（按文件路径：sim/tests/test_m2_*.py）
+        # M2-C1 立占位、M2-C2 填实（cline，2026-09-21）：M2 验收测试按命名约定
+        # `sim/tests/test_m2_*.py` **全量**接入（多域交付：架构域 npc 底座、配置域风场、
+        # 后续 matter/smell/language …）—— 命名约定即契约，落到该前缀即自动成为命名门禁。
+        # timeout 是刻意设的护栏，理由见下（604,800 tick 量纲）——不是随手写的数。
         timeout-minutes: 15
         run: |
           # 纪律与 T3 / M1 同源：只按【文件路径】选择，不用 `-m xxx`
           # （marker/addopts 一变就会把门禁静默排除成假绿灯 —— P04 教训）。
           #
-          # 为什么是「占位」而不是写死一个路径：
+          # 为什么用 glob 而不是写死一个路径：
           #   DESIGN §10「1 tick = 1 游戏秒」⇒ 7 游戏日 = 604,800 tick。完整验收
           #   「50 NPC × 7 游戏日自转无崩溃」**不属于每提交 CI**（timeout-minutes: 15
           #   即这道护栏）；完整跑与 M2 红线一律接 nightly-bench.yml，红线唯一真相源
           #   = sim/tests/bench/thresholds.py（pi 维护）。故本步骤只接
           #   「CI 级缩样/采样」文件（无 LLM，秒级~分钟级）。
+          #   ⇒ 新 M2 验收测试按 `test_m2_*.py` 命名落盘即自动纳入；若某文件量纲超出
+          #     每提交 CI（长跑/基准），**不要**放进本 glob —— 改接 nightly 并在 docs 登记。
           #
-          # 已由他域交付、**不在此重复接**的 M2 门禁（同一门禁不两处维护，防漂移）：
+          # 已由他域单独接入、**不在此重复接**的 M2 门禁（同一门禁不两处维护，防漂移）：
           #   - sim/tests/test_t1_self_unknown.py（codex M2-S1：自我未知/信息边界双路径采样；
-          #     其分支已自带同款文件路径步骤，收编后与本步骤并存不冲突）
-          #   - sim/tests/test_persistence_m2.py（opencode M2-D1：NPC 完整属性/熵增，纯 T1、
+          #     其自带命名步骤，与本步骤并存不冲突）
+          #   - sim/tests/test_persistence_m2.py（opencode M2-D1/M2-D2：数据层持久化，纯 T1、
           #     秒级，随 `-m "not bench"` 全量跑，无需独立命名步骤）
-          #
-          # 填实动作（M2 验收跑分落库后由 cline 做）：glob 换显式文件路径、步骤名去掉「占位」、
-          #   同步 docs/README.md §5 与 docs/dev-workflow.md §3 的实测数字。
           shopt -s nullglob
           files=(sim/tests/test_m2_*.py)
           if [ ${#files[@]} -eq 0 ]; then
-            echo "::warning::M2 指标占位步骤：未找到 sim/tests/test_m2_*.py（M2 验收跑分尚未落库）→ 本步骤当前不构成门禁；落库后自动生效，请届时按本步骤注释填实路径"
-            echo "sim/tests/ 现状（*.py）："
-            for f in sim/tests/*.py; do echo "  ${f#sim/tests/}"; done
+            echo "::warning::M2 验收测试文件缺失（sim/tests/test_m2_*.py 一个都没有）→ 检查是否被误删/改名"
             exit 0
           fi
           echo "选中文件（按文件路径接法）：${files[*]}"
@@ -134,7 +133,7 @@ jobs:
           uv run pytest -m "not bench" "${files[@]}"
           code=$?
           if [ "$code" -eq 5 ]; then
-            echo "::warning::M2 指标文件已存在但未收集到任何用例（全部被 marker 排除 / 文件为空，检查命名与 marker）"
+            echo "::warning::M2 验收测试文件已存在但未收集到任何用例（全部被 marker 排除 / 文件为空，检查命名与 marker）"
             exit 0
           fi
           exit $code

@@ -108,7 +108,7 @@ M1 范围与量化验收：DESIGN §17（认知闭环：LLM 客户端 + Profile 
 
 > 复核经过：P05 终校时（当时 main 尚未含 S04）第 1、2 项**确实仍缺**，已在 P05 报告主树；**codex S04 合入（main `66f3f18`）后三项全部收口**，本表已按终态更新。教训：**跨域状态以 main 实际代码为准**（我复查 `git grep 'not isinstance'` / `_rtoken` docstring 逐条确认，未凭留言采信）。
 
-## 5. M2 区块（M2 四路交付在手，待收编）
+## 5. M2 区块（第一轮四路已收编，第二轮在途）
 
 M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI（兼 LLM 断线兜底）+ 非理性框架 + 物质熵增 + 嗅觉风向 + 语言判定 + 自我未知**。
 
@@ -118,16 +118,18 @@ M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI
 - **本阶段不做**：记忆传播、建造（DESIGN §17 M2 行「本阶段不做」）。
 - **量纲提醒（写 M2 验收脚本前先看）**：DESIGN §10 锁定「1 tick = 1 游戏秒」⇒ 7 游戏日 = **604,800 tick**。完整跑**不进每提交 CI**（ci.yml 的 M2 占位步骤 `timeout-minutes: 15` 即这道护栏），完整跑与 M2 红线一律接 `nightly-bench.yml`（接入点注释已留）。
 
-### M2 派单与交付状态（2026-09-21 盘点，四路交付**待收编**）
+### M2 派单与交付状态（2026-09-21 盘点）
 
-| 路 | Agent | 交付物（分支 / 提交） | 实测 / 结论 |
-|---|---|---|---|
-| M2-A1 架构稿 | Claude | `docs/arch/` 下 M2 稿（进行中） | — |
-| M2-S1 自我未知安全边界 | codex | `docs/security/self-unknown.md` + `sim/npc/hidden.py` + `gate.py`/`memory_scan.py` 扩展 + `sim/tests/test_t1_self_unknown.py`（`ZX466/codex` `581ae78`） | 28 用例（未触发零泄露 / 触发正常浮现双路径）；全量 606 passed / 55 skipped；自带 ci.yml 文件路径门禁 |
-| M2-P1 性能预算 | pi | `docs/perf/{budget,bench-plan,hotspots}.md` + `thresholds.py` 5 常量 + `sim/tests/bench/test_bench_l1_utility.py` / `test_bench_smell.py`（`ZX466/pi` `adaf0c5`） | bench 29 passed；暖态中位 L1 向量化 ~0.02ms/tick、嗅觉 ~0.01ms；红线 L1 6.0ms / 单 NPC 0.12ms / 断线兜底 0.20ms / 嗅觉 0.15ms |
-| M2-D1 数据层 | opencode | `docs/data/schema.md` + `0004_m2_npc_attributes` + `models.py` + `sim/tests/test_persistence_m2.py`（`ZX466/opencode` `2876933`） | 582 passed / 55 skipped；alembic 零漂移；`npc_memory_vec` 仍锁 M3（D04 保留项不变） |
-| K04 WS 类型生成 | kilo | `client/src/net/__tests__/protocol-types.test.ts` + `docs/api/ws-protocol.md` §3.1（`ZX466/kilo` `ab39dc1`） | `gen:protocol --check` / typecheck / lint / vitest 13 / build 全绿；4 项跨域发现（`components.wsMessages` 不被 openapi-typescript 读取等）待 sim 侧裁决 |
-| M2-C1 配套（本域） | cline | ci.yml M2 占位步骤 + nightly 接入点注释 + 本节 + `docs/dev-workflow.md` §3/§7 | 依赖对账 **零新包**（下表）；`.gitattributes` **正式提议**见 dev-workflow §7 |
+| 路 | Agent | 交付物（提交） | 状态 | 实测 / 结论 |
+|---|---|---|---|---|
+| M2-A1 架构稿 | Claude | `docs/arch/m2-npc-cognition.md`（NPC 底座/L1 效用/非理性/物质熵增/嗅觉+风场接口/语言判定 + 实施顺序与分工） | ✅ main `3ab8c71` | 两项配置裁决同批落地（`.gitattributes` + `.gitignore` 的 `.github` 例外） |
+| M2-A2 第一批 | Claude | `sim/npc/{model,needs,body,actions}.py` + EventKind 扩 6 类 + `sim/tests/test_m2_npc_base.py` | ✅ main `76f1ba3` | 26 用例；636 passed / 55 skipped；CI M2 命名步骤已实跑 |
+| M2-S1 自我未知安全边界 | codex | `docs/security/self-unknown.md` + `sim/npc/hidden.py` + gate/memory_scan 扩展 + `sim/tests/test_t1_self_unknown.py` | ✅ main `8d254cb` | 28 用例（未触发零泄露 / 触发正常浮现双路径）；自带 ci.yml 文件路径门禁 |
+| M2-P1 性能预算 | pi | `docs/perf/{budget,bench-plan,hotspots}.md` + `thresholds.py` 5 常量 + `test_bench_l1_utility.py` / `test_bench_smell.py` | ✅ main `e42b979` | bench 29 passed；暖态中位 L1 向量化 ~0.02ms/tick、嗅觉 ~0.01ms；红线 L1 6.0 / 单 NPC 0.12 / 断线兜底 0.20 / 嗅觉 0.15ms |
+| M2-D1 数据层 | opencode | `docs/data/schema.md` §12-14 + `0004_m2_npc_attributes` + `models.py` + `sim/tests/test_persistence_m2.py` | ✅ main `4934ec1` | 11 用例；alembic 零漂移；`npc_memory_vec` 仍锁 M3 |
+| K04 WS 类型生成 | kilo | `client/src/net/__tests__/protocol-types.test.ts` + `docs/api/ws-protocol.md` §3.1 | ✅ main `8dd8355` | `gen:protocol --check` / typecheck / lint / vitest 13 / build 全绿 |
+| **M2-C2 风场 + 六树重签出（本域）** | cline | `sim/world/weather.py` + `sim/tests/test_m2_weather.py` + ci.yml M2 步骤填实 + `docs/dev-workflow.md` §7 重签出操作 | ⏳ 分支 `ZX466/cline` | 31 用例；纯函数可重放（同 (rng,tick) 同风）+ 每日天气注入点 `daily_reseed_due`；风场接口供 `smell.py` 消费 |
+| M2 第二轮（其余） | 各域 | kilo M2-K1 openapi 复核 / opencode M2-D2 LOD 持久化 / pi M2-P2 7 日验收口径 / codex M2-S2 动作白名单 / Claude matter + smell + language | ⏳ 在途 | 派单表见主树 `.orca/talking.txt` |
 
 ### M2 依赖对账（M2-C1 结论：**零新依赖**）
 
@@ -139,19 +141,19 @@ M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI
 | kilo K04 | 无 Python 改动；前端只改测试与文档 | 零新包（openapi-typescript / prettier 已锁；Node ≥24 已定，CI setup-node 已对齐） |
 
 - **证据（硬指标）**：四分支 `git diff --stat origin/main <branch> -- pyproject.toml uv.lock client/package.json client/package-lock.json` **全部为空** —— 零锁文件变更，故 M2 收编**不需要**除 `uv sync` / `npm ci` 之外的任何动作，CI 缓存键也不变。
+- **M2-C2 追加（风场，2026-09-21）**：`sim/world/weather.py` 只用标准库 `hashlib`/`math`/`dataclasses`/`typing` + 已锁 `numpy`（经 `sim.core.rng`/`sim.core.calendar`），**仍为零新依赖**；`.github/workflows/*` 与 `docs/` 改动不涉依赖。
 - **唯一待观察项**：embedding 生成来源（M3 记忆向量检索才触发）。走已锁 `openai` 客户端调远端 embedding API ⇒ 零新包；若改本地模型（torch / onnxruntime / sentence-transformers 等）⇒ 重依赖 + CI 体积暴涨，**须先过依赖评审再动**。M2 不触发：`sqlite-vec>=0.1.6` 已在锁，`sim/core/persistence/vector.py` 脚手架就位，`DEFAULT_EMBEDDING_DIM = 384` 待 M3 锁定。
 
 ### M2 CI 接入（现状）
 
-- **新增占位步骤**：「pytest M2 指标跑分（占位）」——按**文件路径** glob `sim/tests/test_m2_*.py` 选择（纪律同 T3/M1，不用 marker）。文件未落库时只 `::warning::` 留痕、不假绿；落库后**自动生效**，届时由 cline 把 glob 换成显式路径、去掉步骤名里的「占位」。
-- 命名约定：M2 的 CI 级验收测试落 `sim/tests/test_m2_*.py`（对齐 `sim/tests/test_m1_metrics.py`），**无 LLM、秒级~分钟级**。
-- 已到位的 M2 命名门禁（不重复接）：`sim/tests/test_t1_self_unknown.py`（codex 分支自带步骤）；`sim/tests/test_persistence_m2.py` 纯 T1、随 `-m "not bench"` 全量跑。
+- **命名门禁（M2-C1 立占位 → M2-C2 填实）**：「pytest M2 验收测试」按**文件路径** glob `sim/tests/test_m2_*.py` 选择（纪律同 T3/M1，不用 marker）。**命名约定即契约**：新 M2 验收测试落到该前缀即自动纳入门禁；现役 `test_m2_npc_base.py`（架构域）+ `test_m2_weather.py`（配置域，31 用例）。落地要求：无 LLM、秒级~分钟级；步骤内 `-m "not bench"` + `timeout-minutes: 15` 双护栏。
+- 已由他域单独接入的 M2 门禁（不重复接）：`sim/tests/test_t1_self_unknown.py`（codex 自带步骤）；`sim/tests/test_persistence_m2.py` 纯 T1、随 `-m "not bench"` 全量跑。
 - nightly：M2 红线**不复制数值**，唯一真相源 `sim/tests/bench/thresholds.py`；pi 的两个 M2 bench 文件随 `-m bench` 自动纳入，**无需改 yml**。
 - **待裁（Claude）**：完整 7 日自转验收（604,800 tick）的定期接法（新增 `-m m2full` 类 marker + nightly job，还是只在里程碑本地跑一次）。marker 语义属配置域但**接法由主导裁决**，cline 不擅自定；裁决后在本节 + nightly 注释回填。
 
-### 待裁：`.gitattributes`（行尾统一）
+### `.gitattributes`（行尾统一）—— 已落地
 
-正式提议见 `docs/dev-workflow.md` §7 —— 含实测影响面（索引重写量 **0 文件**、各树一次性重签出步骤、方案 A/B/C 对比）。cline **不擅自加**；裁决采纳后由 cline 在 main 落一次提交，各工作树配合重签出。
+裁决采纳方案 A（main `3ab8c71`）：`.gitattributes` = `* text=auto eol=lf`；`.gitignore` 同批补 `!.github/`（`.orca/` 下**新增**文件仍需 `git add -f`）。**重签出操作手册见 `docs/dev-workflow.md` §7**（每树一次：`git rm -r --cached . && git reset --hard`；`git checkout-index -f -a` 实测无效）。M2-C2 已按该手册完成六树重签出。
 
 ## 6. 跨域接口对接点（改了要同时通知对方）
 

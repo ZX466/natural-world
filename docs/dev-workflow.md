@@ -61,10 +61,10 @@ Push-Location client; npx tsc --noEmit; npx eslint .; npx prettier --check .; np
 - CI 里 pytest 一律带 `-m "not bench"`：性能基准抖动大，放进来只会把 CI 变成红灯制造机（`docs/perf/bench-plan.md` §0）。
 - marker 在 `pytest.ini` 注册，`--strict-markers` 生效：写测试必须带正确 marker，拼错会直接失败。
 - **M1 指标跑分**（`sim/tests/test_m1_metrics.py`：差事完成率 / 链路 P95 / 单决策 tok / T3 出戏，假 LLM 零网络，纯 T1 秒级）：本已随 `-m "not bench"` 全量跑，ci.yml 另有命名步骤「pytest M1 指标跑分」——两个命名门禁步骤（T3 对抗、M1 指标）都按**文件路径**选择，不用 marker，以免 marker/addopts 变化把门禁静默排除成假绿灯。实测数字见 `docs/README.md` §4。
-- **M2 指标跑分（占位，M2-C1）**：ci.yml 已有命名步骤「pytest M2 指标跑分（占位）」——按**文件路径** glob `sim/tests/test_m2_*.py` 选择（纪律与 T3/M1 同源）。文件未落库时只 `::warning::` 留痕、不假绿；落库即自动生效。
-  - 命名约定：M2 的 CI 级验收测试落 `sim/tests/test_m2_*.py`，**无 LLM、秒级~分钟级**；步骤内显式 `-m "not bench"`（性能红线是抖动域，属 nightly）。
-  - ⚠ **不要**把完整验收「50 NPC × 7 游戏日自转无崩溃」做成 `sim/tests` 下无 marker 的普通测试：DESIGN §10「1 tick = 1 游戏秒」⇒ 7 游戏日 = **604,800 tick**，它会被 `-m "not bench"` 全量 CI 收集，把每提交 CI 拖成小时级（ci.yml 该步骤的 `timeout-minutes: 15` 就是这道护栏）。完整跑接 `nightly-bench.yml`（接法待 Claude 裁）。
-  - M2 四路依赖对账与交付盘点见 `docs/README.md` §5。
+- **M2 验收测试（命名门禁，M2-C2 起已实跑）**：ci.yml 命名步骤「pytest M2 验收测试」按**文件路径** glob `sim/tests/test_m2_*.py` 选择（纪律与 T3/M1 同源，不用 marker）。**命名约定即契约**：新 M2 验收测试落 `sim/tests/test_m2_*.py` 即自动纳入门禁。
+  - 量纲要求：**无 LLM、秒级~分钟级**；步骤内显式 `-m "not bench"`（性能红线是抖动域，属 nightly）。
+  - ⚠ **不要**把完整验收「50 NPC × 7 游戏日自转无崩溃」做成该前缀下的普通测试：DESIGN §10「1 tick = 1 游戏秒」⇒ 7 游戏日 = **604,800 tick**，它会被 `-m "not bench"` 全量 CI 收集，把每提交 CI 拖成小时级（ci.yml 该步骤的 `timeout-minutes: 15` 就是这道护栏）。完整跑接 `nightly-bench.yml`（接法待 Claude 裁）。
+  - 现役文件：`test_m2_npc_base.py`（架构域 NPC 底座）、`test_m2_weather.py`（配置域风场）；M2 四路依赖对账与交付盘点见 `docs/README.md` §5。
 
 ### bench 跑法（性能域）
 
@@ -127,33 +127,53 @@ rm -rf .tmp-lf                                                       # 用完即
 - `gen:protocol --check` 的假阳性也可用 `node tools/gen-protocol.ts` 重生成消除——内容与提交一致时 `git diff` 为空，**不会产生提交**。
 - 同理：`git status` 偶尔把内容未变的文件显示为 ` M`（mtime/stat 缓存假象）。用 `git hash-object <f>` 与 `git rev-parse :<f>` 对比，相同即无实际改动。
 
-**M2-C1 正式提议（2026-09-21，cline）——待裁，未擅自实施**：加 `.gitattributes` 可让本机检查与 CI 逐字节一致。**影响面已实测**（下表），提案放行后由 cline 在 main 落一次提交、各工作树配合重签出。
+### 已落地：`.gitattributes`（`* text=auto eol=lf`）—— 裁决采纳方案 A（2026-09-21，M2-A1 `3ab8c71`）
 
-### 正式提议：新增 `.gitattributes`（`* text=auto eol=lf`）
+> 决议来源：M2-C1 正式提议（下表即当时实测证据）。本文件此后以「操作手册」为准；上面 §7 正文的
+> 假红成因与 `.tmp-lf/` 自证流程转为**历史记录** —— 新机器/新克隆若发现工作副本又是 CRLF，
+> 说明该树没做重签出，按第 2 步处理即可。
 
-**提议内容**：仓库根新增 `.gitattributes`，内容一行 —— `* text=auto eol=lf`（索引与工作副本统一 LF）。当前仓库无 `.bat`/`.ps1` 等必须 CRLF 的文件，故无需 `eol=crlf` 例外（日后新增再补一行）。
+**1. 现状自检**（一条命令定性）：
 
-**实测影响面**（2026-09-21，cline 本机；探针副本置于 `%TEMP%`，**未改动本仓**）：
+```bash
+git ls-files --eol | grep -c 'w/crlf'   # 期望 0；>0 = 本树尚未重签出（本地格式检查仍可能假红）
+```
+
+PowerShell 等价：`(git ls-files --eol | Select-String 'w/crlf' | Measure-Object).Count`
+
+**2. 每工作树重签出一次**（六树 + 主树各做一次，实测秒级）：
+
+```bash
+git merge origin/main          # 先带上 .gitattributes（落在 main 3ab8c71）
+git status --porcelain         # 必须为空 —— 重签出会丢弃未提交改动（先 commit 或 stash）
+git rm -r --cached . && git reset --hard
+git ls-files --eol | grep -c 'w/crlf'   # 复查：0
+```
+
+- 重签出**只改行尾**：索引内容零变化（`git add --renormalize .` 实测 0 文件），故不产生内容 diff、
+  不影响任何 hash/逐字节断言（现有 sha256 用途全是内存字符串）。
+- 未跟踪文件（`.venv/`、`node_modules/`、`world.db`、`.orca/talking.txt`）**不受影响**：既不删也不改。
+- ❌ `git checkout-index -f -a` **无效**（实测仍 `w/crlf`）——别再试这个。
+- 重签出后本机 `npx prettier --check .` / `node tools/gen-protocol.ts --check` 与 ubuntu CI 逐字节一致；
+  `uv run ruff format --check` 仍是**内容级真红**判据，行为不变。
+
+**3. 附带裁决：`.gitignore` 补例外**：`.*/` 兜底会挡住 `.github/` 下**新增**文件（新增 workflow 需 `-f`），
+故补 `!.github/` + `!.github/**`。**`.orca/` 仍走兜底**：在 `.orca/` 下**新增**文件要 `git add -f`
+（改已跟踪的 `memory.md` / `workflow.txt` 不受影响）。
+
+### 附：M2-C1 提议时的实测影响面（历史证据）
 
 | 项 | 实测值 | 说明 |
 |---|---|---|
 | 跟踪文件总数 | 163（161 `i/lf` + 2 空 `__init__.py` 为 `i/none`） | 索引**本来就是 LF**；无 `-text`（二进制）条目 ⇒ 不需要 `binary` 规则 |
-| 工作副本现状 | 161 个 `w/crlf` | 假红根因确证（`core.autocrlf=true` + 无属性文件） |
-| **索引重写量** | **0 文件**（`git add --renormalize .` 后暂存区为空） | ⇒ **不需要 renormalize 提交、不产生大 diff、不改变任何被 hash/逐字节断言的产物**（现有 sha256 用途全是内存字符串：rng 种子、rtoken、prompt 指纹、state hash） |
+| 工作副本现状（前） | 161 个 `w/crlf` | 假红根因确证（`core.autocrlf=true` + 无属性文件） |
+| **索引重写量** | **0 文件**（`git add --renormalize .` 后暂存区为空） | ⇒ 不需要 renormalize 提交、不产生大 diff、不动任何被 hash/逐字节断言的产物 |
 | 加属性后 `git status` | 干净 | clean 过滤器把 CRLF 归一化后再比对 ⇒ **假红不会自动消失**，必须一次性重签出（最关键的一条） |
-| 重签出方案 A：`git rm -r --cached . && git reset --hard` | 161 文件 `w/crlf` → `w/lf`，`git status` 干净 ✅ | 各树执行一次、秒级；**会丢弃未提交改动 ⇒ 先提交/暂存**；未跟踪文件不受影响 |
-| 重签出方案 B：`git checkout-index -f -a` | **无效**（仍 `w/crlf`） | 实测否掉，别再试 |
+| 重签出（方案 A，已采纳） | 161 文件 `w/crlf` → `w/lf`，`git status` 干净 ✅ | 各树一次、秒级；先提交/暂存；未跟踪文件不受影响 |
+| 重签出（`git checkout-index -f -a`） | **无效**（仍 `w/crlf`） | 实测否掉，别再试 |
 
-**收益**：本机 `npx prettier --check .`、`node tools/gen-protocol.ts --check` 的 CRLF 假红消失（与 ubuntu CI 逐字节一致），本节的自证流程（`.tmp-lf/` 导出）日常不再需要；`uv run ruff format --check` 仍是**内容级真红**判据，行为不变。
+被否掉的备选：**B** 各树本地 `git config core.autocrlf false`（不入库、新克隆复现假红）；
+**C** 维持现状 + 自证流程（每次格式检查多一步手工，新 agent 必踩）。
 
-**代价 / 风险**：六树 + 主树各执行一次方案 A 重签出（需先提交/暂存，避免丢工作）；索引零变化 ⇒ 撤销极简（删掉该文件 + 再重签出一次）；对本机 `core.autocrlf=true` 的既有配置无冲突（`eol=lf` 属性优先）。
-
-**裁决选项**：
-
-- **A（cline 建议采纳）**：加 `.gitattributes`（`* text=auto eol=lf`）。执行链：cline 在 main 落一次提交（`chore(config): 加 .gitattributes 统一 LF`）→ 各树 `git merge origin/main` 后跑一次方案 A → 回执写各树 `.orca/talking.txt`。
-- B：不加文件，各树本地 `git config core.autocrlf false`（`--local`）。只治本机、不入库；新克隆/新 agent 仍会复现假红，且六树要各配一次（不推荐）。
-- C：维持现状 + 本节自证流程。零风险，但每次格式类检查都要多一步手工，新 agent 必踩（已有 P05/O2 两次踩坑记录）。
-
-**裁决记录**：`待裁`（影响面跨六树重签出，按用户要求交用户/主导裁决）。裁决前 cline 不动仓库行尾配置；若采纳选项 A，本节的成因段与自证流程一并改为「历史记录」。
 
 

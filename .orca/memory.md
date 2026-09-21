@@ -19,26 +19,29 @@
 ### 项目状态（2026-09-20 同步自 main `3e320b9`）
 - M0+M1 全部收官（TASK-004 五路全部交付并收编），589 passed 55 skipped。
 - 你的 TASK-004 交付已收编（收编回执曾写在你树 talking.txt，现已轮换清空；结论可查 git log「merge: 收编 cline」）。
-- **M2 已开工（2026-09-21）**：我的 M2-C1 配套已交付（分支 `ZX466/cline`）——docs/README.md §5 M2 区块（含四路依赖对账=**零新包**）+ ci.yml M2 占位步骤（文件路径纪律）+ nightly M2 红线接入点注释 + `.gitattributes` 正式提议（dev-workflow §7）。M2 四路（codex M2-S1 / pi M2-P1 / opencode M2-D1 / kilo K04）交付在手，均待 Claude 收编。
+- **M2 已开工（2026-09-21）**：M2-C1 配套已收编（main `19e3a88`）；**M2-C2 已交付**（分支 `ZX466/cline`）——`sim/world/weather.py` 风场（纯函数可重放 + 每日天气注入点）+ `sim/tests/test_m2_weather.py`（31 用例）+ ci.yml M2 命名步骤填实 + dev-workflow §7 重签出操作手册 + **六树重签出已执行**。
+- M2 进展：第一轮四路（codex M2-S1 / pi M2-P1 / opencode M2-D1 / kilo K04）+ Claude M2-A1 架构稿 / M2-A2 第一批全部收编；第二轮在途（我＝风场+重签出，其余见主树 talking.txt）。
 ### 已内化教训（实测过，别再踩）
-1. **Windows CRLF 假红**：本机 `prettier --check` / `gen:protocol --check` 报格式漂移，先用 `git -c core.autocrlf=false checkout-index -a -f --prefix=.tmp-lf/` 导出 LF 副本复测；LF 下过 = 假红别改代码（详见 docs/dev-workflow.md §7）。已建议 Claude 加 `.gitattributes`（待裁）。
-   - M2-C1 补实测数据（2026-09-21）：跟踪 163 文件 = 索引 161 `i/lf` + 2 空 `__init__.py`；工作副本 161 `w/crlf`。加 `.gitattributes` 后 `git add --renormalize .` **0 文件**（索引本就 LF）⇒ 无内容重写、无 hash 断言风险；但 `git status` 仍干净 ⇒ **假红不会自动消失，必须重签出**。重签出**只有** `git rm -r --cached . && git reset --hard` 管用（`git checkout-index -f -a` 实测无效）。
+1. **Windows CRLF 假红**（根因已消除）：`.gitattributes`（`* text=auto eol=lf`）已裁决落地（main `3ab8c71`），各树一次性重签出后 161 个 `w/crlf` → `w/lf`，本机 `prettier --check` / `gen:protocol --check` 不再假红。**自检一条命令**：`git ls-files --eol | grep -c 'w/crlf'` 期望 0（>0 = 该树没重签出）。重签出**只有** `git rm -r --cached . && git reset --hard` 管用（`git checkout-index -f -a` 实测无效；先 commit/stash，未跟踪文件不受影响）。操作手册在 `docs/dev-workflow.md` §7。
+   - M2-C2 六树实测（2026-09-21，仅对**干净树**执行）：`w/crlf` main 115 / cline 158 / codex 159 / pi 150 / opencode 151 / kilo 151 → **全 0**；重签出后 `npx prettier --check .`（"All matched files use Prettier code style!"）与 `gen-protocol --check` 均 EXIT 0 —— P05 时代的假红确认消失。
 2. **CI 跑分按文件路径接**：无 marker 的专项测试（如 test_m1_metrics.py）在 ci.yml 用文件路径跑，不用 `-m xxx`——加 marker 前后语义会漂移，路径接法防静默排除（P04 教训）。M2 沿用：M2 占位步骤用 `sim/tests/test_m2_*.py` glob（`nullglob` + 空集合 warning + 退出码 5 留痕）。
 3. **跨域代改须留言**：opencode D03 的 3 文件 ruff 格式偏差属数据域文件，修复前在其树 talking.txt 留言说明（f775b91）。
 4. **与主导方裁决冲突时，以 main 实际决策为准**：memory.md 入库裁决（`3e320b9`）推翻我此前「移出跟踪」提交（cb2d85e），已在 76d6a03 反转并恢复入库。
 5. **量纲先算再写门槛**：写 CI/验收前先按 DESIGN 推 tick 数。M2 完整验收「50 NPC × 7 游戏日」= 604,800 tick（1 tick = 1 游戏秒），**不属于每提交 CI**——所以 M2 步骤是占位 + `timeout-minutes: 15` 护栏，而不是写死路径。
 6. **别在他域分支上重复接门禁**：codex 的 M2-S1 已自带 ci.yml 步骤（其分支内），M2 占位步骤不重复接同一文件；同一门禁两处维护会漂移。
-7. **`.gitignore` 的 catch-all `.*/` 连 `.github/`、`.orca/` 一起忽略**（M2-C1 实测踩到）：**已跟踪文件不受影响**（本批 5 文件提交成功），但**新增**文件落在这两个目录下时 `git add` 会失败并提示 ignored（`git check-ignore` 显示 `.gitignore:62:.*/`），必须 `git add -f`。→ 未决：是否补 `!.github/` `!.orca/` 例外（规则 #4 语义，交用户裁），当前做法＝`-f` 强制添加 + 在本节/文档留痕。
-### 常用命令（M2-C1 口径）
+7. **`.gitignore` 的 catch-all `.*/` 会挡住 `.github/`、`.orca/` 下的新增文件**：已跟踪文件不受影响（改 ci.yml / memory.md 正常），但**新增**文件 `git add` 会失败并提示 ignored，须 `git add -f`。**已裁决部分**：`.github/` 补了例外（`!.github/` + `!.github/**`，main `3ab8c71`，新增 workflow 现在可正常 `git add`）；**`.orca/` 未补**：`.orca/` 下新增文件继续用 `git add -f`（要改规则得再请裁——它属用户规则 #4 语义）。
+8. **纯函数优先于「推进式 RNG」**：`sim/world/weather.py` 若用 `RngRegistry.generator(name, cache)` 抽签就会**推进状态**（调用顺序影响结果，回放/bench 不可重算）。正解＝从 `rng.draw_key(流名)`（材料指纹，含熵注入）派生档位种子 → 每次新建 `Generator` 抽，得到「同 (rng, tick) 恒同风」。写任何「按 tick 派生的物理量」都照此办。
+### 常用命令（M2-C2 口径）
 - 本树开工第一步：`git merge origin/main`（常落后 main，P05/P04 都遇到过）。
 - 全量：`uv run pytest -m "not bench"`；bench：`uv run pytest -m bench`；M2 bench 单跑：`uv run pytest sim/tests/bench -q`（pi M2-P1 新文件）。
   - 实测基线（2026-09-21 本树 main，M2-C1 提交前）：`-m "not bench"` = **578 passed / 55 skipped**（选中 633 / 收集 644，11 个 bench 被排除）。⚠ 与 M1 收官写的「589 passed / 55 skipped」**口径不同**：589 = 含 11 个 bench 的口径（578+11），别再混用。
-- M2 指标（占位）：`uv run pytest sim/tests/test_m2_*.py`（文件未落库时无匹配）。
-- LF 自证：见上 1；M2-C1 起 `.gitattributes` 提议见 docs/dev-workflow.md §7（含各树重签出方案 A）。
+- M2 验收测试（命名门禁，ci.yml 按 `sim/tests/test_m2_*.py` 全量接）：`uv run pytest sim/tests/test_m2_*.py`；我的文件＝`sim/tests/test_m2_weather.py`。
+- 风场自洽检查（纯函数）：`wind_at(tick, RngRegistry(world_seed=42))` 反复调用结果相同；`daily_reseed_due(tick)` 为真时由世界循环做 `EntropyMixer.mix("world.weather", tick)`。
+- 行尾自检（重签出后应为 0）：`git ls-files --eol | grep -c 'w/crlf'`。
 ### 未决项
-- `.gitattributes`（`* text=auto eol=lf`）：**已从口头建议转为正式提议**（docs/dev-workflow.md §7「正式提议」表：实测影响面 + 方案 A/B/C，cline 建议 A）。待用户/主导裁决；裁决前不动仓库行尾配置，采纳后由我落一次提交 + 通知各树重签出。
 - M2 完整 7 日自转验收（604,800 tick）的定期接法（nightly job 还是 `-m m2full` 类 marker）：待 Claude 裁，裁决后我在 ci.yml 注释 + nightly yml 回填。
-- M2 验收跑分文件（`sim/tests/test_m2_*.py`）落库后：把 ci.yml M2 占位步骤的 glob 换成显式路径、步骤名去掉「占位」、同步 docs/README.md §5 实测数字。
+- `.orca/` 下新增文件仍被 `.*/` 兜底挡（需 `add -f`）：是否补 `!.orca/` 例外待裁（规则 #4 语义）；`.github/` 已补。
+- M2 第二轮：风场已交付；`smell.py`（消费我的 `wind_at`）、matter、language 属他域，等收编后我复核 CI/文档口径（G-5 类收编后校验）。
 
 （以下各节由对应 agent 维护——cline 节以上为 2026-09-20 收编版。）
 
