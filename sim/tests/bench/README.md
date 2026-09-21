@@ -33,9 +33,17 @@ uv run pytest -m bench --benchmark-columns=min,mean,max,median
 | `test_bench_perception.py` | M1 感知传播（真实引擎）：视觉/听觉暖态 ≤3.6ms + 朴素 O(N²) 哨兵 + 模型形状契约 |
 | `test_bench_l1_utility.py` | M2 L1 效用 50 NPC：全量/单 NPC 红线 ≤6.0ms/0.12ms + 断线兜底队列 ≤0.20ms + 向量化哨兵 |
 | `test_bench_smell.py` | M2 嗅觉传播（∝1/r² 风向）：网格扩散+采样 ≤0.15ms + 逐对 O(N²) 哨兵 + 形状契约 |
+| `soak.py` | 长跑采样 harness（M2-P2）：进程探针（RSS/句柄/GC）+ 窗口化 run_soak + 确定性 mock 动作喂给 |
+| `test_bench_soak.py` | M2 7 日自转预压测：CI 缩样稳定性 + nightly 长跑漂移/p99/缓存 + 完整 604,800 tick（环境门） |
 
 ## 阈值修订记录
 
+- **M2-P2（2026-09-21）新增长跑验收红线**：`SOAK_STEADY_MEAN_LIMIT_MS=6.2` /
+  `SOAK_MEAN_DRIFT_RATIO_LIMIT=1.5` / `SOAK_RSS_GROWTH_LIMIT_MB=128` /
+  `SOAK_GC_OBJECT_GROWTH_LIMIT=20000` / `SOAK_HANDLE_GROWTH_LIMIT=64`。
+  口径：**分窗稳定性**（末窗/首稳态窗漂移 + 资源增长），非单轮 p99（长跑单窗口 GC/OS 离群不误红）。
+  604,800 tick 完整跑不进每提交 CI，接 nightly（接法提案见 `docs/perf/m2-acceptance.md` §4，由 cline 裁决）。
+  实测（50 NPC+感知+持续走动 mock，本机）：稳态 ~1.9ms/tick，100k tick 均值无漂移，RSS/句柄/GC 有界。
 - **M2-P1（2026-09-20）新增**：L1 效用 `L1_UTILITY_TICK_LIMIT_MS=6.0` / `L1_UTILITY_PER_NPC_LIMIT_MS=0.12` /
   `L1_OFFLINE_FALLBACK_LIMIT_MS=0.20`；嗅觉 `SMELL_TICK_LIMIT_MS=0.15`（+哨兵下界 `SMELL_NAIVE_SENTINEL_MS=3.0`）。
   实测均远低于红线（L1 ~0.02ms、嗅觉 ~0.01ms）——红线是「M2 满属性 + 未向量化写法」的回归天花板，不按实测缩小。
