@@ -77,27 +77,19 @@ M2-A2 落地后把 feeder 换成 `NpcRuntime.tick` 的 L1 决策输出，harness
 
 ---
 
-## 4. 接法提案（给 cline 裁决）
+## 4. 接法（已裁决：方案 A，2026-09-21）
 
 **判据：完整跑在哪个 job、超时多少、失败如何暴露。** 性能域建议如下，CI 改动由 cline（配置域）落地：
 
-### 方案 A（推荐）：nightly-bench.yml 内新增一个 step（分阶段，不新建 job）
+### 方案 A（✅ 已采纳）：nightly-bench.yml 内新增一个 step（分阶段，不新建 job）
 
 - 在现有 `Nightly Bench` job 里，`-m bench` 之后加一步「M2 7 日自转完整跑」，
-  跑 `uv run pytest sim/tests/bench/test_bench_soak.py --m2-full-soak`（完整跑用例，见下），
+  跑 `uv run pytest sim/tests/bench/test_bench_soak.py::test_m2_full_7day_acceptance`（完整跑用例，见下），
   `timeout-minutes: 60`。
 - 优点：复用现成 uv 缓存与 runner；阈值唯一真相源仍是 `thresholds.py`（不复制）。
 - 代价：nightly 总时长 +~20-60 min；`-m bench` 与完整跑同 job，需明确 timeout 分层。
-
-### 方案 B：新建独立 workflow（`m2-acceptance.yml`，手动 + 每周）
-
-- 单独的 `on: workflow_dispatch` + `schedule`（每周一次），跑完整 604,800 tick，
-  产物（窗口统计 JSON）上传 artifact。
-- 优点：与 nightly bench 解耦，超时/配额互不影响；里程碑验收语义清晰。
-- 代价：多一个 workflow 维护面。
-
-**性能域建议**：M2 里程碑期用 **A**（nightly 有覆盖、快速暴露回归）；
-里程碑后转 **B**（完整跑变周频，nightly 留 30k 采样）。最终由 cline 定。
+- **落地记录（Claude 裁决，main 收编批）**：nightly-bench.yml 已加该 step（env `PI_M2_FULL_SOAK=1`）。
+  里程碑后转 B（周频独立 workflow）时由 cline 迁出。
 
 **完整跑用例落点**：`test_bench_soak.py` 加 `@pytest.mark.bench` + 环境门
 `PI_M2_FULL_SOAK=1` 才跑的 `test_m2_full_7day_acceptance`（默认 skip，避免 nightly 默认就烧 20 分钟）；

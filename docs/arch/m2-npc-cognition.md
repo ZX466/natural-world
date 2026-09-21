@@ -126,12 +126,13 @@ SmellField（64×64 网格 × 物质种类数）
 
 ### 5.2 language.py — 语言判定
 
-- `LanguageProfile(literacy, jargon: set[str], register)`：挂在 species/阶层 profile 上（human 共用一套，DESIGN §7）。
+- `LanguageProfile(literacy, jargon: Sequence[str], class_register)`：**按角色**构造（数据层既定 `npc_profiles.knowledge_boundary` JSON = 每角色一份，opencode 0004 迁移夹具为准）；`species_language` 才是物种级枚举位（human 共用一套感知参数，DESIGN §7——勿与语言能力混淆，kilo M2-K1 澄清）。命名以数据层夹具为准：`class_register`（非 `register`）、`jargon: Sequence[str]`（JSON list）。
 - 判定规则（纯函数，零 LLM）：
   - 识字类观察（布告/书籍）：`literacy` 不足 → 「有音无义」变体（「画着些看不懂的符号」）。
-  - 行话/阶层用语：词表命中 → 按听者 register 输出「几个词你没听明白」。
+  - 行话/阶层用语：词表命中 → 按听者 class_register 输出「几个词你没听明白」。
   - 物种语言档：cat 无语言（人声=纯音）、dog 40-60 词、raven 伪语言——M2 只留 `species_language` 枚举位，M6 动物接入。
-- 挂载点：`narrate.py` 叙事化管线内、听觉 Observation 输出前——听不懂的话在**叙事层**降质，感知帧原始数据仍完整（供 debug 与 M3 知识传播复用）。
+- 出戏三红线（kilo 实测 `banned_words.scan()` 0 命中的口径延续）：降质文案零数值零系统词；`literacy` 只做阈值判据、绝不进文本；降质只动叙事层文本。
+- 挂载点（M2-K1 意见④采纳，2026-09-21）：`PerceptionFrame.narrated()` 装配内的**通道分组输出前**——听不懂的话在叙事层降质，`Observation`/`PerceptionFrame` 的原始数据保持完整（供 debug 与 M3 知识传播复用；若挂在 Observation 构造处，观测对象本身被裁剪，此保证即失效）。接口面不变：降质文本走现有 perception 消息 `content`（string），判据字段不出 WS。
 
 ---
 

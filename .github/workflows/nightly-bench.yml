@@ -65,6 +65,17 @@ jobs:
       - name: 跑基准
         run: uv run pytest -m bench --benchmark-json=perf/bench.json
 
+      - name: M2 7 日自转完整跑（604,800 tick，里程碑期 nightly 接法）
+        # pi M2-P2 §4 提案、Claude 2026-09-21 裁决采用**方案 A**：完整跑进 nightly 同 job
+        # 新 step（里程碑期 nightly 有覆盖、快速暴露回归；里程碑后转周频独立 workflow，
+        # 届时由 cline 迁出）。阈值唯一真相源仍 sim/tests/bench/thresholds.py，不复制。
+        # 环境门 PI_M2_FULL_SOAK=1 才跑（默认 skip，见 test_bench_soak.py 完整跑用例），
+        # 60 min 超时护栏：实测本机 100k tick ~83s，604,800 tick 预估 ~8-20 min，余量充足。
+        timeout-minutes: 60
+        run: uv run pytest sim/tests/bench/test_bench_soak.py::test_m2_full_7day_acceptance -q
+        env:
+          PI_M2_FULL_SOAK: "1"
+
       - name: 上传基线结果
         uses: actions/upload-artifact@v4
         with:
