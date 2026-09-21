@@ -155,6 +155,11 @@ uv run pyright sim/
 - 本树分支 ZX466/codex；M2-S1 交付后工作区干净，等 Claude 收编。
 
 ### 你已完成的工作（最近一轮）
+- **M2-S2 L1 动作白名单 + 升格隐藏属性契约（2026-09-21 交付，29 个新 T1 用例，全量 675 passed）**：
+  - `docs/security/l1-whitelist.md`：白名单审查结论（W1-W7）+ HiddenState 契约 + runtime 调用点 + 维护责任。
+  - `sim/npc/contract.py`：HiddenState（profile+triggered 快照）——evaluate 重估 / check_reason 降级检查 / gate_kwargs / memory_kwargs / empty() 恒等值。
+  - `sim/tests/test_t1_l1_whitelist.py`：29 用例（白名单锁定 / payload 键 / 升格传递 / 降格写回不降防线 / 降级检查一致性 / 零回归）。
+  - `.github/workflows/ci.yml`：按文件路径新增 T1 L1 白名单门禁。
 - **M2-S1 自我未知安全边界（2026-09-20 交付，28 个新 T1 用例，全量 606 passed）**：
   - `docs/security/self-unknown.md`：隐藏属性标注规范（健康档 疾病/旧伤/成瘾/残疾 + 创伤应激触发条件）+ 情境触发浮现 + 闸门/记忆写入扩展口径 + opencode 0004 数据表协调。
   - `sim/npc/hidden.py`：HiddenAttribute/HiddenProfile 标注模型 + `evaluate_triggers` 触发评估 + `hidden_leak_scan` 直陈泄漏扫描（闸门与记忆写入共用同一工具）。
@@ -165,10 +170,10 @@ uv run pyright sim/
 - 更早累计：TASK-001~004（m1-checklist/threat-model/t3-corpus/memory-scan + T3 实弹 + W6 WS 鉴权 + M1-D reason 禁词门）；详见 git log 与 docs/security/。
 
 ### 当前任务
-- M2-S1 已交付，等 Claude 收编（main 合并 ZX466/codex）。
+- M2-S2 已交付（分支 ZX466/codex `f43e078`，等 Claude 收编），等下一波派发。
 
 ### 进行中
-- (空)——等下一波派发（预告 M2 后续安全面：T4 出戏探针 nightly 分层、LOD 降格记忆压缩校验等）。
+- (空)——等下一波派发（预告：runtime 骨架落地后第一批审 Claude 与 opencode）。
 
 ### 留言板
 - (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)

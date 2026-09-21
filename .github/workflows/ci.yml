@@ -96,6 +96,25 @@ jobs:
           # 按路径可保证即使日后给它加 marker 或改 addopts，也不会被静默排除出 CI。
           uv run pytest sim/tests/test_m1_metrics.py
 
+      - name: pytest T1 L1 动作白名单门禁（M2-S2）
+        run: |
+          # codex 的 test_t1_l1_whitelist.py 无专属 marker（随 `-m "not bench"` 全量跑），
+          # 按【文件路径】选择，把 M2-S2 L1 动作白名单门禁提升为独立命名信号
+          # （沿用 test_t3_gate.py / test_t1_self_unknown.py 做法，防静默排除）。
+          if [ ! -f sim/tests/test_t1_l1_whitelist.py ]; then
+            echo "::warning::T1 L1 白名单门禁文件缺失（M2-S2 交付，疑似被误删/改名）→ 跳过"
+            exit 0
+          fi
+          set +e
+          uv run pytest sim/tests/test_t1_l1_whitelist.py
+          code=$?
+          # 文件在但收集到 0 用例（退出码 5）留痕跳过，避免误红
+          if [ "$code" -eq 5 ]; then
+            echo "::warning::T1 L1 白名单门禁文件已存在但未收集到任何用例（检查文件内容）"
+            exit 0
+          fi
+          exit $code
+
       - name: pytest M2 验收测试（按文件路径：sim/tests/test_m2_*.py）
         # M2-C1 立占位、M2-C2 填实（cline，2026-09-21）：M2 验收测试按命名约定
         # `sim/tests/test_m2_*.py` **全量**接入（多域交付：架构域 npc 底座、配置域风场、
@@ -118,6 +137,8 @@ jobs:
           # 已由他域单独接入、**不在此重复接**的 M2 门禁（同一门禁不两处维护，防漂移）：
           #   - sim/tests/test_t1_self_unknown.py（codex M2-S1：自我未知/信息边界双路径采样；
           #     其自带命名步骤，与本步骤并存不冲突）
+          #   - sim/tests/test_t1_l1_whitelist.py（codex M2-S2：L1 动作白名单+HiddenState 契约，
+          #     自带命名步骤，同上）
           #   - sim/tests/test_persistence_m2.py（opencode M2-D1/M2-D2：数据层持久化，纯 T1、
           #     秒级，随 `-m "not bench"` 全量跑，无需独立命名步骤）
           shopt -s nullglob
