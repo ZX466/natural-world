@@ -164,7 +164,7 @@ def test_m2_acceptance_tick_constant_is_7_days() -> None:
 
 @pytest.fixture(scope="module")
 def nightly_soak_result():
-    """模块级缓存：nightly 40,000 tick 长跑只跑一次，多个断言共享（省 2× 墙钟）。"""
+    """模块级缓存：nightly 30,000 tick 长跑只跑一次，多个断言共享（省 2× 墙钟）。"""
     loop = _build_loop_with_perception()
     result = run_soak(
         loop,
