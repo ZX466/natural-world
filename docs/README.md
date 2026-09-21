@@ -108,7 +108,52 @@ M1 范围与量化验收：DESIGN §17（认知闭环：LLM 客户端 + Profile 
 
 > 复核经过：P05 终校时（当时 main 尚未含 S04）第 1、2 项**确实仍缺**，已在 P05 报告主树；**codex S04 合入（main `66f3f18`）后三项全部收口**，本表已按终态更新。教训：**跨域状态以 main 实际代码为准**（我复查 `git grep 'not isinstance'` / `_rtoken` docstring 逐条确认，未凭留言采信）。
 
-## 5. 跨域接口对接点（改了要同时通知对方）
+## 5. M2 区块（M2 四路交付在手，待收编）
+
+M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI（兼 LLM 断线兜底）+ 非理性框架 + 物质熵增 + 嗅觉风向 + 语言判定 + 自我未知**。
+
+- **量化验收（只认这两条；DESIGN §16「验收只认上表」同纪律）**：
+  1. 50 NPC × 7 游戏日自转无崩溃；
+  2. T1 信息边界 10k 采样通过。
+- **本阶段不做**：记忆传播、建造（DESIGN §17 M2 行「本阶段不做」）。
+- **量纲提醒（写 M2 验收脚本前先看）**：DESIGN §10 锁定「1 tick = 1 游戏秒」⇒ 7 游戏日 = **604,800 tick**。完整跑**不进每提交 CI**（ci.yml 的 M2 占位步骤 `timeout-minutes: 15` 即这道护栏），完整跑与 M2 红线一律接 `nightly-bench.yml`（接入点注释已留）。
+
+### M2 派单与交付状态（2026-09-21 盘点，四路交付**待收编**）
+
+| 路 | Agent | 交付物（分支 / 提交） | 实测 / 结论 |
+|---|---|---|---|
+| M2-A1 架构稿 | Claude | `docs/arch/` 下 M2 稿（进行中） | — |
+| M2-S1 自我未知安全边界 | codex | `docs/security/self-unknown.md` + `sim/npc/hidden.py` + `gate.py`/`memory_scan.py` 扩展 + `sim/tests/test_t1_self_unknown.py`（`ZX466/codex` `581ae78`） | 28 用例（未触发零泄露 / 触发正常浮现双路径）；全量 606 passed / 55 skipped；自带 ci.yml 文件路径门禁 |
+| M2-P1 性能预算 | pi | `docs/perf/{budget,bench-plan,hotspots}.md` + `thresholds.py` 5 常量 + `sim/tests/bench/test_bench_l1_utility.py` / `test_bench_smell.py`（`ZX466/pi` `adaf0c5`） | bench 29 passed；暖态中位 L1 向量化 ~0.02ms/tick、嗅觉 ~0.01ms；红线 L1 6.0ms / 单 NPC 0.12ms / 断线兜底 0.20ms / 嗅觉 0.15ms |
+| M2-D1 数据层 | opencode | `docs/data/schema.md` + `0004_m2_npc_attributes` + `models.py` + `sim/tests/test_persistence_m2.py`（`ZX466/opencode` `2876933`） | 582 passed / 55 skipped；alembic 零漂移；`npc_memory_vec` 仍锁 M3（D04 保留项不变） |
+| K04 WS 类型生成 | kilo | `client/src/net/__tests__/protocol-types.test.ts` + `docs/api/ws-protocol.md` §3.1（`ZX466/kilo` `ab39dc1`） | `gen:protocol --check` / typecheck / lint / vitest 13 / build 全绿；4 项跨域发现（`components.wsMessages` 不被 openapi-typescript 读取等）待 sim 侧裁决 |
+| M2-C1 配套（本域） | cline | ci.yml M2 占位步骤 + nightly 接入点注释 + 本节 + `docs/dev-workflow.md` §3/§7 | 依赖对账 **零新包**（下表）；`.gitattributes` **正式提议**见 dev-workflow §7 |
+
+### M2 依赖对账（M2-C1 结论：**零新依赖**）
+
+| 路 | 分支实测新增 import（`git diff origin/main ZX466/<树> -- '*.py'` 的 `+` 行） | 依赖结论 |
+|---|---|---|
+| codex M2-S1 | `re` / `dataclasses` / `typing` / `pydantic` / `pytest` + 本仓模块 | 零新包（标准库 + 已锁 pydantic/pytest） |
+| pi M2-P1 | `time` / `numpy` / `pytest` + `sim/tests/bench/{harness,thresholds}` | 零新包（numpy、pytest-benchmark 已锁） |
+| opencode M2-D1 | `sqlalchemy` / `alembic` / `sqlite3` / `json` | 零新包（SQLAlchemy 2.0 async + Alembic 已在锁） |
+| kilo K04 | 无 Python 改动；前端只改测试与文档 | 零新包（openapi-typescript / prettier 已锁；Node ≥24 已定，CI setup-node 已对齐） |
+
+- **证据（硬指标）**：四分支 `git diff --stat origin/main <branch> -- pyproject.toml uv.lock client/package.json client/package-lock.json` **全部为空** —— 零锁文件变更，故 M2 收编**不需要**除 `uv sync` / `npm ci` 之外的任何动作，CI 缓存键也不变。
+- **唯一待观察项**：embedding 生成来源（M3 记忆向量检索才触发）。走已锁 `openai` 客户端调远端 embedding API ⇒ 零新包；若改本地模型（torch / onnxruntime / sentence-transformers 等）⇒ 重依赖 + CI 体积暴涨，**须先过依赖评审再动**。M2 不触发：`sqlite-vec>=0.1.6` 已在锁，`sim/core/persistence/vector.py` 脚手架就位，`DEFAULT_EMBEDDING_DIM = 384` 待 M3 锁定。
+
+### M2 CI 接入（现状）
+
+- **新增占位步骤**：「pytest M2 指标跑分（占位）」——按**文件路径** glob `sim/tests/test_m2_*.py` 选择（纪律同 T3/M1，不用 marker）。文件未落库时只 `::warning::` 留痕、不假绿；落库后**自动生效**，届时由 cline 把 glob 换成显式路径、去掉步骤名里的「占位」。
+- 命名约定：M2 的 CI 级验收测试落 `sim/tests/test_m2_*.py`（对齐 `sim/tests/test_m1_metrics.py`），**无 LLM、秒级~分钟级**。
+- 已到位的 M2 命名门禁（不重复接）：`sim/tests/test_t1_self_unknown.py`（codex 分支自带步骤）；`sim/tests/test_persistence_m2.py` 纯 T1、随 `-m "not bench"` 全量跑。
+- nightly：M2 红线**不复制数值**，唯一真相源 `sim/tests/bench/thresholds.py`；pi 的两个 M2 bench 文件随 `-m bench` 自动纳入，**无需改 yml**。
+- **待裁（Claude）**：完整 7 日自转验收（604,800 tick）的定期接法（新增 `-m m2full` 类 marker + nightly job，还是只在里程碑本地跑一次）。marker 语义属配置域但**接法由主导裁决**，cline 不擅自定；裁决后在本节 + nightly 注释回填。
+
+### 待裁：`.gitattributes`（行尾统一）
+
+正式提议见 `docs/dev-workflow.md` §7 —— 含实测影响面（索引重写量 **0 文件**、各树一次性重签出步骤、方案 A/B/C 对比）。cline **不擅自加**；裁决采纳后由 cline 在 main 落一次提交，各工作树配合重签出。
+
+## 6. 跨域接口对接点（改了要同时通知对方）
 
 | 接口 | 提供方 → 消费方 | 契约落点 |
 |---|---|---|
@@ -118,7 +163,7 @@ M1 范围与量化验收：DESIGN §17（认知闭环：LLM 客户端 + Profile 
 | tick 预算 | 性能（Pi）→ 内核（Claude） | `docs/perf/budget.md` §1 ↔ `docs/arch/m0-core.md` §5 固定执行序 |
 | 依赖与 CI | 配置（cline）→ 全员 | `pyproject.toml` / `uv.lock` / `client/package.json` / `.github/workflows/` |
 
-## 6. 约束提醒（写文档时最容易破的两条）
+## 7. 约束提醒（写文档时最容易破的两条）
 
 - `DESIGN.md` §18：**本文档为冻结基线**，新想法先进「MVP 后清单」，不回写里程碑——改基线要走 v2.x 修订记录。
 - `DESIGN.md` §19 禁止事项与 §10 界面双层铁律是**文档也必须遵守**的：设计文档里不要引入「把结构化世界状态喂给 LLM」「戏内界面出元信息」这类写法。
