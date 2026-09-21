@@ -7,6 +7,9 @@
 - 执行时二次校验（revalidate_at_execution）：Intent 入队后在执行 tick
   再校验一次——世界已变化导致的过期 Intent 丢弃并触发重规划。
   LLM 异步延迟因此天然无害（§8）。
+- M2-S1 自我未知（revalidate_at_execution 扩展）：未触发隐藏属性被直陈即拒绝
+  （直陈禁止；行为暗示可议）。hidden 参数缺省 None → 与 M1 行为一致
+  （docs/security/self-unknown.md）。
 
 幻觉隔离（铁律 4）：闸门拒绝的 Intent 不产生任何事件；
 validate/revalidate 都是纯读（世界快照前后一致，测试断言）。
@@ -21,6 +24,7 @@ import structlog
 from sim.agent.intent import REPLAN_CONFIDENCE_THRESHOLD, Intent
 from sim.core.world import WorldState
 from sim.llm.prompts.echo_scan import quoted_echo_scan
+from sim.npc.hidden import HiddenProfile, hidden_leak_scan
 
 logger = structlog.get_logger(__name__)
 
@@ -85,12 +89,24 @@ class IntentGate:
         return GateVerdict(True, "ok")
 
     def revalidate_at_execution(
-        self, intent: Intent, state: WorldState, actor_id: str, planned_tick: int
+        self,
+        intent: Intent,
+        state: WorldState,
+        actor_id: str,
+        planned_tick: int,
+        hidden: HiddenProfile | None = None,
+        triggered: frozenset[str] = frozenset(),
     ) -> GateVerdict:
         """执行 tick 二次校验：世界已变 → 过期 Intent 丢弃触发重规划。
 
         M1 检查两项：目标仍存在（可能已离开/消亡）+ 目标距离仍可达。
+        M2-S1（自我未知）：reason 是独白唯一来源，未触发隐藏属性直陈即拒绝
+        （hidden 缺省 None 时跳过本检查，与 M1 一致）。
         """
+        # 自我未知维度：未触发隐藏属性直陈 → 拒绝；触发中的允许（已浮现）；
+        # 同一 reason 混入其他未触发属性照样拒绝（浮现后仍受闸门审查）。
+        if hidden is not None and hidden_leak_scan(intent.reason, hidden, triggered):
+            return GateVerdict(False, "hidden_attribute_leak")
         if intent.action in ("talk_to", "take", "give", "attack", "use"):
             if intent.target_id is not None and intent.target_id not in state.entities:
                 return GateVerdict(False, "target_gone")

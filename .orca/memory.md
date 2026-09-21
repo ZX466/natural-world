@@ -142,8 +142,32 @@ uv run pyright sim/
 > 每次完成后更新本文件「当前任务 / 进行中 / 已完成」；过时内容删掉。
 
 ## ④ codex（安全 / 合规 / 风险域）
-> ⚠ **codex 记忆空缺**：codex 的提交 987a44a 删除了 memory.md（当时其树未写记忆），合集暂无其内容。
-> 已留言 codex：新对话开场补写记忆进本节并提交。
+
+> 本树工作簿：用户级技能 `security-worktree`（~/.agents/skills/，含环境坑/评审配对/回写纪律）。
+> 能力域：安全/合规/风险；评审配对：cline 评审我，我评审 Claude（架构+前端）与 opencode（数据/库）。
+
+### 项目状态（2026-09-20 同步自 main `4323c9e`）
+- M1 全量收官（TASK-004 S04 已收编，578 passed + 55 skipped）；M2 已派单。
+- 本树分支 ZX466/codex；M2-S1 交付后工作区干净，等 Claude 收编。
+
+### 你已完成的工作（最近一轮）
+- **M2-S1 自我未知安全边界（2026-09-20 交付，28 个新 T1 用例，全量 606 passed）**：
+  - `docs/security/self-unknown.md`：隐藏属性标注规范（健康档 疾病/旧伤/成瘾/残疾 + 创伤应激触发条件）+ 情境触发浮现 + 闸门/记忆写入扩展口径 + opencode 0004 数据表协调。
+  - `sim/npc/hidden.py`：HiddenAttribute/HiddenProfile 标注模型 + `evaluate_triggers` 触发评估 + `hidden_leak_scan` 直陈泄漏扫描（闸门与记忆写入共用同一工具）。
+  - `sim/agent/gate.py`：`revalidate_at_execution` 增加 hidden/triggered 参数与「自我未知」检查——reason 直陈未触发属性 → `hidden_attribute_leak` 拒绝；hidden 缺省 None 与 M1 行为一致。
+  - `sim/llm/memory_scan.py`：`write()` 增加 hidden/triggered 参数与直陈拒写（`REASON_HIDDEN_LEAK`），记忆检索默认结果防线。
+  - `sim/tests/test_t1_self_unknown.py`：双路径采样（未触发零泄露 / 触发正常浮现）+ 行为暗示可议 + 语料卫生 + 感知帧/装配 prompt 面零泄漏。
+  - `.github/workflows/ci.yml`：按文件路径新增 T1 自我未知门禁独立红灯信号（沿用 test_t3_gate.py 做法）。
+- 更早累计：TASK-001~004（m1-checklist/threat-model/t3-corpus/memory-scan + T3 实弹 + W6 WS 鉴权 + M1-D reason 禁词门）；详见 git log 与 docs/security/。
+
+### 当前任务
+- M2-S1 已交付，等 Claude 收编（main 合并 ZX466/codex）。
+
+### 进行中
+- (空)——等下一波派发（预告 M2 后续安全面：T4 出戏探针 nightly 分层、LOD 降格记忆压缩校验等）。
+
+### 留言板
+- (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)
 
 ## ⑤ pi（性能域）
 
