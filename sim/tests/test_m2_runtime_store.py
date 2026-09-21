@@ -30,6 +30,7 @@ from sim.core.persistence.database import init_database
 from sim.core.persistence.models import Event, MatterState, NpcProfile
 from sim.core.persistence.npc_store import NpcStore, NpcStoreError
 from sim.core.persistence.store import SqlEventStore
+from sim.llm.memory_scan import REASON_HIDDEN_LEAK
 from sim.npc.hidden import HiddenAttribute, HiddenProfile
 from sim.npc.model import NpcProfileData
 
@@ -307,6 +308,93 @@ class TestDowngradeMemoryWriteback:
 
         assert result.accepted is False
         assert result.action == "rejected"
+
+    async def test_writeback_reject_returns_reason_and_hits(self, store) -> None:
+        """M2-S2 评审 W2：拒写结果必须带结构化 reason + 命中词面（供观测/重规划）。"""
+        ns = NpcStore(store)
+        hidden = HiddenProfile(
+            npc_id="npc-00",
+            attributes=(
+                HiddenAttribute(
+                    id="h1",
+                    category="trauma",
+                    label="旧伤",
+                    descriptors=("断过的肋骨",),
+                    triggers=(),
+                ),
+            ),
+        )
+
+        result = ns.writeback_downgrade_memory(
+            "npc-00",
+            "他想起断过的肋骨，隐隐作痛。",
+            hidden=hidden,
+        )
+
+        assert result.accepted is False
+        assert result.reason == REASON_HIDDEN_LEAK
+        assert result.hits == ("断过的肋骨",)
+
+    async def test_writeback_triggered_attribute_allowed(self, store) -> None:
+        """M2-S2 评审 W3：触发窗口内属性直陈 → 正常写回（防线不过严）。"""
+        ns = NpcStore(store)
+        hidden = HiddenProfile(
+            npc_id="npc-00",
+            attributes=(
+                HiddenAttribute(
+                    id="h1",
+                    category="trauma",
+                    label="旧伤",
+                    descriptors=("断过的肋骨",),
+                    triggers=("阴雨天",),
+                ),
+            ),
+        )
+
+        result = ns.writeback_downgrade_memory(
+            "npc-00",
+            "他想起断过的肋骨，隐隐作痛。",
+            hidden=hidden,
+            triggered=frozenset({"h1"}),
+        )
+
+        assert result.accepted is True
+        assert result.entry is not None
+        assert result.entry.content == "他想起断过的肋骨，隐隐作痛。"
+
+    async def test_writeback_triggered_mixed_still_rejects_other(self, store) -> None:
+        """M2-S2 评审 W3：触发 h1 放行其词面，未触发的 h2 混入仍拒写。"""
+        ns = NpcStore(store)
+        hidden = HiddenProfile(
+            npc_id="npc-00",
+            attributes=(
+                HiddenAttribute(
+                    id="h1",
+                    category="trauma",
+                    label="旧伤",
+                    descriptors=("断过的肋骨",),
+                    triggers=("阴雨天",),
+                ),
+                HiddenAttribute(
+                    id="h2",
+                    category="addiction",
+                    label="酒瘾",
+                    descriptors=("戒不掉的酒",),
+                    triggers=(),
+                ),
+            ),
+        )
+
+        result = ns.writeback_downgrade_memory(
+            "npc-00",
+            "断过的肋骨还在疼，那戒不掉的酒也停了。",
+            hidden=hidden,
+            triggered=frozenset({"h1"}),
+        )
+
+        assert result.accepted is False
+        assert result.reason == REASON_HIDDEN_LEAK
+        assert result.hits == ("戒不掉的酒",)
 
 
 # ---------------------------------------------------------------------------

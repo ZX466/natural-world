@@ -155,6 +155,10 @@ uv run pyright sim/
 - 本树分支 ZX466/codex；M2-S1 交付后工作区干净，等 Claude 收编。
 
 ### 你已完成的工作（最近一轮）
+- **M2-S3 M2-D2 安全评审（2026-09-21 交付）**：结论=通过（0 CRITICAL/HIGH + 2 MEDIUM + 2 观察 + 4 正面确认），
+  落 `docs/security/m2-d2-review.md`；增补 3 条测试到 test_m2_runtime_store.py（拒写 reason/hits 结构化、
+  触发放行、混合拒写）→ 18 用例全绿。MEDIUM：M1=SqlEventStore.append 裸 dict 绕过 payload 模型校验（opencode），
+  M2=materialize 不加载 npc_health 隐藏行（升格装配缺半边，opencode+Claude）。
 - **M2-S2 L1 动作白名单 + 升格隐藏属性契约（2026-09-21 交付，29 个新 T1 用例，全量 675 passed）**：
   - `docs/security/l1-whitelist.md`：白名单审查结论（W1-W7）+ HiddenState 契约 + runtime 调用点 + 维护责任。
   - `sim/npc/contract.py`：HiddenState（profile+triggered 快照）——evaluate 重估 / check_reason 降级检查 / gate_kwargs / memory_kwargs / empty() 恒等值。
@@ -170,10 +174,10 @@ uv run pyright sim/
 - 更早累计：TASK-001~004（m1-checklist/threat-model/t3-corpus/memory-scan + T3 实弹 + W6 WS 鉴权 + M1-D reason 禁词门）；详见 git log 与 docs/security/。
 
 ### 当前任务
-- M2-S2 已交付（分支 ZX466/codex `f43e078`，等 Claude 收编），等下一波派发。
+- M2-S3（M2-D2 安全评审）已交付（等收编），等下一波派发。
 
 ### 进行中
-- (空)——等下一波派发（预告：runtime 骨架落地后第一批审 Claude 与 opencode）。
+- (空)——等下一波派发（第三批评审等 Claude 通知）。
 
 ### 留言板
 - (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)
