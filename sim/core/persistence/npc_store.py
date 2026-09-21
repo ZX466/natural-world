@@ -28,13 +28,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from sim.core.events import EventKind, WorldEvent
 from sim.core.flush import flush_rows
-from sim.core.persistence.models import MatterState, NpcProfile
+from sim.core.persistence.models import MatterState, NpcHealth, NpcProfile
 from sim.core.persistence.store import SqlEventStore
 from sim.llm.memory_scan import (
-    HiddenProfile,
     MemoryWritePipeline,
     WriteResult,
 )
+from sim.npc.contract import HiddenState
+from sim.npc.hidden import HiddenAttribute, HiddenProfile
 from sim.npc.model import NpcProfileData, needs_from_json
 
 #: LOD↔运行时物化范围（m2-npc-cognition §1.2）：L0=统计/1=效用/2=LLM。
@@ -92,6 +93,19 @@ def _skills_from_json(raw: str) -> dict[str, int]:
     return {str(k): int(v) for k, v in data.items()}
 
 
+def _load_str_list(raw: str | None) -> list[str]:
+    """JSON 文本 → list[str]（descriptors/trigger_conditions）。非法按空表。"""
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, list):
+        return []
+    return [str(item) for item in data]
+
+
 class NpcStore:
     """NPC runtime 数据访问层（async SQLAlchemy，复用事件库 session_factory）。"""
 
@@ -125,6 +139,56 @@ class NpcStore:
         async with self._events.session_factory() as session:
             rows = (await session.execute(stmt)).scalars().all()
         return {row.id: _row_to_profile_data(row) for row in rows}
+
+    async def materialize_hidden(
+        self, npc_ids: Sequence[str] | None = None
+    ) -> dict[str, HiddenState]:
+        """批量装配隐藏属性状态（M2-D3，codex MEDIUM ②；升格缺半边的补齐）。
+
+        `materialize()` 只取 `npc_profiles`，不含 `npc_health` 的隐藏行 →
+        升格时 HiddenState 装配缺半边。本方法一次性取全部相关 `npc_health` 行
+        （hidden=True 且 active=True = 自我未知属性），按 npc_id 聚合为
+        `{npc_id: HiddenState}`（codex `sim/npc/contract.py`）。
+
+        - attributes 的 `id` = ``f"{npc_id}.health_{row.id}"``（DB 主键派生，
+          稳定且不撞车；不直接暴露 label 作 id）；
+        - `descriptors` ← 行 descriptors JSON（直陈词面，供泄漏扫描）；
+        - `triggers` ← 行 trigger_conditions JSON（情境触发关键词）；
+        - triggered 从空集起（升格后按 tick 用 `HiddenState.evaluate` 重估）；
+        - 无隐藏行的 NPC 不出现在结果中（调用方用 `HiddenState.empty()` 兜底）。
+        """
+        stmt = (
+            select(NpcHealth)
+            .where(NpcHealth.branch_id == self._branch_id)
+            .where(NpcHealth.hidden.is_(True))
+            .where(NpcHealth.active.is_(True))
+        )
+        if npc_ids is not None:
+            ids = list(npc_ids)
+            if not ids:
+                return {}
+            stmt = stmt.where(NpcHealth.npc_id.in_(ids))
+        async with self._events.session_factory() as session:
+            rows = (await session.execute(stmt)).scalars().all()
+
+        grouped: dict[str, list[HiddenAttribute]] = {}
+        for row in rows:
+            attr = HiddenAttribute(
+                id=f"{row.npc_id}.health_{row.id}",
+                category=row.category,  # type: ignore[arg-type]  # DB 值受 D1 约束
+                label=row.label,
+                descriptors=tuple(_load_str_list(row.descriptors)),
+                triggers=tuple(_load_str_list(row.trigger_conditions)),
+            )
+            grouped.setdefault(row.npc_id, []).append(attr)
+
+        return {
+            npc_id: HiddenState(
+                profile=HiddenProfile(npc_id=npc_id, attributes=tuple(attrs)),
+                triggered=frozenset(),
+            )
+            for npc_id, attrs in grouped.items()
+        }
 
     # -----------------------------------------------------------------------
     # 2. tick 批次 flush（事件 + 投影，同事务）

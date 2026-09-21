@@ -16,6 +16,7 @@ from typing import Protocol, runtime_checkable
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from sim.core.persistence.event_validation import validate_store_row
 from sim.core.persistence.models import EntropyLog, Event, Snapshot
 
 # 快照 payload 结构版本（codex 建议项：schema_version，M5 前必须）
@@ -53,12 +54,15 @@ class EventStore(Protocol):
         events: list[dict],
         entropy_rows: list[dict] | None = None,
         projection: ProjectionFn | None = None,
+        *,
+        validate: bool = True,
     ) -> None:
         """分配分支内 seq，append-only 写入。
 
         events 为 WorldEvent 字典列表。
         entropy_rows（codex 必须项 #2 预留）：可选的熵日志行，与事件在同一事务内
         原子写入；None 时仅写 events（当前内核把熵材料存于 event payload，无需双写）。
+        validate：默认 True，落库前行级 schema/白名单校验（M2-D3）。
         """
         ...
 
@@ -105,6 +109,8 @@ class SqlEventStore:
         events: list[dict],
         entropy_rows: list[dict] | None = None,
         projection: ProjectionFn | None = None,
+        *,
+        validate: bool = True,
     ) -> None:
         """分配分支内 seq，批量写入 events 表。
 
@@ -119,9 +125,18 @@ class SqlEventStore:
         被调用（收到 session 与 event_index→seq 映射），用于把 M2 事件投影到
         派生表（NPC_LOD_CHANGE→npc_profiles.lod、MATTER_*→matter_state）。
         回调改动随本次 commit 原子提交；抛异常则整批回滚（无半写）。
+
+        validate（M2-D3，codex MEDIUM ①）：默认 **True** —— 落库前逐行过
+        `event_validation.validate_store_row`（payload 过 `extra="forbid"` 模型、
+        NPC_ACT 动作/参数白名单、witnesses 必须 list[str]），拒绝夹带/伪造。
+        仅低层存储机制测试可用 ``validate=False`` 传合成 payload（**生产勿用**）。
         """
         if not events and not entropy_rows:
             return
+
+        if validate:
+            for event in events:
+                validate_store_row(event)
 
         async with self._session_factory() as session:
             # 获取当前最大 seq

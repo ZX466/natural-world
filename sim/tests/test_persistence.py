@@ -6,6 +6,11 @@
 - snapshot 写入/读取往返
 - 回放验证雏形（50 事件逐位一致）
 - aiosqlite 内存库跑
+
+注：本文件测的是**存储机制**（seq 分配/快照/回放），用合成 payload（`{}` 等），
+故 `store.append(..., validate=False)` 显式跳过事件 schema 校验（M2-D3 起默认 True
+会按 event_type 校验 payload 白名单；schema 校验本身由 test_m2_event_validation.py +
+test_m2_runtime_store.py 覆盖）。
 """
 
 import json
@@ -65,7 +70,7 @@ class TestAppendOnly:
         branch = "test-branch"
         events = [_make_event(tick=i) for i in range(5)]
 
-        await store.append(branch, events)
+        await store.append(branch, events, validate=False)
         result = await store.read_range(branch, 1, 5)
 
         assert len(result) == 5
@@ -75,16 +80,16 @@ class TestAppendOnly:
     async def test_append_multiple_batches(self, store):
         """多批次 append，seq 持续递增。"""
         branch = "test-branch"
-        await store.append(branch, [_make_event(tick=0)])
-        await store.append(branch, [_make_event(tick=1)])
-        await store.append(branch, [_make_event(tick=2)])
+        await store.append(branch, [_make_event(tick=0)], validate=False)
+        await store.append(branch, [_make_event(tick=1)], validate=False)
+        await store.append(branch, [_make_event(tick=2)], validate=False)
 
         result = await store.read_range(branch, 1, 3)
         assert [e["seq"] for e in result] == [1, 2, 3]
 
     async def test_append_empty_is_noop(self, store):
         """空 append 不报错。"""
-        await store.append("branch", [])
+        await store.append("branch", [], validate=False)
         result = await store.read_range("branch", 0, 100)
         assert result == []
 
@@ -102,7 +107,7 @@ class TestReadRange:
         """按 seq 升序返回。"""
         branch = "b"
         events = [_make_event(tick=10 - i) for i in range(5)]
-        await store.append(branch, events)
+        await store.append(branch, events, validate=False)
 
         result = await store.read_range(branch, 2, 4)
         assert len(result) == 3
@@ -111,7 +116,7 @@ class TestReadRange:
     async def test_read_range_out_of_bounds(self, store):
         """超出范围返回空。"""
         branch = "b"
-        await store.append(branch, [_make_event(tick=0)])
+        await store.append(branch, [_make_event(tick=0)], validate=False)
         result = await store.read_range(branch, 10, 20)
         assert result == []
 
@@ -119,7 +124,7 @@ class TestReadRange:
         """payload 完整往返。"""
         branch = "b"
         payload = {"x": 1, "y": 2, "nested": {"a": [1, 2, 3]}}
-        await store.append(branch, [_make_event(tick=0, payload=payload)])
+        await store.append(branch, [_make_event(tick=0, payload=payload)], validate=False)
 
         result = await store.read_range(branch, 1, 1)
         assert result[0]["payload"] == payload
@@ -198,7 +203,7 @@ class TestReplayDeterministic:
                     payload={"x": x, "y": y},
                 )
             )
-        await store.append(branch, events)
+        await store.append(branch, events, validate=False)
 
         # --- 读回全部事件 ---
         all_events = await store.read_range(branch, 1, 50)
@@ -229,7 +234,7 @@ class TestReplayDeterministic:
 
         # 写入前 20 个事件
         events1 = [_make_event(tick=i, payload={"val": i}) for i in range(20)]
-        await store.append(branch, events1)
+        await store.append(branch, events1, validate=False)
 
         # 写入快照（模拟 tick 19 的状态）
         snap_state = {"tick": 19, "accumulated": list(range(20))}
@@ -238,7 +243,7 @@ class TestReplayDeterministic:
 
         # 写入后 30 个事件
         events2 = [_make_event(tick=i, payload={"val": i}) for i in range(20, 50)]
-        await store.append(branch, events2)
+        await store.append(branch, events2, validate=False)
 
         # 读回快照
         snap = await store.latest_snapshot(branch, before_tick=50)
@@ -275,7 +280,7 @@ class TestEntropyRows:
             {"stream": "world", "reason": "turn 5 coin flip", "tick": 5, "value": "deadbeef"},
         ]
 
-        await store.append(branch, events, entropy_rows=entropy_rows)
+        await store.append(branch, events, entropy_rows=entropy_rows, validate=False)
 
         # 事件已写
         got_events = await store.read_range(branch, 1, 1)
@@ -298,7 +303,7 @@ class TestEntropyRows:
         from sim.core.persistence.models import EntropyLog
 
         branch = "b-noentropy"
-        await store.append(branch, [_make_event(tick=1)])
+        await store.append(branch, [_make_event(tick=1)], validate=False)
 
         sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with sf() as session:
@@ -320,7 +325,7 @@ class TestSnapshotSeqAlignment:
         branch = "b-align"
 
         # 写 10 个事件
-        await store.append(branch, [_make_event(tick=i) for i in range(10)])
+        await store.append(branch, [_make_event(tick=i) for i in range(10)], validate=False)
         all_events = await store.read_range(branch, 1, 10)
         max_seq = all_events[-1]["seq"]
         assert max_seq == 10
@@ -341,11 +346,11 @@ class TestSnapshotSeqAlignment:
         branch = "b-window"
 
         # 5 事件 + 快照(seq=5)
-        await store.append(branch, [_make_event(tick=i) for i in range(5)])
+        await store.append(branch, [_make_event(tick=i) for i in range(5)], validate=False)
         await store.write_snapshot(branch, tick=4, event_seq=5, blob=b"snap1")
 
         # 再 5 事件 + 快照(seq=10)
-        await store.append(branch, [_make_event(tick=i) for i in range(5, 10)])
+        await store.append(branch, [_make_event(tick=i) for i in range(5, 10)], validate=False)
         await store.write_snapshot(branch, tick=9, event_seq=10, blob=b"snap2")
 
         # 第三份快照的 seq 不应因前两份而变成 3；应仍绑定事件流
