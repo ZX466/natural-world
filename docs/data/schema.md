@@ -412,6 +412,36 @@ entropy_ref= 关键分叉（坍塌伤人/火灾蔓延）走熵注入时指向 en
 - EventKind 与 payload schema 的落地归架构域（`sim/core/events.py`，Claude M2-A1）；
   本表为其持久化投影，字段与上述事件 payload 对齐。
 
+**投影实现（M2-D2，`sim/core/persistence/npc_store.py`）**：
+
+- `NpcStore.flush_tick(events)` = 本 tick 事件批次落 `events`/`entropy_log` +
+  **同一事务内**投影：`MATTER_*` → `matter_state` UPSERT（`durability` 折算 `integrity`，
+  `MATTER_COLLAPSE`/integrity≤0 → `is_rubble=1` 终态）。
+- 投影经 `SqlEventStore.append(..., projection=<callback>)` 在 commit 前同一 session 执行；
+  回调抛异常则整批回滚（无半写）。
+- `NpcStore.materialize(ids)`：一次 SELECT 批量物化（L0→L1）→ frozen `NpcProfileData`（§12）。
+
+---
+
+## 15. NPC_LOD_CHANGE 持久化投影（M2-D2）
+
+LOD 升降格是**事件驱动的列投影**（m2-npc-cognition §1.2：禁止直接改列，C4）：
+
+```
+event_type = "npc.lod_change"
+payload    = { "npc_id", "from_lod", "to_lod"∈{0,1,2}, "reason" }
+```
+
+- 事件落 `events` 表（`witnesses`/`entropy_ref` 为通用列，与非 LOD 事件同构）；
+- `NpcStore.flush_tick` 在**同一事务内**把 `to_lod` 投影回 `npc_profiles.lod`
+  （§12 列，D1 已建），并刷新 `updated_at_tick`；
+- 回放：重放 `events` 即重建各 NPC 的 lod 序列（同 matter_state 结构）；
+- **无新增表/列**（LOD 状态本就属 `npc_profiles`），故 M2-D2 不产生 0005 迁移。
+
+**降格记忆压缩写回（L2→L1，§1.2 关键缝）**：降格时 LLM 结论经唯一写入入口
+`MemoryWritePipeline.write(source="reason")` 压缩落 `npc_memories`（§5）——
+`NpcStore.writeback_downgrade_memory()` 为调用点；S1 守卫不变（隐藏属性直陈 → 拒写不落库）。
+
 ---
 
 ## ER 关系图
@@ -466,8 +496,8 @@ player_anchors ──N:1── branches（通过 branch_id）
 
 | 禁止事项 | Schema 对策 |
 |----------|------------|
-| 不要为世界状态直接赋值，必须走 `apply(event)` | events 表唯一写路径，ORM 不暴露 UPDATE/DELETE；matter_state 为 matter.* 事件的持久化投影（§14） |
+| 不要为世界状态直接赋值，必须走 `apply(event)` | events 表唯一写路径，ORM 不暴露 UPDATE/DELETE；matter_state（§14）与 npc_profiles.lod（§15）均为事件的持久化投影 |
 | 不要让读档删除或回退世界档历史 | events append-only，读档只创建新分支 |
-| 不要在 LOD 降格时丢失 LLM 产生的结论 | npc_memories 持久化所有 LLM 输出的结论 |
+| 不要在 LOD 降格时丢失 LLM 产生的结论 | npc_memories 持久化所有 LLM 输出的结论；降格压缩写回 source=reason（§15） |
 | 不要直接渲染 LLM 原始输出 | schema 不含渲染字段，只存原始数据 |
 | 自我未知：隐藏属性不得默认进入 LLM/戏内输出面 | npc_health.hidden + descriptors/trigger_conditions 标注（§13，触发才浮现） |
