@@ -63,7 +63,7 @@
 |---|---|---|---|---|
 | L-CI（每提交） | `-m "not bench"` | 2,000~3,000 tick | C1/C7 + 探针契约 + 量纲守卫 | `test_bench_soak.py::test_soak_ci_smoke_stability` 等 |
 | L-nightly | `-m bench`（nightly-bench.yml） | 30,000 tick（≈1/3 游戏日） | C1/C3~C10 全量 | `test_bench_soak.py::test_soak_nightly_*` |
-| L-里程碑/手动 | 手动/里程碑 | **604,800 tick** | 同 nightly + 汇总量落盘 | 见 §4 接法 |
+| L-里程碑 | nightly 同 step（§4 方案 A，env `PI_M2_FULL_SOAK=1`）+ 里程碑手动 | **604,800 tick** | 同 nightly + 汇总量落盘 | 见 §4 接法 |
 
 **采样段代表性**：L-nightly 的 30,000 tick 覆盖**多个昼夜相位**（30,000/86,400 ≈ 1/3 日 → 含若干相位切换）。
 跨 7 日的相位全覆盖由 L-里程碑 完整跑补足。三段同 seed，故小段是完整段的**确定性前缀**（可外推趋势）。
@@ -93,7 +93,7 @@ M2-A2 落地后把 feeder 换成 `NpcRuntime.tick` 的 L1 决策输出，harness
 
 **完整跑用例落点**：`test_bench_soak.py` 加 `@pytest.mark.bench` + 环境门
 `PI_M2_FULL_SOAK=1` 才跑的 `test_m2_full_7day_acceptance`（默认 skip，避免 nightly 默认就烧 20 分钟）；
-触发方式在接法确定后由 cline 写进 yml。
+触发方式已由 cline 写进 nightly-bench.yml（`PI_M2_FULL_SOAK=1` + `timeout-minutes: 60`）。
 
 ---
 

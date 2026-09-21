@@ -64,7 +64,7 @@ Push-Location client; npx tsc --noEmit; npx eslint .; npx prettier --check .; np
 - **M2 验收测试（命名门禁，M2-C2 起已实跑）**：ci.yml 命名步骤「pytest M2 验收测试」按**文件路径** glob `sim/tests/test_m2_*.py` 选择（纪律与 T3/M1 同源，不用 marker）。**命名约定即契约**：新 M2 验收测试落 `sim/tests/test_m2_*.py` 即自动纳入门禁。
   - 量纲要求：**无 LLM、秒级~分钟级**；步骤内显式 `-m "not bench"`（性能红线是抖动域，属 nightly）。
   - ⚠ **不要**把完整验收「50 NPC × 7 游戏日自转无崩溃」做成该前缀下的普通测试：DESIGN §10「1 tick = 1 游戏秒」⇒ 7 游戏日 = **604,800 tick**，它会被 `-m "not bench"` 全量 CI 收集，把每提交 CI 拖成小时级（ci.yml 该步骤的 `timeout-minutes: 15` 就是这道护栏）。完整跑接 `nightly-bench.yml`（接法待 Claude 裁）。
-  - 现役文件：`test_m2_npc_base.py`（架构域 NPC 底座）、`test_m2_weather.py`（配置域风场）；M2 四路依赖对账与交付盘点见 `docs/README.md` §5。
+  - 现役文件（6 件）：`test_m2_npc_base.py` / `test_m2_utility.py` / `test_m2_matter.py` / `test_m2_smell.py`（架构域）+ `test_m2_weather.py`（配置域风场）+ `test_m2_runtime_store.py`（opencode 数据层）；M2 交付盘点见 `docs/README.md` §5。
 
 ### bench 跑法（性能域）
 

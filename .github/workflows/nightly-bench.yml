@@ -22,10 +22,10 @@ name: Nightly Bench
 #    `SMELL_TICK_LIMIT_MS = 0.15`（嗅觉传播每 tick） / `SMELL_NAIVE_SENTINEL_MS = 3.0`（naive 哨兵，不卡预算）。
 #    对应 bench 文件 `sim/tests/bench/test_bench_l1_utility.py` / `test_bench_smell.py` 随 `-m bench`
 #    自动纳入本工作流 —— **无需改本 yml**；判定口径统一「暖态中位」（warmup_rounds=1 + median）。
-# 2. 待裁（Claude）/ 待回填：M2 完整验收「50 NPC × 7 游戏日自转无崩溃」= 604,800 tick（DESIGN §10：
-#    1 tick = 1 游戏秒），**不进每提交 CI**（ci.yml 的 M2 占位步骤只接缩样/采样文件）。
-#    若要做成定期跑，接入点在本工作流（新增 job 或给该验收文件加专属 marker 后在此跑，
-#    如 `-m m2full`）；marker 语义属配置域、接法由 Claude 裁决后，cline 在此回填命令。
+# 2. M2 完整验收「50 NPC × 7 游戏日自转无崩溃」= 604,800 tick（DESIGN §10：1 tick = 1 游戏秒）：
+#    **不进每提交 CI**（ci.yml 的 M2 占位步骤只接缩样/采样文件）。Claude 2026-09-21 裁决**方案 A**
+#    （pi M2-P2 §4 提案）：完整跑进本工作流同 job 新 step（见下方「M2 7 日自转完整跑」），
+#    环境门 PI_M2_FULL_SOAK=1 才跑；里程碑后转周频独立 workflow 时由 cline 迁出。
 # 3. 机器档位口径不变：跨机器不硬断言绝对值，结果 JSON 与机器信息一并归档（见 §机器档位步骤）。
 
 on:
