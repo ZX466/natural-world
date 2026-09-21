@@ -9,15 +9,20 @@ from __future__ import annotations
 
 import gzip
 import json
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sim.core.persistence.models import EntropyLog, Event, Snapshot
 
 # 快照 payload 结构版本（codex 建议项：schema_version，M5 前必须）
 SNAPSHOT_SCHEMA_VERSION = 1
+
+#: M2-D2 投影回调：在 append 的同一事务内被调用（session + event_index→seq 映射）。
+ProjectionFn = Callable[[AsyncSession, dict[int, int]], Awaitable[None]]
 
 # ---------------------------------------------------------------------------
 # Protocol 定义（m0-core.md §8）
@@ -47,6 +52,7 @@ class EventStore(Protocol):
         branch_id: str,
         events: list[dict],
         entropy_rows: list[dict] | None = None,
+        projection: ProjectionFn | None = None,
     ) -> None:
         """分配分支内 seq，append-only 写入。
 
@@ -81,18 +87,24 @@ class EventStore(Protocol):
 class SqlEventStore:
     """基于 SQLAlchemy 2.0 async + aiosqlite 的 EventStore 实现。"""
 
-    def __init__(self, session_factory) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         """
         Args:
             session_factory: async session 工厂（async_sessionmaker）。
         """
         self._session_factory = session_factory
 
+    @property
+    def session_factory(self) -> async_sessionmaker[AsyncSession]:
+        """暴露 session 工厂（M2-D2：NpcStore 批量物化需只读查询）。"""
+        return self._session_factory
+
     async def append(
         self,
         branch_id: str,
         events: list[dict],
         entropy_rows: list[dict] | None = None,
+        projection: ProjectionFn | None = None,
     ) -> None:
         """分配分支内 seq，批量写入 events 表。
 
@@ -102,6 +114,11 @@ class SqlEventStore:
 
         D04 记账项：entropy 行可通过 ``event_index`` 关联到 events 列表下标，
         本方法分配 seq 后把对应 ``event_seq`` 回填（同一事务）。
+
+        projection（M2-D2）：可选投影回调，在**同一事务内**、events/entropy 落库后
+        被调用（收到 session 与 event_index→seq 映射），用于把 M2 事件投影到
+        派生表（NPC_LOD_CHANGE→npc_profiles.lod、MATTER_*→matter_state）。
+        回调改动随本次 commit 原子提交；抛异常则整批回滚（无半写）。
         """
         if not events and not entropy_rows:
             return
@@ -146,6 +163,11 @@ class SqlEventStore:
                         event_seq=backfilled,
                     )
                 )
+
+            # M2-D2：派生表投影（NPC_LOD_CHANGE→npc_profiles.lod、
+            # MATTER_*→matter_state）在**同一事务内**完成，随本次 commit 原子提交。
+            if projection is not None:
+                await projection(session, seq_by_index)
 
             await session.commit()
 
