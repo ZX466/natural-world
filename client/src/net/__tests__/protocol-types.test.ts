@@ -5,6 +5,10 @@
  * 且出戏边界成立（rtoken 仅在 render 通道；内部 entity_id/source_id/tick/seed/seq/branch_id
  * 一律不出现）。纯类型检查，无运行时逻辑。
  *
+ * K04 扩展（2026-09-21）：WS 消息类型全量生成后，对 `WsMessage` 判别联合本身断言——
+ * 消息 type 枚举与 ws-protocol.md §3 清单逐条对齐（C→S 5 + S→C 9，共 14 个成员），
+ * 且每个成员的必填字段形状在位（判别键 + 信封 + 通道）。
+ *
  * 说明：任务文档写 "move_intent"，DESIGN.md §6 的 Intent 是 LLM 内部输出、非客户端消息；
  * 玩家唯一主动动作是念头注入（player_impulse，见 ws-protocol.md §3.1）——按已批协议实现，
  * 此处对 player_impulse 断言。rtoken 已由 Claude 评审批准为「不透明替身」（前端永不接触真实 id），
@@ -17,10 +21,16 @@ import type {
   FullSnapshotMessage,
   PlayerImpulseMessage,
   SetControlMessage,
+  LoadAnchorMessage,
+  SyncRequestMessage,
   MoveRequestMessage,
   PerceptionMessage,
   MonologueMessage,
   ImpulseFeedbackMessage,
+  CombatEventMessage,
+  TimescaleMessage,
+  ControlAckMessage,
+  WsErrorMessage,
   Actor,
   ActorDelta,
   Structure,
@@ -203,5 +213,98 @@ describe('ws-protocol 类型与出戏边界', () => {
     // 与 sim settings.py::ProfileCreate 对齐：无 provider/params
     expectTypeOf<ProfileCreate>().not.toHaveProperty('provider');
     expectTypeOf<ProfileCreate>().not.toHaveProperty('params');
+  });
+
+  // ── K04：WsMessage 判别联合（gen-protocol 全量生成后）──────────────────
+  it('K04 #1 WsMessage 判别联合：type 枚举 = ws-protocol.md §3 清单（C→S 5 + S→C 9）', () => {
+    // §3.1 client → sim（5 条：含玩家点击寻路 move_request）
+    expectTypeOf<PlayerImpulseMessage['type']>().toEqualTypeOf<'player_impulse'>();
+    expectTypeOf<SetControlMessage['type']>().toEqualTypeOf<'set_control'>();
+    expectTypeOf<LoadAnchorMessage['type']>().toEqualTypeOf<'load_anchor'>();
+    expectTypeOf<MoveRequestMessage['type']>().toEqualTypeOf<'move_request'>();
+    expectTypeOf<SyncRequestMessage['type']>().toEqualTypeOf<'sync_request'>();
+    // §3.2 sim → client（9 条）
+    expectTypeOf<FullSnapshotMessage['type']>().toEqualTypeOf<'full_snapshot'>();
+    expectTypeOf<StateDeltaMessage['type']>().toEqualTypeOf<'state_delta'>();
+    expectTypeOf<PerceptionMessage['type']>().toEqualTypeOf<'perception'>();
+    expectTypeOf<MonologueMessage['type']>().toEqualTypeOf<'monologue'>();
+    expectTypeOf<ImpulseFeedbackMessage['type']>().toEqualTypeOf<'impulse_feedback'>();
+    expectTypeOf<CombatEventMessage['type']>().toEqualTypeOf<'combat_event'>();
+    expectTypeOf<TimescaleMessage['type']>().toEqualTypeOf<'timescale'>();
+    expectTypeOf<ControlAckMessage['type']>().toEqualTypeOf<'control_ack'>();
+    expectTypeOf<WsErrorMessage['type']>().toEqualTypeOf<'error'>();
+    // 联合判别键：WsMessage['type'] 恰为上述 14 个枚举值（缺一即漏消息，多一即野消息）
+    expectTypeOf<WsMessage['type']>().toEqualTypeOf<
+      | 'player_impulse'
+      | 'set_control'
+      | 'load_anchor'
+      | 'move_request'
+      | 'sync_request'
+      | 'full_snapshot'
+      | 'state_delta'
+      | 'perception'
+      | 'monologue'
+      | 'impulse_feedback'
+      | 'combat_event'
+      | 'timescale'
+      | 'control_ack'
+      | 'error'
+    >();
+    // 判别键存在且为 string 字面量联合（openapi-typescript discriminator 生成前提）
+    expectTypeOf<WsMessage>().toHaveProperty('type');
+    // 出戏边界：hello/hello_ack 是 W6 鉴权握手层（安全域），不进游戏协议清单
+    expectTypeOf<WsMessage['type']>().not.toEqualTypeOf<'hello'>();
+    expectTypeOf<WsMessage['type']>().not.toEqualTypeOf<'hello_ack'>();
+  });
+
+  it('K04 #2 WsMessage 成员必填字段形状：信封 v/ws_seq + 通道判别 + 消息特有键', () => {
+    // 信封公共必填：所有成员都带 v（协议版本）+ ws_seq（传输序号，非 tick）
+    expectTypeOf<FullSnapshotMessage>().toHaveProperty('v');
+    expectTypeOf<FullSnapshotMessage>().toHaveProperty('ws_seq');
+    expectTypeOf<StateDeltaMessage>().toHaveProperty('v');
+    expectTypeOf<StateDeltaMessage>().toHaveProperty('ws_seq');
+    expectTypeOf<PlayerImpulseMessage>().toHaveProperty('v');
+    expectTypeOf<PlayerImpulseMessage>().toHaveProperty('ws_seq');
+    // C→S 特有必填
+    expectTypeOf<SetControlMessage>().toHaveProperty('action');
+    expectTypeOf<LoadAnchorMessage>().toHaveProperty('anchor_id');
+    expectTypeOf<SyncRequestMessage>().toHaveProperty('reason');
+    // S→C 特有必填（M1 叙事/控制 + M4 战斗）
+    expectTypeOf<PerceptionMessage>().toHaveProperty('sense');
+    expectTypeOf<PerceptionMessage>().toHaveProperty('content');
+    expectTypeOf<MonologueMessage>().toHaveProperty('form');
+    expectTypeOf<MonologueMessage>().toHaveProperty('content');
+    expectTypeOf<ImpulseFeedbackMessage>().toHaveProperty('injected');
+    expectTypeOf<ImpulseFeedbackMessage>().toHaveProperty('cue');
+    expectTypeOf<ImpulseFeedbackMessage>().toHaveProperty('reaction_monologue');
+    expectTypeOf<CombatEventMessage>().toHaveProperty('exchange');
+    expectTypeOf<CombatEventMessage>().toHaveProperty('rtoken');
+    expectTypeOf<TimescaleMessage>().toHaveProperty('mode');
+    expectTypeOf<TimescaleMessage>().toHaveProperty('active');
+    expectTypeOf<ControlAckMessage>().toHaveProperty('action');
+    expectTypeOf<ControlAckMessage>().toHaveProperty('applied');
+    expectTypeOf<WsErrorMessage>().toHaveProperty('ref');
+    expectTypeOf<WsErrorMessage>().toHaveProperty('code');
+    expectTypeOf<WsErrorMessage>().toHaveProperty('message');
+    // 通道判别字面量（render/narrative/control/session/error 五通道契约）
+    expectTypeOf<FullSnapshotMessage['channel']>().toEqualTypeOf<'render'>();
+    expectTypeOf<StateDeltaMessage['channel']>().toEqualTypeOf<'render'>();
+    expectTypeOf<CombatEventMessage['channel']>().toEqualTypeOf<'render'>();
+    expectTypeOf<PerceptionMessage['channel']>().toEqualTypeOf<'narrative'>();
+    expectTypeOf<MonologueMessage['channel']>().toEqualTypeOf<'narrative'>();
+    expectTypeOf<PlayerImpulseMessage['channel']>().toEqualTypeOf<'control'>();
+    expectTypeOf<SetControlMessage['channel']>().toEqualTypeOf<'control'>();
+    expectTypeOf<ImpulseFeedbackMessage['channel']>().toEqualTypeOf<'control'>();
+    expectTypeOf<TimescaleMessage['channel']>().toEqualTypeOf<'control'>();
+    expectTypeOf<ControlAckMessage['channel']>().toEqualTypeOf<'control'>();
+    expectTypeOf<LoadAnchorMessage['channel']>().toEqualTypeOf<'session'>();
+    expectTypeOf<SyncRequestMessage['channel']>().toEqualTypeOf<'session'>();
+    expectTypeOf<WsErrorMessage['channel']>().toEqualTypeOf<'error'>();
+    // 出戏边界：任何 WS 载荷都不含世界真相 id/tick/seed
+    expectTypeOf<WsMessage>().not.toHaveProperty('tick');
+    expectTypeOf<WsMessage>().not.toHaveProperty('seed');
+    expectTypeOf<WsMessage>().not.toHaveProperty('entity_id');
+    expectTypeOf<WsMessage>().not.toHaveProperty('source_id');
+    expectTypeOf<WsMessage>().not.toHaveProperty('branch_id');
   });
 });

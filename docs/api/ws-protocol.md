@@ -43,6 +43,7 @@ sim/api/ws  (FastAPI WebSocket 网关)
 |---|---|---|---|
 | `player_impulse` | control | 念头注入（玩家唯一主动动作，M4） | M4 |
 | `set_control` | control | 暂停 / 倍速（1x/4x/16x） | M0 |
+| `move_request` | render | 玩家点击寻路：只发目标格 `{target_x,target_y}`（整数格坐标），sim 寻路驱动主角；无 rtoken（服务端知道主角是谁） | M0 |
 | `load_anchor` | session | 载入玩家档（触发世界分叉+重放，见 §12） | M5 |
 | `sync_request` | session | 请求全量 `full_snapshot`（重连/丢帧补救） | M0 |
 

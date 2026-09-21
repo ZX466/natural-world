@@ -1,3 +1,4 @@
+
 # memory.md — 多 Agent 记忆合集（分节收录各工作树各自的记忆）
 > 用户规则 #7（main `3e320b9` 裁决：memory.md 入库）。本文件 = 五树 + 主树记忆的**融合合集**；
 > 跨树收编由主导方（Claude）合并。各树本地副本是其对应节的**权威来源**，收编冲突时以各树版本为准。
@@ -211,11 +212,8 @@ uv run pyright sim/
 
 ## ⑥ kilo（接口 / 兼容性域）
 
-
-# memory.md — kilo（接口 / 兼容性域）
-
-> 用户规则 #7：本文件保存 **kilo 自己的记忆**，供新对话继续任务。本地保存、**不入 git**
-> （理由同 .orca/talking.txt：各工作树各 agent 各自维护同路径文件，入 git 收编必冲突）。
+> ——kilo 树 memory.md（更新于 5f5f525：K04 完成回执 + 跨域发现）——
+> 用户规则 #7：本文件保存 **kilo 自己的记忆**，供新对话继续任务。**已入库**（main `3e320b9` 裁决），改动走提交；跨树融合由主导方（Claude）收编时合并（本树本地版 = 权威来源）。
 > 新对话开场先读：`.orca/talking.txt`（Claude 派活/回执）→ 本文件 → `.orca/workflow.txt` + `.orca/agent-registry.md`。
 
 ## 0. 我是谁 / 在哪
@@ -261,9 +259,27 @@ uv run pyright sim/
 
 ## 5. 当前任务 / 进行中
 
-- **K04（Claude 建议，未正式派发；"若做，回写 talking.txt 接受"）**：
-  用补全后的 `/openapi.json` 重新 gen 协议，把 **WS 消息类型也生成进 `shared/protocol.ts`**（当前 HTTP-only）；前端 `ws.ts` 消费生成类型、替换手写 interface。
-  执行要点：起 sim（带 `LZ_MASTER_KEY`）→ `--src http://127.0.0.1:8000/openapi.json` → 复核形状 vs `shared/openapi.json`（**以 sim 为准**）→ 回写差异 → 重生成并 `--check`（注意 CRLF 陷阱）→ 前端 `ws.ts` 换用生成类型（`PROTOCOL_VERSION='1.0'` 常数可能与 K04 冲突，以 K04 为准）→ 跑全绿 → 提交分支 + 回写。
+- **K04（2026-09-21 已正式派发+接受，范围 1-3 已由前序提交落地，本次补 4-5）**：
+  WS 消息类型全量生成进 `shared/protocol.ts`。核验结论：`shared/protocol.ts` 的 `WsMessage`
+  判别联合（14 成员：C→S 5 = player_impulse/set_control/move_request/load_anchor/sync_request；
+  S→C 9 = full_snapshot/state_delta/perception/monologue/impulse_feedback/combat_event/
+  timescale/control_ack/error）早已生成；`client/src/net/protocol.ts` re-export 齐全；
+  `ws.ts` 已用生成类型（仅 `WsStatus`/`WsCallbacks` 手写 = 传输层，非协议）。
+  本次交付：`protocol-types.test.ts` 补 K04 #1/#2（WsMessage['type'] 14 枚举 + 每成员必填
+  字段形状 + 五通道判别字面量 + 出戏边界），`docs/api/ws-protocol.md` §3.1 补 `move_request`
+  行（快照 `c48358f` 早加但文档漏更的偏差）。
+- **⚠ 跨域发现（待 Claude/sim 域裁决，已回写 talking.txt）**：
+  1. `sim/api/openapi_ext.py` 的 `components.wsMessages` **openapi-typescript 完全不读**（只读
+     `components.schemas`）→ 实测 `--src` 指 sim `/openapi.json` 生成 0 个 WS 类型。该注入对
+     前端类型源无效。
+  2. 且草图本身不完整/不准：只 6 条（缺 §3 清单 9 条：player_impulse/load_anchor/perception/
+     monologue/impulse_feedback/combat_event/timescale/control_ack/error）；形状也不对
+     （WsStateDelta 缺 `channel`；WsSetControl 用 `controlled` 而非 `action/speed`）。
+  3. `hello`/`hello_ack`（W6 鉴权握手，`sim/api/ws.py` 实发）**故意不进协议清单**（安全域），
+     快照联合无它们是正确裁决，勿"补齐"。
+  4. 结论：`shared/openapi.json` 的 oneOf+discriminator 联合方式是唯一可行前端类型源；要真正
+     消除 sim↔前端漂移，需 sim 侧把 §3 清单写进 `components.schemas.WsMessage`（sim 域改动）。
+  5. `sim/api/ws.py` 与快照的另一处差：`error` 消息 sim 不发 `ref`（快照 required 含 ref）。
 - 其他：等 Claude 派 M2/TASK-005。
 
 ## 6. 留言板 / 待回执
