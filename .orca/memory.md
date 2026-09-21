@@ -8,7 +8,7 @@
 - 主导/组织：架构/代码质量/逻辑/测试 + 前端/体验/发布/运维；评审 cline 与 kilo 的工作。
 - 收编由我执行（merge 各 ZX466/* 分支 → 推 origin+gitee 双远程）；派单写目标树 talking.txt，回执收主树；**不用 orca-cli 发消息**；上下文 50% 提醒切换。
 - M0+M1 全量收官：TASK-004 五路（codex=S04/opencode=D04/pi=F06/cline=P05/kilo=K03）全部收编，589 passed / 55 skipped。
-- M2 拟派：codex=自我未知/创伤隐藏边界；pi=L1 效用 50NPC 基线+嗅觉传播预算；opencode=嵌入落库/向量检索；kilo=K04（WS 类型进 gen-protocol）。
+- M2 已派并全部交付收编（main `8dd8355`：cline M2-C1 / codex M2-S1 / opencode M2-D1 / pi M2-P1 / kilo K04）。架构稿已落 `docs/arch/m2-npc-cognition.md`（M2-A1）。两项裁决已落：`.gitattributes`（A 方案）+ `.gitignore` 补 `!.github/`。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.codegraph/.agents 每树必有，.claude/.opencode/.codex 对应树有，主树全有）；#7 各树 memory.md 各存各的记忆（tracked）；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome。
 
 ## ② cline（依赖 / 配置 / 文档域）

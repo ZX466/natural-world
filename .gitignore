@@ -65,3 +65,7 @@ logs/
 #   tracked:   .orca/workflow.txt, .orca/agent-registry.md, .orca/memory.md (rule #7: per-agent memory)
 #   ignored:   .orca/talking.txt (per-worktree local inbox -> avoids cross-branch conflicts)
 .orca/talking.txt
+
+# .github: workflows 等必须入库（.*/ 兜底会挡新增文件，故显式例外；2026-09-21 裁决）
+!.github/
+!.github/**
