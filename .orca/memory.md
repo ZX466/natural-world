@@ -185,7 +185,16 @@ uv run pyright sim/
 
 ## 你已完成的工作（最近一轮）
 
-- **M2-P1 交付（2026-09-20，分支 ZX466/pi）**：L1 效用 + 嗅觉传播预算与 bench 红线。
+- **M2-P2 交付（2026-09-21，分支 ZX466/pi，commit `7080e1e`+`b033995`）**：7 日自转验收口径 + 长跑预压测。
+  - `docs/perf/m2-acceptance.md`（新）：604,800 tick 验收口径——崩溃判定 C1–C10（进程/tick/RSS/句柄/GC/缓存/实体/漂移/确定性/延迟）；降采样断言三级（CI 缩样 / nightly 30k / 里程碑完整 604,800）；
+    nightly 接法提案 §4（方案 A nightly step vs 方案 B 独立 workflow，交 cline 裁决）。
+  - `sim/tests/bench/soak.py`（新）：窗口化长跑 harness——跨平台进程探针（RSS/句柄/GC 对象）+ `run_soak` 分窗统计 + 确定性持续走动 mock 喂给。
+  - `sim/tests/bench/test_bench_soak.py`（新）：CI 缩样冒烟（1,200 tick）+ 探针/量纲契约；`@bench` nightly 30k tick 漂移/p99/缓存/确定性；完整 604,800 环境门 `PI_M2_FULL_SOAK=1`（默认 skip）。
+  - `thresholds.py`：加 `SOAK_STEADY_MEAN_LIMIT_MS=6.2` / `SOAK_MEAN_DRIFT_RATIO_LIMIT=1.5` / `SOAK_RSS_GROWTH_LIMIT_MB=128` / `SOAK_GC_OBJECT_GROWTH_LIMIT=20000` / `SOAK_HANDLE_GROWTH_LIMIT=64`。
+  - `budget.md` §4 补 M2-P2 对账；`hotspots.md` 加 H-7 长跑隐性累积；`bench-plan.md` §1/§2/§3/§4 补长跑；bench README + docs/README.md 同步。
+  - 实测（50 NPC + 感知 + 持续走动 mock，100k tick）：均值无漂移（1.86→1.86ms）、RSS/句柄/GC 有界、缓存封顶。未发现 O(n) 累积/泄漏。
+  - CI：bench 36 passed/1 skipped；`-m "not bench"` 649 passed/55 skipped；ruff/format/pyright 绿。
+- **M2-P1 交付（2026-09-20，已收编 e42b979）**：L1 效用 + 嗅觉传播预算与 bench 红线。
   - `docs/perf/budget.md`：§1 表新增「嗅觉传播（M2）0.05/0.15」+ 新增「合计（M2）7.05/12.50」；§1.2 M2 分解表；§2.4 补 L1 实测；新增 §2.9 嗅觉；§3/§4 对账补 M2。
   - `docs/perf/bench-plan.md`：§1 清单加 npc.utility / perception.smell；§3 阈值表加 L1 全量/单 NPC/断线兜底/嗅觉四行。
   - `docs/perf/hotspots.md`：H-1 补嗅觉延伸（Eulerian 网格 vs 逐对）。
@@ -200,11 +209,12 @@ uv run pyright sim/
 
 ## 当前任务
 
-**M2-P1（2026-09-20 接受，进行中→已交付）**：L1 效用 50 NPC 预算 + 嗅觉 ∝1/r² 扩散预算 + bench 红线。
+**M2-P2（2026-09-21 接受，已交付）**：7 日自转验收口径（604,800 tick）+ 长跑预压测
++ nightly 接法提案（给 cline）。
 
 ## 进行中
 
-(空——M2-P1 已交付，等 Claude 收编)
+(空——M2-P2 已交付 b033995，等 Claude 收编)
 
 ## 留言板
 
