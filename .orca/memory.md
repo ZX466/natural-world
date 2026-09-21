@@ -162,10 +162,11 @@ uv run pyright sim/
 - 更早累计：TASK-001~004（m1-checklist/threat-model/t3-corpus/memory-scan + T3 实弹 + W6 WS 鉴权 + M1-D reason 禁词门）；详见 git log 与 docs/security/。
 
 ### 当前任务
-- M2-S1 已交付，等 Claude 收编（main 合并 ZX466/codex）。
+- **M2-S2：L1 动作白名单 + 升格隐藏属性契约（2026-09-21 派，进行中）**——
+  ①L1 白名单审查（sim/npc/actions.py 草案 + 语义一致性 + 测试 + T1 门禁）②升格 L2 隐藏属性契约（runtime 接缝 + 降格记忆写入 + 降级检查 + 测试）③评审预告记录。
 
 ### 进行中
-- (空)——等下一波派发（预告 M2 后续安全面：T4 出戏探针 nightly 分层、LOD 降格记忆压缩校验等）。
+- M2-S2 ①L1 白名单审查 ②升格隐藏属性契约（进行中）。
 
 ### 留言板
 - (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)
