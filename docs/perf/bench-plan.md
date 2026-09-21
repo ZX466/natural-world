@@ -21,6 +21,7 @@
 | `perception`（M1 起） | 50 NPC 感知传播（视觉射线/听觉 1/r）全对 vs 分区后 | 计时 harness | ms/tick |
 | `npc.utility`（M2 起） | L1 效用 50 NPC 全量/单 NPC + 断线兜底计划队列 | 计时 harness | ms/tick |
 | `perception.smell`（M2 起） | 嗅觉 ∝1/r² 风向扩散（网格）+ 50 接收采样 | 计时 harness | ms/tick |
+| **7 日自转长跑**（M2 起） | 50 NPC × 604,800 tick 自转无崩溃：分窗漂移/内存/句柄/缓存 | 计时 harness + 进程探针 | ms/tick + 增量/窗 |
 | **整个 tick loop** | 组合：clock+rng+apply+utility（L1）| **真实 tick loop 计时** | ms/tick，p99 |
 
 **M0 的必测三件套**（任务指定）：`clock`、`rng`、`apply(event)`——这三个是 M0 里程碑（§17 M0：RNG/时钟/apply）且是确定性内核底座，C5/C4 的守卫。寻路与渲染从 M0 即有 bench，防止「地图大 → 每移动一下卡死」。
@@ -31,6 +32,7 @@
 |---|---|---|
 | 微基准 | `pytest-benchmark` | clock/rng/entropy/pathfinding 这类纯函数、可独立调用的单元 |
 | 中/大基准 | 真实 tick loop 计时 harness | 直接驱动 `sim.core.tick()` 完整循环，`asyncio` 下测稳态吞吐与 p99；**不要**把微基准数字外推到系统级 |
+| 长跑/自转验收 | 窗口化长跑 harness（`sim/tests/bench/soak.py`） | 不再用 pytest-benchmark（min_time 校准与 7 日量纲冲突）；按窗口统计耗时 + 进程探针（RSS/句柄/GC）+ 分窗漂移判定，见 `docs/perf/m2-acceptance.md` |
 | 统计与假随机 | `Hypothesis`（§4 已有） | 属性测试配固定 seed，保证 bench 输入分布稳定 |
 | 报告 | pytest-benchmark `rounds`/`warmup` 参数 | 每次至少 3 轮取中位，防首轮 JIT/缓存热涨 |
 
@@ -57,14 +59,15 @@
 | LLM 决策延迟 P95 | < 8000 ms（墙钟，独立看板） | 日汇总 | 见 docs/perf/llm-monitoring.md |
 | LLM 单决策 tokens | < 2000 tok（sum 口径） | 日汇总 | 见 docs/perf/llm-monitoring.md |
 | 4x / 16x | 各自 p99 ≤ 对应预算的一半（2.08ms / 0.52ms，L1 降采后口径） | nightly | 降采策略失效检查 |
+| M2 7 日自转长跑（604,800 tick） | 无崩溃 + 分窗均值漂移 ≤1.5x + RSS ≤+128MB + 句柄 ≤+64 + GC 对象 ≤+20000 + 缓存有界 | nightly（缩样 30k）/ 里程碑（完整跑） | 见 docs/perf/m2-acceptance.md §2/§3 |
 
 **口径固定**：所有阈值绑定「机器档位」——记录 CPU 型号/核数/内存 + Python/uv 版本进基线头，跨机器对比按基线线性缩放，避免拿笔记本数据当服务器红线。
 
 ## 4. 执行节奏
 
-- **每次提交附近**：仅 T1/T2/T3 + 单测（bench 关）。
-- **每日 nightly**：全量 bench，出 `perf/<date>.json` 基线 + 对比昨日前瞻。
-- **里程碑（M0/M1/M2）**：跑一次**正式基线**，黄金数字写进里程碑评审（对齐 §17 量化验收：决策延迟 P95<8s、单决策 <2k tok 属 LLM 侧，与 tick 侧分开呈现）。
+- **每次提交附近**：仅 T1/T2/T3 + 单测（bench 关）；含 M2 长跑**缩样冒烟**（`test_bench_soak.py::test_soak_ci_smoke_stability`，未标 bench，秒级）。
+- **每日 nightly**：全量 bench，出 `perf/<date>.json` 基线 + 对比昨日前瞻；含 M2 长跑**缩样采样段**（30,000 tick，标 `bench`；`docs/perf/m2-acceptance.md` §3）。
+- **里程碑（M0/M1/M2）**：跑一次**正式基线**，黄金数字写进里程碑评审（对齐 §17 量化验收：决策延迟 P95<8s、单决策 <2k tok 属 LLM 侧，与 tick 侧分开呈现）；M2 另跑 **604,800 tick 完整自转**（环境门 `PI_M2_FULL_SOAK=1`，接法由 cline，见 m2-acceptance §4）。
 - **回归处置**：谁改谁负责回退或证明阈值失效合理（性能域评审 + Claude（架构）复核）。
 
 ## 5. 具体 bench 用例示例（伪代码，非实现码）

@@ -137,6 +137,10 @@ M1 名义合计 7.00ms / 上限 12.35ms，仍 ≤16.6 ✓。LLM 推理本身（�
 - L1 满属性向量化 ~0.02ms + 嗅觉 ~0.01ms，相比 M1 合计（实际 ~4.4ms）增量可忽略；**M2 对 4x/16x 降采节拍无新增压力**。
 - 4x 仍维持「感知每 2 tick」；L1 在 4x 按 §4 表应每 4 tick 推进——M2 L1 实测成本极低，即使不降采也 ~0.02ms/tick。降采档位由架构域（M2-A1）定，本域仅提供实测依据。
 
+**对账（M2-P2，2026-09-21，50 NPC × 7 日自转长跑实测）**：
+- 持续走动 50 NPC + 真实感知引擎（64×64），稳态 ~1.9ms/tick，100k tick 均值无漂移（1.86→1.86ms），RSS/句柄/GC 对象有界、感知缓存封顶。
+- 完整 604,800 tick 验收（DESIGN §17）不进每提交 CI（小时级），按三级降采样断言（CI 缩样 / nightly 30k / 里程碑完整）——口径与接法见 `docs/perf/m2-acceptance.md`。
+
 ## 5. 采集与告警（量入为出，防回归）
 
 - 每 tick 在 `structlog` 记：`perf.tick_ms`、各子系统分段计时（clock/rng/apply/utility/perception/snapshot/ws_encode/llm_sched）。

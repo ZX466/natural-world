@@ -57,3 +57,25 @@ L1_OFFLINE_FALLBACK_LIMIT_MS = 0.20
 SMELL_TICK_LIMIT_MS = 0.15
 # 嗅觉 naive O(N²) ∝1/r² 哨兵下界：断言其明显慢于网格版（H-1 动机证据，不卡预算）。
 SMELL_NAIVE_SENTINEL_MS = 3.0
+
+# --- M2-P2：7 日自转长跑（604,800 tick）验收红线 ---
+# 依据：DESIGN §17 M2 验收「50 NPC × 7 游戏日自转无崩溃」。
+# 口径：**分窗稳定性**，而非单轮 p99 —— 长跑里单窗口离群（GC/OS 抖动）不应误红；
+# 判据 = 末窗均值相对首稳态窗的漂移有界 + 内存/句柄/缓存不无界增长。
+# 实测（M2-P1 内核 + 感知 + mock 动作，本机 50 NPC×64×64，持续走动负载）：
+# 稳态 mean ~1.9ms（< TICK_P99_LIMIT_MS 8.3，含感知挂载）。
+# （早期错峰空转原型为 4.5ms —— 负载保真差异见 soak.py make_mock_feeder 注释。）
+# 604,800 tick 完整跑不进每提交 CI，接 nightly（接法由 cline）。
+#
+# 稳态均值上限：含感知的全内核长跑须远低于 16.6ms 预算；取 6.2ms（约为 tick p99 红线 8.3 的 75%）。
+SOAK_STEADY_MEAN_LIMIT_MS = 6.2
+# 末窗均值相对首稳态窗（第 2 窗，剔除首窗冷启动）的漂移比上限（1.5x）。
+# 单机 GC/缓存预热有界上升容许；所谓 O(n) 累积会远超此值。
+SOAK_MEAN_DRIFT_RATIO_LIMIT = 1.5
+# 内存增长上限（MB）：末窗 RSS - 首窗 RSS。50 NPC 稳态不应有 MB 级线性累积。
+# 探测不可用（返回 -1）时本项自动跳过（不误红）。
+SOAK_RSS_GROWTH_LIMIT_MB = 128.0
+# GC 对象数增长上限（末窗 - 首窗）。LOS 缓存最多数千项；对象数不应线性膨胀。
+SOAK_GC_OBJECT_GROWTH_LIMIT = 20_000
+# 句柄数增长上限（Windows 有效；其他平台 handle_count()==-1 自动跳过）。
+SOAK_HANDLE_GROWTH_LIMIT = 64
