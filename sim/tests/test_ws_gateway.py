@@ -97,6 +97,15 @@ class TestUntrustedInput:
         reply = handle_client_message({"type": "give_me_seed", "channel": "render"}, loop, pf)
         assert reply is not None and reply["type"] == "error"
 
+    def test_error_carries_ref_of_rejected_type(self, loop: TickLoop, pf: Pathfinder):
+        """K3 附注 2 + ws-protocol §4.5：error.ref = 被拒消息 type（schema required 锚）。"""
+        reply = handle_client_message({"type": "give_me_seed", "channel": "render"}, loop, pf)
+        assert reply is not None
+        assert reply["ref"] == "give_me_seed"
+        reply2 = handle_client_message({"type": "move_request", "channel": "control"}, loop, pf)
+        assert reply2 is not None
+        assert reply2["ref"] == "move_request"
+
     def test_channel_mismatch_rejected(self, loop: TickLoop, pf: Pathfinder):
         reply = handle_client_message(
             {"type": "move_request", "channel": "control"},

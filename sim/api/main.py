@@ -11,6 +11,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel, ConfigDict, Field
 
 from sim.api.settings import router as settings_router
 from sim.api.ws import (
@@ -105,20 +106,66 @@ from sim.api.openapi_ext import install as _install_openapi_ext  # noqa: E402
 _install_openapi_ext()  # WS components 进 OpenAPI（kilo K03 差异回写）
 
 
-@app.get("/api/health")
-async def health() -> dict[str, Any]:
+class HealthStatus(BaseModel):
+    """戏外探针响应（K3 §2.1 #15）。
+
+    status 单值枚举用 Field(json_schema_extra)（pydantic Literal 会产 const 形，
+    与快照 enum 形不符）。装饰 title 由 custom_openapi 后处理统一剥除。
+    注意：勿加 model 级 json_schema_extra 的 properties——会整体替换字段 extras
+    （吞 enum）。docstring 不进 schema：json_schema_extra={"description": ""}
+    占位 + 后处理剥空串（快照 HealthStatus 无 description 键）。
+    """
+
+    model_config = ConfigDict(extra="forbid", json_schema_extra={"description": ""})
+
+    status: str = Field(json_schema_extra={"enum": ["ok"]})
+    world_running: bool
+    in_combat: bool = Field(description="戏外只读，不回流戏内")
+
+
+class MapChunk(BaseModel):
+    """碰撞层 chunk：collision_b64 = base64(每格 1 字节 0/1，顺序按 chunk 内行优先)，只读静态资产"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cx: int = Field(ge=0)
+    cy: int = Field(ge=0)
+    collision_b64: str = Field(
+        description="base64 编码的可通行位（1=可通行），不含 seed/tick/entity_id"
+    )
+
+
+class WorldMapResponse(BaseModel):
+    """/api/world/map 响应：碰撞层静态资产（戏外 meta shell，对齐 sim map_static_payload）"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    w: int = Field(ge=0)
+    h: int = Field(ge=0)
+    tileset: str
+    chunks: list[MapChunk]
+
+
+@app.get("/api/health", response_model=HealthStatus)
+async def health() -> HealthStatus:
     loop: TickLoop = app.state.loop
-    return {
-        "status": "ok",
-        "world_running": True,
-        "in_combat": loop.context.combat_active,
-    }
+    return HealthStatus(
+        status="ok",
+        world_running=True,
+        in_combat=loop.context.combat_active,
+    )
 
 
-@app.get("/api/world/map")
-async def world_map() -> dict[str, Any]:
+@app.get("/api/world/map", response_model=WorldMapResponse)
+async def world_map() -> WorldMapResponse:
     """碰撞层静态资产（codex 意见 5：走 HTTP 不走 WS；kilo chunk 提案已批）。"""
-    return map_static_payload(app.state.tile_map)
+    raw = map_static_payload(app.state.tile_map)
+    return WorldMapResponse(
+        w=raw["w"],
+        h=raw["h"],
+        tileset=raw["tileset"],
+        chunks=[MapChunk(**c) for c in raw["chunks"]],
+    )
 
 
 @app.websocket("/ws")

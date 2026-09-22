@@ -200,6 +200,7 @@ def handle_client_message(
             "channel": "error",
             "v": _PROTOCOL_VERSION,
             "ws_seq": 0,
+            "ref": str(msg_type),
             "code": "unknown_type",
             "message": "unsupported message type",
         }
@@ -209,6 +210,7 @@ def handle_client_message(
             "channel": "error",
             "v": _PROTOCOL_VERSION,
             "ws_seq": 0,
+            "ref": str(msg_type),
             "code": "bad_channel",
             "message": "channel mismatch",
         }
@@ -247,6 +249,7 @@ def handle_client_message(
             "channel": "error",
             "v": _PROTOCOL_VERSION,
             "ws_seq": 0,
+            "ref": "hello",
             "code": "auth_error",
             "message": "authentication failed",
         }

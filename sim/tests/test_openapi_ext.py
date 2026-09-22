@@ -99,7 +99,11 @@ class TestOpenApiExt:
         assert "ProfileUpdate" in components
 
     def test_snapshot_schema_matches_payload(self, client: TestClient):
-        """FullSnapshotMessage required 与 ws.snapshot_payload 实际输出一致（防漂移锚）。"""
+        """FullSnapshotMessage required 与快照一致（防漂移锚）。
+
+        K3 修正（ws-message-diff.md §1.1）：combat 是 optional（oneOf CombatInfo/null），
+        不再进 required——旧锚（combat ∈ required）随 K3 返工推翻。
+        """
         schema = client.get("/openapi.json").json()
         snap = schema["components"]["schemas"]["FullSnapshotMessage"]
         assert set(snap["required"]) == {
@@ -107,20 +111,25 @@ class TestOpenApiExt:
             "ws_seq",
             "channel",
             "type",
-            "actors",
-            "lights",
-            "structures",
             "map",
+            "lights",
+            "actors",
+            "structures",
             "weather",
-            "combat",
         }
         assert snap["properties"]["type"]["enum"] == ["full_snapshot"]
+        assert snap["properties"]["combat"]["oneOf"] == [
+            {"$ref": "#/components/schemas/CombatInfo"},
+            {"type": "null"},
+        ]
 
-    def test_error_member_has_no_ref(self, client: TestClient):
-        """error 消息无 ref 字段（kilo 发现 5 对齐：sim 实发不含 ref）。"""
+    def test_error_member_keeps_ref_field(self, client: TestClient):
+        """error 消息保留 ref 字段（K3 附注 2 修正：「无 ref」指不用 $ref 引外部
+        schema，字段本身要保留——ws-protocol.md §4.5 有它；required 含 ref）。"""
         schema = client.get("/openapi.json").json()
         err = schema["components"]["schemas"]["WsErrorMessage"]
-        assert "ref" not in err["properties"]
+        assert err["properties"]["ref"] == {"type": "string"}
+        assert "ref" in err["required"]
 
     def test_response_model_filters_fields(self, client: TestClient):
         """response_model 生效：API 响应仍是 8 字段白名单（K5 回归锚）。"""
