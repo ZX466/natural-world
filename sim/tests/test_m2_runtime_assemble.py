@@ -219,8 +219,12 @@ class TestFlushEndToEnd:
         from sim.npc.actions import ACTION_PAYLOAD_KEYS, ACTION_WHITELIST
 
         for ev in events:
-            assert ev.payload["action"] in ACTION_WHITELIST
-            allowed = ACTION_PAYLOAD_KEYS[ev.payload["action"]]
+            payload = ev.payload
+            action = str(payload["action"])
+            assert action in ACTION_WHITELIST
+            allowed = ACTION_PAYLOAD_KEYS[action]
             # payload 形状（NpcActPayload）：{npc_id, action, target, params}
-            assert set(ev.payload) <= {"npc_id", "action", "target", "params"}
-            assert set(ev.payload.get("params", {})) <= allowed
+            assert set(payload) <= {"npc_id", "action", "target", "params"}
+            params = payload.get("params") or {}
+            assert isinstance(params, dict)
+            assert set(params) <= allowed
