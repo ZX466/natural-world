@@ -53,7 +53,7 @@
 （以下各节由对应 agent 维护——cline 节以上为 2026-09-20 收编版。）
 
 ## ③ opencode（数据 / 数据库域）
-- 【2026-09-22 第四轮快照】M2-D3 已收编（`4a11d0f`：memory.py 检索缝 + event_validation.py append 收窄 + materialize_hidden 隐藏半边 + redact_sensitive 清偿）。当前任务 M2-D4：MatterLedger↔matter_state↔MatterPayload 三方对账（decay_rate 无列承载等缺口列方案先报裁）+ memory.py 契约文档（cognition 将消费）；alembic 零漂移基线不动。任务单详情=本树 talking.txt。
+- 【2026-09-22 第四轮快照】M2-D3 已收编（`4a11d0f`）。**M2-D4 已交付待收编分支 `3853ceb`**（docs 型、零 schema 改动）：①对账表 `docs/data/schema.md §17`——三方全表 + **唯一硬缺口 `decay_rate` 无事件承载**（投影硬编码 0.0 破坏 §14 回放）+ 方案 A/B/C；②契约文档 `sim/npc/memory.py` docstring 扩写（输入输出/公式/Scorer 注入点/M3 npc_memory_vec 边界/读侧 guardrail）+ `schema.md §18`；③`test_m2_matter_projection.py`（integrity+is_rubble 对账锁定 6 passed，decay_rate 缺口 xfail 占位）；④alembic 零漂移自检通过（无 0005）。**待 Claude 裁决方案 A 才动 events.py/matter.py/npc_store.py**（改冻结事件基线）。任务单=本树 talking.txt。
 
 ### 已内化教训（M2-D2/D3 实测，别再踩）
 - **`.orca/talking.txt` 是 worktree-local（gitignored）**；`.orca/memory.md` 是 tracked。给本树的回执写 talking.txt；给**他树**的回执写**对方树**的 talking.txt。收编方=Claude（merge 各 ZX466/* → origin+gitee 双远程）。
@@ -66,6 +66,10 @@
 - **pyright 全绿要点**：`async_sessionmaker[AsyncSession]` 注解要显式（否则 property 返回 Unknown）；测试里 pydantic 模型 `category` 等 str 字段从 DB 读出要 `# type: ignore[arg-type]`。
 - **验证命令**：`uv run pytest -q --ignore=sim/tests/bench`（门禁）；bench 单独 `uv run pytest sim/tests/bench -q`（7 日 soak 需 `PI_M2_FULL_SOAK=1`，默认 skip）；`uv run ruff check sim/ && uv run ruff format --check sim/`；`uv run pyright sim/`。in-file 测试类标 `@pytest.mark.t1`，文件名 `test_m2_` 前缀自动进 CI 门禁。
 - **flake**：`test_bench_soak` p99 阈值对 CPU 争用敏感——与其他命令并发跑会假红，单独或正常整套跑即可。
+- **matter 投影缺口（M2-D4 实测）**：`matter_state.decay_rate` 列 §14 已存在但投影从不写（新建硬编码 0.0、update 不碰）——账本 `decay_rate` 是**静态率、无任何事件承载**，且 `jitter` 未落 payload 无法反解 → §14「回放逐位重建」不成立。修法**无需新列/迁移**（列已在），只有方案 A：`MatterPayload` 增可选 `decay_rate` + factory/结算携带 + 投影写列（改冻结事件基线，须先报裁）。对账表见 `schema.md §17`。
+- **对账表方法论**：三方对账 = 逐字段判「能否从事件流重建」（§14 判据）；`is_rubble` 靠 `COLLAPSE∨integrity≤0` **推导一致**（非显式承载，当前等价）；`subject_kind/material/quality/load_bearing/supported_by` 是账本无源的占位（归 M4/M5，非缺口）。
+- **pyright 遗留基线**：`test_m2_cognition.py`(source Literal) 与 `test_m2_runtime_assemble.py`(dict[str,object] 取值) 有 3 个**既有**错（Claude M2-A2 第三批文件，非本域），改动前先确认不是自己引入的。
+- **多行 CJK docstring 的 ruff E501**：行宽按字符数计，CJK 表格行/长句易超 100——拆行或去冗余；docstring 里 Markdown 表格的 `\|` 会被 Python 当非法转义（W605），改用「或 None」「和」等文字表述。
 
 
 > ——以下为 opencode 树 memory.md 原文（收编于 3309c0f）——
