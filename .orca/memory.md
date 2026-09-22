@@ -153,6 +153,7 @@ uv run pyright sim/
 > 每次完成后更新本文件「当前任务 / 进行中 / 已完成」；过时内容删掉。
 
 ## ④ codex（安全 / 合规 / 风险域）
+- 【2026-09-22 第四轮快照】M2-S3 已收编（`3c79465`，通过结论；2 MEDIUM 已被 opencode 修：`4a11d0f` event_validation.py + materialize_hidden）。当前任务 M2-S4：T1 信息边界 10k 采样验收口径落盘 + harness 骨架（M2 量化验收另一半，DESIGN §17；复用 S1 双路径工具、假 LLM 零网络；S1 已收编文件只扩不改）。任务单详情=本树 talking.txt。
 
 > 本树工作簿：用户级技能 `security-worktree`（~/.agents/skills/，含环境坑/评审配对/回写纪律）。
 > 能力域：安全/合规/风险；评审配对：cline 评审我，我评审 Claude（架构+前端）与 opencode（数据/库）。
