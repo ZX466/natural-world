@@ -74,6 +74,37 @@
 MOVE 喂给（对应 `sim/npc/actions.py` 的 `move`），**让 50 NPC 持续走动**——否则实体静止，
 感知的 moving/sound 负载远低于真实，量出来的是空转内核，不能当验收基线。
 M2-A2 落地后把 feeder 换成 `NpcRuntime.tick` 的 L1 决策输出，harness 接口不变。
+（已落地：main `59ffd86`，接线设计见 §3.1；算法规格与对账见 `docs/perf/l1-spec.md`。）
+
+### 3.1 feeder 升级方案（M2-P3：mock → 真实 L1）
+
+**现状（M2-P2 交付）**：`soak.make_mock_feeder(grid_w, grid_h, path_len)` —— 每帧给路径耗尽的实体补一段短程
+MOVE，保证 50 NPC 始终在走。它的定位是**内样负载上界**（全呗 move），不消耗真实 L1 的计算。
+
+**升级后**：`soak.make_l1_feeder(runtime, grid_w, grid_h, path_len, translate=None)` —— 每帧调
+`runtime.tick(state.tick + 1)`（真实 L1：needs 推进 + 效用向量化 + 事件产出），再把决策投递给内核。
+**harness 接口不变**：仍是 `feeder(loop) -> 本帧入队事件数`，`run_soak(..., feeder=...)` 不改。
+
+**接线事实（必須先对清）**：`NpcRuntime.tick` 产出 `EventKind.NPC_ACT` 事件，但当前
+`build_default_bus()` **未注册 `NPC_ACT` handler**（架构第三批接 tick 固定序时注册）。故分两阶段：
+
+| 阶段 | 触发条件 | feeder 行为 | 量到的负载 |
+|---|---|---|---|
+| **阶段 1（当前）** | `NPC_ACT` 未注册 | 只把内核已注册的动作（`move`/`wander`）折成 MOVE（`issue_move`，唯一写路径）；`eat`/`rest`/`work`/`request_chat` 无 handler → **丢弃**（不谈报事件） | **真实 L1 计算全量发生**（needs/效用/事件构造都跑）+ 当前内容常量下的动作分布 |
+| **阶段 2（第三批接线）** | 架构在 `TickLoop._tick_once` 挂载点调 `runtime.tick` + 注册 `NPC_ACT` handler | 退化为「全部入队」：`translate=lambda _a: True`（或 feeder 置 `None`，因为内核自己调 runtime） | L1 + 内样 + 事件落库（真实验收形态） |
+
+**约定（接线时必须满足）**：
+1. `runtime.profiles` 的 npc_id 与 `loop.state.entities` 的 id **同名**（映射一致），否则 feeder 跳过该 NPC。
+2. runtime 确定性、固定序（`_order` 排序）；feeder 不引入 stdlib random（C5）。
+3. feeder 在 `advance_frame` **之前**调（`run_soak` 现行顺序），传 `tick = state.tick + 1`。
+4. `translate` 是纯筛选器，不改事件内容；阶段 2 只换这个参数，不动 harness。
+
+**两份 feeder 并存的定位（不要误读实测）**：
+- `make_mock_feeder` = **内样负载上界**（50 全走，~1.9ms/tick）——永远保留作回归检查的最坏情形。
+- `make_l1_feeder` = **真实 L1 计算**（~0.75ms/tick，见 `l1-spec.md` §4）+ 当剅内容常量下的动作分布
+  （当剂量下 `hunger` 主导，`eat` 占多数 → move/wander 少 → 内样负载反而**低于** mock）。
+  所以 L1 feeder 不能取代 mock feeder 当上界＋它两个测不同的事。
+- 两者皆远低 `SOAK_STEADY_MEAN_LIMIT_MS=6.2`（mock ~1.9 / L1 ~0.9ms/tick）。
 
 ---
 
