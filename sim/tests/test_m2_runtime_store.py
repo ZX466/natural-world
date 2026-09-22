@@ -238,7 +238,12 @@ class TestAppendProjectionHook:
                 {
                     "tick": 1,
                     "event_type": EventKind.NPC_LOD_CHANGE.value,
-                    "payload": {"npc_id": "npc-00", "from_lod": 0, "to_lod": 2},
+                    "payload": {
+                        "npc_id": "npc-00",
+                        "from_lod": 0,
+                        "to_lod": 2,
+                        "reason": "enter_range",
+                    },
                 }
             ],
             projection=project,
@@ -259,7 +264,13 @@ class TestAppendProjectionHook:
         with pytest.raises(RuntimeError, match="projection failed"):
             await store.append(
                 "main",
-                [{"tick": 1, "event_type": EventKind.NPC_ACT.value, "payload": {}}],
+                [
+                    {
+                        "tick": 1,
+                        "event_type": EventKind.NPC_ACT.value,
+                        "payload": {"npc_id": "npc-00", "action": "rest"},
+                    }
+                ],
                 projection=boom,
             )
 

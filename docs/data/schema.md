@@ -444,6 +444,48 @@ payload    = { "npc_id", "from_lod", "to_lod"∈{0,1,2}, "reason" }
 
 ---
 
+## 16. 记忆检索打分缝（读侧，M2-D3）+ 隐藏属性物化
+
+### 16.1 检索打分（`sim/npc/memory.py`，读侧 only）
+
+m2-npc-cognition §3.1 的「确认偏误 / 情绪一致性 → 记忆检索」挂载点落地为**读侧
+检索打分 API**；本层**不写死偏差逻辑**，偏差由 `sim/agent/cognition.py` 后期以钩子注册。
+
+```
+MemoryQuery = { npc_id, context, mood=(p,r,d)|None, now_tick|None, top_k=DEFAULT }
+retrieve(store|iterable, query, scorers=()) -> [MemoryHit(entry, score, breakdown)]
+score = base_score(entry, query) × Π(mul 系数) + Σ(add 项)
+base_score = importance × recency_factor   # 纯函数，不含偏差
+```
+
+- 候选来自 `MemoryStore.iter_visible(npc_id)`（§5/S5：**过滤 `superseded_by` 条目**）；
+- **标量检索**（M2）；向量检索走 `npc_memory_vec`（§6）仍锁 M3；
+- 钩子 `Scorer(name, RetrieveFn, mode∈{mul,add})`：`RetrieveFn = (entry, query) -> float`；
+  `RetrievalScorers` 为不可变注册表（默认空 = 无偏差）；
+- 确定性（C5）：同分按 `entry.id` 稳定排序；
+- **读侧 only**：`retrieve` 不写库、不改存储，绝不碰 `MemoryWritePipeline` 写路径与守卫。
+
+### 16.2 隐藏属性物化（`NpcStore.materialize_hidden`，codex MEDIUM ②）
+
+`materialize()` 只取 `npc_profiles`（§12），升格装配 `HiddenState` 时缺隐藏半边。
+`materialize_hidden() -> {npc_id: HiddenState}` 一次 SELECT 取 `npc_health` 中
+`hidden=1 AND active=1`（§13）的行，按 npc_id 聚合：
+
+- `HiddenAttribute.id` = `f"{npc_id}.health_{row.id}"`（DB 主键派生，稳定唯一）；
+- `descriptors` ← 行 `descriptors` JSON（直陈词面，泄漏扫描面）；
+- `triggers` ← 行 `trigger_conditions` JSON（情境触发关键词）；
+- 返回类型 `sim/npc/contract.py::HiddenState`（M2-S2）；无隐藏行者不在结果中。
+
+### 16.3 写入前置校验（`sim/core/persistence/event_validation.py`，codex MEDIUM ①）
+
+`SqlEventStore.append()` 默认 `validate=True`：落库前逐行过
+`validate_store_row`——按 `event_type` 查 `PAYLOAD_MODELS` 走 `extra="forbid"`
+模型校验 payload；`NPC_ACT` 追加动作/`params` 键白名单（`sim/npc/actions.py`）；
+`witnesses` 必须 `list[str]`。拒绝夹带字段/伪造见证人/未知 kind（防「smuggled params」）。
+低层存储机制测试可 `validate=False` 传合成 payload（**生产禁用**）。此校验**不新增表/列**。
+
+---
+
 ## ER 关系图
 
 ```
