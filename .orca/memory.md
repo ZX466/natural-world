@@ -19,36 +19,37 @@
 - 规则速记：#4 除 .orca 外点文件夹不入 git；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome。
 
 ## ② cline（依赖 / 配置 / 文档域）
-> 新对话开场先读本节 + .orca/workflow.txt + .orca/agent-registry.md。你的能力域：依赖/配置/CI/文档域。
-> **本文件已入库**（main `3e320b9` 裁决，规则 #7 遗漏补录）——改动它要走提交；跨分支同路径由 Claude（主导）收编时合并。
+- 【2026-09-22 第四轮快照｜新对话按此继续】**M2-C4 已交付待收编**：① `docs/api/codegen.md` §4.1「切源暂缓声明」+ `tools/gen-protocol.ts` 头注同款警告（顺手修正 `--src` 示例路径 `/api/openapi.json`→`/openapi.json`）；② baseline.json 评估=**产物不全不动**（nightly 3 跑全 failure、artifact 0 份、均倒在「跑基准」step；日志 403 无凭据，疑似 runner 缺 LZ_MASTER_KEY，建议下轮接 nightly 修复单，修绿后再评首轮入库）。约束遵守：只写文档/注释，未动 sim 代码。
+> 新对话开场先读本节 + .orca/workflow.txt + .orca/agent-registry.md。能力域：依赖/配置/CI/文档域；评审 codex 与 pi 的工作；评审 Agent=Claude。
+> **本文件已入库**（main `3e320b9` 裁决，规则 #7）——改动走提交；跨分支同路径由 Claude（主导）收编合并。
 > 另读：`.orca/talking.txt`（任务指派）、`docs/dev-workflow.md`（含 **§7 Windows 行尾假红**——本机格式类检查报错先看那节）。
 
-### 项目状态（2026-09-20 同步自 main `3e320b9`）
-- M0+M1 全部收官（TASK-004 五路全部交付并收编），589 passed 55 skipped。
-- 你的 TASK-004 交付已收编（收编回执曾写在你树 talking.txt，现已轮换清空；结论可查 git log「merge: 收编 cline」）。
-- **M2 已开工（2026-09-21）**：M2-C1 配套已收编（main `19e3a88`）；**M2-C2 已交付**（分支 `ZX466/cline`）——`sim/world/weather.py` 风场（纯函数可重放 + 每日天气注入点）+ `sim/tests/test_m2_weather.py`（31 用例）+ ci.yml M2 命名步骤填实 + dev-workflow §7 重签出操作手册 + **六树重签出已执行**。
-- M2 进展：第一轮四路（codex M2-S1 / pi M2-P1 / opencode M2-D1 / kilo K04）+ Claude M2-A1 架构稿 / M2-A2 第一批全部收编；第二轮在途（我＝风场+重签出，其余见主树 talking.txt）。
+### 我已交付（全部已收编）
+- **M2-C1**（收编 main `19e3a88`）：docs/README §5 M2 区块 + M2 依赖对账（**零新包**）+ ci.yml M2 占位步骤 + nightly M2 红线接入点注释 + `.gitattributes` 正式提议。
+- **M2-C2**（收编 `b1f3d6c`）：`sim/world/weather.py` 风场（`wind_at(tick, rng)` 纯函数可重放 + `daily_reseed_due` 每日天气注入点；`sim/tests/test_m2_weather.py` 31 用例）+ ci.yml M2 步骤填实（glob `sim/tests/test_m2_*.py`，命名约定即契约）+ dev-workflow §7 重签出手册 + **六树重签出执行**（w/crlf 全 0，prettier/gen-protocol 假红消失）。
+- **M2-C3**（纯校验，无提交）：M2 glob 实选 6 件/113 用例 ✓、5 个命名门禁无重复接 ✓、SOAK step/env 门/5 条红线对账 ✓、768 passed 口径 ✓、六树 crlf=0 ✓；**揪出 P0=README §5 未解决合并冲突标记进了 main**（Claude 修 `cbf40ee`），P1/P2 口径过期由 codex 代修。
 ### 已内化教训（实测过，别再踩）
 1. **Windows CRLF 假红**（根因已消除）：`.gitattributes`（`* text=auto eol=lf`）已裁决落地（main `3ab8c71`），各树一次性重签出后 161 个 `w/crlf` → `w/lf`，本机 `prettier --check` / `gen:protocol --check` 不再假红。**自检一条命令**：`git ls-files --eol | grep -c 'w/crlf'` 期望 0（>0 = 该树没重签出）。重签出**只有** `git rm -r --cached . && git reset --hard` 管用（`git checkout-index -f -a` 实测无效；先 commit/stash，未跟踪文件不受影响）。操作手册在 `docs/dev-workflow.md` §7。
    - M2-C2 六树实测（2026-09-21，仅对**干净树**执行）：`w/crlf` main 115 / cline 158 / codex 159 / pi 150 / opencode 151 / kilo 151 → **全 0**；重签出后 `npx prettier --check .`（"All matched files use Prettier code style!"）与 `gen-protocol --check` 均 EXIT 0 —— P05 时代的假红确认消失。
-2. **CI 跑分按文件路径接**：无 marker 的专项测试（如 test_m1_metrics.py）在 ci.yml 用文件路径跑，不用 `-m xxx`——加 marker 前后语义会漂移，路径接法防静默排除（P04 教训）。M2 沿用：M2 占位步骤用 `sim/tests/test_m2_*.py` glob（`nullglob` + 空集合 warning + 退出码 5 留痕）。
+2. **CI 门禁按文件路径接，不用 `-m xxx`**（P04 教训：marker/addopts 一变就被静默排除成假绿灯）。M2 现状＝glob `sim/tests/test_m2_*.py`（**命名约定即契约**，新 M2 验收测试落该前缀自动进门禁）+ `-m "not bench"` + `timeout-minutes: 15` 双护栏；完整 604,800 tick 跑在 nightly（**方案 A 已裁决落地**：step 跑 `test_bench_soak.py::test_m2_full_7day_acceptance`，env `PI_M2_FULL_SOAK=1`，timeout 60）。**我的挂账义务：里程碑后把该 step 迁出为周频独立 workflow**（nightly 注释 + m2-acceptance §4 已写明）。
 3. **跨域代改须留言**：opencode D03 的 3 文件 ruff 格式偏差属数据域文件，修复前在其树 talking.txt 留言说明（f775b91）。
 4. **与主导方裁决冲突时，以 main 实际决策为准**：memory.md 入库裁决（`3e320b9`）推翻我此前「移出跟踪」提交（cb2d85e），已在 76d6a03 反转并恢复入库。
 5. **量纲先算再写门槛**：写 CI/验收前先按 DESIGN 推 tick 数。M2 完整验收「50 NPC × 7 游戏日」= 604,800 tick（1 tick = 1 游戏秒），**不属于每提交 CI**——所以 M2 步骤是占位 + `timeout-minutes: 15` 护栏，而不是写死路径。
 6. **别在他域分支上重复接门禁**：codex 的 M2-S1 已自带 ci.yml 步骤（其分支内），M2 占位步骤不重复接同一文件；同一门禁两处维护会漂移。
 7. **`.gitignore` 的 catch-all `.*/` 会挡住 `.github/`、`.orca/` 下的新增文件**：已跟踪文件不受影响（改 ci.yml / memory.md 正常），但**新增**文件 `git add` 会失败并提示 ignored，须 `git add -f`。**已裁决部分**：`.github/` 补了例外（`!.github/` + `!.github/**`，main `3ab8c71`，新增 workflow 现在可正常 `git add`）；**`.orca/` 未补**：`.orca/` 下新增文件继续用 `git add -f`（要改规则得再请裁——它属用户规则 #4 语义）。
 8. **纯函数优先于「推进式 RNG」**：`sim/world/weather.py` 若用 `RngRegistry.generator(name, cache)` 抽签就会**推进状态**（调用顺序影响结果，回放/bench 不可重算）。正解＝从 `rng.draw_key(流名)`（材料指纹，含熵注入）派生档位种子 → 每次新建 `Generator` 抽，得到「同 (rng, tick) 恒同风」。写任何「按 tick 派生的物理量」都照此办。
-### 常用命令（M2-C2 口径）
+### 常用命令（M2-C4 口径）
 - 本树开工第一步：`git merge origin/main`（常落后 main，P05/P04 都遇到过）。
-- 全量：`uv run pytest -m "not bench"`；bench：`uv run pytest -m bench`；M2 bench 单跑：`uv run pytest sim/tests/bench -q`（pi M2-P1 新文件）。
-  - 实测基线（2026-09-21 本树 main，M2-C1 提交前）：`-m "not bench"` = **578 passed / 55 skipped**（选中 633 / 收集 644，11 个 bench 被排除）。⚠ 与 M1 收官写的「589 passed / 55 skipped」**口径不同**：589 = 含 11 个 bench 的口径（578+11），别再混用。
-- M2 验收测试（命名门禁，ci.yml 按 `sim/tests/test_m2_*.py` 全量接）：`uv run pytest sim/tests/test_m2_*.py`；我的文件＝`sim/tests/test_m2_weather.py`。
-- 风场自洽检查（纯函数）：`wind_at(tick, RngRegistry(world_seed=42))` 反复调用结果相同；`daily_reseed_due(tick)` 为真时由世界循环做 `EntropyMixer.mix("world.weather", tick)`。
-- 行尾自检（重签出后应为 0）：`git ls-files --eol | grep -c 'w/crlf'`。
+- 全量：`uv run pytest -m "not bench"`（main `7d63210` 口径 **805 passed / 55 skipped**；纯 collect 核数法：collect-only 847 全收集，`-m "not bench"` 选中数 − skipped = passed）；bench：`uv run pytest -m bench`。
+- M2 门禁复演：`uv run pytest sim/tests/test_m2_*.py`（我的文件＝test_m2_weather.py）。
+- 行尾自检（应 0）：`git ls-files --eol | grep -c 'w/crlf'`。
+- `.orca/` 下**新增**文件要 `git add -f`（catch-all `.*/` 兜底；改已跟踪的 memory.md 不受限）。
 ### 未决项
-- M2 完整 7 日自转验收（604,800 tick）的定期接法（nightly job 还是 `-m m2full` 类 marker）：待 Claude 裁，裁决后我在 ci.yml 注释 + nightly yml 回填。
-- `.orca/` 下新增文件仍被 `.*/` 兜底挡（需 `add -f`）：是否补 `!.orca/` 例外待裁（规则 #4 语义）；`.github/` 已补。
-- M2 第二轮：风场已交付；`smell.py`（消费我的 `wind_at`）、matter、language 属他域，等收编后我复核 CI/文档口径（G-5 类收编后校验）。
+- **M2-C4 已交付待收编**（2026-09-22）：切源暂缓声明落档 + baseline.json 评估（结论=产物不全不动，详见本节快照与本树 talking.txt 回执）。收编后本行删除。
+- **nightly 三连红挂账**：Nightly Bench 09-19/20/21 三跑均倒在「跑基准」step、artifact 0 份（Actions API 实查；日志 403 需凭据）。疑似 runner 缺 `LZ_MASTER_KEY` 之类 env——下轮可接修复单（属我 CI 域）；baseline.json 入库顺延至首个绿色 run 后（入库前留言板报 Claude）。
+- **里程碑后 soak 完整跑迁出**：nightly step → 周频独立 workflow（我迁，已在 nightly 注释/m2-acceptance §4 挂账）。
+- `.orca/` 例外不补（裁决维持）：新增文件一律 `git add -f`。
+- 嵌入模型选型（M3）：走已锁 openai 客户端＝零新包；本地模型须先过依赖评审。
 
 （以下各节由对应 agent 维护——cline 节以上为 2026-09-20 收编版。）
 
