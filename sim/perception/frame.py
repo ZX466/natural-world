@@ -10,18 +10,22 @@
 from __future__ import annotations
 
 import enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
 
+if TYPE_CHECKING:
+    from sim.agent.language import LanguageProfile
+
 
 class Channel(enum.StrEnum):
-    """M1 通道：视/听/触/内感受（嗅觉 M2）。"""
+    """M1 通道：视/听/触/内感受；M2 增嗅觉。"""
 
     VISION = "vision"
     HEARING = "hearing"
     TOUCH = "touch"
     INTEROCEPTION = "interoception"
+    SMELL = "smell"
 
 
 class Observation(BaseModel):
@@ -45,10 +49,19 @@ class PerceptionFrame(BaseModel):
     observations: tuple[Observation, ...] = ()
     light: float = 1.0  # 本帧光照修正系数（debug/测试用，不进 prompt）
 
-    def narrated(self) -> str:
+    def narrated(
+        self,
+        language: LanguageProfile | None = None,
+        channel_kinds: dict[str, str] | None = None,
+    ) -> str:
         """[处境] 段感知文本：纯第一人称世界内语言，零元信息。
 
-        内感受与触觉直接出，视听按通道分组。空帧 → 「四周很安静。」
+        内感受与触觉直接出，视听按通道分组，嗅觉殿后。空帧 → 「四周很安静。」
+        language（sim.agent.language.LanguageProfile）传入时，视听文本在分组
+        输出前按角色语言档降质（M2 §5.2；channel_kinds = subject → "written"/"speech"，
+        视觉缺省 "written"、听觉缺省 "speech"）。降质只动叙事层文本——
+        self.observations 原始数据保持完整（M3 知识传播前提）。
+        缺省无 language → 与 M1 叙事逐字节一致（零回归）。
         """
         if not self.observations:
             return "四周很安静。"
@@ -60,14 +73,26 @@ class PerceptionFrame(BaseModel):
             lines.extend(ob.description for ob in intero)
         if (touch := by_channel.get(Channel.TOUCH)) is not None:
             lines.extend(ob.description for ob in touch)
+        kinds = channel_kinds or {}
         for ch in (Channel.VISION, Channel.HEARING):
             obs = by_channel.get(ch)
             if not obs:
                 continue
+            texts = [ob.description for ob in obs]
+            if language is not None:
+                from sim.agent.language import degrade_observation_text
+
+                default_kind = "written" if ch is Channel.VISION else "speech"
+                texts = [
+                    degrade_observation_text(t, kinds.get(ob.subject, default_kind), language)
+                    for ob, t in zip(obs, texts, strict=True)
+                ]
             if ch is Channel.VISION:
-                lines.append("你看到：" + "；".join(ob.description for ob in obs) + "。")
+                lines.append("你看到：" + "；".join(texts) + "。")
             else:
-                lines.append("你听到：" + "；".join(ob.description for ob in obs) + "。")
+                lines.append("你听到：" + "；".join(texts) + "。")
+        if (smell := by_channel.get(Channel.SMELL)) is not None:
+            lines.append("你闻到：" + "；".join(ob.description for ob in smell) + "。")
         return "\n".join(lines)
 
     def to_debug_dict(self) -> dict[str, Any]:

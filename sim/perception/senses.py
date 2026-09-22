@@ -19,7 +19,7 @@ M0 内核移动是插值制（路径段事件 + 每 tick 挪一格），没有�
 from __future__ import annotations
 
 import math
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import structlog
 
@@ -30,6 +30,7 @@ from sim.perception.narrate import (
     narrate_motion,
     narrate_move_end,
     narrate_presence,
+    narrate_smell,
     narrate_sound,
 )
 from sim.perception.profiles.base import PerceptionProfile
@@ -207,11 +208,14 @@ class PerceptionEngine:
         observer_id: str,
         tick_events: list[WorldEvent] | None = None,
         sounds: list[_SoundEvent] | None = None,
+        concentrations: dict[str, float] | None = None,
     ) -> PerceptionFrame:
         """为 observer 装配本 tick 感知帧。纯读：不改 state、无全局态。
 
         sounds 可由批量入口传入（run_perception_step 共享一次提取结果，
         避免 50 旁听者 × 每人重建声源表）。
+        concentrations 可由批量入口传入（嗅觉批量采样结果 {entity_id: 浓度}；
+        M2 §5.1 视听之后追加嗅觉观测）。
         性能关键：候选以原始元组参与显著性截断，仅入选者构造 pydantic
         Observation（bench 实测 90% 候选被截断，白建对象占大头）。
         """
@@ -286,6 +290,26 @@ class PerceptionEngine:
 
         # --- 触觉/内感受（M1 最小闭环：贴身接触 + 无数值身体感）---
         # M1 需求系统未接入（M2 扩展）：此处先占位挂载点，见 DESIGN §7 通道表
+
+        # --- 嗅觉（M2 §5.1：视听之后）：他人浓度 → floor 过滤 → 单条观测 ---
+        # subject="smell" 全场去重（一帧最多一条嗅觉）。环境气味语义：报「空气里
+        # 有味道」（含自己站进去的云，不归属来源）；零元信息，风向叙事 M3 起。
+        if concentrations:
+            smell_floor = profile.hearing_floor  # 显著性地板暂与听觉同档
+            others_max = max(
+                (c for eid2, c in concentrations.items() if eid2 != observer_id),
+                default=0.0,
+            )
+            if others_max >= smell_floor:
+                raw.append(
+                    (
+                        Channel.SMELL,
+                        "smell",
+                        narrate_smell(others_max),
+                        min(1.0, others_max),
+                    )
+                )
+
         chosen = _select_raw(raw, profile)
         return PerceptionFrame(
             observer=rtoken_of(observer_id),
@@ -303,17 +327,56 @@ def run_perception_step(
     对状态内每个实体装配一帧；键为 rtoken（C2：全项目对外标识一个真相源）。
     每 tick 全员装配（真实红线 3ms/tick 由 bench 卡，见 test_bench_perception）。
     共享单引擎实例（LOS/光照缓存跨 tick 复用）+ 声源表一次提取全员共享。
+    嗅觉（M2 §5.1）：视听之后推进场 + 批量采样（场随图常驻，_SHARED_SMELL_WORLD）。
     """
     engine = _shared_engine(tile_map)
+    smell_world = _shared_smell_world(tile_map)
     moving = {eid for eid, e in state.entities.items() if e.path}
     sounds = _sound_events_from(tick_events, moving, state)
+    # 嗅觉：源=全体实体（含观察者自己——他人靠风/扩散把气味带过来）；
+    # wind = weather.wind_at 纯函数派生（档内恒定），档位缓存免每 tick 重算哈希。
+    wind = _wind_for_tick(state.tick, state.world_seed)
+    concentrations = smell_world.step(
+        {eid: e.pos for eid, e in state.entities.items()}, wind=wind
+    )
     frames: dict[str, PerceptionFrame] = {}
     for eid in state.entities:
-        frames[rtoken_of(eid)] = engine.assemble(state, eid, tick_events, sounds)
+        frames[rtoken_of(eid)] = engine.assemble(state, eid, tick_events, sounds, concentrations)
     return frames
 
 
 _SHARED_ENGINES: dict[int, PerceptionEngine] = {}  # id(tile_map) → engine
+_SHARED_SMELL_WORLDS: dict[int, Any] = {}  # id(tile_map) → SmellWorld
+
+# (day, phase) 档位 + world_seed → 每 tick 位移（风档内恒定，weather.wind_slot 口径）
+_WIND_CACHE: dict[tuple[object, int], tuple[float, float]] = {}
+
+
+def _wind_for_tick(tick: int, world_seed: int) -> tuple[float, float]:
+    """weather.wind_at 的档位缓存（纯函数，同档同种子必同风；缓存键=档位+种子）。"""
+    from sim.core.rng import RngRegistry
+    from sim.world.weather import wind_at, wind_slot
+
+    slot = wind_slot(tick)
+    key = (slot, world_seed)
+    cached = _WIND_CACHE.get(key)
+    if cached is None:
+        cached = wind_at(tick, RngRegistry(world_seed=world_seed)).vector
+        if len(_WIND_CACHE) >= 256:  # 天花板防御：档位数天然有界，防测试膨胀
+            _WIND_CACHE.clear()
+        _WIND_CACHE[key] = cached
+    return cached
+
+
+def _shared_smell_world(tile_map):
+    """同一张图复用同一嗅觉场（TileMap frozen，id 即身份；跨 tick 常驻）。"""
+    world = _SHARED_SMELL_WORLDS.get(id(tile_map))
+    if world is None:
+        from sim.perception.smell_world import SmellWorld
+
+        world = SmellWorld(height=tile_map.height, width=tile_map.width)
+        _SHARED_SMELL_WORLDS[id(tile_map)] = world
+    return world
 
 
 def _shared_engine(tile_map) -> PerceptionEngine:
