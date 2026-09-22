@@ -63,7 +63,7 @@ class MatterLedger:
         return settle_decay(self, tick=tick, seed=seed)
 
     def damage(self, matter_id: str, *, amount: float, tick: int) -> WorldEvent:
-        """交互损伤（amount<0；integrity 夹到 0，归零即塌）。"""
+        """交互损伤（amount<0；integrity 夹到 0，归零即塌）。decay_rate -1=不变更。"""
         s = self._items[matter_id]
         new_integrity = float(np.clip(s.integrity + amount, 0.0, 1.0))
         event = matter_event(
@@ -77,7 +77,7 @@ class MatterLedger:
         return event
 
     def build(self, matter_id: str, *, amount: float, tick: int) -> WorldEvent:
-        """建造/修复（amount>0；M4 承重前为简化版）。"""
+        """建造/修复（amount>0；M4 承重前为简化版）。携带账本静态率（§17.2 方案 A）。"""
         s = self._items[matter_id]
         new_integrity = float(np.clip(s.integrity + amount, 0.0, 1.0))
         event = matter_event(
@@ -86,6 +86,7 @@ class MatterLedger:
             matter_id=matter_id,
             amount=amount,
             durability=new_integrity,
+            decay_rate=s.decay_rate,
         )
         self._items[matter_id] = replace(s, integrity=new_integrity)
         return event
@@ -117,6 +118,7 @@ def settle_decay(ledger: MatterLedger, *, tick: int, seed: int = 0) -> list[Worl
                     matter_id=m.matter_id,
                     amount=-m.integrity,
                     durability=0.0,
+                    decay_rate=m.decay_rate,
                     note="耐久归零坍塌",
                 )
             )
@@ -129,6 +131,7 @@ def settle_decay(ledger: MatterLedger, *, tick: int, seed: int = 0) -> list[Worl
                     matter_id=m.matter_id,
                     amount=-drop,
                     durability=new_integrity,
+                    decay_rate=m.decay_rate,
                 )
             )
     return events

@@ -301,8 +301,9 @@ _MATTER_KINDS = frozenset(
 async def _project_matter(session: AsyncSession, branch_id: str, event: WorldEvent) -> None:
     """MATTER_* → matter_state UPSERT（matter_state = 事件流的持久化投影）。
 
-    payload（MatterPayload）：matter_id/amount/durability/note。amount<0 为损耗，
-    durability>=0 为结算后耐久（折算 integrity）；COLLAPSE 置 is_rubble。
+    payload（MatterPayload）：matter_id/amount/durability/decay_rate/note。
+    amount<0 为损耗，durability>=0 为结算后耐久（折算 integrity）；COLLAPSE 置
+    is_rubble；decay_rate>=0 携带账本静态率写列（§17.2 方案 A，重放保真），-1=不动。
     """
     payload = event.payload
     matter_id = str(payload.get("matter_id", ""))
@@ -310,6 +311,7 @@ async def _project_matter(session: AsyncSession, branch_id: str, event: WorldEve
         raise NpcStoreError(f"MATTER_* payload 缺 matter_id: {payload!r}")
     amount = float(payload.get("amount", 0.0))  # type: ignore[arg-type]
     durability = float(payload.get("durability", -1.0))  # type: ignore[arg-type]
+    decay_rate = float(payload.get("decay_rate", -1.0))  # type: ignore[arg-type]
     is_collapse = event.event_type is EventKind.MATTER_COLLAPSE
 
     existing = await session.get(MatterState, matter_id)
@@ -323,7 +325,7 @@ async def _project_matter(session: AsyncSession, branch_id: str, event: WorldEve
                 material="",  # MatterPayload 暂无 material 字段（材料归 M4 结构域）
                 integrity=new_integrity,
                 quality=0.5,
-                decay_rate=0.0,
+                decay_rate=max(0.0, decay_rate) if decay_rate >= 0.0 else 0.0,
                 load_bearing=False,
                 supported_by="[]",
                 is_rubble=is_collapse or new_integrity <= 0.0,
@@ -335,6 +337,8 @@ async def _project_matter(session: AsyncSession, branch_id: str, event: WorldEve
 
     base = existing.integrity if durability < 0 else durability
     existing.integrity = max(0.0, min(1.0, base))
+    if decay_rate >= 0.0:
+        existing.decay_rate = decay_rate
     if is_collapse or existing.integrity <= 0.0:
         existing.is_rubble = True
     existing.last_decay_tick = event.tick

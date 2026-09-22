@@ -118,5 +118,6 @@ class TestSettleDecay:
                 "y",
                 "amount",
                 "durability",
+                "decay_rate",  # §17.2 方案 A：settle 事件携带账本静态率
                 "note",
             }

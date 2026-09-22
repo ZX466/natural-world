@@ -133,17 +133,13 @@ class TestRubbleTripleConsistency:
 
 
 @pytest.mark.t1
-class TestDecayRateKnownGap:
-    """§17.2 已知缺口：账本静态 decay_rate 无事件承载 → 投影不持久化。
+class TestDecayRateCarried:
+    """§17.2 缺口已裁决修复（方案 A，2026-09-22）：payload 携带账本静态率 → 投影写列。
 
-    xfail（非 strict）：当 M2-D4 缺口被裁决修复（payload 携带 decay_rate →
-    投影写列）后本测试将 XPASS，提示移除/改写成正向断言。
+    原 xfail 占位改写为正向断言（opencode 对账表方案 A：MatterPayload 增可选
+    decay_rate，默认 -1=不变更；matter_event/settle_decay 携带；投影写列）。
     """
 
-    @pytest.mark.xfail(
-        reason="§17.2 decay_rate 无事件承载，投影落 0.0（待 Claude 裁决方案 A/B）",
-        strict=False,
-    )
     async def test_decay_rate_persisted_from_ledger(self, store, session: AsyncSession) -> None:
         ledger = MatterLedger()
         ledger.register("food-1", integrity=1.0, decay_rate=0.1)
@@ -152,5 +148,23 @@ class TestDecayRateKnownGap:
 
         row = await session.get(MatterState, "food-1")
         assert row is not None
-        # 期望：投影承载账本静态率；当前 = 0.0（缺口）
+        # 方案 A：投影承载账本静态率（重放保真恢复）
         assert row.decay_rate == pytest.approx(ledger.state("food-1").decay_rate)
+
+    async def test_settle_event_carries_rate(self, store, session: AsyncSession) -> None:
+        """settle_decay 产的事件也携带静态率（衰减中对象的更新路径）。"""
+        ledger = MatterLedger()
+        ledger.register("food-2", integrity=1.0, decay_rate=0.2)
+        events = ledger.settle(tick=100, seed=0)
+        assert events, "decay_rate>0 必产 DECAY 事件"
+        for ev in events:
+            assert ev.payload.get("decay_rate") == pytest.approx(0.2)
+
+    async def test_damage_event_rate_minus_one_unchanged(
+        self, store, session: AsyncSession
+    ) -> None:
+        """damage/build 未显式传率时 payload 默认 -1 = 不变更（投影不动 decay_rate）。"""
+        ledger = MatterLedger()
+        ledger.register("wall-2", integrity=1.0, decay_rate=0.0)
+        ev = ledger.damage("wall-2", amount=-0.3, tick=5)
+        assert ev.payload.get("decay_rate") == -1

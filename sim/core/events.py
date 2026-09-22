@@ -111,7 +111,12 @@ class NpcActPayload(BaseModel):
 
 
 class MatterPayload(BaseModel):
-    """物质熵增（M2，§4.1）。matter_state 表 = 事件流持久化投影。"""
+    """物质熵增（M2，§4.1）。matter_state 表 = 事件流持久化投影。
+
+    decay_rate：对象静态衰减率（§17.2 方案 A，2026-09-22 裁决）。-1=不变更
+    （damage/build 缺省）；settle_decay/build 事件携带账本静态率，投影写
+    matter_state.decay_rate 恢复「事件重放逐位重建」（§14）。
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -120,6 +125,7 @@ class MatterPayload(BaseModel):
     y: int = -1
     amount: float = 0.0  # 变化量（decay/damage 为负损，build 为增量）
     durability: float = -1.0  # 结算后耐久（-1=不变更）
+    decay_rate: float = -1.0  # 静态衰减率（-1=不变更；≥0 携带）
     note: str = ""
 
 
@@ -273,10 +279,14 @@ def matter_event(
     y: int = -1,
     amount: float = 0.0,
     durability: float = -1.0,
+    decay_rate: float = -1.0,
     note: str = "",
     branch_id: str = "main",
 ) -> WorldEvent:
-    """物质熵增事件（kind ∈ MATTER_DECAY/DAMAGE/BUILD/COLLAPSE）。"""
+    """物质熵增事件（kind ∈ MATTER_DECAY/DAMAGE/BUILD/COLLAPSE）。
+
+    decay_rate：账本静态率（§17.2 方案 A）；settle_decay/build 携带，damage 缺省 -1。
+    """
     if kind not in (
         EventKind.MATTER_DECAY,
         EventKind.MATTER_DAMAGE,
@@ -285,7 +295,13 @@ def matter_event(
     ):
         raise ValueError(f"kind 必须为 MATTER_*: {kind}")
     p = MatterPayload(
-        matter_id=matter_id, x=x, y=y, amount=amount, durability=durability, note=note
+        matter_id=matter_id,
+        x=x,
+        y=y,
+        amount=amount,
+        durability=durability,
+        decay_rate=decay_rate,
+        note=note,
     )
     return WorldEvent(
         branch_id=branch_id, tick=tick, event_type=kind, payload=p.model_dump(mode="json")
