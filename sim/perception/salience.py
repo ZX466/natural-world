@@ -17,6 +17,7 @@ _CHANNEL_PRIORITY: dict[Channel, int] = {
     Channel.TOUCH: 1,
     Channel.VISION: 2,
     Channel.HEARING: 3,
+    Channel.SMELL: 4,
 }
 
 

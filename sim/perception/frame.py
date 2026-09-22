@@ -16,12 +16,13 @@ from pydantic import BaseModel, ConfigDict
 
 
 class Channel(enum.StrEnum):
-    """M1 通道：视/听/触/内感受（嗅觉 M2）。"""
+    """M1 通道：视/听/触/内感受；M2 增嗅觉。"""
 
     VISION = "vision"
     HEARING = "hearing"
     TOUCH = "touch"
     INTEROCEPTION = "interoception"
+    SMELL = "smell"
 
 
 class Observation(BaseModel):
@@ -68,6 +69,8 @@ class PerceptionFrame(BaseModel):
                 lines.append("你看到：" + "；".join(ob.description for ob in obs) + "。")
             else:
                 lines.append("你听到：" + "；".join(ob.description for ob in obs) + "。")
+        if (smell := by_channel.get(Channel.SMELL)) is not None:
+            lines.append("你闻到：" + "；".join(ob.description for ob in smell) + "。")
         return "\n".join(lines)
 
     def to_debug_dict(self) -> dict[str, Any]:
