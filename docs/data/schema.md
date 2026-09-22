@@ -513,6 +513,71 @@ player_anchors ──N:1── branches（通过 branch_id）
 
 ---
 
+## 17. Matter 三方投影对账（M2-D4）
+
+MatterLedger（内存账本）→ MATTER_* 事件（`MatterPayload`）→ `matter_state`（持久化投影）
+三方的字段一致性对账。判据 = §14「快照 + 事件重放可**逐位重建**」；任一列若无法从
+事件流重建，即破坏回放保真，属对账缺口。
+
+### 17.1 三方字段一致性表
+
+| MatterSnapshot 字段 | MatterPayload 字段 | matter_state 列 | 现状 | 判据 |
+|---|---|---|---|---|
+| `matter_id` | `matter_id` / `target_id` | `subject_id`（PK） | ✅ 一致 | 主键直通 |
+| `integrity` | `durability`（结算后耐久） | `integrity` | ✅ 一致 | 投影 `clip(0,1)`；`durability<0`=不变更 |
+| `is_rubble` | —（无字段，**由 kind/值推导**） | `is_rubble` | ⚠️ 推导一致 | `COLLAPSE ∨ integrity≤0`；当前与账本等价，但非显式承载 |
+| `decay_rate` | **无字段** | `decay_rate` | ❌ **缺口** | 投影硬编码 `0.0` 且 update 路径从不动它 → 重放后衰减对象永不衰减 |
+
+**投影无源、按占位落库的列**（账本无对应概念，非缺口，归 M4/M5）：
+`subject_kind`（`"structure"`）、`material`（`""`）、`quality`（`0.5`）、
+`load_bearing`（`False`）、`supported_by`（`"[]"`）。`last_decay_tick`/`updated_at_tick`
+取事件 `tick`；`branch_id` 取 flush 分支；`created_at` 为落库时钟。
+
+### 17.2 缺口：`decay_rate` 无事件承载
+
+- **现象**：`MatterLedger.register(decay_rate=...)` 是对象静态衰减系数（石墙=0），
+  但 `settle_decay` 只用它算内部 `drop = decay_rate × jitter`，事件只记 `amount=-drop`；
+  投影 `_project_matter` 新建行时 `decay_rate=0.0` 硬编码、更新路径不写该列。
+- **后果**：§14 声明的「事件重放逐位重建」不成立——从快照/事件重载后，衰减对象的
+  `decay_rate` 归零 → 永不衰减。当前无 `MatterState` 读路径（materialize 未接），
+  故尚未暴露，但第三批接入世界循环 + 读档恢复即触发。
+- **无法纯事件推导**：`decay_rate` 未进任何 `MatterPayload`；`jitter` 是 RNG 分桶 draw，
+  未落 payload，从 `amount` 反解需按 tick 序重放 RNG（脆且违背「payload 自描述审计」）。
+  `decay_rate=0` 的对象根本不产事件 → 该值永不可观测。
+
+### 17.3 方案（待裁决）
+
+| 方案 | 动作 | 迁移 | 评价 |
+|---|---|---|---|
+| **A（推荐）事件承载** | `MatterPayload` 增可选 `decay_rate`（默认 `-1`=不变更）；`matter_event`/`settle_decay` 携带账本静态率；投影写 `matter_state.decay_rate` | **无**（列已存在） | 恢复回放保真；但改 `sim/core/events.py` **冻结事件基线**，须 Claude 裁决 |
+| B 只 build/register 事件承载 | 仅建造/注册事件带率，衰减/损伤不带 | 无 | 事件更少，但注册无专属 kind，需借 `MATTER_BUILD` 语义 |
+| C 暂缓 | 保持 `decay_rate=0.0` 占位，文档标注已知缺口 | 无 | 零风险，但 §14 回放保真带洞直至 M4 |
+
+- 最小变更不动 schema（`matter_state.decay_rate` §14 已建）；**无 0005 迁移**。
+- 变更面：`events.py`（payload 字段 + factory 默认）→ `matter.py`（settle/damage/build 传率）
+  → `npc_store.py::_project_matter`（写列）；配套 `test_m2_matter_projection.py` 对账。
+- 约束「schema 变更先提案后动」：本表为提案，**报 Claude 裁决后再动**代码。
+
+---
+
+## 18. memory.py 检索打分契约（M2-D4 文档化）
+
+`sim/npc/memory.py` 的完整契约（输入输出/注入点/M3 边界）以**模块 docstring 为权威**
+（§16.1 为摘要）。要点：
+
+| 契约面 | 内容 |
+|---|---|
+| 输入 | `MemoryQuery(npc_id 必填, context="", mood=None, now_tick=None, top_k=8)` |
+| 输出 | `[MemoryHit(entry, score, breakdown)]`，score 降序 + 同分 `entry.id` 升序稳定 + top_k 截断 |
+| 公式 | `score = (importance × recency) × Π(mul) + Σ(add)`；`scorers=()` 即纯基础分 |
+| 注入点 | `Scorer(name, RetrieveFn(entry,query)->float, mode∈{mul,add})`；`RetrievalScorers` frozen；**偏差逻辑归 cognition**（确认偏误/情绪一致性，mode=mul） |
+| M3 边界 | M2 标量：候选 = `iter_visible`（S5）；`npc_memory_vec`（§6）**仍锁 M3**，届时仅作候选生成器替换/前置，打分 API 形状不变 |
+| Guardrail | 读侧 only：不写库、不碰 `MemoryWritePipeline`/S1 守卫 |
+
+`scores_of(hits) -> {entry_id: score}` = §3.2 cognition 的 `memory_scores` 输入形。
+
+---
+
 ## 索引策略总结
 
 | 表 | 索引 | 用途 |

@@ -13,6 +13,58 @@ M2 用**标量检索**：候选 = `iter_visible(npc_id)`（S5 已过滤被取代
 打分 = 基础分（重要性 + 近因）× 各钩子系数项；向量检索 `npc_memory_vec` 仍锁 M3。
 
 确定性（C5）：同输入同输出；同分按 `entry.id` 稳定排序（不依赖 store 迭代序）。
+
+------------------------------------------------------------------------------
+契约（API 输入输出 / 注入点语义 / M3 边界）— M2-D4 补全
+------------------------------------------------------------------------------
+
+**1. 输入（``MemoryQuery``，frozen 纯数据，无 IO）**
+
+| 字段 | 类型 | 语义 | 缺省行为 |
+|---|---|---|---|
+| `npc_id` | str | 检索主体，**必填**；交 store 作可见性过滤键 | — |
+| `context` | str | 当前情境文本 | `""`；本模块基础分不解析，供 M3 上下文钩子 |
+| `mood` | `tuple[p,r,d]` 或 None | 当前 PAD（-1..1 三元组） | `None`=未知 → 情绪钩子恒等 |
+| `now_tick` | int 或 None | 近因衰减基准 tick | `None` → 全按 `age=0`（近因=1.0） |
+| `top_k` | int | 返回条数上限 | `DEFAULT_TOP_K=8`；`≤0`=不限 |
+
+**2. 输出（``list[MemoryHit]``，已排序截断）**
+``MemoryHit = { entry: MemoryEntry, score: float, breakdown: tuple[(name, value)] }``
+- 顺序：`score` 降序，同分按 `entry.id` **升序稳定**（C5；不依赖 store 迭代序）；
+- `top_k>0` 时截断，否则全量；
+- `breakdown` 为 `("base", base)`+各钩子 `(scorer.name, value)` 的纯诊断分解，
+  **不参与下游计算**——观测/调参基准；
+- ``scores_of(hits) -> {entry_id: score}`` 即 §3.2 cognition 的 `memory_scores` 形。
+
+**3. 打分公式**
+``score = base_score × Π(mul 系数) + Σ(add 项)``，``base_score = importance × recency_factor``。
+基础分**不含偏差**、纯函数；`scorers=()` 时即纯基础分。
+
+**4. 注入点语义（偏差挂载缝，§3.1）**
+钩子 ``RetrieveFn = Callable[[MemoryEntry, MemoryQuery], float]``，以
+``Scorer(name, fn, mode∈{"mul","add"})`` 注册（``mode="mul"`` 默认 1.0 恒等 /
+``"add"`` 默认 0.0 恒等）；``RetrievalScorers`` 为 **frozen 不可变注册表**
+（`register` 返回新表，默认空表=无偏差）。本模块只定义缝，**偏差逻辑归 cognition**：
+- **确认偏误**（`confirmation_bias`，mul）：条目内容命中既有 `beliefs.keywords` → ×1.5；
+- **情绪一致性**（`mood_bias`，mul）：`query.mood` 极性与 `entry.emotion_tag` 极性同向
+  → ×1.3 / 反向 → ×0.7。
+挂载形态由 `sim/agent/cognition.py::CognitionParams.retrieval_scorers()` 产出 tuple，
+调用方 `retrieve(store, query, scorers=params.retrieval_scorers())`。偏差名与参数
+**零元信息**：绝不进 prompt/戏内文本，只作用于打分（DESIGN §7）。
+
+**5. 与 M3 向量检索的边界（`npc_memory_vec` 仍锁）**
+- M2 为**标量**检索：候选来自 `MemoryStoreLike.iter_visible(npc_id)`（S5 过滤
+  `superseded_by`），无语义相似度、无 ANN；
+- `npc_memory_vec`（schema §6，sqlite-vec）**M2 不接**：向量召回 M3 才启用，
+  届时作为**候选生成器**替换/前置 `iter_visible`，本模块打分 API 形状不变
+  （钩子仍作用于 `MemoryEntry`）；
+- 本模块**不含** embedding、不读 vec 表、不依赖 sqlite-vec 扩展。
+
+**6. 读侧 guardrail（铁律，不得越界）**
+- `retrieve`/`base_score`/`recency_factor`/`scores_of` 均为纯函数或只读；
+  **不写库、不触发写路径与 S1 守卫、不触碰 `MemoryWritePipeline`**；
+- store 依赖仅限于 ``MemoryStoreLike``（`iter_visible` 一个方法）——鸭子类型，
+  不绑定具体存储。
 """
 
 from __future__ import annotations
