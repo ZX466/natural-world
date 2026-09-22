@@ -190,6 +190,7 @@ uv run pyright sim/
 - (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)
 
 ## ⑤ pi（性能域）
+- 【2026-09-22 第四轮快照】M2-P3 已收编（`1e3e36e`：l1-spec.md 对账 + L1 feeder 两阶段接线 + p99 硬门禁改信息性守护）。**M2-P4 已交付**（`docs/perf/m2-p4-budget-preplan.md`，未提交=等 Claude 收编裁决）：① smell 接线预算拆表——`SmellField.inject` 逐源 np.clip Python 循环是全场最大头（50 源 0.330ms，占场推进 73%；`np.add.at` 0.0024ms ≈140x，语义等价，交架构域改），场推进 50 源 0.451ms、100 源 0.976ms → 新增 `SMELL_WIRED_TICK_LIMIT_MS=1.0` 一行，旧 0.15 保留改注释为「纯网格 K=20 口径」；smell 净增 0.68ms/感知步（挖空对照 1.58 vs 0.90ms）→ ≈0.34ms/tick，M2-P2 稳态 1.9→2.25ms/tick 仍 ≪8.3ms 回归线。② flush 不进 tick 断言三件套（探针零触发 + 计时器注入 + flush/tick 分开累计；实测 flush_tick 50 条 内存库 2.6ms/文件库 7.8ms，帧级警戒 20ms）。③ cognition：检索缝两钩子净增 0.054ms/次检索 → 上界 0.15ms；效用缝四偏差 0.0004ms/NPC → 0.01ms/NPC 上界；HiddenState.evaluate（50×3 属性）0.10ms/tick → 0.30ms 上界；合计增量 ≤0.20ms/tick 进 L1 行不新增行。旧任务单详情=本树 talking.txt（已回执）。
 
 > ——以下为 pi 树 memory.md 原文（收编于 50b0ebb）——
 > 新对话开场先读本文件 + .orca/workflow.txt + .orca/agent-registry.md。你的能力域：性能域。
@@ -243,18 +244,35 @@ uv run pyright sim/
   `PERCEPTION_TICK_LIMIT_MS=3.6`（预算目标 3.00ms 另一口径）；RNG 1M 警戒线 300ms、真预算每 tick 200 draws ≤0.10ms。
 - 更早累计：TASK-001~003 全链路参与（budget.md/hotspots.md/bench-plan.md + bench 脚手架；详见 git log 与 docs/perf/）。
 
+- **M2-P4 交付（2026-09-22，分支 ZX466/pi，未 commit=等 Claude 裁决后收编）**：第三批预算预案。
+  - `docs/perf/m2-p4-budget-preplan.md`（新）：三项任务逐一回答 + 预算拆表 + 断言方案 + 上界建议。
+  - 拆分口径：smell 场推进（源=全体实体）与旧「纯网格 K=20」口径分离；新红线提案
+    `SMELL_WIRED_TICK_LIMIT_MS=1.0`（实测 50 源 0.451ms / 100 源 0.976ms），旧 `SMELL_TICK_LIMIT_MS=0.15`
+    保留改注释（不再上浮而是补行）。
+  - 最大热点 = `SmellField.inject` 逐源 `np.clip` Python 循环（50 源 0.330ms；`np.add.at` 0.0024ms
+    ≈140x 且同格累加语义等价）→ 交架构域改（性能域不越界）；次热点 = `others_max` 逐 observer
+    O(N²) 扫描（50×50 = 0.107ms）→ 全局 max + 次大值 O(1) 提案（待语义等价裁决）。
+  - flush 断言三件套（探针零触发 / 计时器注入 / flush 与 tick 分开累计）+ 帧级警戒 20ms +
+    structlog `perf.flush_ms` 字段；实测 flush_tick 50 条：内存库 2.6ms / 文件库 7.8ms
+    （说明一旦误进 tick = 半帧预算，动机成立）。
+  - cognition 上界：检索缝 0.15ms/次（实测两钩子净增 0.054）、效用缝 0.01ms/NPC（实测 0.0004）、
+    HiddenState.evaluate 0.30ms/tick（实测 0.10）；合计增量 ≤0.20ms/tick 进 L1 行不新增行。
+  - 防呆提醒：检索缝必须维持「决策/装 prompt 驱动」频次；若退化成每 tick 每 NPC 全量检索
+    ≈27ms/tick 直接破 16.6ms 总预算。
+  - 验证：`-m "not bench"` 855 passed/55 skipped；`-m bench` 29 passed/1 skipped（首轮 2 例抖红，
+    单跑复绿=机器调度噪声，非回归；已按 bench-plan §0「bench 不进每提交红线」口径记录）。
+
 ## 当前任务
 
-**M2-P3（2026-09-21 接受，已交付）**：L1 算法规格落盘（对账 main `59ffd86` 已落地实现）
-+ soak feeder 升级方案（mock → NpcRuntime.tick）。
+（空——M2-P4 已交付，等 Claude 收编裁决；预案未被收编前不改 thresholds.py/budget.md 正文）
 
 ## 进行中
 
-(空——M2-P3 已交付，等 Claude 收编)
+（无）
 
 ## 留言板
 
-(读 Claude 经 talking.txt 写来的任务指派)
+（收编回执见 .orca/talking.txt 留言板）
 
 ## ⑥ kilo（接口 / 兼容性域）
 
