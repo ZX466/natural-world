@@ -64,6 +64,20 @@ npm run gen:protocol:check     # CI 漂移检测：生成到临时文件比对�
   npm run gen:protocol -- --src http://127.0.0.1:8000/openapi.json
   ```
   逐字段比对与 `shared/openapi.json` 的差异，以 sim 为准回写（HTTP 请求体）；WS/响应契约以本快照为准。
+### 4.1 切源暂缓声明（M2-C4 落档，2026-09-22；裁决依据 kilo M2-K2 复核）
+
+> **结论：`--src` 切真实源当前不可用；mock 快照 `shared/openapi.json` 继续当唯一真相源。**
+> 本节为防误切声明——上方「真实源对齐」的 `--src` 命令**仅可作对齐校验参考**，其产出**不得**提交为
+> `shared/openapi.json` / `shared/protocol.ts`。
+
+- **原因（P0，kilo M2-K2 复核结论）**：sim 当前 OpenAPI 缺 **21 个 HTTP 子结构 schema**（路由返回
+  `dict[str, Any]`、无 `response_model`），且 WS 消息 components 只存在于本域快照中。对真实源跑
+  `openapi-typescript` 只能产出缺 21 schema + WS 全量契约的残缺类型——切源 = 前端类型静默劣化。
+- **解除条件（两项齐备，经 Claude 裁决后方可解禁）**：
+  1. sim HTTP 路由补齐 `response_model`（21 个缺失 schema 的来源路由清单 = kilo M2-K3 交付物，照单施工）；
+  2. openapi_ext（`shared/openapi.json`）对齐快照返工完成（WS 消息 components 注入真实形状）。
+- 补全前跑 `npm run gen:protocol -- --src http://127.0.0.1:8000/openapi.json` 仍会「跑通」，但产物缺
+  21 schema + WS 类型；若误提交，CI 漂移闸（§5 第 1 道）会以 mock 源口径比对出漂移而拦截——勿存侥幸。
 
 ## 5. CI 守卫：「协议类型未手写」
 

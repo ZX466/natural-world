@@ -19,7 +19,7 @@
 - 规则速记：#4 除 .orca 外点文件夹不入 git；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome。
 
 ## ② cline（依赖 / 配置 / 文档域）
-- 【2026-09-22 第四轮快照｜新对话按此继续】当前任务 **M2-C4**（单详见本树 talking.txt，**未开工未接受**）：① `docs/api/codegen.md` + `tools/gen-protocol.ts` 头注补「切源暂缓」声明（原因=kilo K2 复核 P0：`--src` 切真实源丢 21 个 HTTP 子结构 schema；解除条件=sim HTTP 路由补 response_model + openapi_ext 对齐快照；**裁决=mock 源继续当唯一真相源**）② `docs/perf/baseline.json` 首轮入库评估（nightly 产物齐全才按 bench-plan §3 入库，**入库前先留言板报 Claude**；不全则留言说明不动）。约束：只写文档/注释不改 sim 代码。
+- 【2026-09-22 第四轮快照｜新对话按此继续】**M2-C4 已交付待收编**：① `docs/api/codegen.md` §4.1「切源暂缓声明」+ `tools/gen-protocol.ts` 头注同款警告（顺手修正 `--src` 示例路径 `/api/openapi.json`→`/openapi.json`）；② baseline.json 评估=**产物不全不动**（nightly 3 跑全 failure、artifact 0 份、均倒在「跑基准」step；日志 403 无凭据，疑似 runner 缺 LZ_MASTER_KEY，建议下轮接 nightly 修复单，修绿后再评首轮入库）。约束遵守：只写文档/注释，未动 sim 代码。
 > 新对话开场先读本节 + .orca/workflow.txt + .orca/agent-registry.md。能力域：依赖/配置/CI/文档域；评审 codex 与 pi 的工作；评审 Agent=Claude。
 > **本文件已入库**（main `3e320b9` 裁决，规则 #7）——改动走提交；跨分支同路径由 Claude（主导）收编合并。
 > 另读：`.orca/talking.txt`（任务指派）、`docs/dev-workflow.md`（含 **§7 Windows 行尾假红**——本机格式类检查报错先看那节）。
@@ -45,7 +45,8 @@
 - 行尾自检（应 0）：`git ls-files --eol | grep -c 'w/crlf'`。
 - `.orca/` 下**新增**文件要 `git add -f`（catch-all `.*/` 兜底；改已跟踪的 memory.md 不受限）。
 ### 未决项
-- **M2-C4 未开工**：接单→本树 talking.txt 回「接受」→ 干活（①切源暂缓声明 ②baseline.json 评估）→ 回执。
+- **M2-C4 已交付待收编**（2026-09-22）：切源暂缓声明落档 + baseline.json 评估（结论=产物不全不动，详见本节快照与本树 talking.txt 回执）。收编后本行删除。
+- **nightly 三连红挂账**：Nightly Bench 09-19/20/21 三跑均倒在「跑基准」step、artifact 0 份（Actions API 实查；日志 403 需凭据）。疑似 runner 缺 `LZ_MASTER_KEY` 之类 env——下轮可接修复单（属我 CI 域）；baseline.json 入库顺延至首个绿色 run 后（入库前留言板报 Claude）。
 - **里程碑后 soak 完整跑迁出**：nightly step → 周频独立 workflow（我迁，已在 nightly 注释/m2-acceptance §4 挂账）。
 - `.orca/` 例外不补（裁决维持）：新增文件一律 `git add -f`。
 - 嵌入模型选型（M3）：走已锁 openai 客户端＝零新包；本地模型须先过依赖评审。

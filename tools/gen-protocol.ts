@@ -4,17 +4,23 @@
  * 能力域：接口/兼容性（kilo TASK-002）。对齐 docs/api/codegen.md。
  *
  * 做什么：
- *   1. 取 OpenAPI 源（默认 mock：shared/openapi.json；sim 起服务后用 --src <url> 拉真实 /api/openapi.json）
+ *   1. 取 OpenAPI 源（唯一真相源 = mock 快照 shared/openapi.json；--src 切真实源**暂缓**，见下方警告）
  *   2. openapi-typescript 生成 TS（--immutable --export-type --alphabetize）
  *   3. 注入 AUTO-GENERATED banner（CI 手写禁令锚点）
  *   4. prettier 格式化（沿用 client/.prettierrc.json 风格）
  *   5. 写 shared/protocol.ts
  *   --check 模式：生成到临时文件，与已提交的 shared/protocol.ts 比对，漂移则非零退出（CI 守卫）。
  *
+ * ⚠ 切源暂缓（M2-C4 落档，2026-09-22；kilo M2-K2 复核 P0）：--src 模式当前不可用——
+ *   sim 真实 OpenAPI 缺 21 个 HTTP 子结构 schema（路由无 response_model）且无 WS 消息
+ *   components，切真实源会丢契约、前端类型静默劣化。mock 快照继续当唯一真相源；
+ *   --src 仅可用于对齐校验（其产出不得提交为 shared/protocol.ts）。解除条件与完整声明见
+ *   docs/api/codegen.md §4.1「切源暂缓声明」。
+ *
  * 运行（在 client/ 下，复用其 node_modules）：
  *   npm run gen:protocol          # 生成（脚本别名由 cline 配置域提供，见 client/package.json）
  *   npm run gen:protocol:check    # CI 漂移检测
- *   node tools/gen-protocol.ts --src http://127.0.0.1:8000/api/openapi.json   # 切真实源
+ *   node tools/gen-protocol.ts --src http://127.0.0.1:8000/openapi.json   # 对齐校验（暂缓切源，产物不得入库）
  *
  * 仅用 node 内置模块（CJS 风格，靠无旗标类型擦除运行），不 import npm 包；
  * openapi-typescript / prettier 通过 client/node_modules 的真实 JS 入口调用。
