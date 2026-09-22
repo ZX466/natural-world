@@ -28,8 +28,7 @@
 | `docs/perf/hotspots.md` | 性能（Pi） | ✅ main | 热点预判 H-1–H-6：感知传播分区/增量、L0 向量化、SQLite append-only 批量写与索引、WS 增量合批、超速倍率、LLM 异步延迟（信息性） |
 | `docs/perf/bench-plan.md` | 性能（Pi） | ✅ main | 基准方案：M0 必带 bench 清单、pytest-benchmark/真实 tick loop harness 选型、回归阈值、nightly 节奏、已知不可测项 |
 | `docs/perf/llm-monitoring.md` | 性能（Pi） | ✅ main | LLM 异步延迟监控口径：structlog 事件名 `llm.request/response/retry/timeout/error/cache_hit/decision` + 字段清单（不记 api_key/prompt 明文）；P95<8s、单决策<2k tok、cache_hit>50%；**C06 LLM 客户端照抄接入**（口径非 tick 量纲） |
-| `docs/perf/m2-acceptance.md` | 性能（Pi） | ✅ main | M2 验收口径：604,800 tick（50 NPC × 7 游戏日）自转无崩溃；崩溃判定 C1–C10（进程/RSS/句柄/GC/缓存/实体/漂移/确定性/延迟）；降采样断言三级（CI 缩样/nightly 30k/里程碑完整）；nightly 接法 §4 |
-| `docs/perf/l1-spec.md` | 性能（Pi） | ✅ main | L1 效用算法规格（M2-P3）：原型 `_L1Load` numpy 数据布局/矩阵形状/打分公式/常量表 vs 真实实现 `utility.py`（`(n,3)@(3,6)` `_GAIN` 矩阵）逐项对账 + 红线实测回填（runtime.tick 50 NPC ~0.75ms，红线 6.0ms）；未落地项清单（PAD/关系/记忆/候选集/NPC_ACT handler） |
+| `docs/perf/m2-acceptance.md` | 性能（Pi） | ✅ main | M2 验收口径：604,800 tick（50 NPC × 7 游戏日）自转无崩溃；崩溃判定 C1–C10（进程/RSS/句柄/GC/缓存/实体/漂移/确定性/延迟）；降采样断言三级（CI 缩样/nightly 30k/里程碑完整）；nightly 接法提案 §4 |
 | `docs/data/schema.md` | 数据/数据库（opencode） | ✅ main | SQLite schema：事件日志（append-only）/分支树/快照分层/玩家 anchor/NPC 记忆 + sqlite-vec 占位；索引与约束对齐 §6 契约 |
 | `docs/data/event-sourcing.md` | 数据/数据库（opencode） | ✅ main | 事件溯源：`apply(event)` 唯一写路径、读档重放流程、回放确定性（RNG/熵随事件落库） |
 | `docs/data/migration.md` | 数据/数据库（opencode） | ✅ main | Alembic 迁移策略（async env.py / alembic.ini / 首版迁移骨架） |
@@ -133,10 +132,15 @@ M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI
 | M2-C2 风场 + 门禁填实 + 重签出（本域） | cline | `sim/world/weather.py` + `sim/tests/test_m2_weather.py` + ci.yml M2 步骤填实 + `docs/dev-workflow.md` §7 重签出操作 | ✅ 已收编 | 31 用例；纯函数可重放（同 (rng,tick) 同风）+ 每日天气注入点 `daily_reseed_due`；六树重签出后 `w/crlf` 全 0、prettier/gen-protocol 假红消失 |
 | M2-S2 L1 动作白名单 + HiddenState | codex | `docs/security/l1-whitelist.md` + `sim/npc/contract.py` + `sim/tests/test_t1_l1_whitelist.py` | ✅ 已收编 | 29 用例（白名单锁定/payload 键/升格传递/降格写回）；自带 T1 文件路径门禁 |
 | M2-D2 LOD 事件持久化 | opencode | `sim/core/persistence/npc_store.py`（materialize/flush_tick/writeback）+ `store.py` 投影缝 + `sim/tests/test_m2_runtime_store.py` + schema.md §14/15 | ✅ 已收编 | 15 用例；651 passed / 55 skipped；alembic 零漂移 |
-| M2-P2 长跑验收口径 + 预压测 | pi | `docs/perf/m2-acceptance.md`（C1-C10）+ `sim/tests/bench/soak.py` + `test_bench_soak.py` + thresholds 5 SOAK_* | ✅ 已收编 | 100k tick 实测均值无漂移（1.86→1.86ms）、RSS/句柄/GC 有界；三级降采样；nightly 接法提案 §4（待裁） |
-| M2-K1 复核 | kilo | language 叙事边界复核 4 条意见（memory.md ⑥节） | ✅ 已收编 | openapi_ext 复核等 Claude 改写通知 |
-| M2-A2 后续批次 | Claude | utility 向量化 / matter 结算 / smell.py / language.py | ⏳ 在途 | 下一批见主树 talking.txt |
-| M2-P3 L1 算法规格 + feeder 接线 | pi | `docs/perf/l1-spec.md`（新） + `docs/perf/m2-acceptance.md` §3.1 + `sim/tests/bench/soak.py` 的 `make_l1_feeder` + `test_bench_l1_utility.py::test_l1_real_*` + `test_bench_soak.py::test_soak_*_l1_feeder` + `thresholds.py` 注释回填（`ZX466/pi`） | ⏳ 待收编 | 原型（_l1Load，6 needs/13 actions/PAD/关系/记忆） ↔ 真实实现（main `59ffd86`，3 needs/6 actions/`_GAIN (3,6)`）逐项对账；实测回填 `utility_scores_matrix` 0.206ms / `evaluate_batch` 0.273ms / `NpcRuntime.tick` 0.747ms （红线 6.0ms，余量 8~29x）；mock → L1 feeder 两阶段接线设计（NPC_ACT handler 未注册，等架构第三批） |
+| M2-P2 长跑验收口径 + 预压测 | pi | `docs/perf/m2-acceptance.md`（C1-C10）+ `sim/tests/bench/soak.py` + `test_bench_soak.py` + thresholds 5 SOAK_* | ✅ 已收编 | 100k tick 实测均值无漂移（1.86→1.86ms）、RSS/句柄/GC 有界；三级降采样；nightly 接法=方案 A（已裁，`c49b0b3`） |
+| M2-K1 复核 | kilo | language 叙事边界复核 4 条意见（memory.md ⑥节） | ✅ 已收编 | 全部采纳进架构稿 §5.2；openapi_ext 复核转 M2-K2 |
+| M2-A2 第二批 | Claude | `sim/npc/{schedule,utility,runtime}.py` + `sim/world/matter.py` + `sim/perception/smell.py` + openapi_ext WsMessage 改写 | ✅ main `59ffd86` | 44 用例；768 passed / 55 skipped；client 五项验收绿 |
+| M2-C3 口径校验 | cline | 纯校验报告（未改仓库文件） | ✅ 已回执 | P0=README §5 冲突标记（Claude 已修）；P1/P2 五处口径过期（codex 代修 `86d5d1e`）；一致项全绿 |
+| M2-S3 M2-D2 安评 | codex | `docs/security/m2-d2-review.md` + 3 条补充测试（`ZX466/codex` `86d5d1e`） | ⏳ 待收编 | 结论=通过：0 CRITICAL/HIGH、2 MEDIUM（归 opencode）、2 观察 |
+| M2-D3 记忆检索缝 | opencode | 读侧检索打分 + redact_sensitive + codex 两条 MEDIUM 修复（`ZX466/opencode` `cc29687`） | ⏳ 待收编 | 9 文件 +988 行；npc_memory_vec 仍锁 M3 |
+| M2-P3 L1 规格 + feeder | pi | `docs/perf/l1-spec.md` + `soak.py::make_l1_feeder`（`ZX466/pi` `a5c05ed`） | ⏳ 待收编 | 实测 0.206-0.747ms（余量 8-29×）；p99 硬门禁改信息性守护（口径变化，收编时留意） |
+| M2-K2 openapi 复核 | kilo | — | ⏳ 进行中 | `59ffd86` 改写复核 + 接口三查 |
+| M2-A2 第三批 | Claude | smell/weather 接线 + NpcStore 落库链路 + cognition 骨架 | ⏳ 在途 | 见主树 talking.txt |
 
 ### M2 依赖对账（M2-C1 结论：**零新依赖**）
 
