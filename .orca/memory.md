@@ -295,6 +295,7 @@ uv run pyright sim/
 （收编回执见 .orca/talking.txt 留言板）
 
 ## ⑥ kilo（接口 / 兼容性域）
+- 【2026-09-22 第四轮快照】M2-K2 复核 6 类问题已全采信（裁决=切源暂缓，mock 源仍唯一真相源；P1 成员简化形状+nullable 3.1 弃用需返工）。当前任务 M2-K3：ext↔快照逐成员 diff 明细（17 schema 差异表 + 21 缺失 HTTP schema 照单 + nullable oneOf:null 修法样例）= Claude ext 返工的验收清单；返工完成后你做 K3 复验。任务单详情=本树 talking.txt。
 
 > ——kilo 树 memory.md（更新于 5f5f525：K04 完成回执 + 跨域发现）——
 > 用户规则 #7：本文件保存 **kilo 自己的记忆**，供新对话继续任务。**已入库**（main `3e320b9` 裁决），改动走提交；跨树融合由主导方（Claude）收编时合并（本树本地版 = 权威来源）。
@@ -379,6 +380,13 @@ uv run pyright sim/
        保持完整（M3 知识传播前提）；挂载点应为 `PerceptionFrame.narrated()` 内而非 `Observation` 构造处。
      - 接口域增量：语言降质文本走现有 `perception` 消息 `content`（string），**schema 不变**；
        `species_language`/`class_register` 等判据不出 WS。K04 的 14 成员联合无需改。
+- **M2-K2（2026-09-22 派发，复核 59ffd86 openapi_ext 改写 + 接口三查——已交付）**：
+  - 结论：**结构骨架对、成员内容简化过度**。14 成员 + oneOf/discriminator 进 components.schemas ✅、wsMessages 废除 ✅、channel 下沉 ✅、error 无 ref ✅、hello/hello_ack 不进联合 ✅（W6 保持）。sim 侧 test_openapi_ext.py 8 用例本机全过，ruff/pyright 干净。
+  - **P0**：`--src <sim>/openapi.json` 全量生成 631 行 vs 提交 830 行——缺 21 个快照独有 schema（Actor/MapInfo/MapChunk/WorldMapResponse/Light/LightDelta/Structure/StructureDelta/Weather/CombatInfo/Projectile/Hit/MonologueReaction/AnchorCreate/AnchorListItem/HealthStatus/ProblemDetail 等）。原因：HTTP 路由（/api/world/map、/api/anchors）仍是裸 dict，sim 只给 settings 四路由挂了 response_model。→ **mock 源 shared/openapi.json 仍是唯一可用真相源**，切源前 sim 须补 HTTP response_model。
+  - **P1**：ext 的 12 个成员与 ws-protocol.md §3/§4 + 快照形状不一致（逐条见 talking.txt 留言板 2026-09-22）：perception 缺 form、monologue 用 reaction 对象（W7 曾删）、impulse_feedback 缺 injected/cue/reaction_monologue、combat_event 缺 §4.1 六项、timescale 缺 mode/active 且 channel 错写 render、control_ack 缺 action/speed/applied（ws.py 实发就带）、sync_request 缺 reason。
+  - **P1**：OpenAPI 3.1 `{"nullable": true}` 是 no-op（openapi-typescript 不产 `| null`）；快照的 `oneOf:[...,{"type":"null"}]` 才是正确写法。preset/subject/attacker/defender/reaction/note 全中招。
+  - **接口三查全过**：①WindVector/weather 不进 WS（openapi_ext 无 wind 字段）；②hidden/triggered 不进 WS（只被 gate/memory_scan 消费）；③perception content 仍 string（frame.py Observation.description: str + narrate.py 纯模板函数）。
+  - 本机环境坑：PowerShell 捕获 python/node 的 stdout 会丢中文/整段输出——比对 JSON 用 node 写 .cjs 脚本落文件再 Read。起 sim 用 `LZ_MASTER_KEY` 临时值 + uvicorn :8000。
 - 其他：等 Claude 派 M2 后续 / TASK-005。
 
 ## 6. 留言板 / 待回执
