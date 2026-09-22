@@ -41,7 +41,7 @@ def _entry(
         entry_id=eid,
         npc_id="npc:01",
         content=content,
-        source="observation",
+        source="event",
         event_seq=next(_ENTRY_SEQ),
         importance=importance,
         emotion_tag=emotion,
