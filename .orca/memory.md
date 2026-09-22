@@ -7,9 +7,16 @@
 ## ① Claude（主工作树 / 主导）
 - 主导/组织：架构/代码质量/逻辑/测试 + 前端/体验/发布/运维；评审 cline 与 kilo 的工作。
 - 收编由我执行（merge 各 ZX466/* 分支 → 推 origin+gitee 双远程）；派单写目标树 talking.txt，回执收主树；**不用 orca-cli 发消息**；上下文 50% 提醒切换。
-- M0+M1 全量收官：TASK-004 五路（codex=S04/opencode=D04/pi=F06/cline=P05/kilo=K03）全部收编，589 passed / 55 skipped。
-- M2 已派并全部交付收编（main `8dd8355`：cline M2-C1 / codex M2-S1 / opencode M2-D1 / pi M2-P1 / kilo K04）。架构稿已落 `docs/arch/m2-npc-cognition.md`（M2-A1）。两项裁决已落：`.gitattributes`（A 方案）+ `.gitignore` 补 `!.github/`。
-- 规则速记：#4 除 .orca 外点文件夹不入 git（.codegraph/.agents 每树必有，.claude/.opencode/.codex 对应树有，主树全有）；#7 各树 memory.md 各存各的记忆（tracked）；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome。
+- M0+M1 全量收官（TASK-004 五路收编）；M2 三轮全部收编：
+  - 第一轮（`8dd8355`：C1/S1/D1/P1/K04）+ 架构稿 M2-A1（`3ab8c71`）+ 两配置裁决。
+  - 第二轮（`c49b0b3`：C2/S2/D2/P2/K1，724 passed）+ 三裁决：nightly 完整跑=方案 A / language 挂载点=narrated() 通道分组输出前 / `.orca/` 例外暂不补。
+  - 我 A2 第二批（`59ffd86`，768）：schedule/utility/runtime 向量化 + MatterLedger + SmellField + openapi_ext WsMessage 14 成员进 components.schemas。
+  - README §5 P0 冲突标记修复（`cbf40ee`，cline C3 揪出）。
+  - 第三轮（`7d63210`：S3 安评通过/D3 检索缝+event_validation/materialize_hidden/P3 l1-spec+L1 feeder+p99 信息性守护，805 passed）。
+  - kilo K2 复核 6 类问题全采信：**裁决=切源暂缓，mock 源仍唯一真相源**（P0=切源丢 21 HTTP schema；P1=ext 成员需按快照对齐+nullable 3.1 写法）。
+- **第四轮已派**（cline C4 切源暂缓落档/codex S4 T1 10k 采样/kilo K3 ext↔快照 diff 明细/opencode D4 matter 投影对账/pi P4 预算预案）；**我 A2 第三批开工序**：smell 接线感知步 → NpcRuntime 接 NpcStore 落库 + HiddenState 每 tick → cognition 六偏差骨架 → openapi_ext 对齐快照返工 → language.py。
+- 进度：MVP ≈97%（M0✅ M1✅ M2≈90%）；全项目 ≈55%（M3-M6 各约 1×M2）。
+- 规则速记：#4 除 .orca 外点文件夹不入 git；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome。
 
 ## ② cline（依赖 / 配置 / 文档域）
 > 新对话开场先读本节 + .orca/workflow.txt + .orca/agent-registry.md。你的能力域：依赖/配置/CI/文档域。
