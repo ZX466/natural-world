@@ -78,6 +78,20 @@ def narrate_presence(rtoken_label: str) -> str:
     return f"{rtoken_label}就在不远处。"
 
 
+def narrate_smell(concentration: float) -> str:
+    """嗅觉浓度（场采样值，内部量）→ 气味描述。零数值零系统词（铁律 1）。
+
+    分档只按浓淡，不带来源方向（风向叙事 M3 起；现批次浓度→文案占位映射）。
+    """
+    if concentration >= 2.0:
+        return "一股浓重的气味直冲鼻子。"
+    if concentration >= 0.5:
+        return "空气里飘着一股明显的味道。"
+    if concentration >= 0.1:
+        return "空气里飘着一股说不清的味道。"
+    return "隐约有一丝陌生的气味。"
+
+
 def make_observation(
     channel: Channel, subject: str, description: str, strength: float
 ) -> Observation:

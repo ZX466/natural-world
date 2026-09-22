@@ -1,21 +1,26 @@
 """sim.npc.runtime — NPC 装配入口（M2-A1 §1.3；世界循环每 tick 调一次）。
 
-NpcRuntime.tick(tick) → 本 tick 事件批次（NPC_ACT）。职责链（固定序，C5）：
+NpcRuntime.tick(tick, hidden_states=..., context_of=...) → 本 tick 事件批次（NPC_ACT）。
+职责链（固定序，C5）：
+  0. 隐藏档触发窗口重估（HiddenState.evaluate 每 tick，self-unknown §2；纯函数）
   1. 需求推进（needs.advance_needs，DEFAULT_DECAYS）
   2. L1 效用打分（utility.evaluate_batch，向量化）
   3. 事件产出（npc_act_event；params 只带白名单键）
 
-不做：SQL（数据访问归 NpcStore，opencode M2-D2）、LLM 调用（L2 在 sim/agent/）、
-LOD 升降格判定（事件驱动，本批只按 lod 字段过滤 L0）。frozen 态：tick 只产出
-事件与新 profile dict，不原地改传入对象。
+不做：SQL（数据访问归 NpcStore，opencode M2-D2；物化走 sim/npc/assemble.py）、
+LLM 调用（L2 在 sim/agent/）、LOD 升降格判定（事件驱动，本批只按 lod 字段过滤 L0）。
+frozen 态：tick 只产出事件与新 profile dict；hidden_states 的窗口按 tick 原地替换
+（HiddenState frozen → evaluate 返回新实例，dict 引用由调用方持有）。
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 from sim.core.events import WorldEvent, npc_act_event
 from sim.npc.actions import ACTION_PAYLOAD_KEYS
+from sim.npc.contract import HiddenState
 from sim.npc.model import NpcProfileData
 from sim.npc.needs import advance_needs
 from sim.npc.utility import UtilityModel, evaluate_batch
@@ -36,8 +41,27 @@ class NpcRuntime:
             msg = f"utility.n_npc={self.utility.n_npc} 与 profiles 数 {len(self._order)} 不一致"
             raise ValueError(msg)
 
-    def tick(self, tick: int) -> list[WorldEvent]:
-        """推进一 tick：需求 → 效用 → 事件批次（顺序固定，可重放）。"""
+    def tick(
+        self,
+        tick: int,
+        *,
+        hidden_states: dict[str, HiddenState] | None = None,
+        context_of: Callable[[str], str] | None = None,
+    ) -> list[WorldEvent]:
+        """推进一 tick：隐藏档重估 → 需求 → 效用 → 事件批次（顺序固定，可重放）。
+
+        hidden_states：物化产物 {npc_id: HiddenState}；传入时第 0 步按
+        context_of(npc_id) 重估触发窗口（frozen.evaluate 返回新实例，原 dict 更新）。
+        context_of：npc_id → 自身处境文本（感知帧叙事+内感受）；缺省恒空 =
+        无情境触发（窗口照旧）。
+        """
+        # 0. 隐藏档触发窗口重估（每 tick；hidden.py §2 纯函数）
+        if hidden_states is not None:
+            for nid in self._order:
+                if nid in hidden_states:
+                    ctx = context_of(nid) if context_of is not None else ""
+                    hidden_states[nid] = hidden_states[nid].evaluate(ctx)
+
         # 1. 需求推进（frozen：replace 生成新元组）
         advanced: dict[str, NpcProfileData] = {}
         for npc_id in self._order:

@@ -54,12 +54,16 @@ def smell_propagate(
     wind: tuple[float, float],
     strength: float,
     decay: np.float32 | float,
+    diffuse_rate: float = 0.0,
 ) -> SmellField:
-    """一 tick 嗅觉推进：发射 → 平流（风） → 衰减（§5.1 纯函数，可重放）。
+    """一 tick 嗅觉推进：发射 → 平流（风） → 扩散 → 衰减（§5.1 纯函数，可重放）。
 
     wind = weather.WindVector.vector()（每 tick 位移，格/tick）。
     平流用 np.roll 取整格位移（半格亚像素精度 M3+ 再加密；pi bench 同口径）。
-    静风 (0,0)：np.roll(0) 为 no-op，只剩发射+衰减。
+    静风 (0,0)：np.roll(0) 为 no-op，只剩发射+扩散+衰减。
+    diffuse_rate：8 防域扩散份额（0..1；0=关，既有调用方行为不变）——
+    每 tick 每格按比例把浓度向 4 直邻 + 4 斜邻（斜邻减半）让渡（arch §5.1 第 2 步），
+    向量化 done via np.roll 叠加，无逐格 Python 循环。
     """
     # 1. 发射（在平流前注入：源是世界的固定位置，随场一起被风带走）
     emitted = field.inject(sources, strength)
@@ -68,8 +72,27 @@ def smell_propagate(
     shift_y = round(dy)
     shift_x = round(dx)
     advected = SmellField(grid=np.roll(emitted.grid, shift=(shift_y, shift_x), axis=(0, 1)))
-    # 3. 衰减
-    return advected.decayed(decay)
+    # 3. 8 邻域扩散（arch §5.1 算法第 2 步；0 = 既有口径不变）
+    g = advected.grid
+    if diffuse_rate > 0.0:
+        rate = np.float32(diffuse_rate)
+        diag = np.float32(diffuse_rate / 2.0)
+        share = g * rate  # 每格向 4 直邻各让渡的量
+        dshare = g * diag  # 向 4 斜邻各让渡的量（减半）
+        acc = (
+            np.roll(share, shift=(1, 0), axis=(0, 1))
+            + np.roll(share, shift=(-1, 0), axis=(0, 1))
+            + np.roll(share, shift=(0, 1), axis=(0, 1))
+            + np.roll(share, shift=(0, -1), axis=(0, 1))
+            + np.roll(dshare, shift=(1, 1), axis=(0, 1))
+            + np.roll(dshare, shift=(1, -1), axis=(0, 1))
+            + np.roll(dshare, shift=(-1, 1), axis=(0, 1))
+            + np.roll(dshare, shift=(-1, -1), axis=(0, 1))
+        )
+        outflow = 4 * share + 4 * dshare
+        g = g - outflow + acc
+    # 4. 衰减
+    return SmellField(grid=g * np.float32(decay))
 
 
 def smell_sample_batch(field: SmellField, positions: list[tuple[int, int]]) -> np.ndarray:
