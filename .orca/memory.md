@@ -53,6 +53,20 @@
 （以下各节由对应 agent 维护——cline 节以上为 2026-09-20 收编版。）
 
 ## ③ opencode（数据 / 数据库域）
+- 【2026-09-22 第四轮快照】M2-D3 已收编（`4a11d0f`：memory.py 检索缝 + event_validation.py append 收窄 + materialize_hidden 隐藏半边 + redact_sensitive 清偿）。当前任务 M2-D4：MatterLedger↔matter_state↔MatterPayload 三方对账（decay_rate 无列承载等缺口列方案先报裁）+ memory.py 契约文档（cognition 将消费）；alembic 零漂移基线不动。任务单详情=本树 talking.txt。
+
+### 已内化教训（M2-D2/D3 实测，别再踩）
+- **`.orca/talking.txt` 是 worktree-local（gitignored）**；`.orca/memory.md` 是 tracked。给本树的回执写 talking.txt；给**他树**的回执写**对方树**的 talking.txt。收编方=Claude（merge 各 ZX466/* → origin+gitee 双远程）。
+- **Windows 行尾**：新文件一律 LF、无 BOM（`git ls-files --eol | grep -c w/crlf` 期望 0）；CJK 控制台会显示乱码但文件字节正常，别被吓到。
+- **零漂移纪律**：任何 schema 改动前先 `uv run alembic upgrade head` → `revision --autogenerate` 看迁移体是否仅 `pass`；「投影回既有列」不产生新迁移（M2-D2 LOD 投影回 `npc_profiles.lod` 即无 0005）。
+- **S1 唯一写入口**：所有 `MemoryEntry` 必须经 `MemoryWritePipeline.write()`（S1 守卫测试 `test_memory_scan.py::TestS1Guard` 扫仓内绕过点）；测试造数据也用 pipeline，别直接 `store.persist` 写正文。
+- **append 收窄**：`SqlEventStore.append` 默认 `validate=True`（走 `event_validation.validate_store_row`）；低层存储机制测试（合成 payload）必须显式 `validate=False`，否则被 payload 白名单拒。
+- **projection 缝**：投影回调在 commit 前**同一 session** 执行，异常整批回滚（无半写）；`EventStore` Protocol 与 `flush_events`（无投影）行为不变。
+- **读侧 only**：检索/打分层（`sim/npc/memory.py`）不写库、不碰写路径与守卫；偏差逻辑（cognition）后期以 `Scorer` 钩子注册，**不写死**。
+- **pyright 全绿要点**：`async_sessionmaker[AsyncSession]` 注解要显式（否则 property 返回 Unknown）；测试里 pydantic 模型 `category` 等 str 字段从 DB 读出要 `# type: ignore[arg-type]`。
+- **验证命令**：`uv run pytest -q --ignore=sim/tests/bench`（门禁）；bench 单独 `uv run pytest sim/tests/bench -q`（7 日 soak 需 `PI_M2_FULL_SOAK=1`，默认 skip）；`uv run ruff check sim/ && uv run ruff format --check sim/`；`uv run pyright sim/`。in-file 测试类标 `@pytest.mark.t1`，文件名 `test_m2_` 前缀自动进 CI 门禁。
+- **flake**：`test_bench_soak` p99 阈值对 CPU 争用敏感——与其他命令并发跑会假红，单独或正常整套跑即可。
+
 
 > ——以下为 opencode 树 memory.md 原文（收编于 3309c0f）——
 > **新对话开场先读**：`.orca/workflow.txt` + `.orca/agent-registry.md` + 本文件 + `.orca/talking.txt`。
