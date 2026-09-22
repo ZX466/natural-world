@@ -153,7 +153,7 @@ uv run pyright sim/
 > 每次完成后更新本文件「当前任务 / 进行中 / 已完成」；过时内容删掉。
 
 ## ④ codex（安全 / 合规 / 风险域）
-- 【2026-09-22 第四轮快照】M2-S3 已收编（`3c79465`，通过结论；2 MEDIUM 已被 opencode 修：`4a11d0f` event_validation.py + materialize_hidden）。当前任务 M2-S4：T1 信息边界 10k 采样验收口径落盘 + harness 骨架（M2 量化验收另一半，DESIGN §17；复用 S1 双路径工具、假 LLM 零网络；S1 已收编文件只扩不改）。任务单详情=本树 talking.txt。
+- 【2026-09-22 第四轮快照】M2-S3 已收编（`3c79465`，通过结论；2 MEDIUM 已被 opencode 修：`4a11d0f` event_validation.py + materialize_hidden）。M2-S4 已交付（`38a7f63`，origin+gitee 已推，等收编）：t1-sampling-10k.md 口径 + test_m2_t1_sampling_10k.py harness（10k 采样 7 用例 1.1s；判据=零直陈泄露+零误伤+全覆盖+可重放；S1 文件零改动；test_m2_ 前缀自动进 CI glob）。全量 862 passed + 55 skipped。
 
 > 本树工作簿：用户级技能 `security-worktree`（~/.agents/skills/，含环境坑/评审配对/回写纪律）。
 > 能力域：安全/合规/风险；评审配对：cline 评审我，我评审 Claude（架构+前端）与 opencode（数据/库）。
@@ -182,7 +182,7 @@ uv run pyright sim/
 - 更早累计：TASK-001~004（m1-checklist/threat-model/t3-corpus/memory-scan + T3 实弹 + W6 WS 鉴权 + M1-D reason 禁词门）；详见 git log 与 docs/security/。
 
 ### 当前任务
-- M2-S3（M2-D2 安全评审）已交付（等收编），等下一波派发。
+- M2-S4 已交付（`38a7f63`，等收编），等下一波派发。
 
 ### 进行中
 - (空)——等下一波派发（第三批评审等 Claude 通知）。
