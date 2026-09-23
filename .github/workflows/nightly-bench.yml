@@ -84,14 +84,19 @@ jobs:
           PI_M2_FULL_SOAK: "1"
 
       - name: 上传基线结果
-        # `if: always()`：本 step 原来在「跑基准」失败时被跳过 → 三轮 nightly 全红且 artifact 0 份，
+        # `if: always()`：本 step 原来在「跑基准」失败时被跳过 → 四轮 nightly 全红且 artifact 0 份，
         # 诊断证据与 CI 档位实测数字全部丢失（C5 缺陷 2）。改成无论如何都归档：
-        # 红灯时也要留下 perf/bench.json 与 runner.txt，供性能域拿 CI 档位数字定标/放红线。
+        # 红灯时也要留下 perf/bench.json 与 runner.txt。
+        # 同时把「记录机器档位」写出的 docs/perf/runner.txt 一并归档（bench-plan §3 要求基线
+        # 记录机器档位；该文件只写在 CI 工作区、原先既不入库也不上传 = 档位信息随 run 蒸发），
+        # 供性能域（pi）拿 CI 档位数字定标/放红线、并在 baseline 入库时记录档位头。
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bench-result
-          path: perf/
+          path: |
+            perf/
+            docs/perf/runner.txt
           if-no-files-found: warn
 
       - name: 基线对比（docs/perf/baseline.json 入库后启用）
