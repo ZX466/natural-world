@@ -331,9 +331,26 @@ uv run pyright sim/
     `PI_BENCH_ADVISORY=1 -m bench` 31 passed/1 skipped + 构造越线用例验证 advisory 生效；
     `-m "not bench"` 913 passed/55 skipped；ruff check+format、pyright 全绿。
 
+- **M3-P1 交付（2026-09-23，分支 ZX466/pi，commit `1d09581`，等收编）**：检索缝预算案 + embed 监控 + baseline 流程（零代码）。
+  - `docs/perf/m3-retrieval-budget.md`（新）：实测本机多轮中位——候选生成 numpy 余弦 **0.019ms/NPC**（600 可见）；
+    打分链 600 候选×2 钩子 **0.862ms** / 3000 候选 4.91ms / 30000 候选 57.8ms；M3 正常形态（k=20 候选
+    + 只打 20 条）≈ **0.05ms/NPC**。红线提案（待裁，随 A4 进 thresholds.py）：`VEC_CANDIDATE_PER_NPC_LIMIT_MS=0.30` /
+    `RETRIEVAL_SCORE_PER_NPC_LIMIT_MS=0.30` / `RETRIEVAL_FULL_SCAN_PER_NPC_LIMIT_MS=2.00`（600 全量退化哨兵）/
+    `RETRIEVAL_TICK_LIMIT_MS=12.0`。
+  - **防呆红线延续反证数据**：每 tick 全量检索 50 NPC = 43.1ms/tick（600 候选）/ 245.5ms/tick（3000）= 破
+    16.6ms **2.6x / 14.8x**；每 tick 广播只候选也 1–9.3ms/tick。V5 建议 = 按需为主 + 批量窗口可选
+    （窗口一次 2.65ms/50NPC，摊销 2.65/N）。反直觉：50 NPC 批量矩阵比 50 次串行 matvec **慢**（2.65 vs 0.91ms，
+    小 n BLAS 开销）——批量优化须先 bench 证伪。
+  - `llm-monitoring.md` §7（A6）：`llm.embed_request/response/error/cache_hit` 族 + 字段（batch_size/dim/
+    total_tokens/latency_ms/degraded/cache_hit；禁记向量本体与明文）+ 独立阈值（单条 P95<300ms / 批量≤32
+    P95<2s / cache_hit>60% / 降级>10%）。chat 族口径零改动。
+  - `bench-plan.md` §4.1（裁 4 执行件）：baseline.json 建8 步 + 触发前提 3 条 + 禁令 3 条。
+  - `budget.md`：§1.2 指针 + §2.10 新节。
+  - 验证：`-m "not bench"` 917 passed + 30 RED（M3-S1 钉子，同 main `db46b9e`）/ 55 skipped；ruff docs 通过。
+
 ## 当前任务
 
-（空——M2-P6 已交付（advisory 门 + RNG 330 + CI 定标提案），等 Claude 收编；基线入库等 advisory 合入后首个全绿 nightly run）
+（空——M3-P1 已交付，等 Claude 收编；下一步 = 首个全绿 nightly run 出现后按 bench-plan §4.1 建 baseline.json（裁 4 执行件）；A4 落地后把检索缝四行红线进 thresholds.py）
 
 ## 进行中
 

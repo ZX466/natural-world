@@ -72,6 +72,38 @@
 - **里程碑（M0/M1/M2）**：跑一次**正式基线**，黄金数字写进里程碑评审（对齐 §17 量化验收：决策延迟 P95<8s、单决策 <2k tok 属 LLM 侧，与 tick 侧分开呈现）；M2 另跑 **604,800 tick 完整自转**（环境门 `PI_M2_FULL_SOAK=1`，接法由 cline，见 m2-acceptance §4）。
 - **回归处置**：谁改谁负责回退或证明阈值失效合理（性能域评审 + Claude（架构）复核）。
 
+## 4.1 baseline.json 建立流程（裁 4 执行件；M3-P1 落地 2026-09-23）
+> 状态：**待首个 advisory=1 全绿 nightly run**。未跑出前 nightly「基线对比」step 保持只提示不判红。
+> 目的：CI 档位（EPYC 9V74 / 4 核，档位比见 `docs/perf/ci-calibration-m2p6.md`）的回归检出
+> 走**相对基线漂移**，不动 thresholds 定标机口径。
+
+**触发前提（三条同时满足）**：
+1. M2-P6 advisory 门已收编进 main 且 nightly「跑基准」step 带 `PI_BENCH_ADVISORY= "1"`；
+2. nightly 出现**首个全绿 run**（advisory 门下越线已不红，绿灯 = 管道/环境本身没问题）；
+3. 该 run 的 artifact `bench-result` 内含 `perf/bench.json` + `docs/perf/runner.txt`（C5 修复后必有）。
+
+**操作序（8 步）**：
+1. `gh run list --workflow nightly-bench.yml` 找首个绿色 run 的 run id（例：`<RUN_ID>`）；
+2. `gh run download <RUN_ID> -n bench-result -D <tmp>`（artifact 含 `perf/bench.json` + `docs/perf/runner.txt`）；
+3. 核对 runner.txt 五字段（date / runner / nproc / cpu / python / uv）与 `ci-calibration-m2p6.md` §0 表一致
+   （EPYC 9V74 / 4 核 / py3.12.3）——**不一致就跑第二步重新取**，不同档位不能混基线；
+4. 把 bench.json 复制为 `docs/perf/baseline.json`，并在文件头补 `runner` 注释块（五字段 +
+   `source_run: <RUN_ID>` + `note: "CI 档位基线；定标机阈值见 sim/tests/bench/thresholds.py"`）；
+5. 本地 sanity：`uv run pytest -m bench --benchmark-compare=docs/perf/baseline.json --benchmark-compare-fail=median:25%`
+   —— 定标机跑 CI 基线必然越线（档位比 1.14），**这条只验证 CLI 参数被 pytest-benchmark 接受**，
+   预期非零退出；要看的是「越线项集合与档位比一致」而非全绿；
+6. 改 `nightly-bench.yml` 「基线对比」step：把现 echo 提示换成
+   `uv run pytest -m bench --benchmark-compare=docs/perf/baseline.json --benchmark-compare-fail=median:25%`
+   （**CI 档位跑自己的基线**，此时才可全绿；阈值仍不复制进 yml）；
+7. commit `docs/perf/baseline.json`（阈值类基线入库，同 runner.txt 先例）+ yml 改一行，回执留言板；
+8. 后续 nightly 若本 step 红 → 按 `gh run download` 取新 JSON，与 baseline 逐项比 median 找漂移源
+   （先看是否单轮离群：mean/median >2x = 被抢断，重跑即可）。
+
+**验收口径**：step 6 之后，任一 nightly run 的「基线对比」绿 = CI 档位无 >25% 中位漂移；
+红 = 要么真回归（同 commit 在定标机也越 thresholds 硬线）、要么 runner 当轮被抢断（mean/median>2x，重跑）。
+**不得做的事**：不把 25% 当「新阈值」写进 thresholds.py（那是相对漂移参数，不是绝对红线）；
+不用 mean 做 compare 判据（CI mean 已被证 3x 抖动）；不拿定标机产物覆盖 CI 基线。
+
 ## 5. 具体 bench 用例示例（伪代码，非实现码）
 
 ```
