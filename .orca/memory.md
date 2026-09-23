@@ -55,7 +55,7 @@
 （以下各节由对应 agent 维护——cline 节以上为 2026-09-20 收编版。）
 
 ## ③ opencode（数据 / 数据库域）
-- 【2026-09-22 第四轮快照】M2-D3 已收编（`4a11d0f`）。**M2-D4 已交付待收编分支 `3853ceb`**（docs 型、零 schema 改动）：①对账表 `docs/data/schema.md §17`——三方全表 + **唯一硬缺口 `decay_rate` 无事件承载**（投影硬编码 0.0 破坏 §14 回放）+ 方案 A/B/C；②契约文档 `sim/npc/memory.py` docstring 扩写（输入输出/公式/Scorer 注入点/M3 npc_memory_vec 边界/读侧 guardrail）+ `schema.md §18`；③`test_m2_matter_projection.py`（integrity+is_rubble 对账锁定 6 passed，decay_rate 缺口 xfail 占位）；④alembic 零漂移自检通过（无 0005）。**待 Claude 裁决方案 A 才动 events.py/matter.py/npc_store.py**（改冻结事件基线）。任务单=本树 talking.txt。
+- 【2026-09-22 第四轮快照】M2-D4 已收编（方案 A 由 Claude 落地 `653d395`）。**M3 预研已交付分支 `8c37e66`**（docs 型、零代码零依赖）：①`schema.md §19` matter 读路径契约草案（`materialize_matter() -> MatterLedger`，快照路径 vs 重放路径两入口的缝，注册≠落库 M3 待定）；②`docs/data/vec-preplan.md` npc_memory_vec 前置调研（sqlite-vec vs 手写余弦、5万条量级估算、embedding 挂 `LlmClient.embed()` 独立缝、7 项待裁决 V1-V7）。**M3 边界**：npc_memory_vec 届时只换候选生成器（`CandidateSource`），`Scorer` 打分链不变；embedding 生成是成本大头非检索。任务单=本树 talking.txt。
 
 ### 已内化教训（M2-D2/D3 实测，别再踩）
 - **`.orca/talking.txt` 是 worktree-local（gitignored）**；`.orca/memory.md` 是 tracked。给本树的回执写 talking.txt；给**他树**的回执写**对方树**的 talking.txt。收编方=Claude（merge 各 ZX466/* → origin+gitee 双远程）。
@@ -72,6 +72,8 @@
 - **对账表方法论**：三方对账 = 逐字段判「能否从事件流重建」（§14 判据）；`is_rubble` 靠 `COLLAPSE∨integrity≤0` **推导一致**（非显式承载，当前等价）；`subject_kind/material/quality/load_bearing/supported_by` 是账本无源的占位（归 M4/M5，非缺口）。
 - **pyright 遗留基线**：`test_m2_cognition.py`(source Literal) 与 `test_m2_runtime_assemble.py`(dict[str,object] 取值) 有 3 个**既有**错（Claude M2-A2 第三批文件，非本域），改动前先确认不是自己引入的。
 - **多行 CJK docstring 的 ruff E501**：行宽按字符数计，CJK 表格行/长句易超 100——拆行或去冗余；docstring 里 Markdown 表格的 `\|` 会被 Python 当非法转义（W605），改用「或 None」「和」等文字表述。
+- **M3 向量检索缝（预研内化）**：`npc_memory_vec` 在 M3 只是**候选生成器**——新增 `CandidateSource` 协议换候选源，`Scorer` 打分链一字不改（§18 硬边界）。**`sqlite-vec>=0.1.6` 已是 pyproject 依赖且已装**（别重复装）；脚手架 `sim/core/persistence/vector.py`（load/create/exists）已备，DDL 在 Alembic 范围外（需 LOAD EXTENSION）。量级 50×1000=5万条非瓶颈，**成本在 embedding 生成**；embedding 挂 `LlmClient.embed(profile, texts)`（复用 ProfileSnapshot + llm.* 监控 + K3/K4），chat 模型不产 embedding → §10 或需第二条 profile 缝。详见 `docs/data/vec-preplan.md`。
+- **matter 读路径（M3 预研）**：`materialize_matter()` 对镜 `materialize`（一次 SELECT、禁止逐对象）；快照路径（直读表）vs 重放路径（snapshots+事件重放）两入口**同产物**，重放器须复用 `_project_matter` 同一折叠规则避免语义分叉；**注册≠落库**（新建对象未产事件前不在表）。详见 `schema.md §19`。
 
 
 > ——以下为 opencode 树 memory.md 原文（收编于 3309c0f）——

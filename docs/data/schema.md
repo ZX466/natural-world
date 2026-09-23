@@ -578,6 +578,68 @@ MatterLedger（内存账本）→ MATTER_* 事件（`MatterPayload`）→ `matte
 
 ---
 
+## 19. matter 读路径设计（M3 预研，M2-D4 后继）
+
+§17 方案 A 落地后 `matter_state` 已是**完整**的写入投影（含 `decay_rate`，事件可逐位重建）。
+M3 世界循环需要**读路径**：从库/事件重建内存 `MatterLedger`。本节为**设计契约草案**
+（零代码，行为以落地版为准）。
+
+### 19.1 目标与模式
+
+- **对镜 `NpcStore.materialize`**（§12 L0→L1）：一次 SELECT 批量取本分支 `matter_state`
+  → 内存态；禁止逐对象查询（§1.3 同款纪律）。
+- **产物**：`MatterLedger`（`{matter_id: MatterSnapshot}`，含 `integrity/decay_rate/is_rubble`）。
+- 契约名：`NpcStore.materialize_matter(subject_ids: Sequence[str] | None = None) -> MatterLedger`。
+
+### 19.2 草案签名与映射
+
+```
+async def materialize_matter(
+    self, matter_ids: Sequence[str] | None = None
+) -> MatterLedger: ...
+```
+
+| matter_state 列 | MatterSnapshot 字段 | 映射 |
+|---|---|---|
+| `subject_id` | `matter_id` | 直通 |
+| `integrity` | `integrity` | 直通（库内已 clip 0..1） |
+| `decay_rate` | `decay_rate` | 直通（方案 A 起列保真） |
+| `is_rubble` | `is_rubble` | 直通（终态） |
+
+- `matter_ids=None` → 本分支全部（`WHERE branch_id=?`）；显式给 id → `IN (...)`，
+  未知 id 不在结果中（调用方兜底，同 `materialize`）。
+- 其余列（`subject_kind/material/quality/load_bearing/supported_by`）**不映射**：
+  MatterSnapshot 无此概念（§17.1 占位列，归 M4/M5）。
+- **不落库、不改写**：读路径只重建内存账本（与 `materialize` 同为纯读）。
+
+### 19.3 两种入口的缝（重放路径 vs 快照路径）
+
+§14 声明「快照 + 事件重放可逐位重建」。两入口**同产物、不同代价/精度**：
+
+| 入口 | 机制 | 代价 | 用途 |
+|---|---|---|---|
+| **快照路径** `materialize_matter()` | 直接 SELECT `matter_state`（当前值） | 1 次查询 O(n) | 常规启动/恢复；n = 存活对象数 |
+| **重放路径**（预留） | 从最近 `snapshots` + 重放 `matter.*` 事件 → UPSERT 重建 | 与事件数成正比 | 快照损坏/审计核对；方案 A 已保证 `decay_rate` 可重建 |
+
+- **缝的位置**：两入口都归数据域（本模块），产出 same `MatterLedger`；调用方
+  （M3 世界循环）按场景选入口，**不感知**内部差异。
+- **一致性判据**：两入口产出应**逐位相等**（`integrity/decay_rate/is_rubble`）；
+  可作 M3 校验测试（对账 §17 三方表的运行时延伸）。
+- **重放路径本批不实现**：M2 只备「快照路径」入口草案；重放器（读 events 表按 seq
+  重放 → 投影回内存）是 M3 工作项，届时复用 `_project_matter` 的**同一折叠规则**
+  （`durability`→integrity、`COLLAPSE∨≤0`→rubble、`decay_rate≥0`→写率），避免两套语义分叉。
+
+### 19.4 边界与约束
+
+- **注册≠落库**：新建对象仅 `register` 到账本、**未产事件前不在 `matter_state`**；
+  `materialize_matter` 只回「已投影对象」。注册持久化（保证空账本冷启不丢对象）是
+  M3 待定项（可能需 `MATTER_BUILD`/register 事件或保留 `structures` 表，见 §9）。
+- **分支隔离**：`WHERE branch_id = self._branch_id`，同 `materialize`。
+- **只读**：不触发写路径、不投影、不 flush（C4 唯一写路径不变）。
+- 零 schema 改动、零迁移（纯读 + 已有列）。
+
+---
+
 ## 索引策略总结
 
 | 表 | 索引 | 用途 |
