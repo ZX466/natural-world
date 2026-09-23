@@ -114,7 +114,7 @@ M1 范围与量化验收：DESIGN §17（认知闭环：LLM 客户端 + Profile 
 
 > 复核经过：P05 终校时（当时 main 尚未含 S04）第 1、2 项**确实仍缺**，已在 P05 报告主树；**codex S04 合入（main `66f3f18`）后三项全部收口**，本表已按终态更新。教训：**跨域状态以 main 实际代码为准**（我复查 `git grep 'not isinstance'` / `_rtoken` docstring 逐条确认，未凭留言采信）。
 
-## 5. M2 区块（第一至第五轮已收编，2026-09-23 盘点）
+## 5. M2 区块（第一至第六轮已收编，2026-09-23 盘点）
 
 M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI（兼 LLM 断线兜底）+ 非理性框架 + 物质熵增 + 嗅觉风向 + 语言判定 + 自我未知**。
 
@@ -144,13 +144,24 @@ M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI
 | M2-S3 M2-D2 安评 | codex | `docs/security/m2-d2-review.md` + 3 条补充测试（`ZX466/codex` `86d5d1e`） | ✅ main `3c79465` | 结论=通过：0 CRITICAL/HIGH、2 MEDIUM（归 opencode）、2 观察 |
 | M2-D3 记忆检索缝 | opencode | 读侧检索打分 + redact_sensitive + codex 两条 MEDIUM 修复（`ZX466/opencode` `cc29687`） | ✅ main `25e9b2d` | 9 文件 +988 行；npc_memory_vec 仍锁 M3 |
 | M2-P3 L1 规格 + feeder | pi | `docs/perf/l1-spec.md` + `soak.py::make_l1_feeder`（`ZX466/pi` `a5c05ed`） | ✅ main `7d63210` | 实测 0.206-0.747ms（余量 8-29×）；p99 硬门禁改信息性守护（口径已随收编确认） |
-| M2-K2 openapi 复核 | kilo | 复核回执（无仓库文件）；返工验收清单转 M2-K3 → `docs/api/ws-message-diff.md`（复验见下行 M2-K3 行） | ✅ main `d7f066f` | `59ffd86` 改写复核 + 接口三查；6 类问题（含 P0「切源丢 21 schema」）全采信，裁决=切源暂缓（`docs/api/codegen.md` §4.1，cline M2-C4 落档） |
+| M2-K2 openapi 复核 | kilo | 复核回执（无仓库文件）；返工验收清单转 M2-K3 → `docs/api/ws-message-diff.md`（见下方 M2-K3 清单行） | ✅ 已回执 | `59ffd86` 改写复核 + 接口三查；6 类问题（含 P0「切源丢 21 schema」）全采信，裁决=切源暂缓（`docs/api/codegen.md` §4.1，cline M2-C4 落档） |
 | M2-A2 第三批 | Claude | smell/weather 接感知步 + NpcRuntime 物化 HiddenState + cognition 六偏差骨架 + language 叙事降质 | ✅ main `19de630` | 四件全部落 main；840 passed / 55 skipped |
+| M2-C4 切源暂缓声明（本域） | cline | `docs/api/codegen.md` §4.1「切源暂缓」+ `tools/gen-protocol.ts` 头注 | ✅ main `525f970` | 原因=kilo K2 P0（`--src` 切真实源丢 21 个 HTTP 子结构 schema）；解除条件=sim 补 `response_model`（照 K3 清单）+ openapi_ext 返工，两项齐备经 Claude 裁决；nightly 基线评估=产物不全不动 |
+| M2-S4 T1 信息边界 10k 采样 | codex | `docs/security/t1-sampling-10k.md` + `sim/tests/test_m2_t1_sampling_10k.py` | ✅ main `38a7f63` | 4 场景 × 2,500 = **10,000 采样**（假 LLM 词面拼装、分流 RNG 可重放、零网络）；判据=零直陈泄露 + 零误伤；7 用例 1.1s 全绿、全量 862 passed；复用 S1 工具链零改动，`test_m2_` 前缀自动进 CI glob |
+| M2-D4 matter 对账 + memory 契约 | opencode | `docs/data/schema.md` §17（Matter 三方投影对账）+ `sim/npc/memory.py` 契约 + 对账锁定测试 | ✅ main `e77d25c` | integrity/decay_rate/is_rubble ↔ `matter_state` 列 ↔ MatterPayload 三方一致表；§17.2 缺口 `decay_rate` 无事件承载 → 方案 A 当时待裁、后由 `653d395` 落地 |
+| M2-P4 第三批预算预案 | pi | `docs/perf/m2-p4-budget-preplan.md` | ✅ main `1813cbb` | smell 接线拆表 / `flush_tick` 异步不进 tick 断言 / cognition 骨架成本上界建议；§4 分「已落地 vs 待裁决」两栏（阈值真相源仍 `thresholds.py`） |
+| M2-K3 返工验收清单 | kilo | `docs/api/ws-message-diff.md` | ✅ main `d7f066f` | 22 个缺失 schema 清单（标来源路由）+ 61 处字段级差异（ADD 22 / DEL 10 / MOD 29）+ 4 处 WS channel 错值 + subject 等整字段删除 + nullable→oneOf-null 三种正确形样例 |
 | M2-C5 nightly 红灯修复（本域） | cline | `.github/workflows/nightly-bench.yml`（`mkdir -p perf` + 上传 `if: always()` + `runner.txt` 归档） | ✅ main `dd8e253` | 根因=`perf/` 目录不入库 → pytest-benchmark 收尾 `save_json` 抛 `FileNotFoundError`（4/4 跑必现）；3 次 dispatch 实证：FileNotFoundError 消失、artifact 首次非 0（含 CI 档位 `runner.txt`：ubuntu-latest / nproc 4 / AMD EPYC 9V74）；残留微基准边缘越线（每轮集合不同、超 2–9%）=runner 负载抖动，非管道问题，移交裁决（`PI_BENCH_ADVISORY` 已批、落地归 pi） |
 | M2-S5 M3 安规预研 | codex | `docs/security/m3-preplan.md` | ✅ main `3c69158` | R1-R7 记忆/知识传播缝、C1-C13 建造输入面、X1-X8 triggered 扫描面 + §4 验收口径（零代码） |
 | M2-D5 M3 数据预研 | opencode | `docs/data/vec-preplan.md` + `docs/data/schema.md` §19 | ✅ main `ee70aad` | sqlite-vec vs numpy 余弦方案 + 5 万条量级估算（非瓶颈）+ `LlmClient.embed` 缝 + V1-V7 待裁决；`materialize_matter` 契约入 schema §19 |
 | M2-P5 嗅觉接线预算落地 | pi | `thresholds.py::SMELL_WIRED_TICK_LIMIT_MS=1.0` + `test_bench_smell.py` 接线版三用例 | ✅ main `7cfe842` | 接线版红线 1.0ms；复测 50 源 0.116ms（余量 ~8.6×） |
 | M2-K3 复验 | kilo | `docs/api/ws-message-diff.md` §4.3 复验结论 + 快照侧对齐回写（`ce68e5a`） | ✅ main `e10c6cd` | 判据达成：白名单外结构 diff = **0**（五项全绿：`MISSING in ext` ≤5 / 逐字段 44+8 required 归零 / 4 处 channel 错值归零 / nullable 归零 / paths `{id}`→`{profile_id}`）；未消项不阻塞 M5，切源解禁仍待 M5 + sim 404 声明 |
+| M2-A2 第四批 | Claude | `docs/arch/m3-plan.md`（M3 规划整合稿） | ✅ main `805166e` | 三份 M3 预研的整合骨架：批次 A-D 切分（A 向量 / C 地图可并行，B 等 A 接口冻结，D 收尾）+ 安规钉子横切（M3-S1 两枚 RED 先于一切实现）+ §6 待裁决队列 + M3 量化验收逐条对照落点 |
+| M2-C6 README 补表（本域） | cline | `docs/README.md`（§2 文档地图 +5 行 / §5 第五轮 +5 行 + 5 处过期状态校正） | ✅ main `4470fd0` | 表列数一致性 + 无冲突标记双检通过；摘要口径微调被采信（裁 6：ws-message-diff 按文档原文写「未消项不阻塞 M5」）；缺行 gap 已转 C7 本单补齐 |
+| M3-S1 安全钉子（两枚 T1 RED） | codex | `sim/tests/test_t1_m3_vec_governance.py`（R2）+ `sim/tests/test_t1_m3_matter_bounds.py`（C2） | ✅ main `2daa644` | 先红后绿钉子：R2 召回治理（`superseded_by`/`invalid_reason` 非空不得进向量候选、supersede 级联即时）5 用例 + C2 MatterPayload 域约束 29 用例；失败指纹=ImportError `VecCandidateSource`；随批次 A4/C4 转绿（收编 `7328dfc`） |
+| M2-D6 vec 裁决栏 | opencode | `docs/data/vec-preplan.md` §7 裁决栏 + `docs/data/schema.md` §19「注册≠落库」核对 | ✅ main `414acb5` | V1/V4/V6 采结（A 主 B 降级 / vec 表为准、BLOB 仅写缓存 / 召回端治理过滤红线归 codex R2）；V2/V3/V5/V7 挂起（改 schema 须提案、S1 敏感须 codex 复核）；纯文档零迁移，alembic 零漂移（收编 `8470f3b`） |
+| M2-P6 advisory 门 | pi | `sim/tests/bench/harness.py`（`PI_BENCH_ADVISORY`）+ `thresholds.py` RNG 330 + `test_bench_advisory_gate.py` + `docs/perf/ci-calibration-m2p6.md` | ✅ main `8fd9a17` | 落地裁 1：nightly 置 `PI_BENCH_ADVISORY=1`（越线只 structlog warning 不红、采集零改动）；裁 2：RNG 1M 警戒 300→**330ms**（CI 档位实测）；附 CI 档位定标提案（收编 `3c20b7c`） |
+| M5-K1 anchors 契约稿 | kilo | `docs/api/anchors-api.md`（306 行，零代码） | ✅ main `b849025` | 三路由契约四要素齐：GET 列表空库 `[]` 非 404 / POST 仅 `name`（游标由服务端从会话取）/ PATCH `name` 必填非可空 / DELETE protected 时 409；+ §5 施工清单与 sim 404 handler 提案（收编 `db46b9e`） |
 
 ### M2 依赖对账（M2-C1 结论：**零新依赖**）
 
