@@ -74,12 +74,12 @@ export type paths = {
     readonly patch?: never;
     readonly trace?: never;
   };
-  readonly '/api/settings/profiles/{id}': {
+  readonly '/api/settings/profiles/{profile_id}': {
     readonly parameters: {
       readonly query?: never;
       readonly header?: never;
       readonly path: {
-        readonly id: string;
+        readonly profile_id: string;
       };
       readonly cookie?: never;
     };
@@ -95,12 +95,12 @@ export type paths = {
     readonly patch: operations['updateProfile'];
     readonly trace?: never;
   };
-  readonly '/api/settings/profiles/{id}/activate': {
+  readonly '/api/settings/profiles/{profile_id}/activate': {
     readonly parameters: {
       readonly query?: never;
       readonly header?: never;
       readonly path: {
-        readonly id: string;
+        readonly profile_id: string;
       };
       readonly cookie?: never;
     };
@@ -392,12 +392,12 @@ export type components = {
     /** @description 更新 Profile；字段全可选，api_key 省略即保留原密钥（K1/K3）。对齐 sim/api/settings.py::ProfileUpdate */
     readonly ProfileUpdate: {
       /** @description 可选，省略即保留原密钥 */
-      readonly api_key?: string;
-      readonly base_url?: string;
-      readonly max_tokens?: number;
-      readonly model?: string;
-      readonly name?: string;
-      readonly temperature?: number;
+      readonly api_key?: string | null;
+      readonly base_url?: string | null;
+      readonly max_tokens?: number | null;
+      readonly model?: string | null;
+      readonly name?: string | null;
+      readonly temperature?: number | null;
     };
     readonly Projectile: {
       readonly dur: number;
@@ -718,7 +718,7 @@ export interface operations {
       readonly query?: never;
       readonly header?: never;
       readonly path: {
-        readonly id: string;
+        readonly profile_id: string;
       };
       readonly cookie?: never;
     };
@@ -741,7 +741,7 @@ export interface operations {
       readonly query?: never;
       readonly header?: never;
       readonly path: {
-        readonly id: string;
+        readonly profile_id: string;
       };
       readonly cookie?: never;
     };
@@ -762,7 +762,7 @@ export interface operations {
       readonly query?: never;
       readonly header?: never;
       readonly path: {
-        readonly id: string;
+        readonly profile_id: string;
       };
       readonly cookie?: never;
     };
@@ -789,7 +789,7 @@ export interface operations {
       readonly query?: never;
       readonly header?: never;
       readonly path: {
-        readonly id: string;
+        readonly profile_id: string;
       };
       readonly cookie?: never;
     };

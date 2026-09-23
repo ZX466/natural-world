@@ -39,9 +39,11 @@ import type {
   AnchorListItem,
   ProfileListItem,
   ProfileCreate,
+  ProfileUpdate,
   WorldMapResponse,
   MapChunk,
 } from '../protocol';
+import type { paths } from '@shared/protocol';
 
 describe('ws-protocol 类型与出戏边界', () => {
   it('state_delta 字段与 ws-protocol.md 一致；用 ws_seq 而非 tick', () => {
@@ -213,6 +215,39 @@ describe('ws-protocol 类型与出戏边界', () => {
     // 与 sim settings.py::ProfileCreate 对齐：无 provider/params
     expectTypeOf<ProfileCreate>().not.toHaveProperty('provider');
     expectTypeOf<ProfileCreate>().not.toHaveProperty('params');
+  });
+
+  it('K03 #3 ProfileUpdate 全字段可选且可显式置 null（对齐 sim pydantic str | None）', () => {
+    // sim settings.py::ProfileUpdate 六字段均 `T | None = None` 且无必填项，
+    // openapi-typescript 产出 `?(T | null)`（可选 + 联合含 null）。
+    // 逐字段断言「值域含 null」，比整物体形状更耐 future 加字段。
+    expectTypeOf<ProfileUpdate['name']>().toEqualTypeOf<string | null | undefined>();
+    expectTypeOf<ProfileUpdate['base_url']>().toEqualTypeOf<string | null | undefined>();
+    expectTypeOf<ProfileUpdate['model']>().toEqualTypeOf<string | null | undefined>();
+    expectTypeOf<ProfileUpdate['api_key']>().toEqualTypeOf<string | null | undefined>();
+    expectTypeOf<ProfileUpdate['temperature']>().toEqualTypeOf<number | null | undefined>();
+    expectTypeOf<ProfileUpdate['max_tokens']>().toEqualTypeOf<number | null | undefined>();
+    // 更新为白名单外字段一律不存在（防前端臆造 sim 不认的键）
+    expectTypeOf<ProfileUpdate>().not.toHaveProperty('provider');
+    expectTypeOf<ProfileUpdate>().not.toHaveProperty('params');
+    expectTypeOf<ProfileUpdate>().not.toHaveProperty('id');
+  });
+
+  it('K03 #4 settings 路径参数名为 profile_id（与 sim 路由签名逐字对齐）', () => {
+    // 快照侧曾用 {id} 而 sim 函数签名是 profile_id → 归一为 {profile_id}。
+    // 前端 settingsApi.ts 用 encodeURIComponent(id) 拼 URL，参数名不影响调用，
+    // 但 paths 类型是自文档契约，必须与 sim 一致。
+    type Update = NonNullable<
+      paths['/api/settings/profiles/{profile_id}']['patch']
+    >;
+    type Activate = NonNullable<
+      paths['/api/settings/profiles/{profile_id}/activate']['post']
+    >;
+    expectTypeOf<NonNullable<Update['parameters']['path']['profile_id']>>().toEqualTypeOf<string>();
+    expectTypeOf<NonNullable<Activate['parameters']['path']['profile_id']>>().toEqualTypeOf<string>();
+    // 旧名 id 必须已从 paths 中消失
+    expectTypeOf<paths>().not.toHaveProperty('/api/settings/profiles/{id}');
+    expectTypeOf<paths>().not.toHaveProperty('/api/settings/profiles/{id}/activate');
   });
 
   // ── K04：WsMessage 判别联合（gen-protocol 全量生成后）──────────────────

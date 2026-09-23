@@ -79,10 +79,10 @@
         }
       }
     },
-    "/api/settings/profiles/{id}": {
+    "/api/settings/profiles/{profile_id}": {
       "parameters": [
         {
-          "name": "id",
+          "name": "profile_id",
           "in": "path",
           "required": true,
           "schema": { "type": "string" }
@@ -135,10 +135,10 @@
         }
       }
     },
-    "/api/settings/profiles/{id}/activate": {
+    "/api/settings/profiles/{profile_id}/activate": {
       "parameters": [
         {
-          "name": "id",
+          "name": "profile_id",
           "in": "path",
           "required": true,
           "schema": { "type": "string" }
@@ -445,7 +445,7 @@
           "channel": { "type": "string", "enum": ["control"] },
           "type": { "type": "string", "enum": ["player_impulse"] },
           "text": { "type": "string", "maxLength": 64, "description": "玩家原始直觉输入；sim 负责叙事化" },
-          "preset": { "type": "string", "nullable": true }
+          "preset": { "oneOf": [{ "type": "string" }, { "type": "null" }] }
         },
         "additionalProperties": false
       },
@@ -682,21 +682,19 @@
           "api_key": { "type": "string", "minLength": 1, "description": "明文入，后端即加密；响应永不回传（K4/K5）" },
           "temperature": { "type": "number", "minimum": 0, "maximum": 2, "default": 0.7 },
           "max_tokens": { "type": "integer", "minimum": 1, "maximum": 32768, "default": 2048 }
-        },
-        "additionalProperties": false
+        }
       },
       "ProfileUpdate": {
         "type": "object",
         "description": "更新 Profile；字段全可选，api_key 省略即保留原密钥（K1/K3）。对齐 sim/api/settings.py::ProfileUpdate",
         "properties": {
-          "name": { "type": "string", "minLength": 1, "maxLength": 64 },
-          "base_url": { "type": "string", "minLength": 1 },
-          "model": { "type": "string", "minLength": 1 },
-          "api_key": { "type": "string", "minLength": 1, "description": "可选，省略即保留原密钥" },
-          "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
-          "max_tokens": { "type": "integer", "minimum": 1, "maximum": 32768 }
-        },
-        "additionalProperties": false
+          "name": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+          "base_url": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+          "model": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+          "api_key": { "anyOf": [{ "type": "string" }, { "type": "null" }], "description": "可选，省略即保留原密钥" },
+          "temperature": { "anyOf": [{ "type": "number", "minimum": 0, "maximum": 2 }, { "type": "null" }] },
+          "max_tokens": { "anyOf": [{ "type": "integer", "minimum": 1, "maximum": 32768 }, { "type": "null" }] }
+        }
       },
       "ProfileListItem": {
         "type": "object",
@@ -708,7 +706,7 @@
           "base_url": { "type": "string" },
           "model": { "type": "string" },
           "temperature": { "type": "number" },
-          "max_tokens": { "type": "integer", "minimum": 0 },
+          "max_tokens": { "type": "integer" },
           "active": { "type": "boolean", "description": "单 profile 手动切换用（DESIGN §4）" },
           "api_key_hint": { "type": "string", "description": "仅掩码 sk-***last4；不是密钥，不能用于调用" }
         },
