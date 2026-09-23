@@ -177,6 +177,7 @@ uv run pyright sim/
 > 每次完成后更新本文件「当前任务 / 进行中 / 已完成」；过时内容删掉。
 
 ## ④ codex（安全 / 合规 / 风险域）
+- 【2026-09-23 M3-S2 证据链契约交付】`d81cf11`：m3-evidence-chain.md（witnessed@emerge 0.9 / told 0.6^n floor 0.1 / inferred 禁；judge_third_party_hidden 签名 + E1 emerge 事件提案 + knowledge 五列待裁；X4 修订走 CR）。B4 前置就绪。
 - 【2026-09-23 M3-S1 钉子交付】`2daa644`：test_t1_m3_vec_governance.py（R2/V6，4 RED，opencode A4 转绿）+ test_t1_m3_matter_bounds.py（C2，26 RED，opencode C4 转绿）。RED 实测：NaN 全链写库、Infinity clip 成 1.0。零实现零依赖；30 RED 全集中两文件，908 passed 零回归。
 - 【2026-09-23 M3 安规预研交付】`b650882`：docs/security/m3-preplan.md（R1-R7 传播缝 / C1-C13 建造输入面 / X1-X8 triggered 扫描面；验收=钉子 T1+10k 零回归）。待命：openapi_ext 批次 security-scan 复审仅被 @ 时行动。
 - 【2026-09-22 第四轮快照】M2-S3 已收编（`3c79465`，通过结论；2 MEDIUM 已被 opencode 修：`4a11d0f` event_validation.py + materialize_hidden）。M2-S4 已交付（`38a7f63`，origin+gitee 已推，等收编）：t1-sampling-10k.md 口径 + test_m2_t1_sampling_10k.py harness（10k 采样 7 用例 1.1s；判据=零直陈泄露+零误伤+全覆盖+可重放；S1 文件零改动；test_m2_ 前缀自动进 CI glob）。全量 862 passed + 55 skipped。
