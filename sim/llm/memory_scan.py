@@ -180,7 +180,8 @@ class InMemoryStore:
 
     def iter_visible(self, npc_id: str) -> Iterator[MemoryEntry]:
         for e in self._entries.values():
-            if e.npc_id == npc_id and e.superseded_by is None:
+            # M3-B1 双列口径：任一治理列非空即不可见（R3 修复，与 SqlMemoryStore 同语义）
+            if e.npc_id == npc_id and e.superseded_by is None and e.invalid_reason is None:
                 yield e
 
     def __len__(self) -> int:
