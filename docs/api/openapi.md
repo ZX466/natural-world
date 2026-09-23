@@ -36,11 +36,12 @@
 | POST | `/api/settings/profiles/{id}/activate` | 设为活动 Profile（单 profile 手动切换） | M1 |
 | GET | `/api/anchors` | 玩家档列表 | M5 |
 | POST | `/api/anchors` | 新建游标（在当前会话点分叉标记） | M5 |
-| PATCH | `/api/anchors/{id}` | 重命名 | M5 |
-| DELETE | `/api/anchors/{id}` | 删除游标（不动世界档，见 §12） | M5 |
+| PATCH | `/api/anchors/{anchor_id}` | 重命名 | M5 |
+| DELETE | `/api/anchors/{anchor_id}` | 删除游标（不动世界档，见 §12） | M5 |
 | GET | `/openapi.json` | FastAPI 自动生成的 OpenAPI schema（codegen 源；FastAPI 默认路径，非 `/api/openapi.json`） | M0 |
 
 > 锚点**载入**（触发世界分叉+重放）不经 HTTP，而经 WS `load_anchor`（见 ws-protocol.md §4.4）——因为载入需在长连接上重建渲染流。CRUD（建/列/改名/删）是元数据操作，归 HTTP。
+> **anchors 逐字段契约（校验规则/状态码/ProblemDetail `type` 机器码/`protected` 派生语义/sim 全局 404 handler 提案）见 `anchors-api.md`**——本节只留端点清单与形状样例；施工前必读该文 §5 清单。
 
 ## 4. 请求 / 响应 schema
 

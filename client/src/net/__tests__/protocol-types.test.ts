@@ -250,6 +250,17 @@ describe('ws-protocol 类型与出戏边界', () => {
     expectTypeOf<paths>().not.toHaveProperty('/api/settings/profiles/{id}/activate');
   });
 
+  it('K03 #5 anchors 路径参数名为 anchor_id（M5-K2 裁 5，与 settings 同逻辑）', () => {
+    // anchors 是 M5 新路由：快照曾用 {id}，因 K3 已将 settings 归一为 {profile_id}，
+    // 采同逻辑一次做对 → {anchor_id}。sim/api/anchors.py 形参名必须逐字为 anchor_id。
+    type Rename = NonNullable<paths['/api/anchors/{anchor_id}']['patch']>;
+    type Delete = NonNullable<paths['/api/anchors/{anchor_id}']['delete']>;
+    expectTypeOf<NonNullable<Rename['parameters']['path']['anchor_id']>>().toEqualTypeOf<string>();
+    expectTypeOf<NonNullable<Delete['parameters']['path']['anchor_id']>>().toEqualTypeOf<string>();
+    // 旧名 id 必须已从 anchors paths 中消失（旧路径整个模板亦不存在）
+    expectTypeOf<paths>().not.toHaveProperty('/api/anchors/{id}');
+  });
+
   // ── K04：WsMessage 判别联合（gen-protocol 全量生成后）──────────────────
   it('K04 #1 WsMessage 判别联合：type 枚举 = ws-protocol.md §3 清单（C→S 5 + S→C 9）', () => {
     // §3.1 client → sim（5 条：含玩家点击寻路 move_request）

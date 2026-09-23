@@ -201,10 +201,10 @@
         }
       }
     },
-    "/api/anchors/{id}": {
+    "/api/anchors/{anchor_id}": {
       "parameters": [
         {
-          "name": "id",
+          "name": "anchor_id",
           "in": "path",
           "required": true,
           "schema": { "type": "string" }
