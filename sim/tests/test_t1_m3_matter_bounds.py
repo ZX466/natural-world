@@ -42,6 +42,13 @@
   → `NpcStore.flush_tick` 全链通过并写库（实测留痕：
     `NaN damage ACCEPTED; integrity now = 1.0`）。
 
+**M3-D1 钉子修正留痕（opencode，2026-09-23）**：原 TestMatterEndToEndBounds 把
+`matter_event(...)` 写在 `pytest.raises(EventValidationError)` **之外**，与
+`test_factory_rejects_nan_durability`（同调用要求抛 ValidationError）**自相矛盾**——
+任何实现都无法同时满足。已按 Claude 裁决将工厂调用移入 `with` 并放宽为
+`(EventValidationError, ValidationError)`（工厂/store 任一层拒绝即算通过，defense in depth）。
+实现后 C2 全绿 29/29。
+
 实现归属：opencode C4（批次 C）。
 CI：test_t1_m3_* 前缀随 `-m "not bench"` 全量跑。
 """
@@ -182,14 +189,18 @@ class TestMatterEndToEndBounds:
 
     async def test_flush_tick_rejects_nan_end_to_end(self, store) -> None:
         ns = NpcStore(store)
-        ev = matter_event(
-            tick=1,
-            kind=EventKind.MATTER_BUILD,
-            matter_id="wall",
-            amount=0.0,
-            durability=float("nan"),
-        )
-        with pytest.raises(EventValidationError):
+        # M3-D1 钉子修正（codex 原稿：工厂调用在 with 之外 → 与
+        # test_factory_rejects_nan_durability 自相矛盾，无法同时满足）。
+        # 语义对齐「链上任一层拒绝非有限值」：工厂层抛 pydantic ValidationError、
+        # store 层抛 EventValidationError，二者皆算通过（defense in depth）。
+        with pytest.raises((EventValidationError, ValidationError)):
+            ev = matter_event(
+                tick=1,
+                kind=EventKind.MATTER_BUILD,
+                matter_id="wall",
+                amount=0.0,
+                durability=float("nan"),
+            )
             await ns.flush_tick([ev])
 
     async def test_flush_tick_rejects_infinity_update(self, store) -> None:
@@ -199,14 +210,14 @@ class TestMatterEndToEndBounds:
             tick=1, kind=EventKind.MATTER_BUILD, matter_id="wall", amount=0.0, durability=0.5
         )
         await ns.flush_tick([ok])
-        bad = matter_event(
-            tick=2,
-            kind=EventKind.MATTER_BUILD,
-            matter_id="wall",
-            amount=0.0,
-            durability=float("inf"),
-        )
-        with pytest.raises(EventValidationError):
+        with pytest.raises((EventValidationError, ValidationError)):
+            bad = matter_event(
+                tick=2,
+                kind=EventKind.MATTER_BUILD,
+                matter_id="wall",
+                amount=0.0,
+                durability=float("inf"),
+            )
             await ns.flush_tick([bad])
 
     async def test_valid_build_still_persists(self, store) -> None:

@@ -121,11 +121,17 @@ class MatterPayload(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     matter_id: str
-    x: int = -1
-    y: int = -1
-    amount: float = 0.0  # 变化量（decay/damage 为负损，build 为增量）
-    durability: float = -1.0  # 结算后耐久（-1=不变更）
-    decay_rate: float = -1.0  # 静态衰减率（-1=不变更；≥0 携带）
+    #: 域约束（M3-S1 C2，m3-preplan §2）：防 NaN/±inf 与越界值固化进
+    #: append-only 世界态（`np.clip(NaN)=NaN` / `min(1,inf)=1` 静默伪造）。
+    #: x/y ∈ [-1,4096)：-1=未定位哨兵，上界=寻路界（gate.py out_of_bounds 同源）。
+    x: int = Field(default=-1, ge=-1, lt=4096)
+    y: int = Field(default=-1, ge=-1, lt=4096)
+    #: 单 tick 变化量；[-1,1]（与账本 clip(0,1) 同语义）。-1..1 之外拒。
+    amount: float = Field(default=0.0, ge=-1.0, le=1.0, allow_inf_nan=False)
+    #: 耐久/积分；-1=不变更哨兵，≥0 为 0..1。
+    durability: float = Field(default=-1.0, ge=-1.0, le=1.0, allow_inf_nan=False)
+    #: 静态衰减率；-1=不变更哨兵，≥0 为静态率。
+    decay_rate: float = Field(default=-1.0, ge=-1.0, le=1.0, allow_inf_nan=False)
     note: str = ""
 
 
