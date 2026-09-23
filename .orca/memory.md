@@ -55,7 +55,7 @@
 （以下各节由对应 agent 维护——cline 节以上为 2026-09-20 收编版。）
 
 ## ③ opencode（数据 / 数据库域）
-- 【2026-09-22 第四轮快照】M2-D4 已收编（方案 A 由 Claude 落地 `653d395`）。**M3 预研已交付分支 `8c37e66`**（docs 型、零代码零依赖）：①`schema.md §19` matter 读路径契约草案（`materialize_matter() -> MatterLedger`，快照路径 vs 重放路径两入口的缝，注册≠落库 M3 待定）；②`docs/data/vec-preplan.md` npc_memory_vec 前置调研（sqlite-vec vs 手写余弦、5万条量级估算、embedding 挂 `LlmClient.embed()` 独立缝、7 项待裁决 V1-V7）。**M3 边界**：npc_memory_vec 届时只换候选生成器（`CandidateSource`），`Scorer` 打分链不变；embedding 生成是成本大头非检索。任务单=本树 talking.txt。
+- 【2026-09-22 第五轮快照】M2-D5 已收编（`ee70aad`）。**M2-D6 已交付分支 `414acb5`**（docs 型、零代码零迁移）：`vec-preplan.md §7 裁决栏`落地——**已裁 3**：V1（sqlite-vec 主 / numpy 余弦降级，同接口两实现）、V4（vec 表为准，`npc_memories.embedding` 仅写缓存）、V6（治理过滤召回端红线，JOIN+过滤 superseded/invalid/abandoned，codex R2）；**挂起 4**：V2/V3/V5/V7（V3 改 schema 须提案、V7 触 S1 须 codex 复核）。裁结对比表已去冗余（§2 合并为结论行）。`schema.md §19` 注册≠落库补核对（与 V6 无交集，matter 域 vs 记忆域）。任务单=本树 talking.txt。
 
 ### 已内化教训（M2-D2/D3 实测，别再踩）
 - **`.orca/talking.txt` 是 worktree-local（gitignored）**；`.orca/memory.md` 是 tracked。给本树的回执写 talking.txt；给**他树**的回执写**对方树**的 talking.txt。收编方=Claude（merge 各 ZX466/* → origin+gitee 双远程）。
@@ -74,6 +74,8 @@
 - **多行 CJK docstring 的 ruff E501**：行宽按字符数计，CJK 表格行/长句易超 100——拆行或去冗余；docstring 里 Markdown 表格的 `\|` 会被 Python 当非法转义（W605），改用「或 None」「和」等文字表述。
 - **M3 向量检索缝（预研内化）**：`npc_memory_vec` 在 M3 只是**候选生成器**——新增 `CandidateSource` 协议换候选源，`Scorer` 打分链一字不改（§18 硬边界）。**`sqlite-vec>=0.1.6` 已是 pyproject 依赖且已装**（别重复装）；脚手架 `sim/core/persistence/vector.py`（load/create/exists）已备，DDL 在 Alembic 范围外（需 LOAD EXTENSION）。量级 50×1000=5万条非瓶颈，**成本在 embedding 生成**；embedding 挂 `LlmClient.embed(profile, texts)`（复用 ProfileSnapshot + llm.* 监控 + K3/K4），chat 模型不产 embedding → §10 或需第二条 profile 缝。详见 `docs/data/vec-preplan.md`。
 - **matter 读路径（M3 预研）**：`materialize_matter()` 对镜 `materialize`（一次 SELECT、禁止逐对象）；快照路径（直读表）vs 重放路径（snapshots+事件重放）两入口**同产物**，重放器须复用 `_project_matter` 同一折叠规则避免语义分叉；**注册≠落库**（新建对象未产事件前不在表）。详见 `schema.md §19`。
+- **V 系裁决采结（M2-D6，M3 实现据此）**：**V1**=sqlite-vec 主 + numpy 余弦降级（同接口两实现 `SqliteVecIndex`/`NumpyCosineIndex`）；**V4**=vec 表为准（`npc_memories.embedding` 仅写路径缓存，读不参与）；**V6**=治理过滤在**召回端**（候选必须 JOIN `npc_memories` 过滤 superseded/invalid/abandoned——**codex R2 红线**，不允许「写入时不同步」旁路）。挂起：V2 维度（随模型锁）、V3 profile 缝（改 schema 须提案）、V5 召回时机、V7 embedding 挂写路径（触 S1，须先提案+codex 复核）。见 `vec-preplan.md §7`。
+- **裁决栏落法（文档惯例）**：任务说「落裁决栏 + 去冗余防误导」= 新增 `## 裁决栏` 节（已裁表+挂起表，挂起注明理由/触发时点），并把被裁结的**对比/建议表**合并为「结论行」、删掉「倾向 X / 最终裁决留 M3」这类过期措辞；原结论节顺延编号。
 
 
 > ——以下为 opencode 树 memory.md 原文（收编于 3309c0f）——
