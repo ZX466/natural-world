@@ -282,9 +282,24 @@ uv run pyright sim/
   - 验证：`-m "not bench"` 855 passed/55 skipped；`-m bench` 29 passed/1 skipped（首轮 2 例抖红，
     单跑复绿=机器调度噪声，非回归；已按 bench-plan §0「bench 不进每提交红线」口径记录）。
 
+- **M2-P5 交付①（2026-09-22，分支 ZX466/pi，commit `00bea5c`，等收编）**：SMELL_WIRED 红线 + 嗅觉接线版 bench 用例。
+  - `thresholds.py` 新增 `SMELL_WIRED_TICK_LIMIT_MS=1.0`；旧 `SMELL_TICK_LIMIT_MS=0.15`
+    保留、注释改「纯网格参考口径（K=20 活性物质源）」；文件头注明两口径**勿混用**。
+  - `test_bench_smell.py`：`test_smell_world_step_50_entities`（50 实体硬红线）+ 
+    `test_smell_world_step_100_sources_headroom`（100 源上界哨兵）+ 
+    `test_smell_world_step_tick_amortized`（非 bench：每 tick 摊销 ≤ 红线/2，
+    盯 `tick.py::_PERCEPTION_EVERY_N_TICKS=2` 失效）。
+  - 复测（inject 向量化 `653d395` 后，np.add.at）：50 源 **0.116ms** / 100 源 0.135 /
+    200 源 0.151 / 500 源 0.335 —— P4 的 50 源 0.451ms 已被向量化淘汰；红线按裁决原值
+    1.0 不缩（覆盖 ~10x L1 上界，50 源余量 ~8.6x）。
+  - 验证：smell 文件 `-m bench` 6 passed；`-m "not bench"` 904 passed/55 skipped；
+    ruff check+format、pyright（sim/tests/bench）全绿。
+  - 附带告警（非回归）：全量 bench 首跑 `test_rng_1m_draws_per_call` 中位 300.084ms >
+    300.000ms 警戒线（差 0.084ms，单跑复绿 = 贴边抖动）。已提案 300→330 待 Claude 裁决。
+
 ## 当前任务
 
-（空——M2-P4 已交付，等 Claude 收编裁决；预案未被收编前不改 thresholds.py/budget.md 正文）
+（空——M2-P5① 已交付，等 Claude 收编；②nightly 数据回流等 cline C5 修好 nightly）
 
 ## 进行中
 
