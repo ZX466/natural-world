@@ -81,6 +81,25 @@ SMELL_NAIVE_SENTINEL_MS = 3.0
 # 1.0ms = 500 源（≈10x L1 规模）之上 + 慢机余量；P4 原提案值不变，实测余量 ~8x。
 SMELL_WIRED_TICK_LIMIT_MS = 1.0
 
+# --- M3-P1/P2：检索缝预算红线（裁 7 采，2026-09-23；A4 收口后落地）---
+# 依据 docs/perf/m3-retrieval-budget.md §1.3（V5 裁决输入）+ §2 防呆母本
+# （m2-p4-budget-preplan §3.3）。口径：单次检索 = vec 候选生成（k=20）+ 打分链
+# （20 候选 × 2 钩子）两段拆开给红线；**不进 tick 常态**（触发决策/prompt 驱动，§2）。
+# 红线值 = pi 提案原值（Claude 裁 7 采，不变）：A4 接线后按实测对账（M3-P2 已对账，
+# 见 test_bench_retrieval.py 头注：候选 0.233 / 打分 0.057 / 哨兵 0.970 / tick 总量 ~0.29ms）。
+# 候选生成（Vec）单次上限。numpy 余弦实测 0.019ms/NPC + 15x 余量（sqlite-vec 同量级；
+# dim 768 翻倍仍余 7x）。破限 = 候选缝退化，查 VectorIndex 接线而非放宽。
+VEC_CANDIDATE_PER_NPC_LIMIT_MS = 0.30
+# 打分链（20 候选 × 2 钩子）上限。外推 0.029ms/NPC + 10x 余量；M3-P2 实测 0.057ms。
+RETRIEVAL_SCORE_PER_NPC_LIMIT_MS = 0.30
+# 退化哨兵：候选未收缩（600 全量 × 2 钩子）上限。实测 0.862ms(A2) / 0.970ms(A4 口径) + ~2x；
+# 破限 = 向量缝断链（召回端治理 JOIN 失败 / 候选生成器没接上）→ 查 A4 接线，非放宽。
+RETRIEVAL_FULL_SCAN_PER_NPC_LIMIT_MS = 2.00
+# 单 tick 检索总量（50 NPC 各一次）上限 = 50×0.05 正常 + 余量。
+# 破限先查**触发频次退化**（§2 防呆：禁每 tick 全量检索），不是查单次成本。
+RETRIEVAL_TICK_LIMIT_MS = 12.0
+# 注：单次检索（候选+打分）合计 ≤ 0.60ms/NPC = 0.30+0.30（不新增行，与上两行同源）。
+
 # --- M2-P2：7 日自转长跑（604,800 tick）验收红线 ---
 # 依据：DESIGN §17 M2 验收「50 NPC × 7 游戏日自转无崩溃」。
 # 口径：**分窗稳定性**，而非单轮 p99 —— 长跑里单窗口离群（GC/OS 抖动）不应误红；
