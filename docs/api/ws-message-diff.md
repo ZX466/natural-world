@@ -186,11 +186,11 @@ ext 的 `_envelope` 给 `v` 加了 `"description": "协商后的协议版本 maj
 
 | 项 | 快照 | ext/sim 现状 | 处置建议 |
 |---|---|---|---|
-| 路径参数名 | `/api/settings/profiles/{id}` | FastAPI 自动生成 `{profile_id}`（因 `main.py` 形参名是 `profile_id`） | 访问路径相同，差异只在生成的 path 模板。**倾向改快照向实现靠齐**（kilo 域，复验前改）→ sim 侧**不要动形参名**（会碰 settings 路由实现，超出返工范围） |
-| `ProfileCreate`/`ProfileUpdate` 字段 | 显式 `type:"string"` | Pydantic 在 3.1 展开成 `anyOf` | **生成器行为，非缺陷**；前端类型归一后等价 → §4.2 白名单 |
-| `ProfileListItem` 的 `active`/`api_key_hint`、三个 Profile* 的 description | 有 | 无 | cosmetic → §4.2 白名单 |
-| `Profile*` 的 `additionalProperties` | `false` | 缺省 | cosmetic → §4.2 白名单 |
-| `ProfileCreate/ListItem` 的 `minimum` | `0`/`1` | `0.0`/`1.0` | JSON 浮点序列化，语义等价 → §4.2 白名单 |
+| 路径参数名 | `/api/settings/profiles/{id}` | FastAPI 自动生成 `{profile_id}`（因 `main.py` 形参名是 `profile_id`） | 访问路径相同，差异只在生成的 path 模板。**倾向改快照向实现靠齐**（kilo 域，复验前改）→ sim 侧**不要动形参名**（会碰 settings 路由实现，超出返工范围）。**已执行**（复验收尾 `ce68e5a`，快照改 `{profile_id}`） |
+| `ProfileCreate`/`ProfileUpdate` 字段 | 显式 `type:"string"` | Pydantic 在 3.1 展开成 `anyOf` | **生成器行为但并非等价**：`anyOf:[T,null]` 产出的 TS 是 `T \| null`，显式 `type:T` 只有 `T`——`ProfileUpdate` 全字段可空，前端收 `null` 时旧类型会误判。**复验收尾已回写快照为 `anyOf:[T,null]`**（`ce68e5a`）。原判「归一后等价」有误，见下方复验结论 |
+| `ProfileListItem` 的 `active`/`api_key_hint`、三个 Profile* 的 description | 有 | 无 | cosmetic → §4.2 白名单（description 仍留在快照，属生成器不吐，保留） |
+| `Profile*` 的 `additionalProperties` | `false` | 缺省 | **非纯 cosmetic**：`additionalProperties:false` 会让客户端以为多传字段被拒，而 sim（pydantic 未设 `extra="forbid"`）实际忽略多余字段。**复验收尾已移除** `ProfileCreate`/`ProfileUpdate` 的 `additionalProperties:false`（`ce68e5a`），使快照与请求体真相源一致 |
+| `ProfileCreate/ListItem` 的 `minimum` | `0`/`1` | `0.0`/`1.0` | JSON 浮点序列化，语义等价 → §4.2 白名单。另 `ProfileListItem.max_tokens` 快照曾多一个 `minimum:0`（sim 无约束），复验收尾已删（`ce68e5a`） |
 | `components.schemas` 多出 `HTTPValidationError`/`ValidationError` | 无 | FastAPI 自动生成 422 | §4.2 白名单（快照不需补） |
 | `info.title`/`info.description` | mock 源文案 | sim 文案 | §4.2 白名单（切源自然消解） |
 
@@ -273,9 +273,37 @@ uv run python <diff.py>        # → diff-report.txt
 |---|---|---|
 | `HTTPValidationError` / `ValidationError` | FastAPI 自动生成 422 形状 | 白名单 |
 | `info.title` / `info.description` | 快照是 mock 源说明文案 | 白名单 |
-| `ProfileCreate`/`ProfileUpdate` 字段 `anyOf` | Pydantic 可选字段在 3.1 的展开行为 | 白名单（前端类型归一后等价） |
-| `Profile*` 的 description / `additionalProperties` / `minimum` 浮点 | 生成器不吐 description、`additionalProperties` 缺省、JSON 浮点序列化 | 白名单（不影响类型） |
+| `ProfileCreate`/`ProfileUpdate` 字段 `anyOf` | Pydantic 可选字段在 3.1 的展开行为 | ~~白名单~~ → **已回写快照归零**（§4.3，`ce68e5a`） |
+| `Profile*` 的 description / `additionalProperties` / `minimum` 浮点 | 生成器不吐 description、`additionalProperties` 缺省、JSON 浮点序列化 | description 仍白名单；`additionalProperties`/`minimum` **已回写快照归零**（§4.3，`ce68e5a`） |
 | `WsMessage` oneOf 成员顺序 | 两边一致，非差异 | — |
+
+---
+
+## 4.3 复验结论（kilo 执行，2026-09-22，ext 基线 `ca1deb8`）
+
+**判据达成：白名单外结构 diff = 0。** WS 侧 + HTTP 请求体侧全部归零，红线 0 项。
+
+| 验收项（§4.1） | 结果 |
+|---|---|
+| ① 成员清单 `MISSING in ext` ≤5 | ✅ 剩 `AnchorCreate`/`AnchorRename`/`AnchorListItem`/`ProblemDetail`/`WsEnvelope`（恰为 §2.2 预期 5 个） |
+| ② 逐字段 44 处 + 8 处 required | ✅ 全归零；`v` description 由快照侧补齐 |
+| ③ channel/type enum 4 处错值 | ✅ 全归零 |
+| ④ nullable 计数 | ✅ ext=0 / 快照=0（`preset` 已改 `oneOf:null`） |
+| ⑤ paths 差异 | ✅ `{id}`→`{profile_id}` 已单边归零 |
+
+**复验收尾快照侧回写（commit `ce68e5a`，kilo 域）**：
+1. `PlayerImpulseMessage.preset`：`nullable:true` → `oneOf:[T,null]`（`nullable` 在 OpenAPI 3.0 不被 openapi-typescript 解析，原写法前端类型静默丢失 `| null`）。
+2. settings 两路径参数名 `{id}` → `{profile_id}`。
+3. `ProfileCreate`/`ProfileUpdate`：六字段回写 `anyOf:[T,null]`，并移除 `additionalProperties:false`。
+4. `ProfileListItem.max_tokens`：移除多余的 `minimum:0`（sim 侧该字段无约束）。
+5. regen `shared/protocol.ts`；新增前端类型测试 K03 #3（`ProfileUpdate` 可空）、#4（`profile_id` 路径名）。
+
+> **§2.3 修正说明**：原判「`ProfileCreate/Update` 的 `anyOf` 归一后等价、`additionalProperties`/`minimum` 属 cosmetic 白名单」**不完全成立**——`anyOf:[T,null]` 与显式 `type:T` 产出的 TS 类型分别是 `T|null` 与 `T`，对全字段可空的 `ProfileUpdate` 是**真实类型差异**；`additionalProperties:false` 亦与 sim 的实际宽松行为不符。故本轮**不依赖白名单**，直接回写快照归零。§4.2 中对应的 Profile* 三行因此降级为「历史差异，已消解」。
+
+**未消项（非 kilo 域，不阻塞 M5，切源暂缓解禁条件）**：
+- ext 侧 404 响应声明缺 3 处（`PATCH`/`DELETE /api/settings/profiles/{profile_id}`、`POST …/activate`）：sim 未挂全局 404 处理器 → 属 sim 域。
+- 切源（`--src` 指 sim）TS 命名维度仍缺上述 5 个 schema（M5 锚点路由未建 + ProblemDetail/WsEnvelope 不施工）。
+- 即 `docs/api/codegen.md` §4.1「切源暂缓」**维持不变**；本复验确认的是**接口契约本身已对齐**，解禁仍需 M5 落地 + sim 404 声明。
 
 ---
 
