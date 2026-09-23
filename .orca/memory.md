@@ -301,9 +301,32 @@ uv run pyright sim/
   - 附带告警（非回归）：全量 bench 首跑 `test_rng_1m_draws_per_call` 中位 300.084ms >
     300.000ms 警戒线（差 0.084ms，单跑复绿 = 贴边抖动）。已提案 300→330 待 Claude 裁决。
 
+- **M2-P6 交付（2026-09-23，分支 ZX466/pi，commit `8fd9a17`，等收编）**：advisory 门（裁 1）+ RNG 330（裁 2）+ CI 定标提案。
+  - `harness.py`：`ADVISORY_ENV="PI_BENCH_ADVISORY"` + `advisory_mode()`（调用时读 env）；
+    `assert_threshold`/`assert_median_threshold` 改 advisory 语义——置 "1" 越线只
+    structlog warning（`bench.advisory.threshold_exceeded`/`median_exceeded`）并返回 True；
+    未越线 False；缺省仍 AssertionError（`raise AssertionError(...)`，非 `assert False`
+    以过 B011 lint）。采集逻辑零改动。
+  - `test_bench_advisory_gate.py`（新，9 例，TDD 先 RED）：env 语义（仅 "1" 为开）×
+    越线/未越线 × advisory 开关；冒牌 `_FakeStats` 只提供 `.stats.median/.mean`（秒）。
+  - `nightly-bench.yml`：「跑基准」step 传 `PI_BENCH_ADVISORY: "1"`；「基线对比」step
+    注释补契约（真相源唯一 thresholds.py；advisory 下回归判定 = 相对基线漂移）。
+  - `RNG_1M_DRAWS_LIMIT_MS` 300→330（本机全量中位 300.084ms 贴边，+10% 余量；聚合
+    警戒线非 tick 硬预算）。
+  - **P6② 定标提案**（`docs/perf/ci-calibration-m2p6.md`，**未动 thresholds**）：已从
+    run 35816437844 下载 artifact（EPYC 9V74 / nproc4 / py3.12.3）与本机同 commit 对照
+    → CI/本机稳定档 **median 1.14**（区间 0.86–1.35）；Python 侧项 CI 慢 1.13–1.35x、
+    numpy 侧项 CI 快 0.86–0.92x。唯一红项感知听觉 CI 3.93 vs 3.6（+9% 在档位区间内），
+    同 run mean 11.5ms = median 2.9x（被抢断）→ 负载噪声非回归。提案 P-A：建
+    `docs/perf/baseline.json` + nightly `--benchmark-compare-fail=median:25%`（等 advisory
+    合入后首个全绿 run）；P-B 备选 = nightly 只归档。共同前提 = thresholds 不放宽。
+  - 验证：门单测 9 passed；`-m bench` 31 passed/1 skipped（advisory 关）；
+    `PI_BENCH_ADVISORY=1 -m bench` 31 passed/1 skipped + 构造越线用例验证 advisory 生效；
+    `-m "not bench"` 913 passed/55 skipped；ruff check+format、pyright 全绿。
+
 ## 当前任务
 
-（空——M2-P5① 已交付，等 Claude 收编；②nightly 数据回流等 cline C5 修好 nightly）
+（空——M2-P6 已交付（advisory 门 + RNG 330 + CI 定标提案），等 Claude 收编；基线入库等 advisory 合入后首个全绿 nightly run）
 
 ## 进行中
 
