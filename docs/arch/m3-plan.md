@@ -71,6 +71,62 @@
 | B6 | 反思批处理（DESIGN §15：每游戏日 1 次） | Claude | B5 |
 | B7 | 关系图激活：`society.py` 传播逻辑（trust/affection 随转述互动演化） | Claude | B5 |
 
+#### B 批次架构细化（A2 第五批，2026-09-23——模块/文件级施工图）
+
+**现状锚点（M2 已备）**：写侧唯一入口 `MemoryWritePipeline.write`（`sim/llm/memory_scan.py`，
+banned+hidden 双扫，S1 守卫 CI 锁构造点）；读侧唯一入口 `memory.py::retrieve`（候选源
+`iter_visible` → 批次 A 换向量候选）；治理列 `superseded_by/invalid_reason`（0003 迁移）；
+`Knowledge`/`Relationship` 表已在 models.py（M3 解锁）；`HiddenState.evaluate → evaluate_triggers`
+已产 triggered 集合（隐藏属性浮现窗）；每游戏日切点 `divmod(tick, TICKS_PER_GAME_DAY)`
+（calendar.py:41，weather 已用同款判日切）。
+
+**B-B1 传播 = 复制写（R6 落地，模块级）**
+- 新模块 `sim/npc/propagation.py`（唯一新文件，行为链域）：
+  `retell(from_npc, to_npc, hit: MemoryHit, *, tick, channel) -> MemoryEntry | None`。
+- **实现即「读 A 可见 → 按证据链判定（B4）→ 在 B 侧走一次 write()」**：
+  `MemoryWritePipeline.write(make_entry(npc_id=to_npc, source="dialogue", ...))`——
+  B 的写入门（banned+hidden 扫描按 B 的 profile）自动生效，禁任何绕行构造。
+- told 衰减在 `retell` 内计算 confidence/importance（codex 契约系数），**不改**
+  `MemoryWritePipeline` 本体（扫描面零扩）。
+- 挂载点：M3 对话/转述行为产生时（NPC_ACT 白名单扩「转述」动作时接）；本批先立模块+契约测试。
+- R7 前置：S1 守卫测试扩一行——`grep` 断言仓内 MemoryEntry 构造只经 make_entry/Pipeline。
+
+**B-B2 反思批处理（DESIGN §15「每游戏日 1 次」，挂载点）**
+- **每日注入点**：新 `sim/npc/reflection.py::reflection_due(tick) -> bool`
+  （`tick % TICKS_PER_GAME_DAY == 0` 判日切，与 weather 同款纯函数；由世界循环在固定执行序
+  「事件结算后」调用——**不进每 tick 路径**，防呆红线同源）。
+- 流水线：`gather(当日 source="event" 的可见记忆) → LLM 摘要（复用 reason 通道，零额外调用型）
+  → write(source="reason")`。摘要产物是普通记忆条目，治理/检索/向量全链复用，无特例。
+- LLM 缺位降级：无 profile/网络时跳过（与决策降级同口径，世界照转）。
+- C5 确定性：反思走「事件驱动」而非墙钟——同事件流重放同反思（RNG 分桶：反思专用 stream key）。
+
+**B-B3 society 激活顺序（`society.py` 新建，M2 只留了规划位）**
+- 数据层：Relationship 表直用（`models.py:194`，双向两行，branch_id 主键列已有——B2 分支隔离自动覆盖）；
+  新 `sim/core/persistence/relationship_store.py`（照 memory_store.py 惯例：纯 SQL、
+  upsert 单行、无缓存层）。
+- 演化规则（M3 最小集，防过度设计）：
+  1. **转述互动**：retell 成功 → to_npc 对 from_npc 的 trust +δ（δ 常量起步，M4 再调）；
+  2. **目击隐藏属性**：witnessed 判定成立 → fear +δ（trauma 关联）；
+  3. **日常互动**：NPC_ACT 对话类动作 → affection 小幅漂移 + last_interaction 刷新。
+- 激活顺序 = 依赖序：relationship_store（数据）→ retell 挂演化钩子（B-B1 完成后）→
+  L1 效用读关系面（现 cognition.py 效用缝**不读关系**，M3 批次 D 才接入——**本批不碰效用链**）。
+- 边界：不做关系推理（M2 架构稿 §3 原约束延续）；trust/affection/fear 不出感知帧（社会未知轴）。
+
+**B 批次文件清单（预估）**
+| 文件 | 动作 | 域 |
+|---|---|---|
+| `sim/npc/propagation.py` | 新建 | Claude |
+| `sim/npc/reflection.py` | 新建 | Claude |
+| `sim/npc/society.py` | 新建 | Claude |
+| `sim/core/persistence/relationship_store.py` | 新建 | opencode |
+| `sim/core/persistence/memory_store.py` | 扩（B1 双列口径 + B2 branch 过滤） | opencode |
+| `sim/core/persistence/models.py` | 扩（B3 knowledge 治理列，schema 提案制） | opencode |
+| `sim/npc/memory.py` | 扩（候选源换向量，A4 联动） | opencode |
+| `sim/tests/test_m3_propagation.py` 等 | 新建（含 codex §8 七钉子） | 共建 |
+
+**B 批次前置裁决**：B1 双列口径（Claude 裁，取「任一非空即不可见」——检索端收紧优先）；
+E1 事件（npc.hidden_emerge）与 knowledge 五列扩展（codex M3-S2 提案，opencode B3 合并评审）。
+
 ### 批次 C — 可变地图底座（opencode）
 
 | # | 工作项 | 域 |
