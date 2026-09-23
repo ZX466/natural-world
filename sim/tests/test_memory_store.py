@@ -209,6 +209,28 @@ class TestStoreConsistency:
         p.supersede(a.id, b.id, REASON_BANNED_WORD)
         assert p.get(a.id).superseded_by == b.id
 
+    def test_invalid_reason_alone_hides_entry(self, sql_store: SqlMemoryStore) -> None:
+        """M3-B1 双列口径（m3-plan 批次 B 前置裁决，R3 修复）：
+        裸置 invalid_reason（superseded_by 仍 NULL）的条目**不可见**——
+        双治理列任一非空即从 iter_visible 过滤；审计 get 仍可见（append-only）。
+        场景：manual_review 类治理只置 invalid_reason，不成对 supersede。"""
+        p = MemoryWritePipeline(store=sql_store)
+        a = _ok_entry(_write(p, CLEAN))
+        b = _ok_entry(_write(p, "井边的青苔记得每场雨"))
+        # 直改治理列（manual_review 路径：无替代条目，禁造 supersede 链）
+        sql_store._conn.execute(
+            "UPDATE npc_memories SET invalid_reason = 'manual_review' WHERE entry_id = ?",
+            (a.id,),
+        )
+        sql_store._conn.commit()
+
+        visible_ids = [e.id for e in p.iter_visible("chenmo")]
+        assert a.id not in visible_ids  # 裸置 invalid_reason = 检索不可见
+        assert b.id in visible_ids
+        audit = p.get(a.id)  # 审计面不变（S5 append-only）
+        assert audit.invalid_reason == "manual_review"
+        assert audit.superseded_by is None
+
 
 # ---------------------------------------------------------------------------
 # make_entry 工厂（S1 守卫：构造点收敛）
