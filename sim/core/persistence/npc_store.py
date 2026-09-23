@@ -37,6 +37,7 @@ from sim.llm.memory_scan import (
 from sim.npc.contract import HiddenState
 from sim.npc.hidden import HiddenAttribute, HiddenProfile
 from sim.npc.model import NpcProfileData, needs_from_json
+from sim.world.matter import MatterLedger
 
 #: LOD↔运行时物化范围（m2-npc-cognition §1.2）：L0=统计/1=效用/2=LLM。
 LOD_STATISTICAL = 0
@@ -189,6 +190,40 @@ class NpcStore:
             )
             for npc_id, attrs in grouped.items()
         }
+
+    async def materialize_matter(self, matter_ids: Sequence[str] | None = None) -> MatterLedger:
+        """批量物化物质账本（M3-C1，§19 快照路径契约照抄）。
+
+        从 ``matter_state``（事件流的持久化投影，§17 方案 A 起列保真）**一次 SELECT**
+        重建内存 ``MatterLedger``，对镜 ``materialize``；禁止逐对象查询（§1.3 纪律）。
+
+        - ``matter_ids=None`` → 本分支全部（``WHERE branch_id=?``）；显式给 id →
+          ``IN (...)``，**未知 id 不在结果中**（调用方兜底，同 ``materialize``）。
+        - 列 → 字段映射（§19.2）：``subject_id``→``matter_id``、``integrity``/``decay_rate``/
+          ``is_rubble`` 直通；其余列（``subject_kind/material/quality/load_bearing/
+          supported_by``）不映射（``MatterSnapshot`` 无此概念，归 M4/M5）。
+        - **纯读**：不触发写路径、不投影、不 flush（C4 唯一写路径不变）。
+        - **注册≠落库**：仅回「已投影对象」；未产事件的注册对象不在 ``matter_state``。
+        - 零 schema 改动、零迁移（纯读 + 已有列）。
+        """
+        stmt = select(MatterState).where(MatterState.branch_id == self._branch_id)
+        if matter_ids is not None:
+            ids = list(matter_ids)
+            if not ids:
+                return MatterLedger()
+            stmt = stmt.where(MatterState.subject_id.in_(ids))
+        async with self._events.session_factory() as session:
+            rows = (await session.execute(stmt)).scalars().all()
+
+        ledger = MatterLedger()
+        for row in rows:
+            # integrity/decay_rate 库内已 clip/非负（_project_matter 保证），register 幂等；
+            # rubble 终态（is_rubble=True ⟹ integrity=0.0，§14）用 mark_rubble 置位，
+            # 与逐位列等价（逐位重建，§19.3）。
+            ledger.register(row.subject_id, integrity=row.integrity, decay_rate=row.decay_rate)
+            if row.is_rubble:
+                ledger.mark_rubble(row.subject_id)
+        return ledger
 
     # -----------------------------------------------------------------------
     # 2. tick 批次 flush（事件 + 投影，同事务）

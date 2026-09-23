@@ -204,12 +204,26 @@ class NumpyCosineIndex:
 def vec_candidate_ids(conn: sqlite3.Connection, query_vector: VectorInput, top_k: int) -> list[int]:
     """向量召回 → 候选 rowid 列表（= npc_memories.id），按距离升序稳定。
 
-    M3-A3 骨架：仅做 vec0 k-NN；**治理过滤 JOIN 是 A4 工作项**（R2/V6 红线）——
-    A4 在此追加 ``JOIN npc_memories ... WHERE superseded_by IS NULL AND
-    invalid_reason IS NULL``（codex R2）。
+    **R2/V6 召回端红线（M3-A4 收口）**：k-NN 结果在 SQL 内 ``JOIN npc_memories``
+    并按治理列过滤——``superseded_by IS NULL AND invalid_reason IS NULL``
+    （与 ``iter_visible`` 同口径：任一非空即不可见）。过滤发生在**进打分缝之前**
+    （候选集已收缩，非召回后再放行），治理条目对向量候选的占比恒为 0。
+
+    即时性：治理列 UPDATE 落库（同事务）后，同一连接直读、无缓存层 → 候选视图
+    立即不含旧条目（无窗口期，R2 契约 3）。
     """
-    index = SqliteVecIndex(conn)
-    return [rowid for rowid, _ in index.knn(query_vector, top_k)]
+    rows = conn.execute(
+        f"SELECT v.rowid, v.distance FROM {VEC_TABLE} v"
+        " JOIN npc_memories m ON m.id = v.rowid"
+        " WHERE v.embedding MATCH ? AND k = ?"
+        " AND m.superseded_by IS NULL AND m.invalid_reason IS NULL"
+        " ORDER BY v.distance",
+        (_to_blob(query_vector), top_k),
+    ).fetchall()
+    # 同距按 rowid 稳定排序（确定性 C5，与 M2 打分 tiebreak 同款）。
+    hits = [(int(r[0]), float(r[1])) for r in rows]
+    hits.sort(key=lambda h: (h[1], h[0]))
+    return [rowid for rowid, _ in hits]
 
 
 def _rowid_to_entry(conn: sqlite3.Connection, rowid: int) -> MemoryEntry | None:
@@ -218,7 +232,8 @@ def _rowid_to_entry(conn: sqlite3.Connection, rowid: int) -> MemoryEntry | None:
     R2 契约（codex 钉子）以 **vec rowid = npc_memories.id** 为候选身份
     （见 ``memory_vec_rowid`` 与 R2 钉子 ``_insert_memory`` 的返回值语义），
     故候选的 ``MemoryEntry.id`` 即该 rowid。其余字段取 ``npc_memories`` 行。
-    A4 会把治理过滤收敛进召回 SQL；本批直接按键取回，**不过滤治理列**。
+    治理过滤已在 ``vec_candidate_ids`` 的召回 SQL 内完成（R2/V6）；本函数只按键
+    取回**已通过治理**的行。
     """
     conn.row_factory = sqlite3.Row
     row = conn.execute("SELECT * FROM npc_memories WHERE id = ?", (rowid,)).fetchone()
@@ -243,8 +258,9 @@ class VecCandidateSource:
     接口（vec-preplan §5）：``candidates(query_vector, top_k) -> list[MemoryEntry]``，
     供 `retrieve` 的候选来源替换；**打分链一字不改**（§18 硬边界）。
 
-    M3-A3 骨架：**治理过滤（R2/V6）是 A4 工作项**——本类目前不过滤
-    ``superseded_by`` / ``invalid_reason``，故 R2 钉子的治理用例仍 RED。
+    **R2/V6 召回端红线（M3-A4 收口）**：候选集由 ``vec_candidate_ids`` 在召回 SQL
+    内 JOIN+过滤治理列得到——治理条目（``superseded_by``/``invalid_reason`` 任一
+    非空）永不进候选，占比恒为 0。
     """
 
     def __init__(self, conn: sqlite3.Connection) -> None:
