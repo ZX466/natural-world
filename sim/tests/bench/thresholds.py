@@ -9,6 +9,8 @@ bench 用例失败时会输出「实测值与阈值的差值」。
 - RNG 1M 逐调用聚合量纲实测 219ms，原 100ms 阈值与「每 tick 预算」脱节 ——
   RNG 每 tick 成本按「draw 数 × 单 draw 耗时」计，聚合 1M 只是警戒线，非 tick 硬预算。
   已将 `RNG_1M_DRAWS_LIMIT_MS` 调为 300（实测 219 + 慢机余量），
+  M2-P6（Claude 2026-09-22 裁决 2）再调 330：定标机全量 bench 首跑中位 300.084ms
+  （贴边，单跑复绿 = 抖动）—— 加 10% 余量消刀尖红。仅聚合警戒线，非 tick 硬预算。
   并新增 `RNG_TICK_LIMIT_MS`（= budget §1 上限 0.10ms）直接卡每 tick 场景。
 """
 
@@ -20,8 +22,9 @@ TICK_BUDGET_MS = 16.6  # 每 tick 硬预算上限
 TICK_P99_LIMIT_MS = 8.3
 # apply(event) 单事件 p99 ≤ 0.04ms
 APPLY_P99_LIMIT_MS = 0.04
-# RNG 1M draws 警戒线（聚合量纲；先行实测逐调用 219ms @本机）。300 = 实测 + 慢机余量
-RNG_1M_DRAWS_LIMIT_MS = 300.0
+# RNG 1M draws 警戒线（聚合量纲；先行实测逐调用 219ms @本机）。
+# 330 = 实测 + 慢机余量（M2-P6：300→330，定标机全量跑中位 300.084ms 贴边）
+RNG_1M_DRAWS_LIMIT_MS = 330.0
 # RNG 每 tick 成本上限 = budget §1/§2.2 上限 0.10ms（50 NPC × draws/tick 场景）
 RNG_TICK_LIMIT_MS = 0.10
 # 快照单次 ≤ 500ms（后台可见，不进 tick 临界区）
