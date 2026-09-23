@@ -55,6 +55,9 @@
 （以下各节由对应 agent 维护——cline 节以上为 2026-09-20 收编版。）
 
 ## ③ opencode（数据 / 数据库域）
+- 【2026-09-23 第六轮快照】**M3-D1 已交付**（C2 MatterPayload 域约束 + A3 VectorIndex 接口草案）。分支 `ZX466/opencode`：**C2 钉子 29/29 GREEN**（`Field(ge/le)+allow_inf_nan=False` 于 x/y/amount/durability/decay_rate，factory 与 `validate_store_row` 同源传导，insert/update 双路径覆盖）；**R2 钉子 4 RED → 3 RED**（仅剩治理 JOIN 未接：`test_candidates_view_excludes_governed_entries`/`test_supersede_cascade_immediate`/`test_query_join_filters_governed_rows_sql`；shape 与 rowid 契约 `test_shape_unchanged_entries_are_memory_entry`/`test_rowid_keying_contract` 转绿）。A3 落地 `VectorIndex` Protocol + `SqliteVecIndex`(A 主)/`NumpyCosineIndex`(B 降级) 骨架 + `VecCandidateSource`/`vec_candidate_ids`（治理过滤 JOIN 留 A4）。整改全绿：`pytest -q --ignore=sim/tests/bench` = **919 passed / 55 skipped / 3 failed（皆 R2 治理，预期最小 RED）**、ruff ok、pyright 0 error、alembic 零漂移。
+- 【C2 钉子修正留痕】codex 原 `TestMatterEndToEndBounds` 把 `matter_event(...)` 写在 `pytest.raises` **之外**，与 `test_factory_rejects_nan_durability`（同调用要求抛 `ValidationError`）**自相矛盾**，无任何实现可 29 全绿。经 Claude 裁决：工厂调用移入 `with` 并放宽为 `(EventValidationError, ValidationError)`（工厂/store 任一层拒绝即过，defense in depth）。钉子头部已留修正说明。
+- 【R2 候选身份约定】`VecCandidateSource.candidates()` 产出的 `MemoryEntry.id` = **vec rowid**（= `npc_memories.id`），非 `npc_memories.entry_id`——R2 钉子以 rowid 为候选身份（`_insert_memory` 返回 rowid 与 `c.id` 集合比对）。已在 `vector.py::_rowid_to_entry` 留档 + `# type: ignore[arg-type]`（A4 接治理 JOIN 时勿改此约定，否则钉子的集合比对失配）。
 - 【2026-09-22 第五轮快照】M2-D5 已收编（`ee70aad`）。**M2-D6 已交付分支 `414acb5`**（docs 型、零代码零迁移）：`vec-preplan.md §7 裁决栏`落地——**已裁 3**：V1（sqlite-vec 主 / numpy 余弦降级，同接口两实现）、V4（vec 表为准，`npc_memories.embedding` 仅写缓存）、V6（治理过滤召回端红线，JOIN+过滤 superseded/invalid/abandoned，codex R2）；**挂起 4**：V2/V3/V5/V7（V3 改 schema 须提案、V7 触 S1 须 codex 复核）。裁结对比表已去冗余（§2 合并为结论行）。`schema.md §19` 注册≠落库补核对（与 V6 无交集，matter 域 vs 记忆域）。任务单=本树 talking.txt。
 
 ### 已内化教训（M2-D2/D3 实测，别再踩）
