@@ -19,12 +19,12 @@ export type paths = {
     readonly patch?: never;
     readonly trace?: never;
   };
-  readonly '/api/anchors/{id}': {
+  readonly '/api/anchors/{anchor_id}': {
     readonly parameters: {
       readonly query?: never;
       readonly header?: never;
       readonly path: {
-        readonly id: string;
+        readonly anchor_id: string;
       };
       readonly cookie?: never;
     };
@@ -605,7 +605,7 @@ export interface operations {
       readonly query?: never;
       readonly header?: never;
       readonly path: {
-        readonly id: string;
+        readonly anchor_id: string;
       };
       readonly cookie?: never;
     };
@@ -627,7 +627,7 @@ export interface operations {
       readonly query?: never;
       readonly header?: never;
       readonly path: {
-        readonly id: string;
+        readonly anchor_id: string;
       };
       readonly cookie?: never;
     };

@@ -1,4 +1,4 @@
-# 玩家档锚点接口契约（docs/api/anchors-api.md）
+﻿# 玩家档锚点接口契约（docs/api/anchors-api.md）
 
 > 能力域：接口 / 兼容性（kilo） | M5-K1 | 对齐 DESIGN.md §7 §12 C6、`openapi.md` §3/§4.3、`ws-protocol.md` §4.4
 > 本文为**设计契约稿（零代码）**：字段 / 校验 / 状态码 / 错误形四要素齐，Claude 域照此施工 `sim/api/anchors.py`。
@@ -34,7 +34,7 @@ BASE = `/api/anchors`。所有路由 `tags: ["anchors"]`，与 `settings.py` 同
 // 200
 [
   {
-    "id": "anc_01",
+    "id": "9f3c1a7b2e04",
     "name": "初到临河",
     "story_label": "第二日 · 清晨 · 雨刚停",
     "created_at": "2026-09-19T03:20:00Z",
@@ -61,7 +61,7 @@ BASE = `/api/anchors`。所有路由 `tags: ["anchors"]`，与 `settings.py` 同
 
 // 201
 {
-  "id": "anc_01",
+  "id": "9f3c1a7b2e04",
   "name": "初到临河",
   "story_label": "",
   "created_at": "2026-09-19T03:20:00Z",
@@ -81,9 +81,9 @@ name: str = Field(min_length=1, max_length=64)
 
 **服务端游标来源**（构造规则，客户端不参与）：
 `branch_id` = 当前活跃分支 id、`tick`/`seq` = 世界当前游标、`agent_override` = 当前主角 agent 状态快照（`models.py` §6 PlayerAnchor 的内部结构，不经 HTTP 回传）。
-`id` 由 sim 生成（建议 `anc_` 前缀 + 短随机，与 `prof_` 惯例一致）。
+`id` 由 sim 生成：`uuid4().hex[:12]`，与 `sim/api/settings.py:131` 的 profile id **逐字一致**（无前缀惯例——全仓不用 `prof_`/`anc_` 字面前缀；前端按不透明字符串对待，详见 §6.5）。
 
-### 1.3 `PATCH /api/anchors/{id}` — 重命名
+### 1.3 `PATCH /api/anchors/{anchor_id}` — 重命名
 
 | 项 | 值 |
 |---|---|
@@ -93,11 +93,11 @@ name: str = Field(min_length=1, max_length=64)
 | 422 | pydantic 校验失败 |
 
 ```jsonc
-// PATCH /api/anchors/anc_01
+// PATCH /api/anchors/9f3c1a7b2e04
 { "name": "临河镇第二日" }
 
 // 200 ← 整项回传（列表页直接替换该项，无需再 GET 全列）
-{ "id": "anc_01", "name": "临河镇第二日", "story_label": "第二日 · 清晨 · 雨刚停",
+{ "id": "9f3c1a7b2e04", "name": "临河镇第二日", "story_label": "第二日 · 清晨 · 雨刚停",
   "created_at": "2026-09-19T03:20:00Z", "protected": true }
 ```
 
@@ -106,7 +106,7 @@ name: str = Field(min_length=1, max_length=64)
 - **改名不动 `updated_at`**（见 §1.4 末条：该列只在 INSERT 时写一次）。否则改个旧档名会让它「变成最新档」并抢走 `protected`，语义错误。
 - 对 `protected: true` 的档**允许改名**（保护只约束删除，见 §1.4）。
 
-### 1.4 `DELETE /api/anchors/{id}` — 删除游标
+### 1.4 `DELETE /api/anchors/{anchor_id}` — 删除游标
 
 | 项 | 值 |
 |---|---|
@@ -132,14 +132,14 @@ name: str = Field(min_length=1, max_length=64)
   "type": "/errors/anchor-not-found",   // 机器可读错误码，URI 风格但不要求可解析
   "title": "玩家档不存在",               // 人读短标题，戏外工程措辞
   "status": 404,                        // 与 HTTP status 一致
-  "detail": "anc_99 不存在"             // 具体上下文（含被拒 id/字段名）
+  "detail": "9f3c1a7b2e04 不存在"       // 具体上下文（含被拒 id/字段名）
 }
 ```
 
 | 状态码 | `type` | `title` | 触发 |
 |---|---|---|---|
 | 400 | `/errors/world-not-ready` | 世界未就绪 | 无活跃 loop / 分支，无法取游标 |
-| 404 | `/errors/anchor-not-found` | 玩家档不存在 | PATCH / DELETE 的 `{id}` 无行 |
+| 404 | `/errors/anchor-not-found` | 玩家档不存在 | PATCH / DELETE 的 `{anchor_id}` 无行 |
 | 409 | `/errors/anchor-protected` | 该档不可删除 | DELETE 时 `protected=true` |
 | 422 | `/errors/validation` | 请求校验失败 | pydantic `RequestValidationError`（FastAPI 自动，兜底 §3.2） |
 
@@ -256,7 +256,7 @@ components.setdefault("responses", {})["Problem"] = {
 - **meta shell 操作失败**（profile/anchor CRUD）→ HTTP ProblemDetail。例：anchor 不存在、重名校验、protected 删除。
 - **WS 消息被拒** → `WsErrorMessage` + `code`（`unknown_type` / `bad_channel` / `auth_error`，见 `ws.py:196-256`）。
 - **`load_anchor` 的失败走哪边？** → 它是 WS 消息（session 通道），但失败多发生在**载入执行阶段**（anchor 不存在、重放失败）。契约：`load_anchor` 自身**不返回 error 帧作为回答**——前端应在调用前先 `GET /api/anchors` 确认 id 存在；若仍失败（如重放中世界状态损坏），sim 发 `WsErrorMessage`（`ref: "load_anchor"`, `code: "load_failed"`）并**保持现有 WS 连接**不断线。
-- **绝不允许**：把 `ProblemDetail.detail` 的工程措辞（"anc_99 不存在"）塞进 WS `message`；也绝不允许把戏内文风写进 HTTP `title`。
+- **绝不允许**：把 `ProblemDetail.detail` 的工程措辞（"9f3c1a7b2e04 不存在"）塞进 WS `message`；也绝不允许把戏内文风写进 HTTP `title`。
 
 ### 4.1 sim WS 分发现状（施工前必读）
 
@@ -285,17 +285,99 @@ components.setdefault("responses", {})["Problem"] = {
 4. `openapi_ext.py` §3.3 注入 `ProblemDetail`/`responses.Problem` + anchors 响应声明。
 5. 路由 404/409 的 `detail` 改用 §3.2 要点 1 的机器码（含 `settings.py` 5 处，小幅改写）。
 6. 测试：`sim/tests/test_api_anchors.py`（列表空库 200、建/改名/删、protected 409、404 形、422 形、pydantic 越权字段 422）。
-7. `shared/openapi.json` 的 anchors 路径**已就绪**（含 `{id}` 参数名），**除非 §6 参数名决议改了，否则不动快照**。
+7. `shared/openapi.json` 的 anchors 路径**已就绪**（M5-K2 已按裁 5 把参数名归一为 `{anchor_id}`，同 K3 settings `{profile_id}` 逻辑）。`sim/api/anchors.py` 的形参名必须逐字为 `anchor_id`，否则 FastAPI 生成的 path 模板会退回 `{id}` 造成快照漂移。
 
 ## 6. 待决议与已知风险
 
-| # | 事项 | 说明 / 建议 |
+> **提案制说明**：以下为 kilo 提案（K3 提案制），**不擅改契约**，待主树裁决后落档。每项含：现状 / 选项 / 建议 / 影响面。
+
+### 6.1 `protected` 判据的并发安全
+
+**现状**：`protected` 在 §1.4 定为落库存列，判据 `NOT EXISTS(其他 anchor.updated_at > 本档.updated_at)`——即「最新一档」。当前 sim 无任何显式锁（无 `asyncio.Lock`/`StaticPool`/`BEGIN IMMEDIATE`），`ProfileStore` 每方法各开一个 session、事务短；单用户本地运行（`openapi.md` §2）。FastAPI 异步 handler 与 WS 驱动协程共享一个事件循环，**同一 `POST` handler 内的读与写之间可能被 `await` 切开**。
+
+| # | 选项 | 描述 | 评估 |
+|---|---|---|---|
+| A1 | 维持现状派生 | 同 §1.4 判据，靠 SQLite 隐式行锁 | 竞态窗口 = 「查最大 updated_at」到「写本档」之间被切。最坏后果：两档同为 `protected=true` 或**无一档为 true**（旧的未清）。**不会丢数据**，只影响保险丝有效性 |
+| A2 | 显式进程锁 | `AnchorStore` 上挂 `asyncio.Lock`，写方法包住 | 覆盖率最全（同进程内所有写路径串行），成本一行。但锁只在单进程有效（多 worker 时无效，sim 当前单进程） |
+| A3 | 事务内重算 | 把「清旧 protected + 写新档」放同一 `with session` 事务内，靠 SQLite 写事务串行 | 最符合 SQL 语义；若 SQLAlchemy 层两段不是同一事务则仍可能裂。需确认 `ProfileStore` 的事务边界（跨两段 with 则无效） |
+| A4 | 反范式化去掉比较 | `protected` 不用「比较得出」，改用一个**单行哨兵表 / `MAX` 查询 + `UPDATE ... WHERE` CAS | 消除读-写间隙，但引入第二张表或更复杂 SQL，收益不成比例 |
+
+**建议**：**A2 + A1 组合**——`AnchorStore` 加 `asyncio.Lock` 包写方法（`create`/`delete`），读方法不加锁（锁是进程内协程串行，与单 worker 部署匹配）。理由：①本问题是「进程内协程交错」而非多进程并发，锁即根治；②成本一行、无 schema 改动；③即使锁失效，退化到 A1 也只是保险丝偶发失效，不丢存档（C6 世界档不受影响）。
+**不改的部分**：`updated_at` 只写一次（§1.4）本身就是最强的竞态削减——没有「时间被后续写入推进」，判据的输入就不漂。
+**影响面**：`sim/api/anchors.py`（新增，非已有代码）；无快照变更；无前端变更。
+
+### 6.2 分页 / 游标
+
+**现状**：`GET /api/anchors` 契约为 `AnchorListItem[]` 裸数组（快照定形，`list[json]` 直返）。`ProfileStore.list_profiles` 是 `.order_by().all()` 全量。玩家档语义 = 玩家手动存的进度点（DESIGN §12：自由创建/命名/回退），数量级是**十位数而非万级**。
+
+| # | 选项 | 描述 | 评估 |
+|---|---|---|---|
+| B1 | 维持裸数组（不分页） | 照 §1.1 现状 | 前端一处 `map` 渲染；与 profiles 列表形状完全一致（UI 组件可复用）。十位数量级下无性能问题 |
+| B2 | offset/limit 分页 | `?limit=20&offset=40` | 存档列表对「跳到第 N 页」无真实需求；offset 深翻页在排序变动时会漏/重 |
+| B3 | 游标分页 | `?cursor=<updated_at>&limit=20` + 响应包 `{items, next_cursor}` | 改动快照顶层形（`AnchorListItem[]` → 对象），**破坏已生成的前端类型**（K03 测试、settingsApi 同款）；获得的能力（深翻页）本场景用不到 |
+| B4 | 上限截断 | 裸数组不变，但服务端超过 N 条只回最新 N 条 + `total` 头 | 需加响应头字段，仍是形状微调 |
+
+**建议**：**B1，本版不加分页**。理由：①DESIGN §12 玩家档是玩家主动存的少量进度点，与「无限增长的数据集」不同性质；②`AnchorListItem[]` 与 `ProfileListItem[]` 同形，meta shell UI 可复用同一个列表组件（cline 前端域的最短路径）；③一旦将来真要分页，因为**响应体形不变**（仍可保持数组），只需加 query 参数即可演进，不会破坏已生成类型。
+**明确否决 B2/B3/B4 的原因**：三者都为本版引入复杂度，换取一个本场景不存在的需求；B3 还额外破坏类型兼容。
+**升级触发条件**（写进契约防遗忘）：单档 `agent_override` 很大 + 玩家档过百 → 届时走 B3 并改 `AnchorListPage` 新 schema，老字段保留过渡（versioning.md §7 登记）。
+**影响面**：无（维持现状）；仅需在 §1.1 明记「无分页」为有意决策——已由本表落档。
+
+### 6.3 DELETE 语义：软删 vs 硬删 vs 归档
+
+**现状**：§1.4 定为硬删（删 `player_anchors` 行，世界档不动）。DESIGN C6 只说世界档 append-only，**未规定玩家档删除的物理形态**。快照 DELETE 响应是 `204` 无 body，已定形。
+
+| # | 选项 | 描述 | 评估 |
+|---|---|---|---|
+| C1 | 硬删（现约定） | `DELETE FROM player_anchors WHERE id=?` | 最简单、204 无 body 与之天然匹配。玩家「不想看到这个档了」即彻底消失 |
+| C2 | 软删（`deleted_at` 列） | 打标记，列表过滤掉 | 可「撤销删除」；但列表接口需加过滤条件、`protected` 判据要把软删行排除（NOT EXISTS 子查询多一个 `AND deleted_at IS NULL`），复杂度上渗 |
+| C3 | 归档（移到 `abandoned` / 冷表） | 与 §12「abandoned 分支冷归档」同思路 | 语义上最贴 §12；但 §12 的 abandoned 说的是**分支**不是玩家档，把两个 abandoned 混义会误导后来读者 |
+| C4 | 拒绝删（只允许改名） | 不提供删除 | 与「自由创建、命名、回退」冲突——玩家无法清理试错档 |
+
+**建议**：**C1 硬删**，与 §1.4 / 快照 204 保持一致。理由：①世界档不可删（C6）已保证「删玩家档永远不销毁世界历史」——玩家能删的只是**自己的游标**，这是最低风险面；②204 无 body 是快照定形，软删/归档都要加过滤或迁表，属自找麻烦；③软删的「可撤销」价值在本地单用户存档场景很弱（玩家删档是有意的，误删可重新存一个）。
+**若将来要 C2 的触发条件**：出现「误删后要求恢复」的真实反馈，再加 `deleted_at`——届时是**加列 + 加过滤**，不动 204 契约。
+**影响面**：无（维持硬删）；`player_anchors` 表不增删列（除 §1.4 的 `protected`）。
+
+### 6.4 ProblemDetail 要不要 `instance` 字段
+
+**现状**：RFC 7807 的 `instance`（本错误发生的 URI 引用，如 `/api/anchors/9f3c1a7b2e04`）**不在** `shared/openapi.json` 的 `ProblemDetail` 快照里（现有：`type`/`title`/`status`/`detail`）。加它 = 改快照 schema + regen protocol.ts + 前端类型测试三处联动（K03 惯例）。WS 侧无对应字段（`WsErrorMessage` 无 instance）。
+
+| # | 选项 | 描述 | 评估 |
+|---|---|---|---|
+| D1 | 不加（现约定） | 维持四字段 | `detail` 已含被拒 id（如 `"9f3c1a7b2e04 不存在"`），信息不丢 |
+| D2 | 加 `instance`，回**客户端请求的 URL** | 如 `/api/anchors/9f3c1a7b2e04` | 对单用户本地应用**零价值**：URL 就是前端自己拼的，回显它等于把前端刚发出去的东西还回来 |
+| D3 | 加 `instance`，回**规范化资源 URI** | 如 `anchor:9f3c1a7b2e04` | 有微价值（机器可关联到具体资源），但需要定义命名空间，且前端目前无处消费 |
+| D4 | 不加 `instance`，改用 `detail` 承载（现约定的一种实现） | `detail: "anchor 9f3c1a7b2e04 不存在"` | 同 D1 |
+
+**建议**：**D1（不加）**。理由：①RFC 7807 的 `instance` 是为**跨服务/日志关联**设计的，本项目是单用户本地应用，无此需求；②`detail` 已把被拒 id 带给前端，前端 `SettingsApiError` 只用 `status` + `detail`（`settingsApi.ts:23-35` 实证）——加 `instance` 是 TS 侧无人读取的死字段；③快照 `ProblemDetail` 是**保留位已定形**（M2-K3 已按 4 字段对齐 ext），加字段等于推翻 K3 的一次对齐，形成返工。
+**如果将来要加**：应由「日志/遥测需要」驱动（而非 RFC 完备性驱动），且必须走 K03 三处联动 + versioning.md §7 登记。
+**影响面**：无（不加）；明确把「RFC 7807 字段完备性不是目标，前端可消费性才是」写进契约，防后人「补字段」式返工。
+
+### 6.5 附带发现：`anc_` 前缀惯例不存在（K1 文档小误，已订正）
+
+K1 版 §1.2 曾写「`id` 由 sim 生成（建议 `anc_` 前缀 + 短随机，与 `prof_` 惯例一致）」——**该惯例不存在**。实证：`sim/api/settings.py:127-131` 与 `memory_store.py:60` 均用 `uuid4().hex`（前者截 12 位、后者全长），全仓无任何 `prof_`/`anc_` 字面前缀。
+**订正**：anchor id 用 `uuid4().hex[:12]`，与 profile 逐字一致。前端**不得**依赖任何前缀特征做校验或路由（如 `startsWith('anc_')`）——按不透明字符串对待（与 `rtoken` 不透明替身同一纪律：客户端只握引用，不解析其构造）。
+**影响面**：仅文档订正；无快照/类型/代码变更。
+
+### 6.6 待决议清单汇总（状态跟踪）
+
+| # | 事项 | kilo 建议 | 状态 |
+|---|---|---|---|
+| 1 | 路径参数名 `{id}` vs `{anchor_id}` | `{anchor_id}` | ✅ **裁 5 已批，M5-K2 落地** |
+| 2 | `protected` 并发安全 | `asyncio.Lock` 包写方法 + 判据不变 | ⏳ 待裁 |
+| 3 | 分页/游标 | 不加，维持裸数组 | ⏳ 待裁 |
+| 4 | DELETE 语义 | 硬删（C1） | ⏳ 待裁 |
+| 5 | ProblemDetail `instance` | 不加（D1） | ⏳ 待裁 |
+
+> 前四条对应 §6.1-§6.4。全部为「维持契约现状 + 明记理由」型提案——**无一条要求改快照**。
+
+### 6.7 已定型决策备忘（K1 → K2 延续，非待裁）
+
+| 事项 | 结论 | 说明 |
 |---|---|---|
-| 1 | 路径参数名 `{id}` vs `{anchor_id}` | 快照现为 `{id}`（与 `openapi.md` §3 一致）。K3 曾把 settings 的 `{id}` 改为 `{profile_id}` 对齐 FastAPI 形参名。**建议**：新路由形参直接取 `anchor_id`，并把快照两路径与 `openapi.md` §3 同步改 `{anchor_id}`——一次性做对，免 M5+ 再返工。若求稳不动快照，则形参必须叫 `id`。**需 Claude 裁决**（改快照 3 行，kilo 可顺手做）。 |
-| 2 | `story_label` 构造期空串 | calendar 未就绪时返回 `""`。若 calendar 给出结构化时间，`story_label` 格式（`第二日 · 清晨 · 雨刚停`）需与 narrative 域对齐，本文只定字段非 null |
-| 3 | `agent_override` 不回传 | 契约确定不回传。但 §12 读档需它——注意：载入走 WS `load_anchor`（服务端自己从库里取），**不经 HTTP**，故客户端无需该字段 |
-| 4 | 无「删全部 / 批量」端点 | 玩家档数量级小（十位数），不需要分页与批量 |
-| 5 | 并发 | 单用户本地运行（`openapi.md` §2），无需并发/幂等设计；`updated_at` 用 `time.time()`（同 `PlayerAnchor.updated_at`） |
+| `story_label` 构造期空串 | 已定型 | calendar 未就绪时返回 `""`（字段非 null），前端显「未标注」。若 calendar 给出结构化时间，具体格式需与 narrative 域对齐，本文只定非空性 |
+| `agent_override` 不回传 | 已定型 | §0 出戏边界。§12 读档需要它，但载入走 WS `load_anchor`（服务端从库自取），**不经 HTTP**，客户端无需该字段 |
+| 无「删全部 / 批量」端点 | 已定型 | 玩家档数量级十位数（§6.2 同论证），不需要批量操作；也无 list 删除语义 |
+| `updated_at` 时间源 | 已定型 | `time.time()`（同 `PlayerAnchor.updated_at`，`models.py:107`）；只写一次（§1.4），不随改名推进 |
 
 ## 7. 不在本文件范围
 
