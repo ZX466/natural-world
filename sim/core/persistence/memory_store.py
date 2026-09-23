@@ -112,7 +112,8 @@ class SqlMemoryStore:
 
     def iter_visible(self, npc_id: str):
         rows = self._conn.execute(
-            "SELECT * FROM npc_memories WHERE npc_id = ? AND superseded_by IS NULL ORDER BY id",
+            "SELECT * FROM npc_memories WHERE npc_id = ? AND superseded_by IS NULL "
+            "AND invalid_reason IS NULL ORDER BY id",
             (npc_id,),
         ).fetchall()
         for row in rows:
