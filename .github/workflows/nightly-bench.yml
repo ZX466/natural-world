@@ -63,7 +63,14 @@ jobs:
           cat docs/perf/runner.txt
 
       - name: 跑基准
-        run: uv run pytest -m bench --benchmark-json=perf/bench.json
+        # perf/ 是运行时目录：`.gitignore` 只忽略 `perf/*.json`，而**目录本身不入库**（git 不跟踪空目录），
+        # 故全新 checkout 下 `perf/` 不存在 → pytest-benchmark 收尾 `save_json` 抛
+        # `FileNotFoundError: [Errno 2] No such file or directory: 'perf/bench.json'`（C5 根因：
+        # 09-19/09-20/09-21 三次 nightly 全倒在本 step，测试本身全绿）。先建目录再跑；产物仍不入库，
+        # 只随下方 artifact 归档。
+        run: |
+          mkdir -p perf
+          uv run pytest -m bench --benchmark-json=perf/bench.json
 
       - name: M2 7 日自转完整跑（604,800 tick，里程碑期 nightly 接法）
         # pi M2-P2 §4 提案、Claude 2026-09-21 裁决采用**方案 A**：完整跑进 nightly 同 job
@@ -77,6 +84,10 @@ jobs:
           PI_M2_FULL_SOAK: "1"
 
       - name: 上传基线结果
+        # `if: always()`：本 step 原来在「跑基准」失败时被跳过 → 三轮 nightly 全红且 artifact 0 份，
+        # 诊断证据与 CI 档位实测数字全部丢失（C5 缺陷 2）。改成无论如何都归档：
+        # 红灯时也要留下 perf/bench.json 与 runner.txt，供性能域拿 CI 档位数字定标/放红线。
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bench-result
