@@ -348,9 +348,24 @@ uv run pyright sim/
   - `budget.md`：§1.2 指针 + §2.10 新节。
   - 验证：`-m "not bench"` 917 passed + 30 RED（M3-S1 钉子，同 main `db46b9e`）/ 55 skipped；ruff docs 通过。
 
+- **M3-P2（2026-09-23，分支 ZX466/pi，commit `48db6cf`，等收编）**：检索缝四红线 bench 配套。
+  - `sim/tests/bench/test_bench_retrieval.py`（新，8 用例）：4 红线 + 3 契约守卫（候选形状 / 治理 JOIN 最小自证 /
+    哨兵区分度）+ 1 反模式探针。参考实现 = A4 同语义治理 JOIN（minimal 直建表 + 80 参 IN-JOIN + 4x 过取）。
+  - 实测对账（暖态中位）：候选 **0.233ms**/0.30（1.29x，偏紧）；打分 20 候选 **0.057ms**/0.30（5.3x）；
+    退化哨兵 600 全量 **0.970ms**/2.00（2.06x）；常态 tick 总量（决策驱动 10 次）**2.9ms**/12.0（4.1x）。
+  - **④ 拆两口径**：反模式（50 NPC 广播）= 探测量不设硬断言——实测 **16.8ms = tick 预算 101%**
+    （无-JOIN 38.9ms=234% / 全表掩码 131.2ms=790% → 三种实现全破线=防呆论据）。
+  - **M3-P1 模型修正**：按纯 numpy 估 50NPC=2.5ms，实测 A4 语义参考 0.29ms/NPC = **低估 6~52x**
+    （要回填 m3-retrieval-budget.md §2；结论不变=触发必须决策驱动）。
+  - thresholds.py 同步四常量（opencode `caddcdd` 已落同值）。
+  - 验证：retrieval 8 passed；`-m bench` 36 passed/1 skipped（2 例首跑抖动、单跑复绿=调度噪声）；
+    `-m "not bench"` 948 passed + 3 RED（R2 钉子=A4 未收编 main）/ 55 skipped；ruff+pyright 全绿。
+  - baseline.json（M3-P2 ②）**未执行**：nightly 迄今 7 跑全 failure（最新 35816437844 = advisory 门前旧跑）
+    → 首个 advisory=1 全绿 run 未出现；等跑出现按 bench-plan §4.1 八步执行。
+
 ## 当前任务
 
-（空——M3-P1 已交付，等 Claude 收编；下一步 = 首个全绿 nightly run 出现后按 bench-plan §4.1 建 baseline.json（裁 4 执行件）；A4 落地后把检索缝四行红线进 thresholds.py）
+（空——M3-P2 ① 已交付，等 Claude 收编；②baseline.json 等首个 advisory=1 全绿 nightly run（nightly 尚未在含 advisory 门的新代码上重跑））
 
 ## 进行中
 
