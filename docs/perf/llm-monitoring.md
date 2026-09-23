@@ -1,6 +1,7 @@
 # LLM 异步延迟监控口径（docs/perf/llm-monitoring.md）
 
 > 性能域（pi）F05 交付 ②。给 Claude（C06 LLM 客户端）的接单规格——按此照抄事件名与字段，客户端接好即可。
+> **M3-P1（2026-09-23）增补 §7 `llm.embed_*` 事件族**（m3-plan A6）：chat 族（§2/§3）口径**不动**；embedding 延迟特征不同（无 ttft/stream、批量为主）→ 独立事件名 + 独立阈值。
 > 依据：DESIGN §15 成本治理（单决策 1.2–2k tok、一游戏日 40–60 次决策）、§17 M1 验收（决策延迟 P95<8s、单决策 <2k tok）、bench-plan §0（LLM 延迟不进 tick 基准，独立看板）。
 
 ## 1. 监控的两个量纲（互不混淆）
@@ -65,3 +66,43 @@ decision_ms: float      # [llm.decision] 意图触发 → Intent 产出 的端�
 | 决策延迟 P95 | < 8000 ms | §17 M1 验收 |
 | cache_hit 率 | 目标 > 50%（身份锚为最大头） | §15 手段 |
 | retry 率 | 警戒 > 5% | 供应商稳定性信号 |
+
+## 7. embedding 族 `llm.embed_*`（M3-P1 / m3-plan A6；A1 定稿后由 opencode 客户端照抄）
+> 背景：`vec-preplan.md` §3 结论——**向量检索非瓶颈，成本大头在 embedding 生成**（写路径）。
+> embedding 与 chat 的延迟画像不同（无 ttft、无 stream、天然批量），故**独立事件族 + 独立阈值**，
+> 不复用 `llm.response` 字段（避免把两个分布混进同一 latency 字段）。
+### 7.1 事件名（固定，别改名）
+| 事件名 | 触发点 | 用途 |
+|---|---|---|
+| `llm.embed_request` | 每次 embedding 请求发出前 | 计数 + batch_size（批量是降成本主手段） |
+| `llm.embed_response` | 每次成功返回 | latency/tokens 主字段 |
+| `llm.embed_error` | 失败/降级（切 numpy 兜底）时 | 可用性 + 降级率 |
+| `llm.embed_cache_hit` | 内容哈希命中缓存（同内容不重复调）时 | 缓存命中率（成本大头） |
+### 7.2 字段清单（embed_request / embed_response 必带）
+```
+profile_name: str       # embedding profile（A1 裁 V3 三选一定型后填），不记 api_key
+model: str              # embedding 型号名（与 chat 型号可不同）
+dim: int                # 向量维度（384/768；A1/V2 定后固定；错维 = 数据损坏信号）
+request_id: str         # 本次调用唯一 id
+batch_size: int         # 本条 embedding 调用携带的文本条数（1 = 单条）
+input_chars: int        # 输入总字符数（token 近似成本；**不记文本明文**）
+total_tokens: int       # 输入 tok（embedding 无 completion_tokens）
+latency_ms: float       # 墙钟毫秒（单条 or 整批，由 batch_size 区分）
+attempt: int            # 第几次尝试
+cache_hit: bool         # 内容哈希是否命中（命中时无 latency，仍记 cache_hit 事件）
+degraded: bool          # 是否降级为 numpy/本地兜底（embed_error 时 True）
+```
+**必记**：`batch_size` / `total_tokens` / `latency_ms` / `dim`。
+**必不记**：`api_key` / 文本明文 / 向量本体（384 维 float 落日志 = 灾难）/ 戏内元信息。
+### 7.3 阈值（**独立于 chat**；M1 无 embed 实测，M3 首个 profile 点亮后回调）
+| 指标 | 目标 | 依据 |
+|---|---|---|
+| 单条 latency P95 | < **300ms** | 同步写路径阻塞预算：写记忆不在每 tick 路径，但慢会拖 L2 升格 |
+| 批量（≤32 条）latency P95 | < **2s** | 批量摊销是主要降本手段（vec-preplan §3「批量化+缓存+降级」） |
+| cache_hit 率 | 目标 > 60% | 同一叙事内容重复 embedding 概率高（descriptors/高频台词） |
+| 降级率（degraded） | 警戒 > 10% | 超限说明主路径不稳；降级本身允许（裁 3 V1：A 主 B 降级） |
+| tokens 日汇总 | 看板项，无硬线 | §15 成本治理按 profile 分组汇总 |
+### 7.4 采集口径
+- 每次调用都记；`batch_size` 决定 latency 归属（单条 vs 整批），日汇总按 `batch_size=1` 分组看单条 P95、其余看批量 P95。
+- 与 chat 共用 §4 日汇总管线（按 profile_name 分组 sum/mean/P50/P95/max），但**分表**（`embed_*` 不进 chat 表）。
+- `llm.embed_error` 的 `error_kind` 沿用 §4 枚举（timeout/connection/http_4xx/http_5xx/rate_limit），`error_hint` 同规则不落堆栈全文。
