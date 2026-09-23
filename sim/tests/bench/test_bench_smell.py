@@ -11,6 +11,11 @@
 红线来自 thresholds.py（SMELL_TICK_LIMIT_MS）。口径：暖态中位，与感知红线同源。
 挂载点说明：嗅觉通道实现属架构域（M2-A1），本文件定预算红线与成本走势；
 网格实现为**参考实现**（同感知 bench 的「参考实现版」模式）。
+**M2-P5 起两口径并存**（勿混用红线）：
+- 上部用例 = 纯网格参考口径（`_SmellField`，K=20 活跃物质源）→
+  `SMELL_TICK_LIMIT_MS=0.15`；
+- 尾部用例（M2-P5）= 接线版真实实现（`SmellWorld.step`，源=全体实体 + 批量采样 +
+  dict 组装）→ `SMELL_WIRED_TICK_LIMIT_MS=1.0`。依据 docs/perf/m2-p4-budget-preplan.md §1.3。
 """
 
 from __future__ import annotations
@@ -21,7 +26,11 @@ import numpy as np
 import pytest
 
 from .harness import assert_median_threshold
-from .thresholds import SMELL_NAIVE_SENTINEL_MS, SMELL_TICK_LIMIT_MS
+from .thresholds import (
+    SMELL_NAIVE_SENTINEL_MS,
+    SMELL_TICK_LIMIT_MS,
+    SMELL_WIRED_TICK_LIMIT_MS,
+)
 
 GRID = 64  # 与感知 bench 同图尺度（64×64）
 N_SOURCES = 20  # 活跃持续源（酒馆/屠宰/药铺/火堆…量级）
@@ -150,3 +159,91 @@ def test_smell_shape_contract() -> None:
     wind = np.array([1.0, 0.0])
     assert float(np.array([1, 0]) @ wind) > 0.0
     assert float(np.array([-1, 0]) @ wind) < 0.0
+
+
+# ---------------------------------------------------------------------------
+# M2-P5：接线版（源 = 全体实体，真实 `SmellWorld.step`）红线
+# 依据 docs/perf/m2-p4-budget-preplan.md §1.3/§1.5（Claude 2026-09-22 裁决）。
+# 与上部参考实现用例的区别：这里是感知步里真正的调用形（inject + roll 平流 +
+# 8 邻域扩散 + 衰减 + sample_batch + dict 组装），源数随实体数走（L1 = 50），
+# 不是 K=20 活跃物质源的参考口径 → 红线独立（SMELL_WIRED_TICK_LIMIT_MS）。
+# 复测（main `653d395` inject 向量化后）：50 源 0.116 / 100 源 0.135 / 200 源
+# 0.151 / 500 源 0.335ms（暖态中位）—— 红线 1.0ms 覆盖 10x L1 规模上界。
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.bench
+def test_smell_world_step_50_entities(benchmark) -> None:
+    """SmellWorld.step（源=全体 50 实体，真实实现）≤ 1.0ms/tick（暖态中位）。
+
+    卡的是接线版红线（budget §1 新行），不是纯网格 K=20 口径；含风平流 +
+    8 邻域扩散 + 衰减 + 批量采样 + {entity_id: 浓度} 组装。
+    """
+    from sim.perception.smell_world import SmellWorld
+
+    rng = np.random.default_rng(_SEED)
+    positions = (rng.random((N_RECV, 2)) * GRID).astype(int) % GRID
+    sources = {f"e{i:03d}": (int(p[0]), int(p[1])) for i, p in enumerate(positions)}
+    world = SmellWorld(height=GRID, width=GRID)
+
+    def _run() -> float:
+        t0 = _perf_counter()
+        world.step(sources, wind=WIND_SHIFT)
+        return (_perf_counter() - t0) * 1000.0
+
+    benchmark.pedantic(_run, rounds=9, warmup_rounds=1, iterations=200)
+    assert_median_threshold(
+        benchmark.stats, SMELL_WIRED_TICK_LIMIT_MS, "嗅觉场推进接线版 50 实体（暖态中位）"
+    )
+
+
+@pytest.mark.bench
+def test_smell_world_step_100_sources_headroom(benchmark) -> None:
+    """100 源上界探测（L0 千人降采样前的余量哨兵；软断言只查形状与量级）。
+
+    不设硬门禁：100 源不是 L1 常态规模，目的是在实体数涨（L0 投影/观战实体）时
+    给出成本走势证据。硬红线由 test_smell_world_step_50_entities 卡。
+    """
+    from sim.perception.smell_world import SmellWorld
+
+    rng = np.random.default_rng(_SEED)
+    positions = (rng.random((100, 2)) * GRID).astype(int) % GRID
+    sources = {f"e{i:03d}": (int(p[0]), int(p[1])) for i, p in enumerate(positions)}
+    world = SmellWorld(height=GRID, width=GRID)
+
+    def _run() -> float:
+        t0 = _perf_counter()
+        world.step(sources, wind=WIND_SHIFT)
+        return (_perf_counter() - t0) * 1000.0
+
+    benchmark.pedantic(_run, rounds=9, warmup_rounds=1, iterations=200)
+    assert_median_threshold(
+        benchmark.stats, SMELL_WIRED_TICK_LIMIT_MS, "嗅觉场推进接线版 100 源（暖态中位）"
+    )
+
+
+def test_smell_world_step_tick_amortized() -> None:
+    """契约守卫（非 bench）：接线版每 tick 摊销 ≤ 红线 / 2（感知每 2 tick 一次）。
+
+    用单次墙钟粗测（非 pytest-benchmark）：一次 step 的摊销成本须低于红线一半，
+    否则 `_PERCEPTION_EVERY_N_TICKS=2` 的降采口径失效（该常量在 tick.py，见
+    budget.md §1）。粗测不设统计轮次，只防量级退化。
+    """
+    from sim.perception.smell_world import SmellWorld
+
+    rng = np.random.default_rng(_SEED)
+    positions = (rng.random((N_RECV, 2)) * GRID).astype(int) % GRID
+    sources = {f"e{i:03d}": (int(p[0]), int(p[1])) for i, p in enumerate(positions)}
+    world = SmellWorld(height=GRID, width=GRID)
+    for _ in range(20):  # 暖态（扩散场稳定、缓存热）
+        world.step(sources, wind=WIND_SHIFT)
+    rounds = 50
+    t0 = _perf_counter()
+    for _ in range(rounds):
+        world.step(sources, wind=WIND_SHIFT)
+    per_step_ms = (_perf_counter() - t0) / rounds * 1000.0
+    amortized_ms = per_step_ms / 2  # 感知步每 2 tick 一次
+    assert amortized_ms <= SMELL_WIRED_TICK_LIMIT_MS / 2, (
+        f"嗅觉场推进每 tick 摊销 {amortized_ms:.3f}ms > 红线一半 "
+        f"{SMELL_WIRED_TICK_LIMIT_MS / 2:.3f}ms（单步 {per_step_ms:.3f}ms）"
+    )

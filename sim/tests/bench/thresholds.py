@@ -62,9 +62,21 @@ L1_OFFLINE_FALLBACK_LIMIT_MS = 0.20
 # 口径：Eulerian 网格半拉格朗日平流 + 衰减 + 持续源发射（64×64，K≈20 活跃源），
 # 一次 np.roll 全图 —— 不逐对计算（逐对 O(N²)·1/r² 是 naive 哨兵，见下）。
 # 暖态中位实测 ~0.01ms；0.15 留「风场非恒定→需双线性插值平移」的余量。
+# **M2-P4 起本常量 = 纯网格参考口径**（K=20 活跃物质源，不接入知步的参考实现
+# `_SmellField`，见 test_bench_smell.py 上部用例）。接线版（源=全体实体、真正的
+# `SmellWorld.step`，含 dict 组装与批量采样）红线下行 `SMELL_WIRED_TICK_LIMIT_MS`——
+# 两口径并存，勿用本常量卡接线版（源数差 2.5x 且多采样/组装成本）。
 SMELL_TICK_LIMIT_MS = 0.15
 # 嗅觉 naive O(N²) ∝1/r² 哨兵下界：断言其明显慢于网格版（H-1 动机证据，不卡预算）。
 SMELL_NAIVE_SENTINEL_MS = 3.0
+# --- M2-P5：嗅觉场推进接线版红线（源 = 全体实体，SmellWorld.step 真实实现） ---
+# 依据 docs/perf/m2-p4-budget-preplan.md §1.3（Claude 2026-09-22 裁决采纳补行）。
+# 口径：`SmellWorld.step`（inject + roll 平流 + 8 邻域扩散 + 衰减 + sample_batch + dict 组装），
+# 源 = 全体实体（50 NPC 场景；100 源上界哨兵用同一红线做软断言）。
+# M2-P5 复测（inject 已向量化 main `653d395`，np.add.at）：
+#   50 源 0.116ms / 100 源 0.135ms / 200 源 0.151ms / 500 源 0.335ms（暖态中位）。
+# 1.0ms = 500 源（≈10x L1 规模）之上 + 慢机余量；P4 原提案值不变，实测余量 ~8x。
+SMELL_WIRED_TICK_LIMIT_MS = 1.0
 
 # --- M2-P2：7 日自转长跑（604,800 tick）验收红线 ---
 # 依据：DESIGN §17 M2 验收「50 NPC × 7 游戏日自转无崩溃」。
