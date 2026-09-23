@@ -32,12 +32,18 @@ uv run pytest -m bench --benchmark-columns=min,mean,max,median
 | `test_bench_apply.py` | EventBus.apply：单事件 / 50 事件批 + 唯一写路径契约守卫 |
 | `test_bench_perception.py` | M1 感知传播（真实引擎）：视觉/听觉暖态 ≤3.6ms + 朴素 O(N²) 哨兵 + 模型形状契约 |
 | `test_bench_l1_utility.py` | M2 L1 效用 50 NPC：全量/单 NPC 红线 ≤6.0ms/0.12ms + 断线兜底队列 ≤0.20ms + 向量化哨兵；**M2-P3 起含真实实现复测** `test_l1_real_*`（对账见 `docs/perf/l1-spec.md`） |
-| `test_bench_smell.py` | M2 嗅觉传播（∝1/r² 风向）：网格扩散+采样 ≤0.15ms + 逐对 O(N²) 哨兵 + 形状契约 |
+| `test_bench_smell.py` | M2 嗅觉传播（∝1/r² 风向）：网格扩散+采样 ≤0.15ms（纯网格参考口径，K=20）+ 逐对 O(N²) 哨兵 + 形状契约；**M2-P5 起含接线版复测** `test_smell_world_step_50_entities` / `_100_sources_headroom` / 摊销契约（红线 `SMELL_WIRED_TICK_LIMIT_MS=1.0`，源=全体实体、真实 `SmellWorld.step`；对账见 `docs/perf/m2-p4-budget-preplan.md` §1.3） |
 | `soak.py` | 长跑采样 harness（M2-P2）：进程探针（RSS/句柄/GC）+ 窗口化 run_soak + 确定性 mock 动作喂给 |
 | `test_bench_soak.py` | M2 7 日自转预压测：CI 缩样稳定性 + nightly 长跑漂移/p99/缓存 + 完整 604,800 tick（环境门） |
 
 ## 阈值修订记录
 
+- **M2-P5（2026-09-22）新增接线版嗅觉红线**：`SMELL_WIRED_TICK_LIMIT_MS=1.0`（P4 提案、Claude 裁决采纳）。
+  口径分工：旧 `SMELL_TICK_LIMIT_MS=0.15` = 纯网格参考口径（`_SmellField`、K=20 活跃物质源，M3+ 语义）；
+  新红线 = 感知步真正调用形（`SmellWorld.step`：inject + roll 平流 + 8 邻域扩散 + 衰减 + batch 采样 + dict 组装，源=全体实体）。
+  复测（main `653d395` inject 向量化后，暖态中位）：50 源 0.116ms / 100 源 0.135ms / 200 源 0.151ms / 500 源 0.335ms
+  —— 1.0ms 覆盖 ~10x L1 规模上界 + 慢机余量，P4 原提案值不变。
+  三个新用例：50 实体硬红线 + 100 源上界软哨兵 + 每 tick 摊销契约（感知每 2 tick 一次，摊销 ≤ 红线一半）。
 - **M2-P3（2026-09-21，对账 + 实测回填）**：L1 红线**常量未动**（6.0 / 0.12 / 0.20ms），
   但注释回填了真实实现实测（`NpcRuntime.tick` 50 NPC ~0.747ms，余量 ~8x），
   并在 `test_bench_l1_utility.py` 加 `test_l1_real_*` 复测任务。红线属于原型（满属性上界）；

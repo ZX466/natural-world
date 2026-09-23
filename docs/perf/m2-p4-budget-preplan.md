@@ -168,12 +168,19 @@ def test_smell_world_step_100_sources_headroom(benchmark) -> None:
   提模块级（性能域仅提示，不动代码）。
 
 ## 4. 我阈值的改动清单（交 Claude 收编裁决）
-1. `thresholds.py` 新增 `SMELL_WIRED_TICK_LIMIT_MS = 1.0`；`SMELL_TICK_LIMIT_MS = 0.15`
-   保留、注释改「纯网格参考口径（K=20 物质源，M3+ 语义）」。
-2. `thresholds.py` 新增注释性常量（不进断言，供架构域对齐）：
+### 4.0 已落地（M2-P5，2026-09-22，commit on ZX466/pi）
+1. ~~`thresholds.py` 新增 `SMELL_WIRED_TICK_LIMIT_MS = 1.0`~~ **已落**；`SMELL_TICK_LIMIT_MS = 0.15` 保留、注释改「纯网格参考口径（K=20 物质源，M3+ 语义）」——两口径并存勿混用。
+2. `test_bench_smell.py` 两个接线版 bench 用例已落（`test_smell_world_step_50_entities`
+   硬红线 1.0ms / `test_smell_world_step_100_sources_headroom` 100 源上界哨兵）+
+   非 bench 摊销契约（每 tick 摊销 ≤ 红线/2，对应感知每 2 tick 一次）。
+   复测口径（inject 向量化 main `653d395` 后）：50 源 0.116 / 100 源 0.135 /
+   200 源 0.151 / 500 源 0.335ms（暖态中位）—— 原 P4 的 0.451ms 数据已被向量化
+   淘汰，红线 1.0ms 按原提案值保留（覆盖 ~10x L1 上界）。
+### 4.1 仍未落地（等裁决/等 M3 接线时引用）
+1. `thresholds.py` 注释性常量（不进断言，供架构域对齐）：
    `COGNITION_SEAM_PER_RETRIEVAL_LIMIT_MS = 0.15` /
    `COGNITION_UTILITY_SEAM_PER_NPC_LIMIT_MS = 0.01` /
    `HIDDEN_EVALUATE_TICK_LIMIT_MS = 0.30`。
-3. `docs/perf/budget.md`：§1 表增行 + §2.9 补「接线口径」段 + §2.3/§5 补 flush 异步断言。
-4. `docs/perf/bench-plan.md`：§3 阈值表增两行 smell 接线红线 + flush 帧级警戒 20ms。
-以上为**预案**，未被收编前不改 `thresholds.py`/`budget.md` 正文（等裁决）。
+2. `docs/perf/budget.md`：§1 表增行 + §2.9 补「接线口径」段 + §2.3/§5 补 flush 异步断言。
+3. `docs/perf/bench-plan.md`：§3 阈值表增两行 smell 接线红线 + flush 帧级警戒 20ms。
+4. `SMELL_WIRED_TICK_LIMIT_MS` 的机器缩放系数（nightly 数据回流后，见 talking.txt ②）。
