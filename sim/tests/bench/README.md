@@ -6,7 +6,10 @@
 
 ```bash
 # 全量基准（nightly；含阈值断言，失败即红灯）
+# 定标机口径（硬断言）：直接跑
 uv run pytest -m bench
+# 共享机器/nightly 口径（M2-P6 advisory 门）：越线只记录不断言
+PI_BENCH_ADVISORY=1 uv run pytest -m bench
 
 # 只看测量结果、不因超阈值中断（夜间看板/采数用）
 uv run pytest -m bench --benchmark-only
@@ -18,26 +21,35 @@ uv run pytest -m bench --benchmark-columns=min,mean,max,median
 ## 与 CI 的关系（依据 docs/perf/bench-plan.md §0）
 
 - **每提交 CI** 跑 `-m "not bench"`（cline 侧已配置），性能基准被 deselected，不因机器抖动红 CI。
-- **nightly** 跑 `-m bench`，结果对基线存档并告警；阈值来自 `bench/thresholds.py`（集中一处，改一处生效）。
+- **nightly** 跑 `-m bench`（yml 传 `PI_BENCH_ADVISORY=1`），结果对基线存档并告警；阈值来自 `bench/thresholds.py`（集中一处，改一处生效）。
+- **advisory 门（M2-P6）**：`PI_BENCH_ADVISORY=1` 时越线只 structlog warning 记录（`bench.advisory.*`）不失败——共享 4 核 runner 边缘越线 2-9% 是调度噪声非回归。硬断言只留定标机。契约单测 `test_bench_advisory_gate.py`；详见 `docs/perf/bench-plan.md` §0。
 
 ## 目录结构
 
 | 文件 | 内容 |
 |---|---|
 | `thresholds.py` | 回归阈值常量（唯一集中点）：tick/apply/RNG/快照 |
-| `harness.py` | 世界/loop 装配 + ms_per_tick 计时 + 阈值断言 |
+| `harness.py` | 世界/loop 装配 + ms_per_tick 计时 + 阈值断言（含 advisory 门 `PI_BENCH_ADVISORY`） |
 | `conftest.py` | 复用 fixture：`bench_loop_empty` / `bench_loop_50` |
 | `test_bench_clock.py` | GameClock：每 tick 均耗（空世界 / 50 NPC）+ 契约守卫 |
 | `test_bench_rng.py` | 分流 RNG：1M 聚合、L1 每 tick 成本、向量化对比 + 确定性/重放契约 |
 | `test_bench_apply.py` | EventBus.apply：单事件 / 50 事件批 + 唯一写路径契约守卫 |
 | `test_bench_perception.py` | M1 感知传播（真实引擎）：视觉/听觉暖态 ≤3.6ms + 朴素 O(N²) 哨兵 + 模型形状契约 |
 | `test_bench_l1_utility.py` | M2 L1 效用 50 NPC：全量/单 NPC 红线 ≤6.0ms/0.12ms + 断线兜底队列 ≤0.20ms + 向量化哨兵；**M2-P3 起含真实实现复测** `test_l1_real_*`（对账见 `docs/perf/l1-spec.md`） |
+| `test_bench_advisory_gate.py` | M2-P6 advisory 门契约（env 语义 × 越线/未越线） |
 | `test_bench_smell.py` | M2 嗅觉传播（∝1/r² 风向）：网格扩散+采样 ≤0.15ms（纯网格参考口径，K=20）+ 逐对 O(N²) 哨兵 + 形状契约；**M2-P5 起含接线版复测** `test_smell_world_step_50_entities` / `_100_sources_headroom` / 摊销契约（红线 `SMELL_WIRED_TICK_LIMIT_MS=1.0`，源=全体实体、真实 `SmellWorld.step`；对账见 `docs/perf/m2-p4-budget-preplan.md` §1.3） |
 | `soak.py` | 长跑采样 harness（M2-P2）：进程探针（RSS/句柄/GC）+ 窗口化 run_soak + 确定性 mock 动作喂给 |
 | `test_bench_soak.py` | M2 7 日自转预压测：CI 缩样稳定性 + nightly 长跑漂移/p99/缓存 + 完整 604,800 tick（环境门） |
 
 ## 阈值修订记录
 
+- **M2-P6（2026-09-22，Claude 裁 1/裁 2 落地）**：① `harness.assert_threshold` /
+  `assert_median_threshold` 加 advisory 门（`PI_BENCH_ADVISORY=1` → 越线只记录，返回
+  True/False = 是否越线）；nightly-bench.yml「跑基准」step 传 "1"（共享 runner 噪声
+  2-9% 不再假红；硬断言只留定标机）。契约单测 `test_bench_advisory_gate.py`（9 例：
+  env 语义 × 越线/未越线 × advisory 开关）。
+  ② `RNG_1M_DRAWS_LIMIT_MS` 300→330（定标机全量跑中位 300.084ms 贴边，+10% 余量消
+  刀尖红；聚合警戒线口径不变）。
 - **M2-P5（2026-09-22）新增接线版嗅觉红线**：`SMELL_WIRED_TICK_LIMIT_MS=1.0`（P4 提案、Claude 裁决采纳）。
   口径分工：旧 `SMELL_TICK_LIMIT_MS=0.15` = 纯网格参考口径（`_SmellField`、K=20 活跃物质源，M3+ 语义）；
   新红线 = 感知步真正调用形（`SmellWorld.step`：inject + roll 平流 + 8 邻域扩散 + 衰减 + batch 采样 + dict 组装，源=全体实体）。

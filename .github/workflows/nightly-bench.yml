@@ -68,6 +68,13 @@ jobs:
         # `FileNotFoundError: [Errno 2] No such file or directory: 'perf/bench.json'`（C5 根因：
         # 09-19/09-20/09-21 三次 nightly 全倒在本 step，测试本身全绿）。先建目录再跑；产物仍不入库，
         # 只随下方 artifact 归档。
+        # PI_BENCH_ADVISORY=1（pi M2-P6，Claude 2026-09-22 裁决 1）：runner 是共享 4 核
+        # （cline 取证 run 35816437844：边缘越线 2-9% 属调度噪声）→ 本 step 走 advisory 口径：
+        # 越线 structlog warning 记录 + 继续跑完 + JSON 全量归档；硬断言只留定标机
+        # （harness.advisory_mode 门只改「断不断言」，采集逻辑零改动）。
+        # 回归判定据此转为「归档 + 相对基线漂移」（bench-plan §0 原意；见下方基线对比 step）。
+        env:
+          PI_BENCH_ADVISORY: "1"
         run: |
           mkdir -p perf
           uv run pytest -m bench --benchmark-json=perf/bench.json
@@ -100,6 +107,9 @@ jobs:
           if-no-files-found: warn
 
       - name: 基线对比（docs/perf/baseline.json 入库后启用）
+        # 契约（pi M2-P6）：阈值真相源唯一 = sim/tests/bench/thresholds.py，本 yml 不复制。
+        # advisory 门下 runner 侧越线不再是红灯信号 → 回归判定靠本 step 的相对基线漂移
+        # （baseline.json 由性能域按 CI 档位定标后提交入库，见 docs/perf/bench-plan.md §3/§4）。
         run: |
           echo "首个基线（docs/perf/baseline.json，由性能域在审阅 nightly 产物后提交入库）建立前，本步骤只提示，不做回归判定。"
           echo "建立基线后改为：uv run pytest -m bench --benchmark-compare=docs/perf/baseline.json --benchmark-compare-fail=median:20%"
