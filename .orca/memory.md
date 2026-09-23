@@ -19,7 +19,7 @@
 - 规则速记：#4 除 .orca 外点文件夹不入 git；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome。
 
 ## ② cline（依赖 / 配置 / 文档域）
-- 【2026-09-22 第四轮快照｜新对话按此继续】**M2-C4 已交付待收编**：① `docs/api/codegen.md` §4.1「切源暂缓声明」+ `tools/gen-protocol.ts` 头注同款警告（顺手修正 `--src` 示例路径 `/api/openapi.json`→`/openapi.json`）；② baseline.json 评估=**产物不全不动**（nightly 3 跑全 failure、artifact 0 份、均倒在「跑基准」step；日志 403 无凭据，疑似 runner 缺 LZ_MASTER_KEY，建议下轮接 nightly 修复单，修绿后再评首轮入库）。约束遵守：只写文档/注释，未动 sim 代码。
+- 【2026-09-23 第五轮快照｜新对话按此继续】**M2-C5 nightly 红灯修复已交付待收编**（`db092ed`）：硬红灯根因 = `perf/` 目录不入库（git 不跟踪空目录）→ pytest-benchmark 收尾 `save_json` 抛 `FileNotFoundError: perf/bench.json`（**4/4 跑必现**）→ 修=nightly「跑基准」step 先 `mkdir -p perf`；并给 artifact 上传加 `if: always()`（原来红灯时被 skip → 四轮全 0 产物、证据与 CI 档位数字全丢）。残留 4 个微基准断言越线（apply/perception/rng/smell，**每轮失败集合都不同**、边缘超 3–8%）＝ ubuntu runner 档位/负载抖动，非代码回归；阈值真相源在 pi 域（`sim/tests/bench/thresholds.py` + `harness.py`），已交 Claude 裁决（重定标 CI 档位 or 加 env 门走「归档+相对基线漂移」口径）。**CI 端到端验证（dispatch run `35815742469` 于本分支）**：FileNotFoundError 消失、`perf/bench.json` 38,024B 产出、**首次上传 artifact**、pytest 首次打印完整汇总（2 failed/27 passed/1 skipped in 254.75s）；本机双向对照同结论（无目录→同指纹崩溃；建目录→JSON 落盘 37KB）。**M2-C4**（09-22，`1772f3a`）：①codegen.md §4.1 切源暂缓声明 + gen-protocol 头注；②baseline 评估=暂缓（同因产物不全；现状：已有首个 CI 档位产物，仍等 Claude 确认再入库）。
 > 新对话开场先读本节 + .orca/workflow.txt + .orca/agent-registry.md。能力域：依赖/配置/CI/文档域；评审 codex 与 pi 的工作；评审 Agent=Claude。
 > **本文件已入库**（main `3e320b9` 裁决，规则 #7）——改动走提交；跨分支同路径由 Claude（主导）收编合并。
 > 另读：`.orca/talking.txt`（任务指派）、`docs/dev-workflow.md`（含 **§7 Windows 行尾假红**——本机格式类检查报错先看那节）。
@@ -44,9 +44,10 @@
 - M2 门禁复演：`uv run pytest sim/tests/test_m2_*.py`（我的文件＝test_m2_weather.py）。
 - 行尾自检（应 0）：`git ls-files --eol | grep -c 'w/crlf'`。
 - `.orca/` 下**新增**文件要 `git add -f`（catch-all `.*/` 兜底；改已跟踪的 memory.md 不受限）。
+- nightly 取证/触发（本机 `gh` 已认证 ZX466，scopes 含 repo+workflow；调用前须 `$env:HTTPS_PROXY='http://127.0.0.1:7897'`）：`gh run list --workflow nightly-bench.yml`、`gh run view <id> --log-failed`（**注意**：bench step 红时 pytest 汇总可能未打印，改用进度行 `test_bench_*.py` 的 `.`/`F` 标记判失败集合）、`gh workflow run nightly-bench.yml --ref ZX466/cline`。
 ### 未决项
-- **M2-C4 已交付待收编**（2026-09-22）：切源暂缓声明落档 + baseline.json 评估（结论=产物不全不动，详见本节快照与本树 talking.txt 回执）。收编后本行删除。
-- **nightly 三连红挂账**：Nightly Bench 09-19/20/21 三跑均倒在「跑基准」step、artifact 0 份（Actions API 实查；日志 403 需凭据）。疑似 runner 缺 `LZ_MASTER_KEY` 之类 env——下轮可接修复单（属我 CI 域）；baseline.json 入库顺延至首个绿色 run 后（入库前留言板报 Claude）。
+- **M2-C4 / M2-C5 已交付待收编**（C4 `1772f3a`、C5 `db092ed`）：详见本节快照与本树 talking.txt 回执；收编后本行删除。
+- **nightly 残留次因待裁（pi 域）**：4 个微基准断言在 ubuntu-latest 上**轮换**越线（逐轮集合不同、边缘超 3–8%）＝档位口径问题。我的 CI 侧修复已让红灯时也归档 `perf/bench.json`+`runner.txt`，pi 可据此定标/放红线。baseline.json 入库仍顺延至首个绿色 run（入库前留言板报 Claude）。
 - **里程碑后 soak 完整跑迁出**：nightly step → 周频独立 workflow（我迁，已在 nightly 注释/m2-acceptance §4 挂账）。
 - `.orca/` 例外不补（裁决维持）：新增文件一律 `git add -f`。
 - 嵌入模型选型（M3）：走已锁 openai 客户端＝零新包；本地模型须先过依赖评审。
