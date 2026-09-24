@@ -104,7 +104,11 @@ class TestE1EventShape:
         from sim.core.events import HiddenEmergePayload
 
         with pytest.raises(ValidationError):
-            HiddenEmergePayload(npc_id="chenmo", attr_ids=(ATTR_A,), descriptors=("旧伤",))
+            HiddenEmergePayload(
+                npc_id="chenmo",
+                attr_ids=(ATTR_A,),
+                descriptors=("旧伤",),  # type: ignore[call-arg]  # 负例：extra=forbid 拒夹带
+            )
 
     def test_payload_accepts_attr_id_tuple(self) -> None:
         from sim.core.events import HiddenEmergePayload
@@ -116,7 +120,7 @@ class TestE1EventShape:
         from sim.core.events import HiddenEmergePayload
 
         with pytest.raises(ValidationError):
-            HiddenEmergePayload(attr_ids=(ATTR_A,))
+            HiddenEmergePayload(attr_ids=(ATTR_A,))  # type: ignore[call-arg]  # 负例：缺 npc_id
 
     def test_store_row_registered_in_payload_models(self) -> None:
         """PAYLOAD_MODELS 登记 → 行级校验可拒夹带键（新 kind 纪律同现有）。"""
@@ -151,7 +155,11 @@ class TestE1EventShape:
         from sim.core.events import hidden_emerge_event
 
         with pytest.raises(ValidationError):
-            hidden_emerge_event(tick=1, npc_id="chenmo", attr_ids="not-a-tuple")
+            hidden_emerge_event(
+                tick=1,
+                npc_id="chenmo",
+                attr_ids="not-a-tuple",  # type: ignore[arg-type]  # 负例：str 非 tuple
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +183,13 @@ class TestE1DeltaSemantics:
             return []
         from sim.core.events import hidden_emerge_event
 
-        return [hidden_emerge_event(tick=state["_tick"], npc_id="chenmo", attr_ids=tuple(delta))]
+        return [
+            hidden_emerge_event(
+                tick=state["_tick"],  # type: ignore[arg-type]  # 测试替身 state dict 混装
+                npc_id="chenmo",
+                attr_ids=tuple(delta),
+            )
+        ]
 
     def test_delta_only_newly_triggered(self) -> None:
         from sim.npc.hidden import HiddenAttribute, HiddenProfile
@@ -254,7 +268,7 @@ class TestE1WitnessAssembly:
             "b": _Frame(observations=[("smell", "chenmo", 0.9)]),
             "a": _Frame(observations=[("vision", "chenmo", 0.8)]),
         }
-        got = evidence.witnesses_of_emerge(frames, subject="chenmo")
+        got = evidence.witnesses_of_emerge(frames, subject="chenmo")  # type: ignore[arg-type]  # 鸭子替身
         assert "a" in got
         assert "b" not in got
 
