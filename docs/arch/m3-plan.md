@@ -133,7 +133,7 @@ E1 事件（npc.hidden_emerge）与 knowledge 五列扩展（codex M3-S2 提案�
 |---|---|---|
 | C1 | `materialize_matter()` 快照路径实现（§19 契约照抄） | opencode |
 | C2 | 重放路径 + 两入口逐位相等校验测试（§19.3） | opencode |
-| C3 | chunk 失效正确性（量化验收「chunk 失效正确」）+ 注册持久化待定项提案 | opencode |
+| C3 | chunk 失效正确性（量化验收「chunk 失效正确」）+ 注册持久化待定项提案 | opencode | ✅ 已交（失效通路+test_m3_chunk_invalidation；提案 matter-register-proposal.md 待裁） |
 | C4 | MatterPayload 域约束实现（codex C2 钉子转绿：Field(ge/le) + allow_inf_nan=False） | opencode |
 
 ### 批次 D — 社会面收束（Claude）
@@ -174,7 +174,7 @@ X5 触发词面扩面走 CR（新叙事文本与 trigger 词面交叉审查，�
 | V5 | 召回时机（每 tick/按需/批量窗口） | opencode + pi | 挂 M3（A5 bench 数据后裁） |
 | V7 | embedding 挂写路径（S1 边界） | opencode | **M3 首批提案**（codex 复核前置） |
 | R3 | invalid_reason 双列口径 | codex 建议 | **M3 首批提案**（B1） |
-| §19.4 | 注册持久化（register 事件 vs structures 表） | opencode | C3 时提案 |
+| §19.4 | 注册持久化（register 事件 vs structures 表） | opencode | **提案已出**（`docs/data/matter-register-proposal.md`，主张 MATTER_BUILD 立账；待 Claude 裁决） |
 
 ## 7. 与第六轮任务单的衔接
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 CHUNK_SIZE = 16  # 瓦片/chunk，边长
 
@@ -40,6 +40,9 @@ class TileMap(BaseModel):
     height: int
     tile_size: int = 16
     chunks: dict[tuple[int, int], Chunk] = Field(default_factory=dict)
+    #: M3 脏 chunk 集（tile_changed/matter 定位事件标脏 → 寻路缓存失效）。
+    #: PrivateAttr：frozen 几何不可变，脏标记是瞬时失效状态、不进世界态快照。
+    _dirty: set[tuple[int, int]] = PrivateAttr(default_factory=set)
 
     @property
     def chunks_x(self) -> int:
@@ -65,8 +68,45 @@ class TileMap(BaseModel):
         return chunk.is_walkable(x % CHUNK_SIZE, y % CHUNK_SIZE)
 
     def dirty_chunks(self) -> list[tuple[int, int]]:
-        """M3 预留接口占位：M0 chunk frozen 无 dirty 标记，恒空。"""
-        return []
+        """当前脏 chunk 列表（字典序排序，确定性；空 = 无待失效）。"""
+        return sorted(self._dirty)
+
+    def mark_tile_dirty(self, x: int, y: int) -> tuple[int, int]:
+        """标记全局坐标所在 chunk 脏。返回 chunk 坐标（界外不标，返回哨兵）。"""
+        if not self.in_bounds(x, y):
+            return (-1, -1)
+        chunk = self.chunk_of(x, y)
+        self._dirty.add(chunk)
+        return chunk
+
+    def mark_chunk_dirty(self, chunk: tuple[int, int]) -> None:
+        """直接标记 chunk 脏。"""
+        self._dirty.add(chunk)
+
+    def drain_dirty(self) -> list[tuple[int, int]]:
+        """取出并清空脏集（寻路失效消费后调用）。返回排序列表。"""
+        out = sorted(self._dirty)
+        self._dirty.clear()
+        return out
+
+    def with_collision(self, x: int, y: int, walkable: bool) -> TileMap:
+        """不可变更新单格碰撞，新实例携带该 chunk 脏标记（M3 可变底座）。
+
+        model_copy 会共享 PrivateAttr 集合——新实例换独立集再标脏，
+        避免新旧图脏标记串扰。
+        """
+        if not self.in_bounds(x, y):
+            msg = f"坐标越界: ({x}, {y})"
+            raise ValueError(msg)
+        key = self.chunk_of(x, y)
+        chunk = self.chunks[key]
+        lx, ly = x % CHUNK_SIZE, y % CHUNK_SIZE
+        col = list(chunk.collision)
+        col[ly * CHUNK_SIZE + lx] = walkable
+        new_chunk = chunk.model_copy(update={"collision": tuple(col)})
+        new = self.model_copy(update={"chunks": {**self.chunks, key: new_chunk}})
+        object.__setattr__(new, "_dirty", {key})
+        return new
 
     @classmethod
     def from_json_file(cls, path: Path) -> TileMap:
