@@ -1,4 +1,4 @@
-# knowledge 五列扩展 + 级联失效 — B3 schema 提案（待裁决）
+# knowledge 五列扩展 + 级联失效 — B3 schema 提案（**裁 10 已全采，M3-D4 实施**）
 
 > 数据域（opencode），M3-D3 B3，2026-09-23。**本文为提案**——按活跃约定
 > 「schema 先提案 → Claude 裁决 → 再动代码」，**未动 models.py / 未出迁移**。
@@ -7,6 +7,14 @@
 > `docs/arch/m3-plan.md §3 批次 B`（B1 双列口径 / B3 合并提案）、
 > `docs/data/schema.md §8`（现 knowledge 表）。
 > 实现范围裁后：B3（本提案）→ R1 闭环。
+
+> **裁决落定（2026-09-24，裁 10 全采；M3-D4 已实施）**：§8 四点全部按本提案主张落——
+> ①七列拆分口径（4 语义 + 3 治理）②`invalidated` 独立位（不造 `superseded_by` 替代列）
+> ③knowledge 落库**走写入门**（X7，不新增裸写）④级联触发点由**调用方串联**
+> （存储层不互依赖；`session=` 入参把级联并进源记忆 supersede 的同一事务）。
+> 实施落点：`0005_m3_knowledge_governance` / `models.py::Knowledge` /
+> `sim/core/persistence/knowledge_store.py` / `sim/tests/test_t1_m3_knowledge_cascade.py`（20 用例全绿）。
+> 本文档保留为**设计依据与理由留档**（含 §2.1 为何不用 `superseded_by` 的论证）。
 
 ## 0. 一句话
 
@@ -132,24 +140,28 @@ class KnowledgeStore:
 | R4 分支隔离 | 全 SQL 带 `branch_id` |
 | R3 双列口径 | knowledge 侧同理：**任一治理位非空即不可见**（`invalidated=1 OR invalid_reason IS NOT NULL`）；B1 终裁若取「双列任一非空」，本提案同口径 |
 
-## 8. 待裁决点（报主树）
+## 8. 待裁决点（**裁 10 已全采，见文首裁决栏**）
 
 1. **五列拆分口径**：任务书「五列」是否按本提案 = 4 语义列 + 3 治理列（共 7）？
-   或治理列合并为 1（如仅 `invalid_reason`）？
+   或治理列合并为 1（如仅 `invalid_reason`）？ → **采纳 7 列**。
 2. **`invalidated` 独立位 vs 复用 `superseded_by`**：本提案主张独立布尔位
    （knowledge 无替代语义）；若裁「统一双列」则改为 `superseded_by`+`invalid_reason`。
+   → **采纳独立位**（codex 预审①同向：无替代行语义，别造 replacement 列）。
 3. **落库入口**：`KnowledgeStore` 新增裸写 vs 扩 `MemoryWritePipeline`？
-   本提案主张**不新增裸写**，knowledge 落库经写入门（R1/X7）。
+   本提案主张**不新增裸写**，knowledge 落库经写入门（R1/X7）。 → **采纳走写入门**。
 4. **级联触发点**：`SqlMemoryStore.supersede` 是否直接持有 `KnowledgeStore` 回调，
    或由调用方（runtime/传播）串联？本提案主张**调用方串联**（存储层不互依赖）。
+   → **采纳调用方串联**；`KnowledgeStore.invalidate_*` 的 `session=` 入参让调用方
+   把级联并进同一事务（裁 10「supersede 事务内级联」）。
 
-## 9. 交付物清单（裁后）
+## 9. 交付物清单（**M3-D4 已全部落地**）
 
-- [ ] 迁移 `0005_m3_knowledge_governance`
-- [ ] `models.py::Knowledge` 加 7 字段 + 3 索引 + CHECK
-- [ ] `sim/core/persistence/knowledge_store.py`（`KnowledgeStore` + 级联）
-- [ ] `schema.md §8` 更新（列/索引/约束）
-- [ ] T1 钉子 `test_t1_m3_knowledge_cascade.py`（R1：源 supersede → 派生失效 → 下游级联；分支隔离；幂等）
-- [ ] `MemoryWritePipeline`/传播侧 knowledge 落库 + `source_memory` 记录
+- [x] 迁移 `0005_m3_knowledge_governance`（add_column×7 + 索引×3 + CHECK×3，downgrade 回 0002 原型）
+- [x] `models.py::Knowledge` 加 7 字段 + 3 索引 + 3 CHECK
+- [x] `sim/core/persistence/knowledge_store.py`（`KnowledgeStore` + 级联 + 写入门 + `fill_evidence_seq`）
+- [x] `schema.md §8` 更新（列/索引/约束/治理语义）
+- [x] T1 钉子 `sim/tests/test_t1_m3_knowledge_cascade.py`（20 用例：R1 端到端 / 链断拒收闭环 / 幂等 / 分支隔离 / 同事务回滚 / 写入门 X7 / `evidence_seq` 回填）
+- [x] `MemoryWritePipeline.decide` 抽出共用判梯 + `scan_fact` 供知识写入复用（记忆侧 116 用例回归全绿，行为不变）
+- [ ] 传播侧 knowledge 落库接线（叙事文本由架构域 runtime/传播给出，本批只交付数据面形状与回填机制）
 
-> 状态：**待 Claude 裁决**。裁决前不动 schema/models/迁移。
+> 状态：**已实施待收编**。裁 10 依据见文首裁决栏；codex M3-S5 按钉子验收。

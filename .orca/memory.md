@@ -11,8 +11,9 @@
 - **M0+M1 全量收官；M2 全收官（九轮全收编，main `4e381c0` 前态 1003 passed）**；裁决 1-12 全落地（1 advisory 门/2 RNG330/3 V1V4V6/4 baseline 漂移 25%/5 {anchor_id}/6 cline 修正/7 pi 四红线/8 E1+knowledge 列/9 cline 口径/10 B3 七列/11 机型重对账/12 kilo 8.1-8.8）。
 - **我 A2 批次链**：第二批 `59ffd86`（向量化）→ 第三批（smell/runtime 接线）→ 第四批 `805166e`（m3-plan 骨架）→ 第五批 `3bf49be`（批次 B 细化+B1 双列）→ 第六批 `1ae9e54`（E1 事件层+evidence.py+propagation.py，26 钉子转绿）→ 第七批 `f1c0c35`（reflection.py+society.py+relationship_store+budget 回填）→ **第八批 `64b7390`（2026-09-24，批次 B 生产面收口）**：①F2 收口=NpcRuntime.tick 第 0 步 delta 装配发 hidden_emerge_event（先于 NPC_ACT=证据链根先行，attr_ids 排序保 C5，bench/soak 调用形零回归）；②F1=工厂 witnesses 收窄 Sequence[str]+isinstance 拒 str/bytes/dict（codex S5 的 dict→ghost 键洗白向量封口）；③B-B2=run_world_driver 增 on_day_switch 钩子（**跨越判定逐日补发**，非 reflection_due 等值判定——帧驱动一帧 0..N tick，等值点 75-94% 被整帧跳过）+ reflection.make_day_switch_reflector 适配器（钩子 1-based→run_reflection 0-based 换算；ws.py 零 sim.npc 依赖）。新钉子 test_m3_e1_wiring.py 17 用例；全量 **1020 passed / 0 RED**，bench 36，pyright 全仓 0，ruff clean。
 - **坑（实测过）**：①日切判定必须跨越式（prev_day≠new_day），等值式在帧驱动下丢日切；②工厂收窄 isinstance 须先查 str/bytes（str 本身是 Sequence）；③NPC 事件身份进 payload 不设 actor_id（npc_act_event 同口径，actor_id 是世界事件字段）；④pyright reportUnnecessaryTypeIgnoreComment=error——ignore 须落在真报错行，负例越型用 `Any` 中转变量而不是猜 ignore 规则名；⑤钩子回调同步形（run_reflection 无 IO），on_flush 是 async 形；⑥witnesses 装配在感知层（evidence.witnesses_of_emerge），runtime 无感知帧留空=fail-closed（witnessed 三要素齐才 0.9）。
-- M3 进度：批次 A ✅ / **批次 B 双收口（架构+生产）** / C 过半（C1/C2 ✅，剩 C3）/ D 未开工；M5 接口锚点待施工（kilo 对表+8.7 首修）。MVP ≈99%，全项目 ≈65%。
-- 待办：收编 opencode D4（`30dd087` 已推双远程）+ codex S5 终验（R1 端到端+X7 grep+0005 downgrade）→ 批次 C3 → 批次 D；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
+- 【2026-09-24 第十轮快照｜opencode M3-D4 收编 + codex M3-S5 终验全过（main `d8fe2b0`）】**D4 收编**（`30dd087` → ff `3b560b9`）：knowledge 治理七列+0005 迁移（batch_alter_table 落 CHECK×3）+ KnowledgeStore（invalidate_by_source|row 沿 source_knowledge_id 广度递归，继承失效不继承替代，幂等+分支隔离+session= 同事务）+ X7 写入门（memory_scan 抽 decide() 唯一判梯，write/scan_fact 共用）+ T1 钉子 20 用例。**S5 终验四项我主树实测全过**：①R1 三硬断言（supersede→失效 count=1 / told 链下行级联 / 链断后 judge_third_party_hidden 拒收 reason=told_teller_knowledge_invalidated）②X7 grep 零裸 INSERT（Knowledge( 构造仅在 knowledge_store.py，tests 外零处）③裁10④ session= 同事务口在 ③裁10④ 接线点形态在（write_fact/invalidate 均有 session= 入参，调用方串联，存储层互不依赖）④alembic 0005→0004→0005→0002→0005 往返零漂移（scratch DB 实测；world.db 本地仍无版本记录=正常，迁移仅测试/生产路径用）+ F1 Sequence[str] 收窄复验（hidden_emerge+knowledge_cascade 46 passed）。**门禁：1076 passed / 56 skipped / 0 failed**（新增 T1 20 用例；skip 55→56=新增 1 条环境门），pyright 全仓 0，ruff ok，bench 绿。**批次进度：B 双收口 / C1+C2+C4 ✅ 剩 C3 / D 未开工**。
+- M3 进度：批次 A ✅ / **批次 B 双收口（架构+生产）** / C 过半（C1/C2/C4 ✅，剩 C3）/ D 未开工；M5 接口锚点待施工（kilo 对表+8.7 首修）。MVP ≈99%，全项目 ≈67%。
+- 待办：**批次 C3**（opencode：chunk 失效正确性量化验收 map.py:67 dirty_chunks 占位恒空 + §19.4 注册持久化提案）→ **批次 D**（Claude 主线：D1 不成文规矩 v0 + D2 空间迷雾 + D3 端到端 T5 golden，codex 出探针）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
 ## ② cline（依赖 / 配置 / 文档域）
@@ -129,11 +130,11 @@
 
 ## 当前任务
 
-待命（M2-C8 已闭环）。主树第十轮派单：轮休——下次派单预计在 M3 批次 B 收编后（README §5 补 M3 分节 + §2 文档地图补行）。
+待命（M3 批次 B 已收口，D4 已收编；下次派单预计在 M3 批次 D 收编后：README §5 补 M3 分节 + §2 文档地图补行）。
 
 ## 进行中
 
-(空)
+(空 — 等 Claude 经 talking.txt 派发下一单。)
 
 ## 留言板
 
