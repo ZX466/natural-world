@@ -264,14 +264,16 @@ components.setdefault("responses", {})["Problem"] = {
 
 | 消息 | 白名单 `_ALLOWED_CLIENT_TYPES` | `_CHANNEL_FOR` | 分发块 | 现状 |
 |---|---|---|---|---|
-| `move_request` | ✅ | ✅ render | ✅ | 完整（寻路 + `issue_move`） |
+| `move_request` | ✅ | ✅ render | ✅ | 完整（寻路 + `issue_move`）；**校验失败静默 `return None`**（`ws.py:221,230,234`，同属静默缺陷，见 `ws-dispatch-proposal.md` §4） |
 | `hello` | ✅ | ✅ session | ✅ | 完整（鉴权握手） |
-| `sync_request` | ✅ | ✅ session | ✅ | 完整（回 `control_ack`） |
-| `set_control` | ✅ | ✅ control | ❌ 无 | **静默忽略**——白名单放行但落 `return None`，客户端收不到 ack 也不知被拒 |
-| `player_impulse` | ❌ | ❌ | ❌ | 压根未注册 → 回 `unknown_type` error 帧 |
-| `load_anchor` | ❌ | ❌ | ❌ | 压根未注册 → 回 `unknown_type` error 帧 |
+| `sync_request` | ✅ | ✅ session | ⚠️ | **回错型**：返回 `control_ack{action:"resume"}`（`ws.py:257-266`）——契约要求回 `full_snapshot`（`ws-protocol.md:48`）。**M5-K4 订正**（本行原记「完整（回 `control_ack`）」有误），修法见 `ws-dispatch-proposal.md` §5 |
+| `set_control` | ✅ | ✅ control | ❌ 无 | **静默忽略**——白名单放行但落 `return None`，客户端收不到 ack 也不知被拒。修法见 `ws-dispatch-proposal.md` §1 |
+| `player_impulse` | ❌ | ❌ | ❌ | 压根未注册 → 回 `unknown_type` error 帧。修法见 `ws-dispatch-proposal.md` §2 |
+| `load_anchor` | ❌ | ❌ | ❌ | 压根未注册 → 回 `unknown_type` error 帧。修法见 `ws-dispatch-proposal.md` §3 |
 
-**对 M5 的三条影响**：
+> **M5-K4 交付**：上表四类待修项的分发块契约已出（`docs/api/ws-dispatch-proposal.md`），含验收对表 20 项 + 待裁清单 8 项。本节表格从「现状描述」转为「施工进度跟踪」。
+
+**对 M5 的三条影响**（下列为 K1 时点判断；完整分发块契约见 `ws-dispatch-proposal.md`）：
 
 1. **`load_anchor` 需新增注册**（白名单 + `_CHANNEL_FOR: session` + 分发块），否则本契约 §4 的载入链路无从谈起。这属 Claude 域 M5 施工。
 2. **`set_control` 的静默忽略是已存缺陷**（不是本契约引入）：契约已定 `ControlAck` 三字段（action/applied/speed），缺的只是分发块。建议 M5 顺手补，或按 §6 待决议单独排期。

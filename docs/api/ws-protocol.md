@@ -158,6 +158,7 @@ sim/api/ws  (FastAPI WebSocket 网关)
 
 - sim 负责：叙事化注入（"你摸了摸空瘪的钱袋……"）→ 意愿冲突度计算 → 注入 Agent prompt。
 - 客户端不参与叙事化，不计算冲突度（数值是元信息）。
+- **分发契约见 `ws-dispatch-proposal.md` §2**（M5-K4）：注册（白名单+channel）、入站校验（`text` 长度/空串）、乐观 `impulse_feedback` 与 LLM 异步投递缝、error code（`bad_impulse`/`impulse_too_long`）。现状 `player_impulse` **未注册**（回 `unknown_type`）。
 
 #### impulse_feedback.data（S→C，M4）
 
@@ -180,6 +181,7 @@ sim/api/ws  (FastAPI WebSocket 网关)
 ```
 
 - 战斗时间尺（§9）由 sim 自动切换，**不允许客户端直接设战斗慢镜**。`timescale`（S→C）告知进入/脱离。
+- **分发块契约见 `ws-dispatch-proposal.md` §1**（M5-K4）：`action`/`speed` 校验规则、`applied` 语义、`timescale` 联动、拒绝面 error 帧（`bad_action`/`bad_speed`）。现状 `handle_client_message` **无 `set_control` 分发块**（静默 `return None`）——分发块落地是本节契约成立的前提。
 
 #### control_ack.data / timescale.data（S→C）
 
@@ -188,16 +190,21 @@ sim/api/ws  (FastAPI WebSocket 网关)
 { "mode": "combat", "active": true, "note": null }               // timescale（note 戏外调试用）
 ```
 
+- **`control_ack.speed` = 用户设定的倍率**，不是当前有效 tick 率；战斗期有效率 = `1 × speed`（`clock.py` 的 `ticks_per_real_second = base × speed`）。前端不得拿此值直算帧率。
+- `timescale` **只由战斗事件驱动**（`issue_combat_scale`→广播），与 `set_control` 无因果链。详见 `ws-dispatch-proposal.md` §1.5。
+
 ### 4.4 session 通道
 
 #### load_anchor.data（C→S）
 
 ```jsonc
-{ "anchor_id": "anc_01" }        // 来自 HTTP anchor 列表（见 openapi.md）
+{ "anchor_id": "9f3c1a7b2e04" }   // 来自 HTTP anchor 列表（见 openapi.md / anchors-api.md）
 ```
 
 - 触发 §12 读档流程：定位 (branch_id,seq) → 快照 → 重放 → 新分支 → 流 `full_snapshot`。
 - 重放毫秒级，期间客户端显示"片刻后……"叙事化过渡，绝不显示"重放中/tick"。
+- `anchor_id` 是**不透明字符串**（12 位 hex，`uuid4().hex[:12]`）——**不得**用 `startsWith('anc_')` 之类前缀特征做校验（`anchors-api.md` §6.5：`anc_` 前缀惯例不存在）。
+- **分发契约见 `ws-dispatch-proposal.md` §3**（M5-K4）：注册、入站校验、失败走 WS error 帧（`code:"load_failed"`）**且不断线**、成功发 `full_snapshot`。现状 `load_anchor` **未注册**（回 `unknown_type`）。
 
 #### sync_request.data（C→S） / full_snapshot 响应见 §4.1
 
@@ -208,10 +215,12 @@ sim/api/ws  (FastAPI WebSocket 网关)
 ### 4.5 error 通道
 
 ```jsonc
-{ "ref": "player_impulse", "code": "IMPULSE_TOO_LONG", "message": "话说得太长了，说不清。" }
+{ "ref": "player_impulse", "code": "impulse_too_long", "message": "话说得太长了，说不清。" }
 ```
 
 - message 保持戏内文风（§19 不静默丢弃、不用系统措辞）；code 供客户端逻辑分支，不向玩家显示。
+- **`code` 一律小写 snake_case**（M5-K4 §5.1 统一口径；实现已是此风格，本节样例原写 `IMPULSE_TOO_LONG` 已订正）。全量 code 词表见 `ws-dispatch-proposal.md` §5.1。
+- 三原则：**不静默丢弃**（非法输入必回 error 帧，不 `return None`）；**不泄露内部真相**（§5 禁出字段不出现在 `message`）；**不断线**（`load_anchor` 失败等只回 error，连接保持）。
 
 ## 5. 出戏边界（逐条可查）
 
