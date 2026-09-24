@@ -37,7 +37,7 @@ from sim.llm.memory_scan import (
 from sim.npc.contract import HiddenState
 from sim.npc.hidden import HiddenAttribute, HiddenProfile
 from sim.npc.model import NpcProfileData, needs_from_json
-from sim.world.matter import MatterLedger
+from sim.world.matter import MatterLedger, MatterSnapshot
 
 #: LOD↔运行时物化范围（m2-npc-cognition §1.2）：L0=统计/1=效用/2=LLM。
 LOD_STATISTICAL = 0
@@ -215,15 +215,64 @@ class NpcStore:
         async with self._events.session_factory() as session:
             rows = (await session.execute(stmt)).scalars().all()
 
-        ledger = MatterLedger()
-        for row in rows:
-            # integrity/decay_rate 库内已 clip/非负（_project_matter 保证），register 幂等；
-            # rubble 终态（is_rubble=True ⟹ integrity=0.0，§14）用 mark_rubble 置位，
-            # 与逐位列等价（逐位重建，§19.3）。
-            ledger.register(row.subject_id, integrity=row.integrity, decay_rate=row.decay_rate)
-            if row.is_rubble:
-                ledger.mark_rubble(row.subject_id)
-        return ledger
+        # 逐位列直通（§19.2）：库内 integrity 已 clip、decay_rate 非负（_project_matter
+        # 保证），故直接构造 MatterSnapshot 与「register+mark_rubble」逐位等价。
+        # 与**重放路径**共用 `MatterLedger.from_snapshots` 构造点（§19.3 逐位相等判据）。
+        return MatterLedger.from_snapshots(
+            MatterSnapshot(
+                matter_id=row.subject_id,
+                integrity=row.integrity,
+                decay_rate=row.decay_rate,
+                is_rubble=row.is_rubble,
+            )
+            for row in rows
+        )
+
+    async def materialize_matter_replay(
+        self, matter_ids: Sequence[str] | None = None
+    ) -> MatterLedger:
+        """物质账本**重放路径**（M3-C2，§19.3）：从事件流重放 ``matter.*`` 重建。
+
+        与**快照路径** ``materialize_matter`` **同产物、不同机制**（§19.3）：
+
+        - 快照路径：直接 SELECT ``matter_state``（当前值，O(n)）；
+        - 重放路径：读 ``events`` 表内 ``matter.*`` 事件（按 seq 升序）→ 逐事件
+          **复用同一折叠规则**（``fold_matter_snapshot``，与 ``_project_matter``
+          同源）→ UPSERT 内存账本。
+
+        冷启动（无封存快照）时即「从空账本 + 全部事件」重放；若调用方持有快照点
+        的账本（M3 世界循环封存），可先 ``from_snapshots(基线)`` 再喂后续事件——
+        本方法当前实现「全量重放」形态（快照封存接线后扩展为「快照 + seq 之后」）。
+
+        - ``matter_ids`` 过滤同 ``materialize_matter``（未知 id 不在结果）：
+          仅当**最后一次折叠仍存在**的 id 才在结果中；未产事件的对象不在。
+        - **纯读**：只读 ``events``、不落库、不投影。
+        - 一致性判据：两入口产出**逐位相等**（§19.3；见 C2 校验测试）。
+        """
+        raw = await self._events.read_range(self._branch_id, 0, 2**62 - 1)
+
+        # 按 seq 升序折叠所有 matter.* 事件（read_range 已升序；显式排序防御）。
+        states: dict[str, MatterSnapshot] = {}
+        for ev in sorted(raw, key=lambda e: int(e.get("seq", 0))):
+            kind = str(ev.get("event_type", ""))
+            if not kind.startswith("matter."):
+                continue
+            payload = ev.get("payload") or {}
+            matter_id = str(payload.get("matter_id", ""))
+            if not matter_id:
+                raise NpcStoreError(f"MATTER_* payload 缺 matter_id: {payload!r}")
+            states[matter_id] = fold_matter_snapshot(
+                states.get(matter_id),
+                matter_id=matter_id,
+                durability=float(payload.get("durability", -1.0)),
+                decay_rate=float(payload.get("decay_rate", -1.0)),
+                is_collapse=kind == EventKind.MATTER_COLLAPSE.value,
+            )
+
+        if matter_ids is not None:
+            wanted = set(matter_ids)
+            states = {k: v for k, v in states.items() if k in wanted}
+        return MatterLedger.from_snapshots(states.values())
 
     # -----------------------------------------------------------------------
     # 2. tick 批次 flush（事件 + 投影，同事务）
@@ -333,12 +382,56 @@ _MATTER_KINDS = frozenset(
 )
 
 
+def fold_matter_snapshot(
+    state: MatterSnapshot | None,
+    *,
+    matter_id: str,
+    durability: float,
+    decay_rate: float,
+    is_collapse: bool,
+) -> MatterSnapshot:
+    """**单一折叠规则**：MATTER_* payload → 新 ``MatterSnapshot``（§19.3 防分叉）。
+
+    投影路径（``_project_matter``，落 ``matter_state``）与重放路径
+    （``materialize_matter_replay``，建内存账本）**共用本函数**——两入口逐位相等
+    的前提（无第二套语义）。
+
+    - ``durability < 0``：本次事件不携带耐久（如纯衰减携带账本率的 BUY 类），
+      新态沿用旧 integrity；新对象无旧值 → 取 1.0（§17.2：新建硬编码满耐久）；
+    - ``durability >= 0``：结算后耐久（clamp 0..1）；
+    - ``decay_rate >= 0``：携带账本静态率（§17.2 方案 A 写率）；``< 0`` = 不动
+      （沿用旧率；新对象取 0.0）；
+    - ``is_rubble``：终态不可逆（``COLLAPSE`` 或 integrity 归零即置位，只增不减）；
+    - 新对象的 ``decay_rate<0`` 归一为 0.0（旧对象沿用），对齐 ``_project_matter`` 原行为。
+    """
+    if state is None:
+        integrity = 1.0 if durability < 0.0 else max(0.0, min(1.0, durability))
+        rate = max(0.0, decay_rate) if decay_rate >= 0.0 else 0.0
+        return MatterSnapshot(
+            matter_id=matter_id,
+            integrity=integrity,
+            decay_rate=rate,
+            is_rubble=is_collapse or integrity <= 0.0,
+        )
+
+    base = state.integrity if durability < 0.0 else durability
+    integrity = max(0.0, min(1.0, base))
+    rate = decay_rate if decay_rate >= 0.0 else state.decay_rate
+    return MatterSnapshot(
+        matter_id=matter_id,
+        integrity=integrity,
+        decay_rate=rate,
+        is_rubble=state.is_rubble or is_collapse or integrity <= 0.0,
+    )
+
+
 async def _project_matter(session: AsyncSession, branch_id: str, event: WorldEvent) -> None:
     """MATTER_* → matter_state UPSERT（matter_state = 事件流的持久化投影）。
 
     payload（MatterPayload）：matter_id/amount/durability/decay_rate/note。
     amount<0 为损耗，durability>=0 为结算后耐久（折算 integrity）；COLLAPSE 置
     is_rubble；decay_rate>=0 携带账本静态率写列（§17.2 方案 A，重放保真），-1=不动。
+    折叠规则见 ``fold_matter_snapshot``（与重放路径同源）。
     """
     payload = event.payload
     matter_id = str(payload.get("matter_id", ""))
@@ -351,30 +444,46 @@ async def _project_matter(session: AsyncSession, branch_id: str, event: WorldEve
 
     existing = await session.get(MatterState, matter_id)
     if existing is None:
-        new_integrity = 1.0 if durability < 0 else max(0.0, min(1.0, durability))
+        folded = fold_matter_snapshot(
+            None,
+            matter_id=matter_id,
+            durability=durability,
+            decay_rate=decay_rate,
+            is_collapse=is_collapse,
+        )
         session.add(
             MatterState(
                 subject_id=matter_id,
                 branch_id=branch_id,
                 subject_kind="structure",
                 material="",  # MatterPayload 暂无 material 字段（材料归 M4 结构域）
-                integrity=new_integrity,
+                integrity=folded.integrity,
                 quality=0.5,
-                decay_rate=max(0.0, decay_rate) if decay_rate >= 0.0 else 0.0,
+                decay_rate=folded.decay_rate,
                 load_bearing=False,
                 supported_by="[]",
-                is_rubble=is_collapse or new_integrity <= 0.0,
+                is_rubble=folded.is_rubble,
                 last_decay_tick=event.tick,
                 updated_at_tick=event.tick,
             )
         )
         return
 
-    base = existing.integrity if durability < 0 else durability
-    existing.integrity = max(0.0, min(1.0, base))
-    if decay_rate >= 0.0:
-        existing.decay_rate = decay_rate
-    if is_collapse or existing.integrity <= 0.0:
-        existing.is_rubble = True
+    prior = MatterSnapshot(
+        matter_id=matter_id,
+        integrity=existing.integrity,
+        decay_rate=existing.decay_rate,
+        is_rubble=existing.is_rubble,
+    )
+    folded = fold_matter_snapshot(
+        prior,
+        matter_id=matter_id,
+        durability=durability,
+        decay_rate=decay_rate,
+        is_collapse=is_collapse,
+    )
+    existing.integrity = folded.integrity
+    existing.decay_rate = folded.decay_rate
+    existing.is_rubble = folded.is_rubble
     existing.last_decay_tick = event.tick
     _ = amount  # amount 已折算进 durability/integrity；保留字段供审计

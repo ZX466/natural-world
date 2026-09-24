@@ -11,6 +11,7 @@ RNG 纪律（§4.1）：自然衰减**每 tick 一次批量 draw**（分桶）�
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 
 import numpy as np
@@ -37,6 +38,19 @@ class MatterLedger:
 
     def __init__(self) -> None:
         self._items = {}
+
+    @classmethod
+    def from_snapshots(cls, snapshots: Iterable[MatterSnapshot]) -> MatterLedger:
+        """从一组快照构造账本（M3-C1/C2 读路径共用构造点）。
+
+        快照路径（SELECT matter_state）与重放路径（事件折叠）都经此构造，
+        保证两入口产出**逐位相等**的 `MatterLedger`（§19.3 一致性判据）。
+        key 取 `snapshot.matter_id`（不重算，避免与折叠规则分叉）。
+        """
+        ledger = cls()
+        for snap in snapshots:
+            ledger._items[snap.matter_id] = snap
+        return ledger
 
     def register(self, matter_id: str, *, integrity: float, decay_rate: float) -> None:
         if matter_id in self._items:
