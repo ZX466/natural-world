@@ -277,15 +277,65 @@ components.setdefault("responses", {})["Problem"] = {
 2. **`set_control` 的静默忽略是已存缺陷**（不是本契约引入）：契约已定 `ControlAck` 三字段（action/applied/speed），缺的只是分发块。建议 M5 顺手补，或按 §6 待决议单独排期。
 3. **前端「先 `GET /api/anchors` 再 `load_anchor`」的预检**（§4 分流规则第 3 条）必须做到——因为当前 `load_anchor` 连 `unknown_type` 都回得不友好。
 
-## 5. 施工清单（Claude 域，照本文施工）
+## 5. 施工清单 + 验收对表（Claude 域，照本文施工）
 
-1. `sim/api/anchors.py`：`APIRouter(prefix="/api/anchors", tags=["anchors"])` + 三路由 + pydantic `AnchorCreate`/`AnchorRename`/`AnchorListItem`（`extra="forbid"`，同 `ProfileListItem`）。
-2. `PlayerAnchor` 表补 `protected` 列 + alembic 迁移（M5 数据迁移归 cline/perf 域协作；本文只定列语义）。
-3. `sim/api/errors.py` §3.2 handler + `main.py` lifespan 调 `install_error_handlers(app)`。
-4. `openapi_ext.py` §3.3 注入 `ProblemDetail`/`responses.Problem` + anchors 响应声明。
-5. 路由 404/409 的 `detail` 改用 §3.2 要点 1 的机器码（含 `settings.py` 5 处，小幅改写）。
-6. 测试：`sim/tests/test_api_anchors.py`（列表空库 200、建/改名/删、protected 409、404 形、422 形、pydantic 越权字段 422）。
-7. `shared/openapi.json` 的 anchors 路径**已就绪**（M5-K2 已按裁 5 把参数名归一为 `{anchor_id}`，同 K3 settings `{profile_id}` 逻辑）。`sim/api/anchors.py` 的形参名必须逐字为 `anchor_id`，否则 FastAPI 生成的 path 模板会退回 `{id}` 造成快照漂移。
+**验收对表用法**：右列「验收标准」是**可测断言**——Claude 施工后逐条自测；kilo 复验时照此逐条核。
+断言分两类：`[T]` = pytest 断言（`sim/tests/test_api_anchors.py`）、`[O]` = OpenAPI/静态形状断言（`client.get("/openapi.json")` 或快照 diff）、`[C]` = 前端类型断言（`client/src/net/__tests__/protocol-types.test.ts`）。
+测试 fixture 沿用 `sim/tests/test_m2_openapi_rework.py:46-56` 的 `client` 写法（`LZ_MASTER_KEY` + 临时 sqlite）。
+
+| # | 施工项 | 验收标准（可测断言） |
+|---|---|---|
+| 1 | `sim/api/anchors.py`：`APIRouter(prefix="/api/anchors", tags=["anchors"])` + 三路由 + pydantic `AnchorCreate`/`AnchorRename`/`AnchorListItem`（`extra="forbid"`） | `[O]` `GET /openapi.json` 后 `paths["/api/anchors"]["post"]["operationId"]=="createAnchor"`、`paths["/api/anchors/{anchor_id}"]["patch"]["operationId"]=="renameAnchor"`、`["delete"]["operationId"]=="deleteAnchor"`（三者与快照逐字同）；`[O]` 路径键确为 `{anchor_id}`（**非 `{id}`**，否则 §5#7 漂移）；`[T]` 三 schema 均 `additionalProperties:false` |
+| 2 | `PlayerAnchor` 表补 `protected` 列 + alembic 迁移 | `[T]` 建档后 `AnchorListItem.protected` 为 `bool`；迁移 `upgrade()` 后 `player_anchors` 有 `protected` 列且 NOT NULL 有默认；`[T]` 新建第二档后，第一档 `protected==False`、第二档 `==True`（§1.4 派生规则） |
+| 3 | `sim/api/errors.py` §3.2 handler + `main.py` 调 `install_error_handlers(app)` | `[T]` **未匹配路由** 404 也是 ProblemDetail 形（`{"type","title","status","detail"}`，非 FastAPI 默认 `{"detail":"Not Found"}`）；`[T]` 422（缺 `name`）形同 ProblemDetail 且 `status==422`；`[T]` `title`/`status` 必填，`type`/`detail` 出现 |
+| 4 | `openapi_ext.py` 注入 `ProblemDetail`/`responses.Problem` + anchors 响应声明 | `[O]` `components.schemas.ProblemDetail` 存在且 `required==["title","status"]`；`[O]` `components.responses.Problem.$ref` 或内联 `content.application/json.schema.$ref` 指 `#/components/schemas/ProblemDetail`；`[O]` anchors 三路由的 404/409/422/400 响应声明齐全（清单见 §5.1） |
+| 5 | 路由 404/409 的 `detail` 用 §3.2 机器码（含 `settings.py` 小幅改写） | `[T]` `PATCH /api/anchors/<不存在>` 回 `404` 且 `body["type"]=="/errors/anchor-not-found"`；`[T]` `DELETE` 末梢档回 `409` 且 `type=="/errors/anchor-protected"`；`[T]` `POST` 世界未就绪回 `400` 且 `type=="/errors/world-not-ready"` |
+| 6 | 测试：`sim/tests/test_api_anchors.py` | `[T]` **空库** `GET /api/anchors` → `200` + `[]`（**非 404**；这是最易写错的一条）；`[T]` POST 回 `201` 且 body 含全部 5 键 `{id,name,story_label,created_at,protected}`（`story_label` 可为 `""`，**不得缺键**）；`[T]` PATCH 回 `200` 且 `name` 已改、`created_at` 不变；`[T]` `name` 缺失/空串/65 字符 → `422`；`[T]` 越权字段 `{"name":"x","tick":100}` → `422`（`extra="forbid"`）；`[T]` 响应体**不含** `tick`/`seq`/`seed`/`branch_id`/`agent_override`（出戏边界，§0） |
+| 7 | `shared/openapi.json` 的 anchors 路径已就绪（M5-K2 归一 `{anchor_id}`） | `[O]` `paths` 键为 `/api/anchors` 与 `/api/anchors/{anchor_id}`；**`/api/anchors/{id}` 必须为 0 处**；`[O]` `AnchorListItem.properties` 恰为 `{id,name,story_label,created_at,protected}` 五键（无 tick/seq/seed/branch_id）；`[C]` `protocol-types.test.ts` K03 #5 绿；`[O]` 形参名逐字 `anchor_id`（`sim/api/anchors.py` 的 `def rename_anchor(anchor_id: str, ...)`），否则 FastAPI 生成 `{id}` 造成漂移 |
+
+### 5.1 OpenAPI responses 声明清单（#4 注入点，供 `custom_openapi` 手抄）
+
+**为什么单列**：`exception_handler` 写的响应**不会自动进** `/openapi.json`（§3.3 关键坑）——必须手注。以下是与 `shared/openapi.json` 逐字对齐的 4 处注入点。
+
+**注入点**：`sim/api/openapi_ext.py::custom_openapi()`（L445）内，`schemas.update(...)`（L457-459）**之后**、`_strip_pydantic_decorations(schema)`（L460）**之前**，加：
+
+```python
+# --- anchors 路由 Problem 响应声明（M5-K3 §5.1；与快照 components.responses.Problem 对齐）---
+PROBLEM = {"$ref": "#/components/schemas/ProblemDetail"}
+components.setdefault("responses", {})["Problem"] = {
+    "description": "RFC 7807 问题详情（戏外工程措辞，不回灌 Agent）",
+    "content": {"application/json": {"schema": PROBLEM}},
+}
+_problem_resp = {"$ref": "#/components/responses/Problem"}
+
+def _attach(route_key: str, method: str, codes: list[str]) -> None:
+    op = schema["paths"].get(route_key, {}).get(method)
+    if op is None:
+        return
+    for code in codes:
+        op.setdefault("responses", {})[code] = dict(_problem_resp)
+
+_attach("/api/anchors", "post", ["400", "422"])                  # 世界未就绪 / 校验失败
+_attach("/api/anchors/{anchor_id}", "patch", ["404", "422"])     # 不存在 / 校验失败
+_attach("/api/anchors/{anchor_id}", "delete", ["404", "409"])    # 不存在 / 末梢受保护
+```
+
+**四类响应 → 状态码 → 触发**（与 §2 表一一对应）：
+
+| 状态码 | 注入到 | `type` 机器码 | 触发条件 | `[T]` 断言 |
+|---|---|---|---|---|
+| 404 | PATCH / DELETE | `/errors/anchor-not-found` | `{anchor_id}` 无行 | `client.patch("/api/anchors/deadbeef", json={"name":"x"}).status_code==404` |
+| 409 | DELETE | `/errors/anchor-protected` | 该档 `protected=true` | 删末梢档 → `409` |
+| 422 | POST / PATCH | `/errors/validation` | pydantic 校验失败 | 缺 `name` → `422` |
+| 400 | POST | `/errors/world-not-ready` | 无活跃 loop / 分支 | 无世界态时 POST → `400` |
+
+**验收（#4）**：`[O]` 注入后 `client.get("/openapi.json")` 的 `paths["/api/anchors"]["post"]["responses"]` 键集 ⊇ `{201,400,422}`；`paths["/api/anchors/{anchor_id}"]["delete"]["responses"]` 键集 ⊇ `{204,404,409}`；`paths["/api/anchors/{anchor_id}"]["patch"]["responses"]` 键集 ⊇ `{200,404,422}`。**这三条补上后，M2-K3 记录的「ext 缺 3 处 404」随之消解**（§3.3）。
+
+> ⚠ **注入顺序**：必须在 `get_openapi(...)`（L449）**之后**——`get_openapi` 会用 `app.routes` 重建 `paths`，之前注入的会被冲掉。`custom_openapi()` 有 `if app.openapi_schema: return` 缓存（L447-448），故只在首次调用时注入一次，正确。
+
+> ⚠ **两处 M2-K3 遗留注释需 M5 施工时订正**（位于 Claude 域，kilo 不代改）：
+> - `sim/api/openapi_ext.py:17`：「anchors 三 schema（M5 阶段）与 ProblemDetail/WsEnvelope 无路由可挂，不施工。」→ M5 施工后应改为「anchors 三 schema 随 M5 路由生成；ProblemDetail/responses.Problem 由本文件 §5.1 注入」。
+> - `sim/tests/test_m2_openapi_rework.py` 的 `ADDED_SCHEMAS` 白名单未含 anchors 三 schema（§2.2 判「本轮不施工」）→ M5 施工后复验口径会变（`MISSING in ext` 应为 0），该测试的期望值需同步。
 
 ## 6. 待决议与已知风险
 

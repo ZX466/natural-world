@@ -176,7 +176,7 @@ ext 的 `_envelope` 给 `v` 加了 `"description": "协商后的协议版本 maj
 
 | schema | 判定理由 | 复验期望 |
 |---|---|---|
-| `AnchorCreate` / `AnchorRename` / `AnchorListItem` | anchors 三路由（`/api/anchors`、`/api/anchors/{id}`）在 sim 中**不存在**（M5 阶段），无路由可挂 `response_model` | 复验时 `MISSING in ext` **允许残留这 3 个**；建议在 `openapi_ext.py` 留 TODO 注释指明 M5 施工点，防遗忘 |
+| `AnchorCreate` / `AnchorRename` / `AnchorListItem` | anchors 三路由（`/api/anchors`、`/api/anchors/{anchor_id}`）在 sim 中**不存在**（M2-K3 复验时属 M5 阶段），无路由可挂 `response_model` | 复验时 `MISSING in ext` **允许残留这 3 个**；建议在 `openapi_ext.py` 留 TODO 注释指明 M5 施工点，防遗忘。**M5 更新（2026-09-24）**：M5 施工在即，路由与 schema 契约见 `anchors-api.md`（§5 验收对表 + §5.1 responses 注入点）。注意路径参数名已于 M5-K2 归一为 `{anchor_id}`（裁 5，同 `{profile_id}` 逻辑）——本行原写 `{id}` 已订正 |
 | `ProblemDetail` | 快照中**无任何路由引用**，是错误响应统一形状的规范保留位 | 不施工、不建路由；保持快照定义 |
 | `WsEnvelope` | 快照中**无任何路由引用**，W6 之后成员自带信封字段，仅文档性定义 | 同上 |
 
