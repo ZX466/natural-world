@@ -130,11 +130,11 @@
 
 ## 当前任务
 
-(空 —— 等 Claude 经 `.orca/talking.txt` 派发下一单，预计 TASK-005 / M2 相关。)
+待命（M3-S5 已交付：D3 提案 7/7 通过 + F1 留痕含 dict 洗白向量）。重启后先读本文件 + .orca/talking.txt（含 M3-S5 回执全文）。
 
 ## 进行中
 
-(空)
+(空 — D4 / A2-8 落地后按 §留言板「D4 落地后验收清单」终验：R1 端到端三硬断言 + X7 grep 审计 + 0005 downgrade 零漂移 + F1 Sequence[str] 收窄复验。)
 
 ## 留言板
 
