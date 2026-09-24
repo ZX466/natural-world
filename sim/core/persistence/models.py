@@ -10,6 +10,7 @@ import time
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Float,
     Index,
     Integer,
@@ -214,7 +215,17 @@ class Relationship(TimestampMixin, Base):
 
 
 class Knowledge(TimestampMixin, Base):
-    """NPC 事实性知识 — schema.md §8。带可信度与来源。"""
+    """NPC 事实性知识 — schema.md §8。带可信度与来源。
+
+    M3-D4（0005 迁移，裁 10 全采 B3 提案）补两组列：
+    - **证据链派生键**（codex m3-evidence-chain §5）：`subject_npc_id` /
+      `subject_attr_id`（他人属性知识的主体与属性主键；自身事实两列同 NULL）/
+      `evidence_seq`（witnessed 锚定的 emerge 事件 seq，经 M2-D3 ``seq_by_index``
+      投影缝回填）/ `source_knowledge_id`（told 链上行 id = 级联递归索引起点）；
+    - **治理列**（§6 终裁「继承失效、不继承替代」）：`source_memory`（派生源
+      记忆 entry_id）/ `invalidated`（独立失效位——knowledge 无「替代行」语义，
+      故不复用 ``superseded_by``）/ `invalid_reason`（结构化原因串，不含 LLM 原文）。
+    """
 
     __tablename__ = "knowledge"
 
@@ -225,10 +236,28 @@ class Knowledge(TimestampMixin, Base):
     source: Mapped[str] = mapped_column(String, nullable=False)  # witnessed/told/inferred
     learned_at: Mapped[int] = mapped_column(Integer, nullable=False)
     branch_id: Mapped[str] = mapped_column(String, nullable=False)
+    # ---- 证据链派生键（m3-evidence-chain §5）----
+    subject_npc_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    subject_attr_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    evidence_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_knowledge_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # ---- 治理列（R1/S5：继承失效、不继承替代）----
+    source_memory: Mapped[str | None] = mapped_column(String, nullable=True)
+    invalidated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    invalid_reason: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
+        CheckConstraint("source IN ('witnessed', 'told', 'inferred')", name="ck_knowledge_source"),
+        CheckConstraint("confidence >= 0.0 AND confidence <= 1.0", name="ck_knowledge_confidence"),
+        CheckConstraint(
+            "(subject_npc_id IS NULL) = (subject_attr_id IS NULL)",
+            name="ck_knowledge_subject_pair",
+        ),
         Index("idx_knowledge_holder", "branch_id", "holder_id"),
         Index("idx_knowledge_source", "branch_id", "source"),
+        Index("idx_knowledge_source_memory", "branch_id", "source_memory"),
+        Index("idx_knowledge_source_kid", "branch_id", "source_knowledge_id"),
+        Index("idx_knowledge_subject", "branch_id", "subject_npc_id", "subject_attr_id"),
     )
 
 

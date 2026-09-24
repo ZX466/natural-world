@@ -69,6 +69,23 @@ class WriteResult:
     reason: str | None = None
 
 
+@dataclass(frozen=True)
+class FactDecision:
+    """写入决策结果（`MemoryWritePipeline.decide` 的产出，纯判定无副作用）。
+
+    M3-D4：知识表写入（X7 要求「fact 过 banned+hidden」）与记忆写入共用同一
+    判梯，故把决策从 `WriteResult` 里拆出——`WriteResult` 带 store 落库产物，
+    知识侧只需判定。`content` 是**实际应落库的文本**（改写时为清洗后文本，
+    调用方落它而非原文，否则等于绕过 S3 改写）。
+    """
+
+    admitted: bool
+    content: str
+    hits: tuple[str, ...] = ()
+    reason: str | None = None
+    rewritten: bool = False
+
+
 def make_entry(
     *,
     entry_id: str,
@@ -222,38 +239,84 @@ class MemoryWritePipeline:
 
         M2-S1：hidden 提供时，未触发隐藏属性的直陈内容 → 拒写
         （reason=REASON_HIDDEN_LEAK；不改写——直陈面不是机械词，S4 拒写保底）。
+
+        决策判梯见 :meth:`decide`（M3-D4：`scan_fact` 与本方法共用，不造第二套）。
+        """
+        decision = self.decide(content, hidden=hidden, triggered=triggered)
+        if not decision.admitted:
+            return self._reject(npc_id, source, decision.hits, decision.reason or "rejected")
+        if decision.rewritten:
+            entry = self._persist(
+                npc_id, decision.content, source, event_seq, importance, emotion_tag
+            )
+            logger.info(
+                "memory_scan.rewritten",
+                npc_id=npc_id,
+                source=source,
+                hits=list(decision.hits),
+            )
+            return WriteResult(accepted=True, entry=entry, action="rewritten", hits=decision.hits)
+        entry = self._persist(npc_id, decision.content, source, event_seq, importance, emotion_tag)
+        return WriteResult(accepted=True, entry=entry, action="written")
+
+    def decide(
+        self,
+        content: str,
+        *,
+        hidden: HiddenProfile | None = None,
+        triggered: frozenset[str] = frozenset(),
+    ) -> FactDecision:
+        """写入**决策判梯**（S1-S4 的唯一实现）：hidden 直陈 → banned → 改写 → 拒写。
+
+        纯判定、不落库、不推进任何状态。`write()`（记忆）与 `scan_fact()`（知识，
+        M3-D4 X7）共用本方法——知识表写入因此与记忆走**同一张词表 + 同一条处置
+        阶梯**，不新增扫描面、不可能被新列绕过。
         """
         if hidden is not None:
             leaks = hidden_leak_scan(content, hidden, triggered)
             if leaks:
                 words = tuple(dict.fromkeys(leak.word for leak in leaks))
-                return self._reject(npc_id, source, words, REASON_HIDDEN_LEAK)
+                return FactDecision(
+                    admitted=False, content=content, hits=words, reason=REASON_HIDDEN_LEAK
+                )
         result = scan(content)
         if result.ok:
-            entry = self._persist(npc_id, content, source, event_seq, importance, emotion_tag)
-            return WriteResult(accepted=True, entry=entry, action="written")
+            return FactDecision(admitted=True, content=content)
 
         hit_words = tuple(dict.fromkeys(h.word for h in result.hits))
 
         if len(result.hits) <= REWRITE_MAX_HITS and all(h.word in REWRITE_MAP for h in result.hits):
             rescanned = scan(result.cleaned)
             if rescanned.ok:
-                entry = self._persist(
-                    npc_id, result.cleaned, source, event_seq, importance, emotion_tag
+                return FactDecision(
+                    admitted=True, content=result.cleaned, hits=hit_words, rewritten=True
                 )
-                logger.info(
-                    "memory_scan.rewritten",
-                    npc_id=npc_id,
-                    source=source,
-                    hits=list(hit_words),
-                )
-                return WriteResult(accepted=True, entry=entry, action="rewritten", hits=hit_words)
             # 复扫仍有残留 → 按拒写处理（词面级机械替换救不回的文本）
             residual = tuple(dict.fromkeys(h.word for h in rescanned.hits))
-            return self._reject(npc_id, source, hit_words + residual, "rewrite_residual")
+            return FactDecision(
+                admitted=False,
+                content=content,
+                hits=hit_words + residual,
+                reason="rewrite_residual",
+            )
 
         reason_code = "unrewritable" if len(result.hits) <= REWRITE_MAX_HITS else "too_many_hits"
-        return self._reject(npc_id, source, hit_words, reason_code)
+        return FactDecision(admitted=False, content=content, hits=hit_words, reason=reason_code)
+
+    def scan_fact(
+        self,
+        fact: str,
+        *,
+        hidden: HiddenProfile | None = None,
+        triggered: frozenset[str] = frozenset(),
+    ) -> FactDecision:
+        """知识文本（`knowledge.fact`）过写入门——M3-D4 X7 要求。
+
+        知识不是记忆，但**同一条判梯**（`decide`）：banned 词面命中且不可机械
+        替换 → 拒收；可映射的机械命中 → 放行改写后文本（调用方须落
+        ``decision.content``，不是原文）。本方法不落库、不碰记忆表。
+        """
+        return self.decide(fact, hidden=hidden, triggered=triggered)
 
     def _persist(
         self,
