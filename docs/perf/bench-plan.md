@@ -73,7 +73,9 @@
 - **回归处置**：谁改谁负责回退或证明阈值失效合理（性能域评审 + Claude（架构）复核）。
 
 ## 4.1 baseline.json 建立流程（裁 4 执行件；M3-P1 落地 2026-09-23）
-> 状态：**待首个 advisory=1 全绿 nightly run**。未跑出前 nightly「基线对比」step 保持只提示不判红。
+> **状态：已执行（2026-09-23，pi M3-P2②）**——首绿 run `35918283944`（main `372153a`，EPYC 7763/nproc4/py3.12.3）
+> 产物已建 `docs/perf/baseline.json`（21 benchmarks + `machine_info.baseline_meta`），
+> nightly「基线对比」step 已切 `--benchmark-compare=docs/perf/baseline.json --benchmark-compare-fail=median:25%`。
 > 目的：CI 档位（EPYC 9V74 / 4 核，档位比见 `docs/perf/ci-calibration-m2p6.md`）的回归检出
 > 走**相对基线漂移**，不动 thresholds 定标机口径。
 
@@ -95,7 +97,9 @@
 6. 改 `nightly-bench.yml` 「基线对比」step：把现 echo 提示换成
    `uv run pytest -m bench --benchmark-compare=docs/perf/baseline.json --benchmark-compare-fail=median:25%`
    （**CI 档位跑自己的基线**，此时才可全绿；阈值仍不复制进 yml）；
-7. commit `docs/perf/baseline.json`（阈值类基线入库，同 runner.txt 先例）+ yml 改一行，回执留言板；
+7. commit `docs/perf/baseline.json`（阈值类基线入库，同 runner.txt 先例）+ yml 改一行，回执留言板
+   （**已完成 2026-09-23**：commit 见 git log「perf(M3-P2②)」；runner 五字段 = ubuntu-latest /
+   nproc 4 / AMD EPYC 7763 64-Core / py3.12.3 / uv 0.12.18，源 run `35918283944`）；
 8. 后续 nightly 若本 step 红 → 按 `gh run download` 取新 JSON，与 baseline 逐项比 median 找漂移源
    （先看是否单轮离群：mean/median >2x = 被抢断，重跑即可）。
 
