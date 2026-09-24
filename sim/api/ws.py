@@ -20,6 +20,7 @@ from typing import Any
 import structlog
 from fastapi import WebSocket
 
+from sim.core.calendar import game_time
 from sim.core.tick import TickLoop
 from sim.world.map import TileMap
 from sim.world.pathfinding import Pathfinder
@@ -287,14 +288,25 @@ async def run_world_driver(
     manager: ConnectionManager,
     tile_map: TileMap,
     on_flush: Any = None,
+    on_day_switch: Any = None,
 ) -> None:
     """外层 asyncio 驱动：固定节拍喂 real_dt → drain 事件（on_flush 落库）→ 广播增量。
 
     广播先于落库是有意设计（codex M0 评审意见 8）：WS 观察者先看到状态、
     事件日志稍后补齐——戏内通道无审计语义，不为观察者引入额外延迟。
+
+    on_day_switch(day)：日切钩子（M3 B-B2 反思批处理挂载点，m3-plan 批次 B
+    「世界循环在固定执行序事件结算后调用」）。同步回调（run_reflection 是
+    纯同步批处理；无 IO，LLM 摘要挂载点在 _llm_summarize 内部决策缝）。
+    **跨越判定**（prev_day != new_day
+    时逐日各回调一次）而非 reflection_due 等值判定——帧驱动一帧推进 0..N tick
+    （16x 下 ~16 tick/帧，catch-up 上限 240），等值点会被整帧跳过（75-94% 的
+    日切丢失）；多日跨越按日序逐个补发，missed days 不静默吞。时序：on_flush
+    之后（反思素材须当日事件已落库）。
     """
     last = time.monotonic()
     seq = 0
+    prev_day = game_time(loop.state.tick).day
     while True:
         await asyncio.sleep(FRAME_BUDGET_SECONDS)
         now = time.monotonic()
@@ -307,6 +319,12 @@ async def run_world_driver(
         events = loop.drain_events()
         if events and on_flush is not None:
             await on_flush(events)
+        if on_day_switch is not None:
+            new_day = game_time(loop.state.tick).day
+            if new_day != prev_day:
+                for day in range(prev_day + 1, new_day + 1):
+                    on_day_switch(day)
+                prev_day = new_day
         if moved:
             seq += 1
             payload = delta_payload(loop, moved)

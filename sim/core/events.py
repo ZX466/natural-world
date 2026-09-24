@@ -10,6 +10,7 @@ pydantic payload 模型（extra="forbid"），构造事件必须走工厂函数�
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -337,11 +338,23 @@ def hidden_emerge_event(
     tick: int,
     npc_id: str,
     attr_ids: tuple[str, ...],
-    witnesses: list[str] | None = None,
+    witnesses: Sequence[str] | None = None,
     branch_id: str = "main",
 ) -> WorldEvent:
     """隐藏属性浮现事件（E1）：attr_ids = 新进触发窗口的 delta（X4 修订：仅戏外主键，
-    descriptors/label/triggered 词面永不入事件——extra=forbid 硬拒）。"""
+    descriptors/label/triggered 词面永不入事件——extra=forbid 硬拒）。
+
+    witnesses 收窄（codex F1 advisory + S5 复核）：只接受 Sequence[str]——
+    str/bytes 是 Sequence 但元素是字符，dict 可迭代出键，都会洗白成见证人
+    （store 行级校验是纵深第二道，工厂层 fail-closed 同纪律）。
+    """
+    if witnesses is not None:
+        if isinstance(witnesses, (str, bytes)) or not isinstance(witnesses, Sequence):
+            msg = f"witnesses 必须是 Sequence[str]（禁 str/bytes/dict 洗白）: {witnesses!r}"
+            raise TypeError(msg)
+        if not all(isinstance(w, str) for w in witnesses):
+            msg = f"witnesses 元素必须全是 str: {witnesses!r}"
+            raise TypeError(msg)
     p = HiddenEmergePayload(npc_id=npc_id, attr_ids=attr_ids)
     return WorldEvent(
         branch_id=branch_id,
