@@ -400,7 +400,7 @@ uv run pyright sim/
 （收编回执见 .orca/talking.txt 留言板）
 
 ## ⑥ kilo（接口 / 兼容性域）
-- 【2026-09-24 第九轮快照｜M5-K4 全闭环已收编】ws-dispatch-proposal 264 行交付，**裁 12 全采 8.1-8.8**：applied 恒 true 占位 / speed 容忍忽略 / 冲突度归 LLM 域 / load_anchor 同步发快照 / handler 增 tile_map 参数（已落地）/ move_request 只修非法类型 / **8.7 sync_request 回错型列 M5 首修**（sync_request 应回 full_snapshot 而非 error）/ error code 小写 snake。**active 约定**：K3 关键修正=subject 整删 + ext 侧 nullable=0 红线；切源解禁两条件（codegen.md §4.1）=M5 锚点路由落地 + sim 全局 404 声明。**待命**：M5 anchors 施工时按 K3 对表验收 + 8.7 首修；另提醒 M5 施工时订正 openapi_ext.py:17「anchors 不施工」与 test ADDED_SCHEMAS 白名单两处 M2-K3 遗留注释。
+- 【2026-09-24 第九轮快照｜M5-K4 全闭环已收编】ws-dispatch-proposal 264 行交付，**裁 12 全采 8.1-8.8**：applied 恒 true 占位 / speed 容忍忽略 / 冲突度归 LLM 域 / load_anchor 同步发快照 / **8.5 handler 增 tile_map 参数＝已裁「改」但未落地**（2026-09-24 复核：`ws.py:189-191` 签名仍为 `(raw, loop, pf)`）/ move_request 只修非法类型 / **8.7 sync_request 回错型列 M5 首修**（sync_request 应回 full_snapshot 而非 control_ack；复核 `ws.py:258-267` 仍回 control_ack）/ error code 小写 snake。**裁 12 ≠ 已施工**：以下均**未落地**——`handle_client_message` 无 `set_control` 分发块（白名单+channel 仅无语义）、`player_impulse`/`load_anchor` 仍未注册（L33/L271 无）。**active 约定**：K3 关键修正=subject 整删 + ext 侧 nullable=0 红线；切源解禁两条件（codegen.md §4.1）=M5 锚点路由落地 + sim 全局 404 声明。**待命**：M5 anchors 施工时按 K3 对表验收 + 8.7 首修 + 8.5 签名变更；另提醒 M5 施工时订正 openapi_ext.py:17「anchors 不施工」与 test ADDED_SCHEMAS 白名单两处 M2-K3 遗留注释。
 - 【历史】M2-K2 复核 6 类全采信（切源暂缓，mock 源唯一真相源）；M2-K3 ext↔快照 diff 明细（17 schema 差异表+21 缺失 HTTP schema+nullable oneOf:null 修法）=ext 返工验收清单，返工已完成 K3 复验通过（M5 放行）；M5-K1 anchors 契约稿 306 行（`b849025`）；M5-K2/K3 复验链见 git log。
 
 > ——kilo 树 memory.md（更新于 5f5f525：K04 完成回执 + 跨域发现）——
