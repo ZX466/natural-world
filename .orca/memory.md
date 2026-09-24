@@ -372,9 +372,23 @@ uv run pyright sim/
   - baseline.json（M3-P2 ②）**未执行**：nightly 迄今 7 跑全 failure（最新 35816437844 = advisory 门前旧跑）
     → 首个 advisory=1 全绿 run 未出现；等跑出现按 bench-plan §4.1 八步执行。
 
+- **M3-P2② 交付（2026-09-24，分支 ZX466/pi，commit `ee05ab0`，等收编）**：baseline.json 八步执行 + AGENTS.md 清账。
+  - runner 5 字段（run 35918283944 artifact 原样）：ubuntu-latest / nproc 4 / **AMD EPYC 7763 64-Core** / py3.12.3 / uv 0.12.18；
+    head=main `372153a`，conclusion success。
+  - `docs/perf/baseline.json` 入库：21 benchmarks + `machine_info.baseline_meta`（source_run/branch/commit/判据说明）；
+    严格可解析 JSON（说明走 meta 字段，不破坏 json.load）。
+  - nightly-bench.yml「基线对比」step：echo 提示 → `uv run pytest -q -m bench
+    --benchmark-compare=docs/perf/baseline.json --benchmark-compare-fail=median:25%`；yml 仍不复制阈值。
+  - **档位观察**：本 run 是 EPYC 7763（上轮 M2-P6② 是 9V74，微软换了机型）→ CI/本机中位比 median **1.71**
+    （1.08–1.93，21 项）vs 上轮 1.14。25% 相对参数适用边界 = **跨 run 同档位**比较；档位切换需重新对账
+    （已写进 yml 注释 + bench-plan §4.1 step 6 注记）。
+  - AGENTS.md 13 行残账随本批提交，工作区干净。
+  - 验证：`-m "not bench"` 981 passed/55 skipped；`-m bench` 36 passed/1 skipped；bench ruff+pyright 全绿；
+    nightly-bench.yml YAML 解析通过。
+
 ## 当前任务
 
-（空——M3-P2 ① 已交付，等 Claude 收编；②baseline.json 等首个 advisory=1 全绿 nightly run（nightly 尚未在含 advisory 门的新代码上重跑））
+（空——M3-P2 ①② 均已交付，等 Claude 收编；下一步等 M3 批次 A4/embedding 相关派单（A1 定 V3 后 embed 监控事件族由 opencode 客户端照抄 llm-monitoring §7））
 
 ## 进行中
 

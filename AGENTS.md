@@ -1,5 +1,18 @@
 # Project Agent Instructions
 
+## Memory (read first)
+
+This repo is a multi-agent worktree setup. Resume context **before** acting:
+
+1. `.orca/workflow.txt` — how the agent trees communicate (talking.txt, roles).
+2. `.orca/talking.txt` — outgoing tasks + receipts for your tree.
+3. `.orca/memory.md` — your tree's section: completed rounds, next step,
+   environment pitfalls, verification commands.
+
+Keep `.orca/memory.md` updated when you finish a round so a new conversation can
+resume without re-deriving state. See `.orca/workflow.txt` §2/§3 for the division
+of labour; don't work outside your domain.
+
 ## Principles
 
 - Verify repository evidence before acting; do not guess APIs, behavior, dependencies, or configuration.
