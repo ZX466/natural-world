@@ -57,3 +57,13 @@
 2. Agent 行动前读本文件 + agent-registry.md，确认任务属于自己 → 接受并执行。
 3. 完成后在同一 talking.txt 回写结果（简短）。
 4. 越界的任务不要做；不在注册表里的能力保持空白，等用户决定。
+
+## 8. 记忆机制（memory.md，规则 #7）
+
+- **每个工作树 `.orca/memory.md` 保存各自记忆**（tracked 入库；talking.txt 才是 gitignore 的本地件）：
+  - 主树文件 = 六树**融合合集**（①Claude ②cline ③opencode ④codex ⑤pi ⑥kilo 分节）；
+  - 各树本地副本是其对应节的**权威来源**，收编冲突时以各树版本为准，由 Claude（主导）分节融合。
+- **新对话恢复序**（每树一致）：`.orca/talking.txt`（当前任务单）→ `.orca/memory.md` **自己那一节** → `.orca/workflow.txt` + `.orca/agent-registry.md`。
+- **快照纪律**：每轮交付/收编后，在**自己节**顶部写一行快照 `【日期 轮次｜状态】做了什么/关键决定/坑/下一步`；旧快照压缩为 git log 指针（`git log --oneline -- .orca/memory.md` 可考古），不无限堆积。
+- **写入即提交**：memory.md 改动走 `git add -f .orca/memory.md`（`.orca/` 被 catch-all ignore，已跟踪文件更新也须 -f）+ 常规提交；收编时 Claude 随主分支分发到各树。
+- 收编流程随附动作：Claude 收编时把各树新快照融合进主树合集对应节，然后 `git merge main` 同步六树（冲突时各树本地版优先——即快照内容由原树裁决，但结构以 main 为主）。
