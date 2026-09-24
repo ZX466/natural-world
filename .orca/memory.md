@@ -130,11 +130,11 @@
 
 ## 当前任务
 
-(空 —— 等 Claude 经 `.orca/talking.txt` 派发下一单，预计 TASK-005 / M2 相关。)
+待命（M5-K4 已闭环：ws-dispatch 提案 264 行，裁 12 全采）。
 
 ## 进行中
 
-(空)
+(空 — M5 anchors 施工时按 K4 对表 [T]/[O]/[C] 三类断言验收；8.7 sync_request 回错型列 M5 首修。)
 
 ## 留言板
 
