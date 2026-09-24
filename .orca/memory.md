@@ -130,11 +130,11 @@
 
 ## 当前任务
 
-M3-D4 — B3 实施（能力域：数据）：裁 10 七列 + 迁移 0005_m3_knowledge_governance + KnowledgeStore（invalidate_by_source|row）+ T1 钉子 test_t1_m3_knowledge_cascade.py + schema.md §8 同步。
+待命（M3-D4 已交付并收编 main；M3-S5 终验四项由 Claude 主树实测全过，见 ①节第十轮快照）。重启后先读本文件 + .orca/talking.txt（含 M3-S5 回执全文）。
 
 ## 进行中
 
-按 codex 预审 7 要点逐条回应（本文件 §留言板存档）；验收清单 4 项：①R1 端到端三硬断言（源 supersede→派生失效 / told 链下行级联 / evidence 返回 told_teller_knowledge_invalidated）②X7 knowledge 写入只经写入门（grep 裸 INSERT = 0）③裁10④「事务内」接线点写死（caller 同事务调 invalidate_by_source，存储层互不依赖）④evidence_seq 回填复用 seq_by_index 不造第二套 + downgrade 回 0002 原型零漂移。
+(空 — 等 Claude 经 talking.txt 派发下一单。)
 
 ## 留言板
 
