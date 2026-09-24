@@ -46,6 +46,16 @@ class MemorySlice:
 
 
 @dataclass(frozen=True)
+class NormSlice:
+    """[规矩] 段原料：不成文规矩文本（M3 批次 D1；sim.npc.norms 产出）。
+
+    逐条 = 知识行 fact（写入门已把关的世界内语言）；空集 = 段省略。
+    """
+
+    entries: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class SituationSlice:
     """[处境] 段原料：感知帧叙事文本 + 内感受。"""
 
@@ -95,11 +105,14 @@ def assemble_prompt(
     plan: PlanSlice,
     user_input: InputSlice,
     chain_id: str,
+    norms: NormSlice | None = None,
 ) -> AssembledPrompt:
     """六段装配 → 禁词终扫 → messages。装配失败抛 PromptAssemblyError。
 
     段序即缓存序：身份锚单独占 messages[0]（同 Agent 恒定 → 前缀缓存
     必命中）；其余五段合并为 messages[1]（每决策变化）。
+    norms（M3 批次 D1）：[规矩] 段，[记忆] 之后 [处境] 之前；None/空 = 段省略
+    （兼容既有调用形）。
     """
     sections: list[str] = []
 
@@ -107,6 +120,12 @@ def assemble_prompt(
     if memory.entries:
         memories = "\n".join(f"- {m}" for m in memory.entries)
         sections.append(f"你还记得的事：\n{memories}")
+
+    # [规矩]（M3 批次 D1）：不成文规矩，[记忆] 后 [处境] 前——先规矩后处境，
+    # 行为约束在情境解读之前给出。
+    if norms is not None and norms.entries:
+        norm_lines = "\n".join(f"- {n}" for n in norms.entries)
+        sections.append(f"这镇上不成文的规矩：\n{norm_lines}")
 
     # [处境]：感知帧叙事 + 内感受（内感受永远在最前——身体优先）
     situation_parts: list[str] = []
