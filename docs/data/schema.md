@@ -207,14 +207,32 @@ CREATE VIRTUAL TABLE npc_memory_vec USING vec0(
 | `source` | TEXT | NOT NULL | witnessed / told / inferred | §6 |
 | `learned_at` | INTEGER | NOT NULL | 学习时的 tick | §6 |
 | `branch_id` | TEXT | NOT NULL | 所属分支 | — |
+| `subject_npc_id` | TEXT | NULL | 他人属性知识的主体 npc_id；自身事实知识为 NULL | evidence-chain §5 |
+| `subject_attr_id` | TEXT | NULL | 属性主键（戏外）；自身事实知识为 NULL | evidence-chain §5 |
+| `evidence_seq` | INTEGER | NULL | witnessed：锚定的 `npc.hidden_emerge` 事件 seq（持久层分配后经 `seq_by_index` 投影缝回填） | evidence-chain §5 |
+| `source_knowledge_id` | INTEGER | NULL | told：teller 的 knowledge 行 id（told 链回溯键 = 级联递归索引起点） | evidence-chain §5 |
+| `source_memory` | TEXT | NULL | 派生源记忆 `npc_memories.entry_id`（R1 级联起点） | m3-preplan §1 R1 |
+| `invalidated` | BOOLEAN | NOT NULL DEFAULT 0 | 失效位（0=有效）；**独立位而非 `superseded_by`**——knowledge 无「替代行」语义 | evidence-chain §6 |
+| `invalid_reason` | TEXT | NULL | 失效原因（结构化串，不含 LLM 原文/词面） | 同 `npc_memories` |
 
-**约束**：
-- `source` IN ('witnessed', 'told', 'inferred')
-- `confidence` 范围 0.0–1.0
+**约束**（CHECK，`0005_m3_knowledge_governance`）：
+- `ck_knowledge_source`：`source` IN ('witnessed', 'told', 'inferred')
+- `ck_knowledge_confidence`：`confidence` 范围 0.0–1.0
+- `ck_knowledge_subject_pair`：`(subject_npc_id IS NULL) = (subject_attr_id IS NULL)`（成对）
+
+**应用层形态约束**（proposal §2.2「软约束」，由 `KnowledgeStore.write_fact` 把关，DB CHECK 表达力不及）：
+- `witnessed` ⇒ `evidence_seq IS NOT NULL` 且 `subject_npc_id IS NOT NULL`；
+- `told` ⇒ `source_knowledge_id IS NOT NULL`（自我披露链根 `subject_npc_id == holder_id` 例外）；
+- `fact` 必过写入门（`MemoryWritePipeline.scan_fact`，X7：banned 词面 + 未触发隐藏属性直陈 → 拒收不落库；可映射命中落改写后文本）。
 
 **索引**：
 - `idx_knowledge_holder` ON `(branch_id, holder_id)` — 按角色查询知识
 - `idx_knowledge_source` ON `(branch_id, source)` — 按来源筛选
+- `idx_knowledge_source_memory` ON `(branch_id, source_memory)` — 源记忆 supersede → 反查派生知识（R1 级联起点）
+- `idx_knowledge_source_kid` ON `(branch_id, source_knowledge_id)` — told 链向下递归（级联传播）
+- `idx_knowledge_subject` ON `(branch_id, subject_npc_id, subject_attr_id)` — 按主体+属性查有效知识（evidence 判定 teller 行一致性）
+
+**治理语义**（evidence-chain §6 终裁）：**继承失效、不继承替代**——源记忆 supersede → 派生 knowledge 行置 `invalidated=1` + `invalid_reason`，沿 `source_knowledge_id` 递归向下，无替代行（codex 预审①）。接口见 `sim/core/persistence/knowledge_store.py`：`invalidate_by_source(entry_id)` / `invalidate_by_row(row_id)`，分支隔离（R4）+ 幂等 + 可与源记忆 supersede 同事务。
 
 ---
 
