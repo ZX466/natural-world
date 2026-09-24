@@ -26,6 +26,7 @@ from sim.core.events import (
     CombatScaleChangePayload,
     EntropyInjectPayload,
     EventKind,
+    HiddenEmergePayload,
     MatterPayload,
     MovePayload,
     NpcActPayload,
@@ -53,6 +54,7 @@ PAYLOAD_MODELS: dict[EventKind, type[BaseModel]] = {
     EventKind.MATTER_DAMAGE: MatterPayload,
     EventKind.MATTER_BUILD: MatterPayload,
     EventKind.MATTER_COLLAPSE: MatterPayload,
+    EventKind.NPC_HIDDEN_EMERGE: HiddenEmergePayload,
 }
 
 

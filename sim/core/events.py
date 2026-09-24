@@ -30,6 +30,8 @@ class EventKind(StrEnum):
     MATTER_DAMAGE = "matter.damage"  # 物质熵增：交互损伤
     MATTER_BUILD = "matter.build"  # 物质熵增：建造（M4 承重前为简化版）
     MATTER_COLLAPSE = "matter.collapse"  # 物质熵增：耐久归零坍塌（简化版）
+    # ---- M3（m3-plan 批次 B / m3-evidence-chain §3；裁 8）----
+    NPC_HIDDEN_EMERGE = "npc.hidden_emerge"  # 隐藏属性新进触发窗口（E1：浮现即事件，R5 证据链根）
 
 
 # ---------------------------------------------------------------------------
@@ -133,6 +135,20 @@ class MatterPayload(BaseModel):
     #: 静态衰减率；-1=不变更哨兵，≥0 为静态率。
     decay_rate: float = Field(default=-1.0, ge=-1.0, le=1.0, allow_inf_nan=False)
     note: str = ""
+
+
+class HiddenEmergePayload(BaseModel):
+    """隐藏属性浮现（M3 E1，m3-evidence-chain §3；裁 8）。
+
+    attr_ids 只装「新进触发窗口」的 delta（戏外主键 ``f"{npc_id}.health_{row.id}"``，
+    非 descriptor/label 词面——X4 修订：词面永不入事件，extra=forbid 硬拒）。
+    witnessed 装配在感知层（evidence.witnesses_of_emerge），不在 payload。
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    npc_id: str
+    attr_ids: tuple[str, ...]
 
 
 class WorldEvent(BaseModel):
@@ -311,4 +327,26 @@ def matter_event(
     )
     return WorldEvent(
         branch_id=branch_id, tick=tick, event_type=kind, payload=p.model_dump(mode="json")
+    )
+
+
+# ---- M3 工厂（m3-evidence-chain §3/§4；裁 8 E1）----
+
+
+def hidden_emerge_event(
+    tick: int,
+    npc_id: str,
+    attr_ids: tuple[str, ...],
+    witnesses: list[str] | None = None,
+    branch_id: str = "main",
+) -> WorldEvent:
+    """隐藏属性浮现事件（E1）：attr_ids = 新进触发窗口的 delta（X4 修订：仅戏外主键，
+    descriptors/label/triggered 词面永不入事件——extra=forbid 硬拒）。"""
+    p = HiddenEmergePayload(npc_id=npc_id, attr_ids=attr_ids)
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.NPC_HIDDEN_EMERGE,
+        payload=p.model_dump(mode="json"),
+        witnesses=list(witnesses or []),
     )

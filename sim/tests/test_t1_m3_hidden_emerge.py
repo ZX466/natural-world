@@ -70,7 +70,13 @@ def _emerge_row(
     witnesses: list[str] | None = None,
     smuggled: str | None = None,
 ) -> dict:
-    """helpers：npc.hidden_emerge store 行（to_store_dict 形状）。"""
+    """helpers：npc.hidden_emerge store 行（to_store_dict 形状）。
+
+    修正留痕（A2 第六批，2026-09-24）：原 `list(witnesses or [])` 会把伪造输入
+    （witnesses="b"）强转成合法 ["b"]，test_store_row_rejects_forged_witnesses
+    永远测不到该场景（DID NOT RAISE）。改为透传（None → []），伪造形状原样
+    进校验器——其余调用点全为 list/None，行为不变。
+    """
     payload: dict = {"npc_id": npc_id, "attr_ids": list(attr_ids)}
     if smuggled is not None:
         payload[smuggled] = "x"
@@ -78,7 +84,7 @@ def _emerge_row(
         "tick": tick,
         "event_type": "npc.hidden_emerge",
         "payload": payload,
-        "witnesses": list(witnesses or []),
+        "witnesses": witnesses if witnesses is not None else [],
     }
 
 
