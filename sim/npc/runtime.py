@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
-from sim.core.events import WorldEvent, npc_act_event
+from sim.core.events import WorldEvent, hidden_emerge_event, npc_act_event
 from sim.npc.actions import ACTION_PAYLOAD_KEYS
 from sim.npc.contract import HiddenState
 from sim.npc.model import NpcProfileData
@@ -48,19 +48,38 @@ class NpcRuntime:
         hidden_states: dict[str, HiddenState] | None = None,
         context_of: Callable[[str], str] | None = None,
     ) -> list[WorldEvent]:
-        """推进一 tick：隐藏档重估 → 需求 → 效用 → 事件批次（顺序固定，可重放）。
+        """推进一 tick：隐藏档重估(+E1 浮现事件) → 需求 → 效用 → 事件批次（顺序固定，可重放）。
 
         hidden_states：物化产物 {npc_id: HiddenState}；传入时第 0 步按
         context_of(npc_id) 重估触发窗口（frozen.evaluate 返回新实例，原 dict 更新）。
         context_of：npc_id → 自身处境文本（感知帧叙事+内感受）；缺省恒空 =
         无情境触发（窗口照旧）。
+        E1（F2 收口，m3-evidence-chain §3）：重估后 delta = 新进触发窗口的属性，
+        非空 → 每 NPC 合并一条 npc.hidden_emerge 事件，先于 NPC_ACT（证据链根
+        先行）；attr_ids 排序（frozenset 序漂移禁入事件流，C5）。witnesses 由
+        感知层装配（evidence.witnesses_of_emerge）——runtime 无感知帧，留空，
+        随世界循环接线批次补齐（witnessed 判定须三要素齐，空 witnesses 自然
+        不构成目击，fail-closed）。
         """
-        # 0. 隐藏档触发窗口重估（每 tick；hidden.py §2 纯函数）
+        events: list[WorldEvent] = []
+
+        # 0. 隐藏档触发窗口重估（每 tick；hidden.py §2 纯函数）+ E1 浮现事件
         if hidden_states is not None:
             for nid in self._order:
                 if nid in hidden_states:
+                    prev = hidden_states[nid]
                     ctx = context_of(nid) if context_of is not None else ""
-                    hidden_states[nid] = hidden_states[nid].evaluate(ctx)
+                    now = prev.evaluate(ctx)
+                    hidden_states[nid] = now
+                    delta = now.triggered - prev.triggered
+                    if delta:
+                        events.append(
+                            hidden_emerge_event(
+                                tick=tick,
+                                npc_id=nid,
+                                attr_ids=tuple(sorted(delta)),
+                            )
+                        )
 
         # 1. 需求推进（frozen：replace 生成新元组）
         advanced: dict[str, NpcProfileData] = {}
@@ -76,7 +95,6 @@ class NpcRuntime:
         decisions = evaluate_batch([advanced[nid] for nid in active_ids], self.utility)
 
         # 3. 事件产出：params 只带白名单键（eat/rest/wander/move 无参数动作 → 空 params）
-        events: list[WorldEvent] = []
         for nid, d in zip(active_ids, decisions, strict=True):
             allowed = ACTION_PAYLOAD_KEYS[d.action]
             params = {k: str(v) for k, v in d.scores.items() if k in allowed}

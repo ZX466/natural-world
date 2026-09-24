@@ -80,3 +80,29 @@ def run_reflection(*, pipeline: MemoryWritePipeline, npc_id: str, day: int):
     if not result.accepted or result.entry is None:
         return None
     return result.entry
+
+
+def make_day_switch_reflector(
+    pipeline: MemoryWritePipeline, *, npc_ids: tuple[str, ...] | list[str]
+):
+    """日切钩子适配器（B-B2 消费侧）：on_day_switch(day) → 逐 NPC run_reflection。
+
+    day 语义换算：世界循环钩子传 calendar 1-based 戏内天号（game_time(tick).day，
+    界面同口径）；run_reflection/_day_materials 用 0-based（created // 86400），
+    适配器在此换算——钩子不背两套历法。
+
+    返回同步回调（run_world_driver 在事件结算后调用）；产出 = 本日写入的
+    reason 条目列表（无素材的 NPC 自然缺位）。本批仍无生产 MemoryWritePipeline
+    装配点（M3 批次 D 随 agent 循环接线），主树 lifespan 挂接本适配器时传入
+    既有 pipeline 实例即可。
+    """
+
+    def _on_day_switch(day: int) -> list:
+        written: list = []
+        for npc_id in npc_ids:
+            entry = run_reflection(pipeline=pipeline, npc_id=npc_id, day=day - 1)
+            if entry is not None:
+                written.append(entry)
+        return written
+
+    return _on_day_switch
