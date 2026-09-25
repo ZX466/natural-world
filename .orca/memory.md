@@ -54,6 +54,7 @@
 （以下各节由对应 agent 维护——cline 节以上为 2026-09-20 收编版。）
 
 ## ③ opencode（数据 / 数据库域）
+- 【2026-09-24 第十轮｜**M3-C3 已交付待收编**（chunk 失效通路 + §19.4 提案）】分支 `ZX466/opencode` 基于 main `2976cf1`，一次性提交（未推远程等收编）。**①chunk 失效量化通路**：`sim/world/map.py` TileMap 加 `PrivateAttr _dirty`（frozen 几何不动，脏标=瞬时态不进快照）+ `dirty_chunks()` 真实排序返回 + `mark_tile_dirty`/`mark_chunk_dirty`/`drain_dirty` + `with_collision(x,y,walkable)` 不可变换单格且新实例独立脏集（`model_copy` 共享 PrivateAttr，须 `object.__setattr__(new,"_dirty",{key})` 断开——否则新旧图串脏）；`sim/world/pathfinding.py` 加 `event_tile_position`（TILE_CHANGED 全量 / MATTER_* 仅 x/y≥0、-1 哨兵不标 / 无关 None）+ `Pathfinder.observe_events`（标脏+精确失效）/`invalidate_dirty`/`observe_map`（换图消费脏集）。投影与持久层**零改动**。钉子 `sim/tests/test_m3_chunk_invalidation.py` **24 用例**：跨 chunk 剔1留1、定位 matter 失效、未定位/无关 no-op、空批幂等、远端剔0、with_collision 不串脏、封格绕行、窄图全封失效后抛不可达（缓存不吐陈旧路径）。**②§19.4 提案**（文档制未动代码）：`docs/data/matter-register-proposal.md`——**主张 A**：`register` 返回 `MATTER_BUILD` 立账事件（amount=0、note=register）走 C4 唯一写路径，零 schema；**否 B** structures 作注册主路径（表未实现+双真相+拓扑/熵态正交）；默认否 A' 新 kind；structures 留 M4 拓扑投影再议。4 待裁点在提案 §5。交叉引用：schema.md §19.4、m3-plan §6+批次C 行、README §2+§5。**门禁：1081 passed / 55 skipped / 0 failed；ruff ok；pyright sim/ 0 error；alembic 零漂移**（scratch DB autogenerate 仅空 pass，已删临时迁移）。**坑**：本树根 `world.db` 是脏库（alembic_version 缺失但表已存在→upgrade head 撞 branches exists）——零漂移核验必须 `WORLD_DB_URL=sqlite+aiosqlite:///<scratch>`，别用默认 world.db。
 - 【2026-09-24 第九轮快照｜D4 已交付待收编】**M3-D4 已交付**（B3 实施，裁 10 全采 + codex 预审 7 要点，分支 `30dd087` 基于main `4e381c0`，已补推双远程）。**0005_m3_knowledge_governance**：knowledge `add_column`×7（subject_npc_id/subject_attr_id/evidence_seq/source_knowledge_id + source_memory/invalidated/invalid_reason）+ 索引×3 + CHECK×3（source 取值域/confidence 值域等可表达约束）；`KnowledgeStore.invalidate_by_source|invalidate_by_row` 级联 + `write_fact` 走 X7 写入门 + T1 钉子 test_t1_m3_knowledge_cascade。
 - 【B3 实施三条纪律留痕】①**继承失效不继承替代**：`_cascade` 沿 `source_knowledge_id` 广度递归，只置 `invalidated=1`+`invalid_reason`，表内无替代指针（钉子断言 `superseded_by not in cols`，codex 预审①）；已失效行不覆写 invalid_reason、不重复计数（幂等）但仍向下遍历（下游可能尚未失效）。②**X7 写入门**：`memory_scan` 抽出 `decide()` 为唯一判梯，`write()`（记忆）与 `scan_fact()`（知识）共用——知识表不可能成为扫描面旁路；改写放行落清洗后文本（`decision.content`），落原文=绕过 S3。③**evidence_seq 复用 seq_by_index**：`fill_evidence_seq` 只按 M2-D3 投影缝映射回填，不读 max(seq) 不自行分配（否则 witnessed 知识锚到不存在的 seq）。
 - 【踩坑：`_cascade` await 种子】`invalidate_by_row` 初版传同步 lambda，`_cascade` 里 `await seeds_fn(session)` → TypeError；修=两个种子源都改 async。`session.execute(update())` 的 Result 无 rowcount（pyright）→ 先 select 判状态再 UPDATE，免 type-ignore。
@@ -131,7 +132,7 @@
 
 ## 当前任务
 
-待命（M5-K4 已闭环：ws-dispatch 提案 264 行，裁 12 全采）。
+待命（C3 已收编 main。M5-K4 闭环维持：anchors 施工对表 [T]/[O]/[C]；8.7 sync_request 回错型列 M5 首修；下一单等派发。）
 
 ## 进行中
 
