@@ -84,3 +84,54 @@ L1 断线兜底低频；零触发 = 每 tick 零检索成本）。
 见该文件 §7 新增节（本次同批落地）。要点：embedding 是**写路径成本大头**（vec-preplan §3
 结论：检索非瓶颈、成本在 embedding 生成），延迟特征与 chat 不同（无 ttft、无 stream、
 批量调用），P95 目标建议**另立**：单条 < 300ms、批量（≤32 条）< 2s。
+
+## 5. 附录（M3-P3，2026-09-25）：C3 chunk 失效通路实测 + 提案待裁
+> 本件任务书从「检索缝预算」扩到「C3 失效通路纳入观察」——按惯例新热路径要有数。
+> 本文档已定为 M3 检索域的实测归档处，故失效实测数据收录在此（§1-§4 只读不动）。
+
+### 5.1 通路与口径
+C3 收编 main `5724aa7` 的两段（`sim/world/pathfinding.py` + `sim/world/map.py`）：
+1. **事件扫描**（`event_tile_position` 纯函数）：每 tick 对**全事件流**遍历一遍，
+   TILE_CHANGED 全量取坐标，MATTER_* 仅 `x/y≥0`（-1 未定位哨兵不标脏，C4 域约束），
+   无关 kind → `None`。成本 ∝ **事件总数**（与坐标落点无关）。
+2. **失效本体**（`Pathfinder.observe_events` 标脏 → `TileMap.drain_dirty` →
+   `PathCache.invalidate` 逐 chunk 精确剔除非途经条目）。成本 ∝ **缓存条数 × 脏 chunk 数**
+   （`invalidate` 每个脏 chunk 全表扫一遍缓存；精确失效非全清）。
+
+口径与 §1-§4 同源：暖态中位（`warmup_rounds=1` + median）、固定seed、48×48=9 chunk 全通开阔图
+（无遮挡 → 路径长度/扫描成本取同条件最坏）。失效本体是**消费式**（标脏即 drain、剔除即删），
+bench 每轮用 `setup` 复原缓存快照，计时窗口只含失效通路（不含 A* 回填：单条 ~0.65ms，属寻路本身）。
+
+### 5.2 实测数据（本机暖态中位，`sim/tests/bench/test_bench_chunk_invalidation.py`）
+| 场景 | 实测 | 占 tick 预算 16.6ms |
+|---|---|---|
+| `event_tile_position` × 50 定位事件 | **0.007ms** | 0.04% |
+| `event_tile_position` × 200 混合（150 无关 MOVE + 50 定位） | **0.036ms** | 0.2% |
+| `event_tile_position` × 1000 无关事件 | 0.054ms | 0.3% |
+| `event_tile_position` × 5000 无关事件 | 0.267ms | 1.6% |
+| **失效本体** 100 路径 × 50 定位事件（≈9 脏 chunk） | **0.076ms** | 0.5% |
+| 失效本体 500 路径 × 50 定位事件 | 0.192ms | 1.2% |
+| 失效本体 1000 路径 × 50 定位事件 | 0.320ms | 1.9% |
+| **失效本体 4096 缓存（max_entries 打满）× 50 定位事件** | **1.18ms** | 7.1% |
+| 失效本体 100 路径 × 25 定位+25 未定位（脏 chunk 减半） | 0.056ms | 0.3% |
+| 失效本体 4096 缓存 × 全 9 chunk 脏（退化哨兵） | 1.04ms | 6.3% |
+
+**成本模型验证**：脏 chunk 数 1→9，4096 缓存下 0.14→1.11ms（近似线性，验证「缓存条数 × 脏 chunk 数」）；
+缓存 100→4096（50 定位）：0.076→1.18ms（近似线性）。半定位混合批成本降 26%（脏 chunk 9→5）。
+
+### 5.3 提案红线（**待裁**，`thresholds.py` 新增两行，既有四行不动）
+| 项 | 提案值 | 依据 | 归属 |
+|---|---|---|---|
+| `event_tile_position` 全 tick 事件遍历 | ≤ **0.10ms** | 0.06ms/千事件 + 1.7x → 覆盖 ~1800 事件/tick（稳态 ~20、p99 50 均远在内，budget.md §2.3） | 新行 `CHUNK_EVENT_SCAN_LIMIT_MS` |
+| `observe_events` 失效本体（单 tick） | ≤ **2.0ms** | 上界档实测 1.18ms + 1.7x 慢机余量；占 tick 预算 12%（取独立行：失效是寻路缓存维护成本，与检索链零耦合，不占 `RETRIEVAL_TICK_LIMIT_MS`） | 新行 `CHUNK_INVALIDATION_TICK_LIMIT_MS` |
+
+**裁后动作（pi 已就绪）**：bench 侧 `_record_proposal` → 换 `harness.assert_median_threshold`
+（定标机硬断言 + nightly advisory 门），与 M3-P2 四红线同款流程。
+
+### 5.4 观察项（不设红线，留预审核）
+- **大图全脏风险**：128×128=64 chunk 全脏实测 ~10ms = tick 预算 **60%**。当前无形态触发
+  （定位事件稳态 ~20/tick、p99 50；48×48 只有 9 chunk）。若 M4 起出现「全图重绘 / 批量建造 /
+  地图尺扩大」形态 → 按 `test_chunk_invalidation_full_dirty_degraded_probe` 档位复核，
+  届时再裁是否设红线（备选优化：`PathCache` 按 chunk 倒排索引，避免逐 chunk 全表扫）。
+- **未定位哨兵语义**：x/y=-1 不标脏是 C4 域约束（避免把整图当脏）—— bench 实测其收益
+  （成本降 26%）可作该约束的性能佐证，不是放宽理由。

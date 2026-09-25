@@ -124,3 +124,27 @@ SOAK_RSS_GROWTH_LIMIT_MB = 128.0
 SOAK_GC_OBJECT_GROWTH_LIMIT = 20_000
 # 句柄数增长上限（Windows 有效；其他平台 handle_count()==-1 自动跳过）。
 SOAK_HANDLE_GROWTH_LIMIT = 64
+
+# --- M3-P3：C3 chunk 失效通路提案（**提案待裁**，不卡 CI 红）---
+# 依据 docs/perf/m3-retrieval-budget.md 附录「M3-P3 chunk 失效实测」（2026-09-25）。
+# 口径与既有红线同源：暖态中位（warmup_rounds=1 + median）、固定seed、48×48=9 chunk 开阔图。
+# **状态**：pi 实测后提案值；Claude 裁前 bench 侧只记录不断言（见
+# test_bench_chunk_invalidation.py 头注 `_record_proposal`）。裁后按 M3-P2 先例：
+# 定标机硬断言（harness.assert_median_threshold）+ nightly advisory 门。**既有四行常量不动**。
+# ① `event_tile_position` 纯函数每 tick 全事件遍历上限 = 0.10ms。
+#    实测 0.06ms/千事件（50 定位 0.007 / 200 混合 0.036 / 1000 0.054 / 5000 0.267ms）→ 1.7x 余量
+#    覆盖 ~1800 事件/tick（稳态 ~20 与 p99 50 均远在其内，budget.md §2.3）。
+#    破限 = 事件流异常暴涨，查事件产生侧（非本通路退化）。
+CHUNK_EVENT_SCAN_LIMIT_MS = 0.10
+# ② `observe_events` 失效本体（标脏 → drain → 逐 chunk 精确剔除）单 tick 上限 = 2.0ms
+#    （tick 预算 RETRIEVAL_TICK_LIMIT_MS=12.0 之外**独立行**：失效是寻路缓存的维护成本，
+#    与检索链零耦合；且必须留在 16.6ms tick 预算内 → 取 12% 作上界占位）。
+#    实测（暖态中位）：
+#      100 路径 / 50 定位事件  ~0.076ms
+#      1000 路径 / 50 定位事件 ~0.320ms
+#      **4096 缓存打满 / 50 定位事件 ~1.18ms**（= PathCache.max_entries 上界档，定标据此）
+#      100 路径 / 25 定位+25 未定位 ~0.056ms（脏 chunk 减半 → 成本减半，验证 ∝ 脏chunk 数）
+#    成本模型：缓存条数 × 脏 chunk 数（`PathCache.invalidate` 逐 chunk 全表扫一遍）。
+#    2.0 = 1.18 实测 + ~1.7x 慢机余量。破限先查缓存规模/脏 chunk 数来源，
+#    再考虑「按 chunk 倒排索引」形态（当前 4096 条 × 9 chunk 下限规模无需索引）。
+CHUNK_INVALIDATION_TICK_LIMIT_MS = 2.0
