@@ -37,6 +37,7 @@
 | `docs/perf/l1-spec.md` | 性能（Pi） | ✅ main | L1 算法规格：原型↔实现对账 + 红线实测回填 + soak L1 feeder 两阶段 |
 | `docs/perf/m3-retrieval-budget.md` | 性能（Pi） | ✅ main | M3 检索缝预算案：候选/打分/退化哨兵/tick 四红线设计稿（实测候选 0.019ms、打分 600 候选 0.862ms、正常形态 ≈0.05ms/NPC）+ V5 裁决输入 + baseline.json 8 步建立流程 |
 | `docs/perf/ci-calibration-m2p6.md` | 性能（Pi） | ✅ main | CI 档位定标提案：nightly advisory 门（`PI_BENCH_ADVISORY`）+ CI 实测档位基线口径（RNG 1M 警戒 300→330 的依据） |
+| `docs/perf/m4-build-budget-preplan.md` | 性能（Pi） | ⏳ 待收编 | M4-P1 建造预算预研：现状 tick 预算盘点（上限表余量 2.10ms=13%）+ 坍塌级联成本模型实测（BFS 10k=1.27ms vs 逐对象事件 51ms=307% tick）+ 施工推进语义 perf 建议（支持 M4-D1 checkpoint）+ 红线草案框架 |
 | `docs/data/schema.md` | 数据/数据库（opencode） | ✅ main | SQLite schema：事件日志（append-only）/分支树/快照分层/玩家 anchor/NPC 记忆 + sqlite-vec 占位；索引与约束对齐 §6 契约 |
 | `docs/data/event-sourcing.md` | 数据/数据库（opencode） | ✅ main | 事件溯源：`apply(event)` 唯一写路径、读档重放流程、回放确定性（RNG/熵随事件落库） |
 | `docs/data/migration.md` | 数据/数据库（opencode） | ✅ main | Alembic 迁移策略（async env.py / alembic.ini / 首版迁移骨架） |
