@@ -25,7 +25,7 @@
 |---|---|---|
 | `m3-preplan.md`（codex） | R1-R7 传播缝 4 条真实（knowledge 无治理列/vec 无治理/双列口径/分支混入）；C1-C13 建造输入面（M4 用，C2 提前）；X1-X8 扫描面（breakdown 构造隔离） | §2 批次内的 T1 钉子 |
 | `vec-preplan.md`（opencode） | sqlite-vec 主 + numpy 降级（裁 3）；5 万条量级两法均亚毫秒=**非瓶颈，成本在 embedding 生成**；`LlmClient.embed` 独立缝；候选源替换不触打分链（§18 硬边界） | 批次 A 全部 |
-| `schema.md §19`（opencode） | `materialize_matter(ids=None) -> MatterLedger` 快照路径；重放路径同折叠规则；「注册≠落库」待定 | 批次 C |
+| `schema.md §19`（opencode） | `materialize_matter(ids=None) -> MatterLedger` 快照路径；重放路径同折叠规则；注册由 `MATTER_BUILD` 立账事件持久化 | 批次 C |
 | K3 复验（kilo） | 接口契约 0 差异；M5 anchors 契约稿与 404 handler 提案是切源解禁实现侧（不阻塞 M3） | M5 批次（本文不展开） |
 
 ## 2. 依赖与排序总纲
@@ -133,7 +133,7 @@ E1 事件（npc.hidden_emerge）与 knowledge 五列扩展（codex M3-S2 提案�
 |---|---|---|
 | C1 | `materialize_matter()` 快照路径实现（§19 契约照抄） | opencode |
 | C2 | 重放路径 + 两入口逐位相等校验测试（§19.3） | opencode |
-| C3 | chunk 失效正确性（量化验收「chunk 失效正确」）+ 注册持久化待定项提案 | opencode | ✅ 已交（失效通路+test_m3_chunk_invalidation；提案 matter-register-proposal.md 待裁） |
+| C3 | chunk 失效正确性（24 钉子）+ §19.4 注册持久化（`MATTER_BUILD` 立账事件 + 9 钉子） | opencode |
 | C4 | MatterPayload 域约束实现（codex C2 钉子转绿：Field(ge/le) + allow_inf_nan=False） | opencode |
 
 ### 批次 D — 社会面收束（Claude）

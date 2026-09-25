@@ -1,7 +1,7 @@
-# matter 注册持久化 — §19.4 提案（已裁决：采方案 A，见 §6）
+# matter 注册持久化 — §19.4 裁决与实施记录（方案 A）
 
-> 数据域（opencode），M3-C3，2026-09-24。**本文为提案**——按活跃约定
-> 「schema 先提案 → Claude 裁决 → 再动代码」，**未动 models.py / 未出迁移**。
+> 数据域（opencode），M3-C3，2026-09-24；裁决 2026-09-25。方案 A 已实施：
+> `MatterLedger.register` 返回 `MATTER_BUILD` 立账事件，**零 schema、零迁移**。
 > 依据：`docs/data/schema.md §9`（structures 表设计）、`§19.4`（注册≠落库边界）、
 > `§17.2`（MatterPayload 语义）、`docs/data/migration.md §4.9 + §6.2`
 > （structures 迁移草案，**未实现**）、`docs/arch/m3-plan.md §6`（C3 提案项）、
@@ -11,11 +11,11 @@
 
 ## 0. 一句话
 
-`MatterLedger.register` 只进内存账本、**不产事件** → 空账本冷启（仅回放/快照重建）
-丢「已注册未结算」对象；本提案裁「注册如何持久化」：**主张 register 产
-`MATTER_BUILD` 事件（amount=0 语义 = 立账）**，否 structures 表作注册主路径。
+`MatterLedger.register` 返回 `MATTER_BUILD` 立账事件（`amount=0`、
+`durability=integrity`、`note="register"`）；调用方 flush 后，快照与事件重放两条
+冷启路径均不丢注册对象。structures 表不作注册主路径。
 
-## 1. 现状（§19.4 + 代码实证）
+## 1. 裁决前基线（§19.4 + 代码实证）
 
 | 面 | 现状 | 缺口 |
 |---|---|---|
@@ -29,16 +29,16 @@
 §19.4 原文把「注册持久化」标为 M3 待定项，二选一线索：
 **MATTER_BUILD/register 事件** vs **保留 structures 表**。
 
-## 2. 方案对比
+## 2. 方案对比（历史留档）
 
 | # | 方案 | 机制 | schema | 写路径 | 冷启保真 | 风险 |
 |---|---|---|---|---|---|---|
-| A | **register 产 `MATTER_BUILD` 事件**（主张） | `register()` 改为返回 `WorldEvent`（或内部 enqueue），`amount=0`、`durability=integrity`、`decay_rate=rate`、`note="register"`；走既有 C4 唯一写路径 → `_project_matter` 首事件建行 | **零改动** | 唯一写路径（事件） | 重放/快照均含 | register 签名变更（见 §4） |
+| A | **register 产 `MATTER_BUILD` 事件（已采）** | `register()` 返回 `WorldEvent`，`amount=0`、`durability=integrity`、`decay_rate=rate`、`note="register"`；走既有 C4 唯一写路径 → `_project_matter` 首事件建行 | **零改动** | 唯一写路径（事件） | 重放/快照均含 | register 签名变更（见 §4） |
 | A' | 新 kind `MATTER_REGISTER` | 同 A，专用 kind + payload 登记 | 零列改动；**EventKind 追加**（冻结基线允许追加） | 同 A | 同 A | 多一种 kind 的折叠/校验分支；与 BUILD 语义重复 |
 | B | **structures 表作注册主路径** | `register` 直写 `structures` 行；`materialize_matter` 需 UNION 或双读 | 新表 + 迁移 003（草案未实现） | **双真相**（structures 存在性 vs matter_state 熵态） | 须两表一致 | 违「matter_state=事件流投影」；§14 回放判据失效；C4 旁路直写 |
 | C | A+B 混合 | 注册走事件；structures 仅存 §9 拓扑列（tiles/kind/material/owner） | structures 列裁剪 | 事件为主 | 同 A | 结构域 M4 才需要拓扑；M3 过早建表 |
 
-## 3. 主张与理由（方案 A）
+## 3. 裁决结论与理由（方案 A）
 
 1. **零 schema、零迁移**：复用 `MatterPayload` + 既有 `_project_matter` /
    `fold_matter_snapshot` 单一折叠规则——注册 = 新对象首事件，与 §17.2
@@ -53,46 +53,35 @@
      matter 注册 = **熵态账本身份**——两域正交，硬绑会把 M4 建造列拖进 M3 注册；
    - 若 M4 需要 structures，应走 **C：事件仍是熵态真相，structures 只做拓扑投影**
      （从 BUILD/REGISTER 事件投影 tiles/kind，不从 register 直写）。
-5. **否 A' 新 kind（默认）**：`MATTER_BUILD` 已覆盖「立账 + 携带 durability/decay_rate」；
-   amount=0 + note 区分注册与增建。仅当裁决要求审计上注册/建造分账时再追加
-   `MATTER_REGISTER`（EventKind 追加合法，payload 复用 MatterPayload）。
+5. **否 A' 新 kind**：`MATTER_BUILD` 已覆盖「立账 + 携带 durability/decay_rate」；
+   `amount=0` + `note="register"` 区分注册与增建。审计分账若 M5+ 有实证需求，
+   再走 CR 追加 `MATTER_REGISTER`。
 
-## 4. 实施草案（**裁后**动代码）
+## 4. 实施记录（已完成）
 
-1. `MatterLedger.register` 签名：
-   ```python
-   def register(
-       self, matter_id: str, *, integrity: float, decay_rate: float,
-       tick: int = 0, x: int = -1, y: int = -1,
-   ) -> WorldEvent:
-   """注册并返回 MATTER_BUILD 立账事件（amount=0；调用方负责 flush）。"""
-   ```
-   - 重复注册仍 `ValueError`（现行为保留）；
-   - 返回事件 = 显式交回调用方 flush（与 `damage`/`build` 一致的「产事件」风格）；
-   - **兼容**：现有测试 `ledger.register(...)` 忽略返回值仍绿（返回值不破坏调用）。
-2. 投影/重放：**零改动**（MATTER_BUILD 已在 `_MATTER_KINDS` / `PAYLOAD_MODELS` /
-   `_project_matter` 覆盖）。
-3. 调用方（裁后接线）：创世/装配层 register 后 `flush_tick([event])` 或同批入队。
-4. 测试钉子 `sim/tests/test_m3_matter_register.py`：
-   - register → flush → `materialize_matter` 含该 id；
-   - 空账本仅重放（不读表）→ `materialize_matter_replay` 含该 id（冷启不丢）；
-   - 快照/重放逐位相等（扩展 §19.3 判据到「仅注册」对象）；
-   - 重复注册拒；amount=0 不扭曲 integrity。
-5. 文档：裁决落回 `schema.md §19.4`（去掉「待定」，改指向本提案结论）。
+1. `sim/world/matter.py::MatterLedger.register` 已改为返回 `WorldEvent`：
+   `tick=0`、`x=-1`、`y=-1`；先经 `matter_event` 校验并构造事件，再写账本，
+   避免非法 payload 留下半注册状态。
+2. 投影/重放零改动：`MATTER_BUILD` 已由 `_MATTER_KINDS`、`PAYLOAD_MODELS`、
+   `_project_matter` 与 `fold_matter_snapshot` 覆盖。
+3. flush 口径：
+   - `NpcStore.flush_tick([event])`：事件落库并同事务投影 `matter_state`，
+     供 `materialize_matter` 快照路径读取；
+   - `flush_events(store, [event])`：只落事件，供
+     `materialize_matter_replay` 重建；当前生产代码无 `register` 调用点，
+     本批不造调用方。
+4. `sim/tests/test_m3_matter_register.py` 9 用例覆盖：立账事件形状、
+   `flush_tick` 冷启不丢、纯事件重放不丢、仅注册对象快照/重放逐位相等、
+   `amount=0` 不扭曲 integrity、重复注册不替换、非法 payload 不半注册、
+   x/y=-1 不标脏、定位坐标透传。
+5. `schema.md §19.4` 已回写为规范契约；`m3-plan.md §6` 保留裁决记录。
 
-## 5. 待裁决点
+## 5. 裁决结果（历史提案问题已闭合）
 
-1. **采 A（BUILD 立账）还是 A'（新 kind MATTER_REGISTER）？**
-   本提案主张 **A**（零新 kind；审计 note 可后补）。若要求注册/建造事件流分账 → A'。
-2. **register 返回事件 vs 内部总线 enqueue？**
-   本提案主张 **返回事件**（与 damage/build 同风格，flush 权在调用方，测试可纯函数断言）；
-   若裁「register 必须自含持久化」则改为注入 EventSink——偏离现风格，不推荐。
-3. **structures 表是否保留给 M4 拓扑？**
-   本提案主张 **保留 §9 设计但 M3 不建表**；M4 建造时再裁「拓扑列是否从事件投影」。
-   本提案不否定 structures 本身，只否定其作 **注册** 主路径。
-4. **x/y 坐标**：注册事件默认 -1（未定位）还是强制带 tiles？
-   MatterPayload 无 tiles 字段；定位注册可后续加 x/y 或 M4 structures 拓扑。
-   本提案主张 **M3 默认 -1**（与现 register 无坐标一致；chunk 失效不因纯注册触发）。
+1. **A vs A'**：采 A，零新 EventKind；`note="register"` 保留审计区分。
+2. **返回事件 vs EventSink**：采返回事件，flush 权在调用方。
+3. **structures**：M3 不建表，§9 设计保留给 M4 拓扑投影。
+4. **x/y**：默认 -1 未定位；显式坐标可透传，tiles 拓扑留 M4。
 
 ---
 
@@ -112,6 +101,6 @@
    投影」（倾向 C：事件是熵态真相，structures 只做拓扑投影，不直写）。
 4. **x/y 默认 -1**（未定位）。MatterPayload 加 tiles 字段属 M4 结构域，M3 不扩。
 
-**放行范围**：opencode 按 §4 实施草案动代码（`register` 签名 + 调用方接线 +
-`test_m3_matter_register.py` 钉子 + `schema.md §19.4` 文档回写），完成后
-「M3-C3 后续件」交付待收编。
+**实施结果**：opencode 已按 §4 完成 `register` 签名、立账事件、9 用例钉子与
+`schema.md §19.4` 回写；作为「M3-C3 后续件」交付待收编。当前无生产
+`MatterLedger.register` 调用点，不新增调用方。
