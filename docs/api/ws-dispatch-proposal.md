@@ -8,16 +8,19 @@
 
 ## 0. 问题定位（K1 首发现 + K4 复核补一条）
 
+> **本节为 K4 时点（2026-09-24）的现状快照，保留作发现记录**；M5-K5/K6 施工后全部转 ✅，
+> 施工后状态见 `anchors-api.md` §4.1 表与 §7 对表逐项标注。
+
 `handle_client_message`（`ws.py:188`）只分发 3 类，白名单放行的其余类型**静默落 `return None`**；未注册类型回 `unknown_type`。逐条现状（`anchors-api.md:265-272` 已列，此处补 K4 复核的修正）：
 
-| 消息 | 白名单 | `_CHANNEL_FOR` | 分发块 | 现状 | K4 复核 |
-|---|---|---|---|---|---|
-| `move_request` | ✅ | ✅ render | ✅ | 完整（寻路 + `issue_move`） | 校验失败**静默 `return None`**（`ws.py:221,230,234`）——见 §4 |
-| `hello` | ✅ | ✅ session | ✅ | 完整 | 无缺 |
-| `sync_request` | ✅ | ✅ session | ⚠️ | **回错型**：返回 `control_ack{action:"resume",speed:1}`（`ws.py:257-266`） | **K4 新发现**：契约要求回 `full_snapshot`。见 §5.1 |
-| `set_control` | ✅ | ✅ control | ❌ | **静默忽略**（落到 `return None`） | 本文 §1 |
-| `player_impulse` | ❌ | ❌ | ❌ | 未注册 → `unknown_type` | 本文 §2 |
-| `load_anchor` | ❌ | ❌ | ❌ | 未注册 → `unknown_type` | 本文 §3 |
+| 消息 | 白名单 | `_CHANNEL_FOR` | 分发块 | 现状（K4 时点） | K4 复核 | 现行 |
+|---|---|---|---|---|---|---|
+| `move_request` | ✅ | ✅ render | ✅ | 完整（寻路 + `issue_move`） | 校验失败**静默 `return None`**（`ws.py:221,230,234`）——见 §4 | ✅ K6：非法类型 → `bad_target` |
+| `hello` | ✅ | ✅ session | ✅ | 完整 | 无缺 | ✅ |
+| `sync_request` | ✅ | ✅ session | ⚠️ | **回错型**：返回 `control_ack{action:"resume",speed:1}`（`ws.py:257-266`） | **K4 新发现**：契约要求回 `full_snapshot`。见 §5.1 | ✅ K5：回 `full_snapshot` |
+| `set_control` | ✅ | ✅ control | ❌ | **静默忽略**（落到 `return None`） | 本文 §1 | ✅ K6：`_handle_set_control` |
+| `player_impulse` | ❌ | ❌ | ❌ | 未注册 → `unknown_type` | 本文 §2 | ✅ K6：注册 + 乐观 feedback |
+| `load_anchor` | ❌ | ❌ | ❌ | 未注册 → `unknown_type` | 本文 §3 | ✅ K6：注册 + 失败不断线 |
 
 ## 0.1 架构约束：单回复通道（写契约前必读）
 
@@ -191,6 +194,8 @@ if reply is not None:
 
 **建议**：统一为**小写 snake_case**（实现已是主流：3 个小写 vs 1 个文档样例），并把 `ws-protocol.md` §4.5 样例的 `IMPULSE_TOO_LONG` 改为 `impulse_too_long`。本提案所有新 code（`bad_action`/`bad_speed`/`bad_impulse`/`impulse_too_long`/`bad_anchor`/`load_failed`）一律小写 snake。
 
+> **✅ M5-K6 已落地**（2026-09-25）：10 项 code 全部形为 `sim/api/ws.py` 的 `_ERROR_*` 模块常量（单一真相源，防字面量散落）；`ws-protocol.md` §4.5 样例已订正小写（§7 #19 已过）。`TestErrorCodeVocabulary` 三例钉子：常量子集 ⊆ 词表 / 全小写 / 运行时逐路径断言 code ∈ 词表。
+
 **code 词表（本提案新增后全量）**：
 
 | code | 触发 | 出处 |
@@ -208,17 +213,21 @@ if reply is not None:
 
 ## 6. 实现清单（Claude 域，提案态）
 
+> **✅ M5-K6 已施工**（2026-09-25，commit 见 git log）：以下 1-8 全部落地，测试钉子在 `sim/tests/test_ws_gateway.py`（§7 对表现已逐项标注通过状态）。
+> **第 4 项签名变更未执行**——K5 走 §8.5 备选案（`pf.tile_map`），`handle_client_message` 保持 `(raw, loop, pf)` 三参、`main.py` 调用点零改动。
+> **第 9 项测试文件未新建**——按任务单「钉在 `test_ws_gateway.py`」并入现有文件（避免同域测试分裂）。
+
 > 纯契约提案，以下为实现落点，**照本文施工**。所有动作面均**不新增消息类型**（5 类已在 `ws-protocol.md` §3.1 定义）、**不改 `shared/openapi.json`**（schema 全部已就绪）、**不改 `main.py` 收发结构**（除下述签名）。
 
-1. `ws.py:32` `_ALLOWED_CLIENT_TYPES` += `player_impulse`, `load_anchor`。
-2. `ws.py:270` `_CHANNEL_FOR` += `player_impulse: "control"`, `load_anchor: "session"`。
-3. `ws.py:188` `handle_client_message`：新增 3 个分发块（`set_control`/`player_impulse`/`load_anchor`），**各自有独立 `_handle_*` 纯函数**，可单测。
-4. **签名变更（唯一）**：`handle_client_message(raw, loop, pf)` → 增 `tile_map` 参数（供 `snapshot_payload`），或经 `pf` 取。`main.py:186` 调用点同步。**§3.4 / §5 共用此路径**。
-5. `ws.py:257` `sync_request` 分支改回 `full_snapshot`（§5）。
-6. `ws.py` 顶部注释「只分发 3 类」等表述同步更新（现状描述会过期）。
-7. `anchors-api.md:265-272` §4.1 表：订正 `sync_request` 行（回 `full_snapshot` 非 `control_ack`）+ 状态列（改为「M5 施工后完整」）。
-8. `ws-protocol.md`：§4.3 加「见 `ws-dispatch-proposal.md` §1」引用；§4.4 加「§3」引用并订正 `anc_01` 示例；§4.5 订正 `IMPULSE_TOO_LONG` → `impulse_too_long` + 加 §1.4/§2.3/§3.3 的 code 词表引用。
-9. 测试：`sim/tests/test_ws_dispatch.py`（§7 清单）。
+1. `ws.py:32` `_ALLOWED_CLIENT_TYPES` += `player_impulse`, `load_anchor`。 → **✅ 已加**（六类齐全）
+2. `ws.py:270` `_CHANNEL_FOR` += `player_impulse: "control"`, `load_anchor: "session"`。 → **✅ 已加**（配对，§7 #18 有钉）
+3. `ws.py:188` `handle_client_message`：新增 3 个分发块（`set_control`/`player_impulse`/`load_anchor`），**各自有独立 `_handle_*` 纯函数**，可单测。 → **✅ 已加**（`_handle_set_control` / `_handle_player_impulse` / `_handle_load_anchor`；另把既有的 move/sync 块也抽成 `_handle_move_request` / `_handle_sync_request`，同构）
+4. **签名变更（唯一）**：`handle_client_message(raw, loop, pf)` → 增 `tile_map` 参数（供 `snapshot_payload`），或经 `pf` 取。`main.py:186` 调用点同步。**§3.4 / §5 共用此路径**。 → **改为备选案**：经 `pf.tile_map` 取（K5 定案），签名不变
+5. `ws.py:257` `sync_request` 分支改回 `full_snapshot`（§5）。 → **✅ M5-K5 已修**
+6. `ws.py` 顶部注释「只分发 3 类」等表述同步更新（现状描述会过期）。 → **✅ 已更新**
+7. `anchors-api.md:265-272` §4.1 表：订正 `sync_request` 行（回 `full_snapshot` 非 `control_ack`）+ 状态列（改为「M5 施工后完整」）。 → **✅ K5/K6 两次刷新，六类行全部为施工后状态**
+8. `ws-protocol.md`：§4.3 加「见 `ws-dispatch-proposal.md` §1」引用；§4.4 加「§3」引用并订正 `anc_01` 示例；§4.5 订正 `IMPULSE_TOO_LONG` → `impulse_too_long` + 加 §1.4/§2.3/§3.3 的 code 词表引用。 → **✅ K6 已做**（见 §7 #19/#20 状态）
+9. 测试：`sim/tests/test_ws_dispatch.py`（§7 清单）。 → **改为并入 `sim/tests/test_ws_gateway.py`**（任务单指定）
 
 ## 7. 验收对表（可测断言，供 Claude 自测 / kilo 复验）
 
@@ -226,39 +235,40 @@ if reply is not None:
 
 | # | 断言 | 类型 |
 |---|---|---|
-| 1 | `set_control{action:"set_speed",speed:4}` → 回 `control_ack{action:"set_speed",speed:4,applied:true}`，且 `loop.clock.speed == 4.0` | `[T]` |
-| 2 | `set_control{action:"pause"}` → 回 `control_ack{action:"pause",applied:true}`，`clock.speed == 0.0`；紧接 `set_control{action:"resume"}` → `clock.speed` 恢复为暂停前值 | `[T]` |
-| 3 | **bool 陷阱**：`set_control{action:"set_speed",speed:true}` → `error{code:"bad_speed"}`，`clock.speed` 不变 | `[T]` |
-| 4 | `set_control{action:"set_speed",speed:8}`（不在 `{1,4,16}`）→ `error{code:"bad_speed"}`，clock 不变 | `[T]` |
-| 5 | `set_control{action:"nope"}` → `error{code:"bad_action"}` | `[T]` |
-| 6 | **不再静默**：任意非法 `set_control` 的 reply **非 None**（回归钉子，防退回静默） | `[T]` |
-| 7 | `player_impulse{text:"去赚钱"}` → 回 `impulse_feedback{injected:true,cue:∈四值,reaction_monologue:{form,content}}`，且**一帧内**返回（不 await LLM） | `[T]` |
-| 8 | `player_impulse{text:<65 字>}` → `error{code:"impulse_too_long",message:"话说得太长了，说不清。"}` | `[T]` |
-| 9 | `player_impulse{text:"  "}`（全空白）→ `error{code:"bad_impulse"}` | `[T]` |
-| 10 | `player_impulse` 的 `unknown_type` 回归：注册后**不再**回 `unknown_type` | `[T]` |
-| 11 | `load_anchor{anchor_id:"9f3c1a7b2e04"}`（不存在）→ `error{ref:"load_anchor",code:"load_failed",message:"<戏内>"}`，**连接保持**（后续可继续发消息收到回复） | `[T]` |
-| 12 | `load_anchor{anchor_id:<合法>}` → 回 `full_snapshot`（含 `map/actors/lights/structures/weather/combat` 六键） | `[T]` |
-| 13 | `load_anchor` **不因 `anc_` 前缀拒绝**（不透明串纪律）：`{anchor_id:"anc_01"}` 走正常查表路径（找不到 → `load_failed`，非 `bad_anchor`） | `[T]` |
+| 1 | `set_control{action:"set_speed",speed:4}` → 回 `control_ack{action:"set_speed",speed:4,applied:true}`，且 `loop.clock.speed == 4.0` | `[T]` **✅ 已过**（`test_set_speed_applies`） |
+| 2 | `set_control{action:"pause"}` → 回 `control_ack{action:"pause",applied:true}`，`clock.speed == 0.0`；紧接 `set_control{action:"resume"}` → `clock.speed` 恢复为暂停前值 | `[T]` **✅ 已过**（`test_pause_then_resume_restores_previous_speed` + `test_pause_from_default_speed_resumes_to_one`） |
+| 3 | **bool 陷阱**：`set_control{action:"set_speed",speed:true}` → `error{code:"bad_speed"}`，`clock.speed` 不变 | `[T]` **✅ 已过**（`test_speed_bool_rejected`） |
+| 4 | `set_control{action:"set_speed",speed:8}`（不在 `{1,4,16}`）→ `error{code:"bad_speed"}`，clock 不变 | `[T]` **✅ 已过**（`test_speed_out_of_enum_rejected`，另覆盖 0/2/32/缺失/字符串/null/float） |
+| 5 | `set_control{action:"nope"}` → `error{code:"bad_action"}` | `[T]` **✅ 已过**（`test_unknown_action_rejected` + `test_missing_action_rejected`） |
+| 6 | **不再静默**：任意非法 `set_control` 的 reply **非 None**（回归钉子，防退回静默） | `[T]` **✅ 已过**（`test_no_silent_drop_on_illegal`，5 用例） |
+| 7 | `player_impulse{text:"去赚钱"}` → 回 `impulse_feedback{injected:true,cue:∈四值,reaction_monologue:{form,content}}`，且**一帧内**返回（不 await LLM） | `[T]` **✅ 已过**（`test_registered_returns_feedback`） |
+| 8 | `player_impulse{text:<65 字>}` → `error{code:"impulse_too_long",message:"话说得太长了，说不清。"}` | `[T]` **✅ 已过**（`test_too_long_rejected` + `test_max_length_text_accepted` 边界 64 整） |
+| 9 | `player_impulse{text:"  "}`（全空白）→ `error{code:"bad_impulse"}` | `[T]` **✅ 已过**（`test_blank_text_rejected`，另覆盖空串/Tab换行 + `test_missing_or_non_string_text_rejected`） |
+| 10 | `player_impulse` 的 `unknown_type` 回归：注册后**不再**回 `unknown_type` | `[T]` **✅ 已过**（`test_no_longer_unknown_type`） |
+| 11 | `load_anchor{anchor_id:"9f3c1a7b2e04"}`（不存在）→ `error{ref:"load_anchor",code:"load_failed",message:"<戏内>"}`，**连接保持**（后续可继续发消息收到回复） | `[T]` **✅ 已过**（`test_registered_unknown_anchor_returns_load_failed` + `test_connection_stays_alive_after_failure`） |
+| 12 | `load_anchor{anchor_id:<合法>}` → 回 `full_snapshot`（含 `map/actors/lights/structures/weather/combat` 六键） | `[T]` **✅ 已过**（`test_success_returns_full_snapshot`——经 `_ANCHOR_LOAD_HOOK` 注入合法态；键集合与连接即发快照相等） |
+| 13 | `load_anchor` **不因 `anc_` 前缀拒绝**（不透明串纪律）：`{anchor_id:"anc_01"}` 走正常查表路径（找不到 → `load_failed`，非 `bad_anchor`） | `[T]` **✅ 已过**（`test_underscore_prefix_not_rejected` + `test_anc_prefix_id_is_opaque_not_validated`） |
 | 14 | `sync_request{reason:"reconnect"}` → 回 `full_snapshot`（**非 `control_ack`**，§5 钉子） | `[T]` **✅ M5-K5 已过**（`test_sync_request_returns_full_snapshot`） |
-| 15 | 所有 error 帧的 `code` ∈ §5.1 词表，且均为小写 snake（无大写） | `[T]` |
-| 16 | 出戏边界：三新路径的任何出站帧**不含** `tick`/`seed`/`seq`/`branch_id`/内部 entity_id（`ws-protocol.md` §5 表逐字段） | `[T]` |
-| 17 | `timescale` 帧由战斗事件驱动（`issue_combat_scale`→广播），**不由** `set_control` 触发 | `[T]` |
-| 18 | 5 类 client→sim 消息全部在 `_ALLOWED_CLIENT_TYPES` 与 `_CHANNEL_FOR` **成对**注册（防 §2.2 落单 → `bad_channel`） | `[O]` |
-| 19 | `ws-protocol.md` §4.5 样例 code = 小写 `impulse_too_long`（与实现一致） | `[P]` |
-| 20 | `ws-protocol.md` §4.4 `load_anchor` 示例 anchor_id 为 12 位 hex（非 `anc_01`） | `[P]` |
+| 15 | 所有 error 帧的 `code` ∈ §5.1 词表，且均为小写 snake（无大写） | `[T]` **✅ 已过**（`TestErrorCodeVocabulary` 3 例：常量子集 + 全小写 + 运行时 10 路径逐个触发断言在词表内） |
+| 16 | 出戏边界：三新路径的任何出站帧**不含** `tick`/`seed`/`seq`/`branch_id`/内部 entity_id（`ws-protocol.md` §5 表逐字段） | `[T]` **✅ 已过**（`test_sync_request_snapshot_clean` + `TestOutOfCharacterBoundary` 全量；三新路径的 error 帧键集合 `_error_frame` 封闭，`control_ack`/`impulse_feedback` 键亦经白名单同构断言） |
+| 17 | `timescale` 帧由战斗事件驱动（`issue_combat_scale`→广播），**不由** `set_control` 触发 | `[T]` **✅ 已过**（`test_extra_speed_on_pause_tolerated` + `test_clock_untouched_when_rejected` 反向证明 `set_control` 只动 clock.speed、不发 timescale 帧；`ws_endpoint` 层无 timescale 广播路径） |
+| 18 | 5 类 client→sim 消息全部在 `_ALLOWED_CLIENT_TYPES` 与 `_CHANNEL_FOR` **成对**注册（防 §2.2 落单 → `bad_channel`） | `[O]` **✅ 已过**（`TestDispatchRegistration` 2 例：白名单 == 六类集合 + 两表 keys 严格相等） |
+| 19 | `ws-protocol.md` §4.5 样例 code = 小写 `impulse_too_long`（与实现一致） | `[P]` **✅ 已过**（文档样例已订正为小写；见 §7 表下注记） |
+| 20 | `ws-protocol.md` §4.4 `load_anchor` 示例 anchor_id 为 12 位 hex（非 `anc_01`） | `[P]` **✅ 已过**（文档示例已订正为 `9f3c1a7b2e04`） |
 
 ## 8. 待裁清单（汇总，供 Claude 裁决）
 
 | # | 议题 | kilo 建议 | 影响面 |
 |---|---|---|---|
-| 8.1 | `control_ack.applied` 语义 | **恒 `true` 占位**（§1.3），钳制场景未来再定 | 中（前端分支逻辑） |
-| 8.2 | `set_control pause/resume` 携带 `speed` | **容忍忽略**（不报错），与 move_request 宽容风格一致 | 低 |
-| 8.3 | `player_impulse` 冲突度规则表 + 叙事化模板归属域 | 协议面本文定；规则表归 LLM 域（`sim/llm/` 或 `sim/perception/`） | 高（M4 施工前置） |
-| 8.4 | `load_anchor` 成功发 `full_snapshot` 的时机（短期同步 vs 长期 driver） | M5 先落**短期同步**（重放未实现），留 TODO 指向 §3.4 | 高（决定是否改签名） |
-| 8.5 | `handle_client_message` 增 `tile_map` 参数 | **建议改**（§3.4/§5 共用）；备选：从 `pf` 取。→ **M5-K5 定：备选案成立**（`pf.tile_map`，签名不变） | 中（改签名 + 调用点） |
-| 8.6 | `move_request` 静默缺陷是否本批修 | **建议本批只修非法类型（`bad_target`），不可达保留静默**（§4） | 低 |
+| 8.1 | `control_ack.applied` 语义 | **恒 `true` 占位**（§1.3），钳制场景未来再定。→ **M5-K6 已按此落地**（`applied: True` 硬编码） | 中（前端分支逻辑） |
+| 8.2 | `set_control pause/resume` 携带 `speed` | **容忍忽略**（不报错），与 move_request 宽容风格一致。→ **M5-K6 已落地**（`resume` 用 `_PRE_PAUSE_SPEED` 栈值，不信入站 speed） | 低 |
+| 8.3 | `player_impulse` 冲突度规则表 + 叙事化模板归属域 | 协议面本文定；规则表归 LLM 域（`sim/llm/` 或 `sim/perception/`）。→ **M5-K6 只落协议面**：`_impulse_cue()` 是占位（问号→hesitation / 感叹→complaint / 其余→accepted），M4 LLM 域定稿前不视作契约 | 高（M4 施工前置） |
+| 8.4 | `load_anchor` 成功发 `full_snapshot` 的时机（短期同步 vs 长期 driver） | M5 先落**短期同步**（重放未实现），留 TODO 指向 §3.4。→ **M5-K6 已落地**（复用 `snapshot_payload`，TODO 在 `_handle_load_anchor` docstring） | 高（决定是否改签名） |
+| 8.5 | `handle_client_message` 增 `tile_map` 参数 | **建议改**（§3.4/§5 共用）；备选：从 `pf` 取。→ **K5 定备选案**（`pf.tile_map`，签名不变），K6 沿用 | 中（改签名 + 调用点） |
+| 8.6 | `move_request` 静默缺陷是否本批修 | **本批只修非法类型（`bad_target`），不可达保留静默**（§4）。→ **M5-K6 已落地** | 低 |
 | 8.7 | `sync_request` 回错型 | **本批必修**（P1，§5）——一行级。→ **M5-K5 已修** ✅ | 中（契约正确性） |
-| 8.8 | error `code` 大小写口径 | **统一小写 snake**（§5.1） | 低（文档订正 + 未来钉子） |
+| 8.8 | error `code` 大小写口径 | **统一小写 snake**（§5.1）。→ **M5-K6 已落地**（10 项 `_ERROR_*` 常量，§7 #15 三例钉子） | 低（文档订正 + 未来钉子） |
+| 8.9 | `_pre_pause_speed` 与 anchor 登记的存放形态（**M5-K6 新增待裁**） | 现为模块级（`_PRE_PAUSE_SPEED` 栈 / `_ANCHOR_IDS` 集 / `_ANCHOR_LOAD_HOOK` 钩子），与既有 `ws_auth_token()` 模块级模式同构。**M2 多连接前**须改为 `ConnectionManager` 每连接字段 + 由落库路径调 `register_anchor_id()`；并须定「同步查表替身」是否长期保留 (§3.4 driver 化后 `_ANCHOR_LOAD_HOOK` 是唯一真实入口) | 中（多连接改造前置） |
 
 ## 9. 不在本文件范围
 

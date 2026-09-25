@@ -158,7 +158,7 @@ sim/api/ws  (FastAPI WebSocket 网关)
 
 - sim 负责：叙事化注入（"你摸了摸空瘪的钱袋……"）→ 意愿冲突度计算 → 注入 Agent prompt。
 - 客户端不参与叙事化，不计算冲突度（数值是元信息）。
-- **分发契约见 `ws-dispatch-proposal.md` §2**（M5-K4）：注册（白名单+channel）、入站校验（`text` 长度/空串）、乐观 `impulse_feedback` 与 LLM 异步投递缝、error code（`bad_impulse`/`impulse_too_long`）。现状 `player_impulse` **未注册**（回 `unknown_type`）。
+- **分发契约见 `ws-dispatch-proposal.md` §2**（M5-K4）：注册（白名单+channel）、入站校验（`text` 长度/空串）、乐观 `impulse_feedback` 与 LLM 异步投递缝、error code（`bad_impulse`/`impulse_too_long`）。**M5-K6 已注册**（白名单 + `_CHANNEL_FOR: control` 成对）；`text` 校验走 `_handle_player_impulse`，校验通过即回**乐观** `impulse_feedback`（同步、不 await LLM）。`cue`/`reaction_monologue` 是占位——冲突度规则表归 LLM 域定稿（提案 §8.3）。
 
 #### impulse_feedback.data（S→C，M4）
 
@@ -181,7 +181,7 @@ sim/api/ws  (FastAPI WebSocket 网关)
 ```
 
 - 战斗时间尺（§9）由 sim 自动切换，**不允许客户端直接设战斗慢镜**。`timescale`（S→C）告知进入/脱离。
-- **分发块契约见 `ws-dispatch-proposal.md` §1**（M5-K4）：`action`/`speed` 校验规则、`applied` 语义、`timescale` 联动、拒绝面 error 帧（`bad_action`/`bad_speed`）。现状 `handle_client_message` **无 `set_control` 分发块**（静默 `return None`）——分发块落地是本节契约成立的前提。
+- **分发块契约见 `ws-dispatch-proposal.md` §1**（M5-K4）：`action`/`speed` 校验规则、`applied` 语义、`timescale` 联动、拒绝面 error 帧（`bad_action`/`bad_speed`）。**M5-K6 已落地分发块** `_handle_set_control`：`applied` 恒 `true`（8.1 占位）、`pause`/`resume` 经连接级 `_PRE_PAUSE_SPEED` 记忆暂停前倍率、`speed` 校验排除 bool（提案 §1.4）。`applied:false` 无当前触发场景——钳制语义出现前字段保持占位。
 
 #### control_ack.data / timescale.data（S→C）
 
@@ -204,7 +204,7 @@ sim/api/ws  (FastAPI WebSocket 网关)
 - 触发 §12 读档流程：定位 (branch_id,seq) → 快照 → 重放 → 新分支 → 流 `full_snapshot`。
 - 重放毫秒级，期间客户端显示"片刻后……"叙事化过渡，绝不显示"重放中/tick"。
 - `anchor_id` 是**不透明字符串**（12 位 hex，`uuid4().hex[:12]`）——**不得**用 `startsWith('anc_')` 之类前缀特征做校验（`anchors-api.md` §6.5：`anc_` 前缀惯例不存在）。
-- **分发契约见 `ws-dispatch-proposal.md` §3**（M5-K4）：注册、入站校验、失败走 WS error 帧（`code:"load_failed"`）**且不断线**、成功发 `full_snapshot`。现状 `load_anchor` **未注册**（回 `unknown_type`）。
+- **分发契约见 `ws-dispatch-proposal.md` §3**（M5-K4）：注册、入站校验、失败走 WS error 帧（`code:"load_failed"`）**且不断线**、成功发 `full_snapshot`。**M5-K6 已注册**（白名单 + `_CHANNEL_FOR: session` 成对）；`anchor_id` 缺失/空/非串 → `bad_anchor`，其余形状一律按不透明串走查表（§6.5 禁前缀特征），载入失败/异常 → `load_failed` 且**不断线**。成功走短期同步路径（提案 §8.4）：回 `full_snapshot`；「定位→快照→重放」driver 化后由广播接替（提案 §3.4 长期方案）。
 
 #### sync_request.data（C→S） / full_snapshot 响应见 §4.1
 
