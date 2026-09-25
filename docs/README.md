@@ -27,6 +27,7 @@
 | `docs/security/memory-scan.md` | 安全/合规/风险（Codex） | ✅ main | 记忆写入前禁词扫描设计稿（架构域已批原则方向，M1 照此落地）：挂记忆写入路径、复用禁词表、命中改写优先拒写、append-only 用「标记无效+重写」补救 |
 | `docs/security/m3-preplan.md` | 安全/合规/风险（Codex） | ✅ main | M3 安规预研：R1-R7 记忆/知识传播缝、C1-C13 建造输入面、X1-X8 triggered 扫描面 + §4 验收口径 |
 | `docs/security/m3-evidence-chain.md` | 安全/合规/风险（Codex） | ✅ main | R5 证据链契约：witnessed（emerge 事件 + witnesses 双证据）/ told（链上衰减 0.9×0.6^n、下限 0.1、断链即失效）/ inferred（禁他人属性，无例外）三路判定 + E1 浮现事件提案 + knowledge 五列扩展 + §8 七条 T1 验收钉子 |
+| `docs/security/t1-sampling-10k.md` | 安全/合规/风险（Codex） | ✅ main | T1 信息边界 10k 采样验收口径：采样对象/触发分布/判据（零直陈泄露 + 零误伤）+ 与 S1 双路径测试的关系（单测=逻辑覆盖，10k=规模化终验）；配套 `test_m2_t1_sampling_10k.py` |
 | `docs/perf/budget.md` | 性能（Pi） | ✅ main | 每 tick 16.6ms（1x=60tick/s）预算表：7 子系统名义 7.00ms / 上限 12.35ms（M1 分解）；4x/16x 与战斗时间尺特例；采集告警点 |
 | `docs/perf/hotspots.md` | 性能（Pi） | ✅ main | 热点预判 H-1–H-6：感知传播分区/增量、L0 向量化、SQLite append-only 批量写与索引、WS 增量合批、超速倍率、LLM 异步延迟（信息性） |
 | `docs/perf/bench-plan.md` | 性能（Pi） | ✅ main | 基准方案：M0 必带 bench 清单、pytest-benchmark/真实 tick loop harness 选型、回归阈值、nightly 节奏、已知不可测项 |
@@ -34,6 +35,8 @@
 | `docs/perf/m2-acceptance.md` | 性能（Pi） | ✅ main | M2 验收口径：604,800 tick（50 NPC × 7 游戏日）自转无崩溃；崩溃判定 C1–C10（进程/RSS/句柄/GC/缓存/实体/漂移/确定性/延迟）；降采样断言三级（CI 缩样/nightly 30k/里程碑完整）；nightly 接法提案 §4 |
 | `docs/perf/m2-p4-budget-preplan.md` | 性能（Pi） | ✅ main | 第三批预算预案：smell 拆表/flush 断言/cognition 上界 + §4 已落地 vs 待裁决分栏 |
 | `docs/perf/l1-spec.md` | 性能（Pi） | ✅ main | L1 算法规格：原型↔实现对账 + 红线实测回填 + soak L1 feeder 两阶段 |
+| `docs/perf/m3-retrieval-budget.md` | 性能（Pi） | ✅ main | M3 检索缝预算案：候选/打分/退化哨兵/tick 四红线设计稿（实测候选 0.019ms、打分 600 候选 0.862ms、正常形态 ≈0.05ms/NPC）+ V5 裁决输入 + baseline.json 8 步建立流程 |
+| `docs/perf/ci-calibration-m2p6.md` | 性能（Pi） | ✅ main | CI 档位定标提案：nightly advisory 门（`PI_BENCH_ADVISORY`）+ CI 实测档位基线口径（RNG 1M 警戒 300→330 的依据） |
 | `docs/data/schema.md` | 数据/数据库（opencode） | ✅ main | SQLite schema：事件日志（append-only）/分支树/快照分层/玩家 anchor/NPC 记忆 + sqlite-vec 占位；索引与约束对齐 §6 契约 |
 | `docs/data/event-sourcing.md` | 数据/数据库（opencode） | ✅ main | 事件溯源：`apply(event)` 唯一写路径、读档重放流程、回放确定性（RNG/熵随事件落库） |
 | `docs/data/migration.md` | 数据/数据库（opencode） | ✅ main | Alembic 迁移策略（async env.py / alembic.ini / 首版迁移骨架） |
@@ -44,6 +47,7 @@
 | `docs/api/codegen.md` | 接口/兼容性（kilo） | ✅ main | OpenAPI → `shared/protocol.ts` 生成管线（openapi-typescript + banner + prettier）；CI 三道守卫（漂移检测已接 ci.yml / banner / 禁手写） |
 | `docs/api/versioning.md` | 接口/兼容性（kilo） | ✅ main | 协议版本策略：WS version 字段/协商方式，client 与 sim 独立演进 |
 | `docs/api/ws-message-diff.md` | 接口/兼容性（kilo） | ✅ main | ext↔快照逐成员 diff 明细 + K3 复验结论（§4.3：白名单外 diff = 0、契约对齐完成；未消项**不阻塞** M5，切源解禁仍待 M5 + sim 404 声明） |
+| `docs/api/anchors-api.md` | 接口/兼容性（kilo） | ✅ main | anchors 三路由契约稿（字段/校验/状态码/示例四要素齐）+ §5 施工清单 + 验收对表（[T] pytest / [O] OpenAPI 静态形状 / [C] 前端类型三类断言）+ §5.1 OpenAPI responses 注入点 |
 | `docs/dev-workflow.md` | 依赖/配置/文档（cline） | ✅ main | 环境与常用命令：uv/pytest/ruff/pyright、npm/tsc/eslint/vitest、T1–T5 marker 跑法、bench nightly 跑法、CI 对应关系 |
 
 状态图例：✅ main = 已在 main 分支；⏳ 待收编 = 已在对应 agent 分支产出，等 Claude（主导）统一收编（**当前：TASK-001/002/003 交付已全数收编，见 §4**）。
@@ -117,7 +121,7 @@ M1 范围与量化验收：DESIGN §17（认知闭环：LLM 客户端 + Profile 
 
 > 复核经过：P05 终校时（当时 main 尚未含 S04）第 1、2 项**确实仍缺**，已在 P05 报告主树；**codex S04 合入（main `66f3f18`）后三项全部收口**，本表已按终态更新。教训：**跨域状态以 main 实际代码为准**（我复查 `git grep 'not isinstance'` / `_rtoken` docstring 逐条确认，未凭留言采信）。
 
-## 5. M2 区块（第一至第八轮已收编，2026-09-23 盘点）
+## 5. M2 / M3 / M5 交付台账（2026-09-25 盘点）
 
 M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI（兼 LLM 断线兜底）+ 非理性框架 + 物质熵增 + 嗅觉风向 + 语言判定 + 自我未知**。
 
@@ -127,7 +131,7 @@ M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI
 - **本阶段不做**：记忆传播、建造（DESIGN §17 M2 行「本阶段不做」）。
 - **量纲提醒（写 M2 验收脚本前先看）**：DESIGN §10 锁定「1 tick = 1 游戏秒」⇒ 7 游戏日 = **604,800 tick**。完整跑**不进每提交 CI**（ci.yml 的 M2 占位步骤 `timeout-minutes: 15` 即这道护栏），完整跑与 M2 红线一律接 `nightly-bench.yml`（接入点注释已留）。
 
-### M2 派单与交付状态（2026-09-23 盘点）
+### 5.1 M2 交付状态（第一至九轮）
 
 | 路 | Agent | 交付物（提交） | 状态 | 实测 / 结论 |
 |---|---|---|---|---|
@@ -161,22 +165,34 @@ M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI
 | M2-K3 复验 | kilo | `docs/api/ws-message-diff.md` §4.3 复验结论 + 快照侧对齐回写（`ce68e5a`） | ✅ main `e10c6cd` | 判据达成：白名单外结构 diff = **0**（五项全绿：`MISSING in ext` ≤5 / 逐字段 44+8 required 归零 / 4 处 channel 错值归零 / nullable 归零 / paths `{id}`→`{profile_id}`）；未消项不阻塞 M5，切源解禁仍待 M5 + sim 404 声明 |
 | M2-A2 第四批 | Claude | `docs/arch/m3-plan.md`（M3 规划整合稿） | ✅ main `805166e` | 三份 M3 预研的整合骨架：批次 A-D 切分（A 向量 / C 地图可并行，B 等 A 接口冻结，D 收尾）+ 安规钉子横切（M3-S1 两枚 RED 先于一切实现）+ §6 待裁决队列 + M3 量化验收逐条对照落点 |
 | M2-C6 README 补表（本域） | cline | `docs/README.md`（§2 文档地图 +5 行 / §5 第五轮 +5 行 + 5 处过期状态校正） | ✅ main `4470fd0` | 表列数一致性 + 无冲突标记双检通过；摘要口径微调被采信（裁 6：ws-message-diff 按文档原文写「未消项不阻塞 M5」）；缺行 gap 已转 C7 本单补齐 |
-| M3-S1 安全钉子（两枚 T1 RED） | codex | `sim/tests/test_t1_m3_vec_governance.py`（R2）+ `sim/tests/test_t1_m3_matter_bounds.py`（C2） | ✅ main `2daa644` | 先红后绿钉子：R2 召回治理（`superseded_by`/`invalid_reason` 非空不得进向量候选、supersede 级联即时）5 用例 + C2 MatterPayload 域约束 29 用例；失败指纹=ImportError `VecCandidateSource`；随批次 A4/C4 转绿（收编 `7328dfc`） |
 | M2-D6 vec 裁决栏 | opencode | `docs/data/vec-preplan.md` §7 裁决栏 + `docs/data/schema.md` §19「注册≠落库」核对 | ✅ main `414acb5` | V1/V4/V6 采结（A 主 B 降级 / vec 表为准、BLOB 仅写缓存 / 召回端治理过滤红线归 codex R2）；V2/V3/V5/V7 挂起（改 schema 须提案、S1 敏感须 codex 复核）；纯文档零迁移，alembic 零漂移（收编 `8470f3b`） |
 | M2-P6 advisory 门 | pi | `sim/tests/bench/harness.py`（`PI_BENCH_ADVISORY`）+ `thresholds.py` RNG 330 + `test_bench_advisory_gate.py` + `docs/perf/ci-calibration-m2p6.md` | ✅ main `8fd9a17` | 落地裁 1：nightly 置 `PI_BENCH_ADVISORY=1`（越线只 structlog warning 不红、采集零改动）；裁 2：RNG 1M 警戒 300→**330ms**（CI 档位实测）；附 CI 档位定标提案（收编 `3c20b7c`） |
-| M5-K1 anchors 契约稿 | kilo | `docs/api/anchors-api.md`（306 行，零代码） | ✅ main `b849025` | 三路由契约四要素齐：GET 列表空库 `[]` 非 404 / POST 仅 `name`（游标由服务端从会话取）/ PATCH `name` 必填非可空 / DELETE protected 时 409；+ §5 施工清单与 sim 404 handler 提案（收编 `db46b9e`） |
 | M2-C7 README §5 补齐（本域） | cline | `docs/README.md`（§5 +11 行：第四轮 / A2 第四批 / 第六轮 + K2 状态消重） | ✅ main `0eff1e9` | §5 表 36 行×5 列一致、无冲突标记、11 个 commit 逐一 `merge-base --is-ancestor` 实测；已知缺行清零 |
+| M2-A2 第五批 | Claude | `docs/arch/m3-plan.md` 批次 B 架构细化 + B1 双列口径落地（`memory_store.py` 双实现 + `memory_scan.py`） | ✅ main `3bf49be` | B1 = `iter_visible` 双列口径（`superseded_by` / `invalid_reason` 任一非空即检索不可见，修 R3 的 S5 旁路），TDD 先 RED 后 GREEN；批次 B 模块/文件级施工图（传播=复制写等） |
+| M2-A2 第六批 | Claude | `sim/core/events.py`（`NPC_HIDDEN_EMERGE` + `HiddenEmergePayload`）+ `sim/npc/evidence.py`（`judge_third_party_hidden`）+ `sim/npc/propagation.py`（`retell()` 复制写） | ✅ main `1ae9e54` | 把 codex M3-S3 的 **26 RED 全部转绿（26/26）** + retell 复制写 4 用例；结构化拒绝 reason 无词面（X4 修订：descriptor/label/triggered 永不入事件） |
+
+### 5.2 M3 交付状态（第七轮起；批次 A/B/C/D 全收口）
+
+| 路 | Agent | 交付物（提交） | 状态 | 实测 / 结论 |
+|---|---|---|---|---|
+| M3-S1 安全钉子（两枚 T1 RED） | codex | `sim/tests/test_t1_m3_vec_governance.py`（R2）+ `sim/tests/test_t1_m3_matter_bounds.py`（C2） | ✅ main `2daa644` | 先红后绿钉子：R2 召回治理（`superseded_by`/`invalid_reason` 非空不得进向量候选、supersede 级联即时）5 用例 + C2 MatterPayload 域约束 29 用例；失败指纹=ImportError `VecCandidateSource`；随批次 A4/C4 转绿（收编 `7328dfc`） |
 | M3-S2 R5 证据链契约稿 | codex | `docs/security/m3-evidence-chain.md`（152 行） | ✅ main `d81cf11` | 三路判定：witnessed（emerge 事件 + witnesses 双证据）/ told（0.9×0.6^n 衰减、下限 0.1、链须完整）/ inferred（禁他人属性，无例外）；自我披露作链根特例；+ E1 提案（extra=forbid、attr_ids 走 delta）+ knowledge 五列 + §8 七条 T1 钉子（收编 `cf7fa8a`，裁 8 采） |
 | M3-D1 向量缝接口 + C2 域约束 | opencode | MatterPayload 域约束（C2 钉子 29/29 转绿）+ `VectorIndex` 接口草案（SqliteVec / NumpyCosine 双实现，A3） | ✅ main `4da190d` | C2 钉子全绿；R2 治理钉子余 3 RED 留 A4 收口（收编 `d7178fe`） |
 | M3-P1 检索缝预算案 | pi | `docs/perf/m3-retrieval-budget.md` + `bench-plan.md` / `budget.md` / `llm-monitoring.md` + embed 监控事件族 | ✅ main `1d09581` | 实测（本机多轮中位）：候选 0.019ms/NPC、打分 600 候选 0.862ms、正常形态（k=20）≈0.05ms/NPC；红线提案 2 项随 A4 落地；附 baseline.json 8 步建立流程（收编 `fbd4e71`：裁 7 采红线 4 项 + V5） |
-| M5-K2 anchors 路径参数归一 | kilo | `shared/openapi.json` + `shared/protocol.ts` + `docs/api/{anchors-api,openapi}.md` + 前端 K03 #5 | ✅ main `5cf58c9` | `{id}`→`{anchor_id}` 三处同步（K03 惯例），旧模板从 paths 消失；§6 四项待决议提案（protected 并发 `asyncio.Lock` 等）（收编 `372153a`，四提案全采=裁 9） |
 | M3-D2 批次 A 收口（A4 + C1） | opencode | `sim/core/persistence/{vector,npc_store}.py` + `sim/tests/bench/thresholds.py` | ✅ main `caddcdd` | A4 治理 JOIN 收口（R2 3 RED→0：召回 SQL 内联 JOIN + `superseded_by IS NULL AND invalid_reason IS NULL` push-down，保留 rowid 候选身份）；裁 7 四红线进 `thresholds.py`；C1 `materialize_matter` 照抄 schema §19；门禁 923 passed / ruff / pyright 0 error / alembic 零漂移（收编 `e2f8863`） |
 | M3-P2① 检索缝四红线 bench | pi | `sim/tests/bench/test_bench_retrieval.py`（364 行，8 用例）+ `thresholds.py` | ✅ main `48db6cf` | 四红线实测对账：候选 0.233ms（余量 1.29× 偏紧）/ 打分 0.057ms（5.3×）/ 退化哨兵 0.970ms（2.06×）/ tick 常态 2.9ms（④ 拆常态 + 退化两口径）；附 R2 最小自证契约用例 |
 | M3-S3 E1 验收钉子（26 RED） | codex | `sim/tests/test_t1_m3_hidden_emerge.py`（486 行） | ✅ main `56a6fa4` | 12 用例 E1 事件形状（kind 注册 / `HiddenEmergePayload` extra=forbid / 工厂 witnesses 形 / 二阶 RED 防「未注册」误点绿）+ 2 用例 delta 语义（`triggered_now - triggered_prev`、无 delta 不发事件）+ 证据链三路判定，**26 用例全 RED**，实现归 A2 第六批（收编 `5596537`） |
+| M3-D4 knowledge 治理七列（B3 实施） | opencode | `0005_m3_knowledge_governance`（add_column×7 + 索引×3 + CHECK×3，CHECK 走 `op.batch_alter_table`）+ `sim/core/persistence/knowledge_store.py` + `sim/llm/memory_scan.py`（`decide()` 抽出为唯一判梯）+ `sim/tests/test_t1_m3_knowledge_cascade.py`（20 用例） | ✅ main `30dd087` | 裁 10 全采：继承失效不继承替代（沿 `source_knowledge_id` 广度递归、表内无替代指针、已失效行幂等仍下钻、全 SQL 带 `branch_id`）；X7 写入门=记忆/知识共用 `decide()`，知识表不可能成扫描旁路；`evidence_seq` 复用 M2-D3 `seq_by_index` 投影缝回填；门禁 995 passed / 55 skipped、ruff ok、pyright 0 error、alembic 零漂移 |
+| M3-C3 chunk 失效通路 + §19.4 提案 | opencode | `sim/world/{map,pathfinding}.py` + `sim/tests/test_m3_chunk_invalidation.py` + `docs/data/matter-register-proposal.md` | ✅ main `5724aa7` | `TileMap` PrivateAttr 脏集（mark/drain/`with_collision` 不可变换图）+ `event_tile_position`（TILE_CHANGED 全量、MATTER 仅 x/y≥0、-1 哨兵不标）+ `Pathfinder.observe_events`/`observe_map` 精确失效；24 用例钉死「剔 1 留 1 / 未定位 no-op / 封格绕行 / 全封不可达」；提案主张 MATTER_BUILD 立账否 structures 注册主路径（全量 1081 passed / ruff / pyright 0） |
+| M3-§19.4 注册持久化裁决 | Claude | `docs/data/matter-register-proposal.md`（提案→已裁）+ `docs/data/schema.md` §19.4 + `docs/arch/m3-plan.md` §6 同步 | ✅ main `16f2983` | 四点全采：①采 A 否 A'（零新 kind，`register` 产 `MATTER_BUILD` 立账）②采「返回事件不注入 EventSink」③structures M3 不建、留给 M4 ④x/y 默认 -1（与 C3 `event_tile_position` 哨兵天然衔接）；依据=主树实证 `_project_matter` 首事件即建行、折叠按 `durability` 而非 `amount`；实施放行 opencode（M3-C3 后续件） |
+
+### 5.3 M5 预备（接口锚点，零代码契约先行）
+
+| 路 | Agent | 交付物（提交） | 状态 | 实测 / 结论 |
+|---|---|---|---|---|
+| M5-K1 anchors 契约稿 | kilo | `docs/api/anchors-api.md`（306 行，零代码） | ✅ main `b849025` | 三路由契约四要素齐：GET 列表空库 `[]` 非 404 / POST 仅 `name`（游标由服务端从会话取）/ PATCH `name` 必填非可空 / DELETE protected 时 409；+ §5 施工清单与 sim 404 handler 提案（收编 `db46b9e`） |
+| M5-K2 anchors 路径参数归一 | kilo | `shared/openapi.json` + `shared/protocol.ts` + `docs/api/{anchors-api,openapi}.md` + 前端 K03 #5 | ✅ main `5cf58c9` | `{id}`→`{anchor_id}` 三处同步（K03 惯例），旧模板从 paths 消失；§6 四项待决议提案（protected 并发 `asyncio.Lock` 等）（收编 `372153a`，四提案全采=裁 9） |
 | M5-K3 anchors 验收对表 | kilo | `docs/api/anchors-api.md`（§5 施工清单 + 验收对表、§5.1 responses 注入点）+ `tools/gen-protocol.ts` 头注登记 | ✅ main `c25b979` | 7 项逐条补验收标准并标三类断言 `[T]` pytest / `[O]` OpenAPI 静态形状 / `[C]` 前端类型；覆盖空库 `[]` 非 404、越权字段 422、出戏字段不回传等易错点；注入点 = `openapi_ext.py::custom_openapi()` L445（须在 get_openapi 之后、strip 之前）（收编 `32ef4fe`） |
-| M2-A2 第五批 | Claude | `docs/arch/m3-plan.md` 批次 B 架构细化 + B1 双列口径落地（`memory_store.py` 双实现 + `memory_scan.py`） | ✅ main `3bf49be` | B1 = `iter_visible` 双列口径（`superseded_by` / `invalid_reason` 任一非空即检索不可见，修 R3 的 S5 旁路），TDD 先 RED 后 GREEN；批次 B 模块/文件级施工图（传播=复制写等） |
-| M2-A2 第六批 | Claude | `sim/core/events.py`（`NPC_HIDDEN_EMERGE` + `HiddenEmergePayload`）+ `sim/npc/evidence.py`（`judge_third_party_hidden`）+ `sim/npc/propagation.py`（`retell()` 复制写） | ✅ main `1ae9e54` | 把 codex M3-S3 的 **26 RED 全部转绿（26/26）** + retell 复制写 4 用例；结构化拒绝 reason 无词面（X4 修订：descriptor/label/triggered 永不入事件） |
-| M3-C3 chunk 失效通路 + §19.4 提案 | opencode | `sim/world/{map,pathfinding}.py` + `sim/tests/test_m3_chunk_invalidation.py` + `docs/data/matter-register-proposal.md` | ⏳ 待收编 | `TileMap` PrivateAttr 脏集（mark/drain/`with_collision` 不可变换图）+ `event_tile_position`（TILE_CHANGED 全量、MATTER 仅 x/y≥0、-1 哨兵不标）+ `Pathfinder.observe_events`/`observe_map` 精确失效；24 用例钉死「剔 1 留 1 / 未定位 no-op / 封格绕行 / 全封不可达」；提案主张 MATTER_BUILD 立账否 structures 注册主路径（全量 1081 passed / ruff / pyright 0） |
 
 ### M2 依赖对账（M2-C1 结论：**零新依赖**）
 
