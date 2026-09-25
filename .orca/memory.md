@@ -30,8 +30,9 @@ schema.md §19.4/README/m3-plan 已同步已裁状态。实施放行 opencode「
 坑：cline/pi/kilo merge 冲突均为「当前任务」小节（main 带 opencode 文本 vs 各树待命文本），按各树本地版权威解决；
 .orca 在子树也是 gitignore 的，tracked 文件须 `git add -f`。
 ## ② cline（依赖 / 配置 / 文档域）
+- 【2026-09-25 第十一轮快照｜M3-C9 文档收口已交付待收编】README **§5 按里程碑三节拆分**（`5.1 M2` 35 行 / `5.2 M3` 10 行 / `5.3 M5 预备` 3 行；脚本按行首列前缀 M3-/M5-/其余 分组，**既有 46 行内容逐字未改**——diff 删除行只有旧标题 + 6 行移位 + M3-C3 旧状态）+ **§2 补四行**（`m3-retrieval-budget` `1d09581`／`anchors-api` `b849025`／`t1-sampling-10k` `38a7f63`／`ci-calibration-m2p6` `8fd9a17`，hash 全 git 实证）+ **M3 节补三行**（M3-D4 `30dd087`／M3-C3 `5724aa7` 状态由「⏳ 待收编」修正／M3-§19.4 注册持久化裁决 `16f2983` 四点全采：register 产 `MATTER_BUILD` 立账、返回事件不注入 EventSink、structures 留 M4、x/y 默认 -1）。**坑（卡片摘要须对原文，本轮第二次踩到）**：卡里 M3-D4 写 `3b560b9`，git 实为 memory.md 清占位 chore，真身 `30dd087`（Claude 第十轮快照亦记「`30dd087` → ff `3b560b9`」）——**凡 commit 引用一律 `git log` + `merge-base --is-ancestor` 双验**。**核对项**：`docs/data/matter-register-proposal.md` 卡片状态「✅ 已裁」实证通过（文档头「已裁决：采方案 A」+ `16f2983`），未改一字。**验证**：§5.1/5.2/5.3 = 37/12/5 行 × 5 列、§2 = 34 行 × 4 列、冲突标记 0、无 CRLF/BOM、8 路径在盘、7 hash 逐一 is-ancestor main。**待命**：M5-K4 / A2 第七·八批（`f1c0c35`/`64b7390`）/ M3 批次 D 三件（`08db7ed`/`a452ded`/`8d17e40`）是否补表待 Claude 裁（已回执请裁）。
 - 【2026-09-24 第九轮快照｜M2-C8 全闭环已收编】README §5 表至第八轮 47×5 行 + §2 文档地图补 m3-plan/m3-evidence-chain；卡片勘误（M3-D1 真身 opencode `4da190d`）。C1-C8 全收编。**active 约定**：CI 门禁按文件路径接不用 -m（P04 教训）；`perf/` 目录须 mkdir（git 不跟踪空目录，C5 根因）；Windows CRLF 假红已根除（.gitattributes，自检 `git ls-files --eol | grep -c 'w/crlf'` 期望 0）；`.orca/` 下新增文件须 `git add -f`（catch-all `.*/` 未豁免，规则 #4 语义）。**待命**：M3 收官时补 §5 M3 分节（现混装 M2/M3 行，等批次 B/D 收口后分节改名）。§2 遗留四行（m3-retrieval-budget/anchors-api/t1-sampling-10k/ci-calibration-m2p6）仍待裁。
-- 【2026-09-23 第五轮快照｜新对话按此继续】**M2-C5 nightly 红灯修复已交付待收编**（`db092ed`）：硬红灯根因 = `perf/` 目录不入库（git 不跟踪空目录）→ pytest-benchmark 收尾 `save_json` 抛 `FileNotFoundError: perf/bench.json`（**4/4 跑必现**）→ 修=nightly「跑基准」step 先 `mkdir -p perf`；并给 artifact 上传加 `if: always()`（原来红灯时被 skip → 四轮全 0 产物、证据与 CI 档位数字全丢）。残留 4 个微基准断言越线（apply/perception/rng/smell，**每轮失败集合都不同**、边缘超 2–9%）＝ ubuntu runner 档位/负载抖动，非代码回归；阈值真相源在 pi 域（`sim/tests/bench/thresholds.py` + `harness.py`），已交 Claude 裁决（重定标 CI 档位 or 加 env 门走「归档+相对基线漂移」口径）。**CI 端到端验证（3 次 dispatch 于本分支 `d68885a`）**：①`35815742469` FileNotFoundError 消失、JSON 38,024B、首次上传 artifact、pytest 首次打印完整汇总（2 failed/27 passed/1 skipped in 254.75s）；②`35816176126` artifact 非 0、红 1 例（smell 哨兵 2.939ms vs 3.0＝超 2%）；③`35816437844` artifact 含 `perf/bench.json` 38,597B **+ `docs/perf/runner.txt`**（第三处修复：档位随 artifact；ubuntu-latest/nproc4/AMD EPYC 9V74/py3.12.3/uv0.12.18）、红 1 例（听觉 3.932ms vs 3.6＝超 9%，mean 11.546＝抖动 3×）。**「跑基准绿」未达成＝非管道问题**：7 组数据失败集合每轮不同、均边缘超 2–9%、mean 为 median 3–4× → 共享 runner 负载噪声（pi 域阈值口径）。本机双向对照同结论（无目录→同指纹崩溃；建目录→JSON 落盘 37KB）。**M2-C4**（09-22，`1772f3a`，已收编）：①codegen.md §4.1 切源暂缓声明 + gen-protocol 头注；②baseline 评估=暂缓（已有首个 CI 档位产物，仍等 Claude 确认再入库）。**M2-C6**（09-23，`4470fd0`，待收编）：`docs/README.md` §2 文档地图 +5 行（m3-preplan/vec-preplan/ws-message-diff/m2-p4-budget-preplan/l1-spec）+ §5 M2 表 +5 行第五轮终态（C5 `dd8e253`/S5 `3c69158`/D5 `ee70aad`/P5 `7cfe842`/K3 复验 `e10c6cd`）+ 同表 5 处过期状态校正（S3/D3/P3/K2/A2 第三批→✅ main）；遗留 gap：§5 第四轮行（C4/S4/D4/P4/K3 清单）与 A2 第四批 `805166e` 未入表，已回执请裁。教训：任务卡给的摘要注意回文档原文核对（ws-message-diff「M5 放行」实为「不阻塞 M5」）。**M2-C7**（09-23，`0eff1e9`，待收编）：§5 补齐 **11 行**——第四轮 5 行（C4 `525f970`/S4 `38a7f63`/D4 `e77d25c`/P4 `1813cbb`/K3 清单 `d7f066f`）+ A2 第四批 `805166e`（按时间序放第五轮之后）+ 第六轮 5 行（C6 `4470fd0`/M3-S1 `2daa644`/D6 `414acb5`/P6 `8fd9a17`/M5-K1 `b849025`，结论列补注收编 merge `7328dfc`/`8470f3b`/`3c20b7c`/`db46b9e`）；K2 行状态消重改 ✅ 已回执（`d7f066f` 归 K3 清单独立行）；§5 标题→「第一至第六轮」。验证：36 行×5 列一致、无冲突、11 commit 均 is-ancestor main、8 文件路径 Test-Path 全在。**表已无已知缺行**；第七轮照此格式续加。**M2-C8**（09-23，`925b39d`，待收编）：§5 补第七轮 5 行（C7 `0eff1e9`/M3-S2 `d81cf11`/M3-D1 `4da190d`/M3-P1 `1d09581`/M5-K2 `5cf58c9`）+ 第八轮 6 行（M3-D2 `caddcdd`/M3-P2① `48db6cf`/M3-S3 `56a6fa4`/M5-K3 `c25b979`/A2 第五批 `3bf49be`/A2 第六批 `1ae9e54`）；§2 补 `docs/arch/m3-plan.md` + `docs/security/m3-evidence-chain.md`。**卡片勘误已按 git 修正**：卡里「M3-D1 = 2daa644（收编 7328dfc）」实为 codex M3-S1（C6 已入表），M3-D1 真身是 opencode `4da190d`（收编 `d7178fe`）——未把同一 commit 写两行。验证：§2 29×4、§5 47×5、无冲突、16 路径全在、11 commit 均 is-ancestor main。**遗留**：§2 仍缺 `m3-retrieval-budget.md`/`anchors-api.md`/`t1-sampling-10k.md`/`ci-calibration-m2p6.md` 四行（已提示待裁）；§5 现混装 M2 轮次与 M3/M5 交付。
+- 【历史】第五轮及更早快照（C4-C8 交付/验证/CI 实证细节，约 3k 字）已按 workflow §8 压缩为指针 → 考古命令 `git log --oneline -- .orca/memory.md` + 本树 talking.txt 留言板；现状看上方第九轮快照。
 > 新对话开场先读本节 + .orca/workflow.txt + .orca/agent-registry.md。能力域：依赖/配置/CI/文档域；评审 codex 与 pi 的工作；评审 Agent=Claude。
 > **本文件已入库**（main `3e320b9` 裁决，规则 #7）——改动走提交；跨分支同路径由 Claude（主导）收编合并。
 > 另读：`.orca/talking.txt`（任务指派）、`docs/dev-workflow.md`（含 **§7 Windows 行尾假红**——本机格式类检查报错先看那节）。
@@ -52,19 +53,18 @@ schema.md §19.4/README/m3-plan 已同步已裁状态。实施放行 opencode「
 8. **纯函数优先于「推进式 RNG」**：`sim/world/weather.py` 若用 `RngRegistry.generator(name, cache)` 抽签就会**推进状态**（调用顺序影响结果，回放/bench 不可重算）。正解＝从 `rng.draw_key(流名)`（材料指纹，含熵注入）派生档位种子 → 每次新建 `Generator` 抽，得到「同 (rng, tick) 恒同风」。写任何「按 tick 派生的物理量」都照此办。
 ### 常用命令（M2-C4 口径）
 - 本树开工第一步：`git merge origin/main`（常落后 main，P05/P04 都遇到过）。
-- 全量：`uv run pytest -m "not bench"`（main `7d63210` 口径 **805 passed / 55 skipped**；纯 collect 核数法：collect-only 847 全收集，`-m "not bench"` 选中数 − skipped = passed）；bench：`uv run pytest -m bench`。
+- 全量：`uv run pytest -m "not bench"`（**最新口径见 ① Claude 节**：main `64b7390` = 1020 passed、bench 36；本节旧数 805/847 已作废）；bench：`uv run pytest -m bench`。
 - M2 门禁复演：`uv run pytest sim/tests/test_m2_*.py`（我的文件＝test_m2_weather.py）。
 - 行尾自检（应 0）：`git ls-files --eol | grep -c 'w/crlf'`。
-- `.orca/` 下**新增**文件要 `git add -f`（catch-all `.*/` 兜底；改已跟踪的 memory.md 不受限）。
+- `.orca/` 写入一律 `git add -f`：catch-all `.*/` 未豁免，**已跟踪的 memory.md 更新也须 -f**（workflow §8 明确要求）——否则 `git add` 只报 ignored 提示，文件容易漏进提交。
 - nightly 取证/触发（本机 `gh` 已认证 ZX466，scopes 含 repo+workflow；调用前须 `$env:HTTPS_PROXY='http://127.0.0.1:7897'`）：`gh run list --workflow nightly-bench.yml`、`gh run view <id> --log-failed`（**注意**：bench step 红时 pytest 汇总可能未打印，改用进度行 `test_bench_*.py` 的 `.`/`F` 标记判失败集合）、`gh workflow run nightly-bench.yml --ref ZX466/cline`。
 ### 未决项
-- **M2-C4 / M2-C5 已交付待收编**（C4 `1772f3a`、C5 `db092ed`）：详见本节快照与本树 talking.txt 回执；收编后本行删除。
-- **nightly 残留次因待裁（pi 域）**：4 个微基准断言在 ubuntu-latest 上**轮换**越线（逐轮集合不同、边缘超 3–8%）＝档位口径问题。我的 CI 侧修复已让红灯时也归档 `perf/bench.json`+`runner.txt`，pi 可据此定标/放红线。baseline.json 入库仍顺延至首个绿色 run（入库前留言板报 Claude）。
+- **C4–C8 全部收编**（`1772f3a` / `db092ed` / `4470fd0` / `0eff1e9` / `925b39d`），旧挂账已清；nightly 残留次因亦了结：裁 1 advisory 门 + 裁 2 RNG 330 已由 pi 落地（P6 `8fd9a17`）。baseline.json 入库按裁 4 走 pi 主导流程，我域只配合 workflow 侧。
 - **里程碑后 soak 完整跑迁出**：nightly step → 周频独立 workflow（我迁，已在 nightly 注释/m2-acceptance §4 挂账）。
 - `.orca/` 例外不补（裁决维持）：新增文件一律 `git add -f`。
 - 嵌入模型选型（M3）：走已锁 openai 客户端＝零新包；本地模型须先过依赖评审。
 
-（以下各节由对应 agent 维护——cline 节以上为 2026-09-20 收编版。）
+（各节由对应 agent 维护；快照纪律见 workflow §8：交付后在**自己节**顶部写一行快照 `【日期 轮次｜状态】`，旧快照压缩为 `git log --oneline -- .orca/memory.md` 指针，不无限堆积。）
 
 ## ③ opencode（数据 / 数据库域）
 - 【2026-09-25｜**M3-C3 后续件已实施待收编**】`MatterLedger.register` 增 `tick=0/x=-1/y=-1` 并返回 `MATTER_BUILD` 立账事件（amount=0、durability=夹后 integrity、decay_rate=夹后 rate、note=register）；先构造/校验事件再写账本，非法 payload 不半注册。投影零改动：`MATTER_BUILD` 既有 `_project_matter` 首事件建行 + `fold_matter_snapshot` 单规则。`test_m3_matter_register.py` **9 钉子**：事件形状、flush_tick 快照冷启、flush_events 纯事件重放、仅注册对象两入口逐位相等、amount=0 不扭 integrity、重复注册不替换、非法 payload 原子性、x/y=-1 不标脏、定位坐标透传。生产 grep 无 register 调用点，**不造调用方**；flush 口径写进提案：快照须 `NpcStore.flush_tick`，`flush_events` 只保重放。文档回写 schema §19.4 规范契约、m3-plan C3、README。门禁 **1090 passed / 55 skipped**、ruff ok、pyright 0；零 schema/迁移（scratch DB autogenerate 仅 `pass`）。
@@ -147,7 +147,7 @@ schema.md §19.4/README/m3-plan 已同步已裁状态。实施放行 opencode「
 
 ## 当前任务
 
-待命（M3-P3 bench 交付待收编：失效通路实测+红线提案。进行中不变：nightly 相对漂移观察。）
+**M3-C9 文档收口已交付**（README §5 三节拆分+§2 补四行+M3 三行，5e3719d）。下一单等派发。
 
 
 ## 留言板
