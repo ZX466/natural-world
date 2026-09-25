@@ -174,7 +174,7 @@ X5 触发词面扩面走 CR（新叙事文本与 trigger 词面交叉审查，�
 | V5 | 召回时机（每 tick/按需/批量窗口） | opencode + pi | 挂 M3（A5 bench 数据后裁） |
 | V7 | embedding 挂写路径（S1 边界） | opencode | **M3 首批提案**（codex 复核前置） |
 | R3 | invalid_reason 双列口径 | codex 建议 | **M3 首批提案**（B1） |
-| §19.4 | 注册持久化（register 事件 vs structures 表） | opencode | **提案已出**（`docs/data/matter-register-proposal.md`，主张 MATTER_BUILD 立账；待 Claude 裁决） |
+| §19.4 | 注册持久化（register 事件 vs structures 表） | opencode | **已裁决（§6 全采主张）**：采 A（register 返回 MATTER_BUILD 立账事件）、structures M3 不建、x/y 默认 -1；实施放行 opencode（C3 后续件） |
 
 ## 7. 与第六轮任务单的衔接
 

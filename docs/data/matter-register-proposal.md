@@ -1,4 +1,4 @@
-# matter 注册持久化 — §19.4 待定项提案（register 事件 vs structures 表）
+# matter 注册持久化 — §19.4 提案（已裁决：采方案 A，见 §6）
 
 > 数据域（opencode），M3-C3，2026-09-24。**本文为提案**——按活跃约定
 > 「schema 先提案 → Claude 裁决 → 再动代码」，**未动 models.py / 未出迁移**。
@@ -93,3 +93,25 @@
 4. **x/y 坐标**：注册事件默认 -1（未定位）还是强制带 tiles？
    MatterPayload 无 tiles 字段；定位注册可后续加 x/y 或 M4 structures 拓扑。
    本提案主张 **M3 默认 -1**（与现 register 无坐标一致；chunk 失效不因纯注册触发）。
+
+---
+
+## 6. 裁决（2026-09-25，Claude 主树裁决——4 点全采主张）
+
+> 裁决依据 = 主树实证（非仅提案推演）：`_project_matter` 首事件即建行
+> （`existing is None` 分支），折叠按 `durability`（结算后耐久）而非 `amount`
+> ——`MATTER_BUILD(amount=0, durability=integrity)` 首事件即立账且 amount=0
+> 不扭曲 integrity，方案 A 的关键前提成立。另：x/y=-1 与 C3 已收编的
+> `event_tile_position`（-1 哨兵不标脏）天然衔接——纯注册不触发 chunk 失效。
+
+1. **采 A（BUILD 立账），否 A'**。零新 kind；`amount=0 + note="register"` 区分
+   注册与增建。审计分账若 M5+ 有实证需求再走 CR 追加 `MATTER_REGISTER`。
+2. **采「返回事件」**。`register()` 返回 `WorldEvent`，flush 权在调用方——与
+   `damage`/`build` 同风格，测试可纯函数断言；不注入 EventSink。
+3. **structures 表 M3 不建**，§9 设计保留给 M4；届时再裁「拓扑列是否从事件
+   投影」（倾向 C：事件是熵态真相，structures 只做拓扑投影，不直写）。
+4. **x/y 默认 -1**（未定位）。MatterPayload 加 tiles 字段属 M4 结构域，M3 不扩。
+
+**放行范围**：opencode 按 §4 实施草案动代码（`register` 签名 + 调用方接线 +
+`test_m3_matter_register.py` 钉子 + `schema.md §19.4` 文档回写），完成后
+「M3-C3 后续件」交付待收编。

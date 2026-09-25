@@ -38,7 +38,7 @@
 | `docs/data/event-sourcing.md` | 数据/数据库（opencode） | ✅ main | 事件溯源：`apply(event)` 唯一写路径、读档重放流程、回放确定性（RNG/熵随事件落库） |
 | `docs/data/migration.md` | 数据/数据库（opencode） | ✅ main | Alembic 迁移策略（async env.py / alembic.ini / 首版迁移骨架） |
 | `docs/data/vec-preplan.md` | 数据/数据库（opencode） | ✅ main | M3 记忆向量检索预研：sqlite-vec vs numpy 余弦、5 万条量级估算（非瓶颈）、`LlmClient.embed` 缝、V1-V7 待裁决清单 |
-| `docs/data/matter-register-proposal.md` | 数据/数据库（opencode） | ⏳ 待裁 | §19.4 注册持久化提案：主张 `register` 产 `MATTER_BUILD` 立账事件（零 schema）、否 structures 作注册主路径；4 个待裁决点 |
+| `docs/data/matter-register-proposal.md` | 数据/数据库（opencode） | ✅ 已裁 | §19.4 注册持久化提案：主张 `register` 产 `MATTER_BUILD` 立账事件（零 schema）、否 structures 作注册主路径；4 个待裁决点 |
 | `docs/api/ws-protocol.md` | 接口/兼容性（kilo） | ✅ main | WS 消息协议：消息类型清单与字段 schema、出戏边界（哪些字段绝不外发） |
 | `docs/api/openapi.md` | 接口/兼容性（kilo） | ✅ main | HTTP 端点设计：设置页 / Profile 管理 / 存档 anchor CRUD；api_key 只在后端流转 |
 | `docs/api/codegen.md` | 接口/兼容性（kilo） | ✅ main | OpenAPI → `shared/protocol.ts` 生成管线（openapi-typescript + banner + prettier）；CI 三道守卫（漂移检测已接 ci.yml / banner / 禁手写） |
