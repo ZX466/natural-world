@@ -38,6 +38,7 @@
 | `docs/data/event-sourcing.md` | 数据/数据库（opencode） | ✅ main | 事件溯源：`apply(event)` 唯一写路径、读档重放流程、回放确定性（RNG/熵随事件落库） |
 | `docs/data/migration.md` | 数据/数据库（opencode） | ✅ main | Alembic 迁移策略（async env.py / alembic.ini / 首版迁移骨架） |
 | `docs/data/vec-preplan.md` | 数据/数据库（opencode） | ✅ main | M3 记忆向量检索预研：sqlite-vec vs numpy 余弦、5 万条量级估算（非瓶颈）、`LlmClient.embed` 缝、V1-V7 待裁决清单 |
+| `docs/data/matter-register-proposal.md` | 数据/数据库（opencode） | ✅ 已裁 | §19.4 注册持久化提案：主张 `register` 产 `MATTER_BUILD` 立账事件（零 schema）、否 structures 作注册主路径；4 个待裁决点 |
 | `docs/api/ws-protocol.md` | 接口/兼容性（kilo） | ✅ main | WS 消息协议：消息类型清单与字段 schema、出戏边界（哪些字段绝不外发） |
 | `docs/api/openapi.md` | 接口/兼容性（kilo） | ✅ main | HTTP 端点设计：设置页 / Profile 管理 / 存档 anchor CRUD；api_key 只在后端流转 |
 | `docs/api/codegen.md` | 接口/兼容性（kilo） | ✅ main | OpenAPI → `shared/protocol.ts` 生成管线（openapi-typescript + banner + prettier）；CI 三道守卫（漂移检测已接 ci.yml / banner / 禁手写） |
@@ -175,6 +176,7 @@ M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI
 | M5-K3 anchors 验收对表 | kilo | `docs/api/anchors-api.md`（§5 施工清单 + 验收对表、§5.1 responses 注入点）+ `tools/gen-protocol.ts` 头注登记 | ✅ main `c25b979` | 7 项逐条补验收标准并标三类断言 `[T]` pytest / `[O]` OpenAPI 静态形状 / `[C]` 前端类型；覆盖空库 `[]` 非 404、越权字段 422、出戏字段不回传等易错点；注入点 = `openapi_ext.py::custom_openapi()` L445（须在 get_openapi 之后、strip 之前）（收编 `32ef4fe`） |
 | M2-A2 第五批 | Claude | `docs/arch/m3-plan.md` 批次 B 架构细化 + B1 双列口径落地（`memory_store.py` 双实现 + `memory_scan.py`） | ✅ main `3bf49be` | B1 = `iter_visible` 双列口径（`superseded_by` / `invalid_reason` 任一非空即检索不可见，修 R3 的 S5 旁路），TDD 先 RED 后 GREEN；批次 B 模块/文件级施工图（传播=复制写等） |
 | M2-A2 第六批 | Claude | `sim/core/events.py`（`NPC_HIDDEN_EMERGE` + `HiddenEmergePayload`）+ `sim/npc/evidence.py`（`judge_third_party_hidden`）+ `sim/npc/propagation.py`（`retell()` 复制写） | ✅ main `1ae9e54` | 把 codex M3-S3 的 **26 RED 全部转绿（26/26）** + retell 复制写 4 用例；结构化拒绝 reason 无词面（X4 修订：descriptor/label/triggered 永不入事件） |
+| M3-C3 chunk 失效通路 + §19.4 提案 | opencode | `sim/world/{map,pathfinding}.py` + `sim/tests/test_m3_chunk_invalidation.py` + `docs/data/matter-register-proposal.md` | ⏳ 待收编 | `TileMap` PrivateAttr 脏集（mark/drain/`with_collision` 不可变换图）+ `event_tile_position`（TILE_CHANGED 全量、MATTER 仅 x/y≥0、-1 哨兵不标）+ `Pathfinder.observe_events`/`observe_map` 精确失效；24 用例钉死「剔 1 留 1 / 未定位 no-op / 封格绕行 / 全封不可达」；提案主张 MATTER_BUILD 立账否 structures 注册主路径（全量 1081 passed / ruff / pyright 0） |
 
 ### M2 依赖对账（M2-C1 结论：**零新依赖**）
 

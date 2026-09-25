@@ -2,14 +2,46 @@
 
 确定性：open set 用 (f, 坐标字典序) 排序，禁 hash 序——回放路径不因
 容器遍历顺序分叉。chunk 增量失效：缓存条目记录途经 chunk，失效精确剔除。
+
+M3 通路：事件（tile_changed / MATTER_* 定位 x/y≥0）→ chunk 脏标 →
+``Pathfinder.observe_events`` → ``PathCache.invalidate`` 精确剔除。
 """
 
 from __future__ import annotations
 
 import heapq
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
+from sim.core.events import EventKind, WorldEvent
 from sim.world.map import TileMap
+
+#: 携带地图坐标的事件种类（M3 chunk 失效输入）
+_MATTER_KINDS = frozenset(
+    {
+        EventKind.MATTER_DECAY,
+        EventKind.MATTER_DAMAGE,
+        EventKind.MATTER_BUILD,
+        EventKind.MATTER_COLLAPSE,
+    }
+)
+
+
+def event_tile_position(event: WorldEvent) -> tuple[int, int] | None:
+    """事件关联的全局 tile 坐标；无关/未定位（x/y=-1 哨兵）返回 None。"""
+    kind = event.event_type
+    if kind is EventKind.TILE_CHANGED:
+        return (
+            int(event.payload["x"]),  # type: ignore[arg-type]
+            int(event.payload["y"]),  # type: ignore[arg-type]
+        )
+    if kind in _MATTER_KINDS:
+        x = int(event.payload.get("x", -1))  # type: ignore[arg-type]
+        y = int(event.payload.get("y", -1))  # type: ignore[arg-type]
+        if x >= 0 and y >= 0:
+            return (x, y)
+    return None
+
 
 # 8 邻接：四正交代价 1，四对角代价 √2
 _NEIGHBORS: tuple[tuple[int, int, float], ...] = (
@@ -60,6 +92,34 @@ class Pathfinder:
     def __init__(self, tile_map: TileMap, cache: PathCache | None = None) -> None:
         self._tile_map = tile_map
         self.cache = cache if cache is not None else PathCache()
+
+    @property
+    def tile_map(self) -> TileMap:
+        return self._tile_map
+
+    def observe_events(self, events: Sequence[WorldEvent]) -> int:
+        """事件批 → 标脏所在 chunk → 精确失效缓存。返回剔除条目数。
+
+        TILE_CHANGED 全量标脏；MATTER_* 仅 x/y≥0（未定位 -1 不标，避免
+        把整图当脏）。幂等：空批/无关事件返回 0。
+        """
+        for ev in events:
+            pos = event_tile_position(ev)
+            if pos is not None:
+                self._tile_map.mark_tile_dirty(*pos)
+        return self.invalidate_dirty()
+
+    def invalidate_dirty(self) -> int:
+        """消费 TileMap 脏集：逐 chunk 失效缓存并清空。返回剔除总数。"""
+        total = 0
+        for chunk in self._tile_map.drain_dirty():
+            total += self.cache.invalidate(chunk)
+        return total
+
+    def observe_map(self, tile_map: TileMap) -> int:
+        """替换底图（with_collision 等不可变更新）并失效新图脏 chunk。"""
+        self._tile_map = tile_map
+        return self.invalidate_dirty()
 
     def find(self, start: tuple[int, int], goal: tuple[int, int]) -> tuple[tuple[int, int], ...]:
         """返回 start→goal 的完整格路径（含两端）。不可达抛 ValueError。

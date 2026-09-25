@@ -652,6 +652,10 @@ async def materialize_matter(
 - **注册≠落库**：新建对象仅 `register` 到账本、**未产事件前不在 `matter_state`**；
   `materialize_matter` 只回「已投影对象」。注册持久化（保证空账本冷启不丢对象）是
   M3 待定项（可能需 `MATTER_BUILD`/register 事件或保留 `structures` 表，见 §9）。
+  *（M3-C3 裁决已落：`docs/data/matter-register-proposal.md` §6 —— 采方案 A，
+  `register` 改为返回 `MATTER_BUILD` 立账事件（amount=0、durability=integrity、
+  x/y 默认 -1），走 C4 唯一写路径；否 structures 作注册主路径（§9 表 M3 不建，
+  M4 建造时再裁拓扑投影）。实施由 opencode 按 §4 草案执行。）*
   *（M2-D6 核对：本条与 V 系裁决 3 的 V6「记忆召回端治理过滤」无交集——V6 作用于
   `npc_memories`/`npc_memory_vec`（记忆域），本条为 matter 域注册语义，二者互不影响。）*
 - **分支隔离**：`WHERE branch_id = self._branch_id`，同 `materialize`。
