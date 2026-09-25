@@ -260,18 +260,20 @@ components.setdefault("responses", {})["Problem"] = {
 
 ### 4.1 sim WS 分发现状（施工前必读）
 
-`handle_client_message`（`ws.py:188`）当前只分发 3 类，其余进白名单后也**静默 `return None`**：
+`handle_client_message`（`ws.py:188`）当前分发 `move_request` / `hello` / `sync_request` 三类，其余进白名单后也**静默 `return None`**：
 
-| 消息 | 白名单 `_ALLOWED_CLIENT_TYPES` | `_CHANNEL_FOR` | 分发块 | 现状 |
+| 消息 | 白名单 `_ALLOWED_CLIENT_TYPES` | `_CHANNEL_FOR` | 分发块 | 现状（M5-K5 后） |
 |---|---|---|---|---|
 | `move_request` | ✅ | ✅ render | ✅ | 完整（寻路 + `issue_move`）；**校验失败静默 `return None`**（`ws.py:221,230,234`，同属静默缺陷，见 `ws-dispatch-proposal.md` §4） |
 | `hello` | ✅ | ✅ session | ✅ | 完整（鉴权握手） |
-| `sync_request` | ✅ | ✅ session | ⚠️ | **回错型**：返回 `control_ack{action:"resume"}`（`ws.py:257-266`）——契约要求回 `full_snapshot`（`ws-protocol.md:48`）。**M5-K4 订正**（本行原记「完整（回 `control_ack`）」有误），修法见 `ws-dispatch-proposal.md` §5 |
+| `sync_request` | ✅ | ✅ session | ✅ | **M5-K5 已修**：回 `full_snapshot`（`ws.py:258`，经 `snapshot_payload(loop, pf.tile_map)`）。K1 时曾误记「完整（回 `control_ack`）」——实为**回错型**，契约（`ws-protocol.md:48`）要求回全量快照；K4 发现、`M5-K5` 首修（K4 提案 §5/§8.7），回归钉 `test_ws_gateway.py::TestSyncRequest` |
 | `set_control` | ✅ | ✅ control | ❌ 无 | **静默忽略**——白名单放行但落 `return None`，客户端收不到 ack 也不知被拒。修法见 `ws-dispatch-proposal.md` §1 |
 | `player_impulse` | ❌ | ❌ | ❌ | 压根未注册 → 回 `unknown_type` error 帧。修法见 `ws-dispatch-proposal.md` §2 |
 | `load_anchor` | ❌ | ❌ | ❌ | 压根未注册 → 回 `unknown_type` error 帧。修法见 `ws-dispatch-proposal.md` §3 |
 
 > **M5-K4 交付**：上表四类待修项的分发块契约已出（`docs/api/ws-dispatch-proposal.md`），含验收对表 20 项 + 待裁清单 8 项。本节表格从「现状描述」转为「施工进度跟踪」。
+>
+> **M5-K5 进度**：8.7（sync_request 回错型）已首修，表中该行由 ⚠️ 转 ✅。K4 §8.4/8.5（load_anchor 发 `full_snapshot` 的时机 + `tile_map` 传递）也已顺便确证走 `pf.tile_map`——`Pathfinder` 已暴露该 property（`pathfinding.py:96-98`），**签名无需变更**（K4 §8.5 备选案成立）。
 
 **对 M5 的三条影响**（下列为 K1 时点判断；完整分发块契约见 `ws-dispatch-proposal.md`）：
 

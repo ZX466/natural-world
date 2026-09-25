@@ -212,6 +212,10 @@ sim/api/ws  (FastAPI WebSocket 网关)
 { "reason": "gap_detected" }     // gap_detected|reconnect|after_load
 ```
 
+- **响应恒为 `full_snapshot`**（与连接即发的全量快照同形：`type:"full_snapshot"`、`channel:"render"`、键集合一致）。
+- `reason` **不入响应帧**——`FullSnapshotMessage` 是封闭 schema（`additionalProperties:false`），透传 `reason` 会破坏契约并使前端类型断言变红；仅在 `SyncRequestMessage` 内作为自由字符串。
+- **M5-K5 首修**（K4 提案 §5/§8.7）：旧实现误回 `control_ack{action:"resume",speed:1}`（那是 `set_control` 的确认帧型，与 sync 语义冲突，客户端无法据此重建世界）。已返修为 `snapshot_payload(loop, pf.tile_map)`；回归钉见 `sim/tests/test_ws_gateway.py::TestSyncRequest`（5 例，含「不得退回 control_ack」）。
+
 ### 4.5 error 通道
 
 ```jsonc
