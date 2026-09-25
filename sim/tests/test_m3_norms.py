@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from sim.core.persistence.database import init_database
 from sim.core.persistence.knowledge_store import KnowledgeStore
+from sim.core.persistence.models import Knowledge
 from sim.llm.memory_scan import MemoryWritePipeline
 from sim.llm.prompts.assembler import (
     InputSlice,
@@ -23,7 +24,7 @@ from sim.llm.prompts.assembler import (
     assemble_prompt,
 )
 from sim.llm.prompts.identity import IdentityAnchor
-from sim.npc.norms import MAX_NORMS, norms_text_of
+from sim.npc.norms import MAX_NORMS, norms_text_of, select_norms
 
 
 @pytest.fixture
@@ -119,6 +120,45 @@ class TestNormsSelection:
         await store.invalidate_by_row(1)
         rows = await store.iter_valid("npc-a")
         assert norms_text_of(rows, holder_id="npc-a") == ""
+
+
+class TestNormsSelectionBoundary:
+    """F-d（codex S6 预审对齐）：select_norms 排序/截断/同分边界的纯函数钉子。
+    知识行用轻量 stub（select_norms 只读 id/confidence/subject_npc_id 三列）。"""
+
+    @staticmethod
+    def _row(rid: str, conf: float, subject: str | None = "npc-b") -> Knowledge:
+        """Knowledge 形状的只读 stub（select_norms 只消费 id/confidence/subject_npc_id）。
+
+        Knowledge ORM 行属性丰富，纯函数测试不需要建库——用不可变视图伪装。
+        pyright 规避：select_norms 声明 Iterable[Knowledge]，这里 cast 语义上安全
+        （鸭子形状完全覆盖函数实际读取面）。
+        """
+        from types import SimpleNamespace
+        from typing import cast
+
+        return cast(
+            Knowledge, SimpleNamespace(id=rid, confidence=conf, subject_npc_id=subject)
+        )
+
+    @pytest.mark.t1
+    def test_select_sorted_by_confidence_desc(self) -> None:
+        rows = [self._row("k1", 0.3), self._row("k2", 0.9), self._row("k3", 0.6)]
+        sel = select_norms(rows, holder_id="npc-a")
+        assert [r.id for r in sel] == ["k2", "k3", "k1"]
+
+    @pytest.mark.t1
+    def test_select_tie_breaks_by_row_id(self) -> None:
+        # 同分按行 id 升序（C5：不依赖 store 迭代序）
+        rows = [self._row("k3", 0.7), self._row("k1", 0.7), self._row("k2", 0.7)]
+        sel = select_norms(rows, holder_id="npc-a")
+        assert [r.id for r in sel] == ["k1", "k2", "k3"]
+
+    @pytest.mark.t1
+    def test_select_limit_zero_and_subject_null(self) -> None:
+        # limit=0 → 空；subject_npc_id=None（非他人属性）不入选
+        assert select_norms([self._row("k1", 0.9)], holder_id="npc-a", limit=0) == ()
+        assert select_norms([self._row("k1", 0.9, subject=None)], holder_id="npc-a") == ()
 
 
 class TestNormsWording:

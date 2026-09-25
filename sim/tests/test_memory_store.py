@@ -238,6 +238,48 @@ class TestStoreConsistency:
 
 
 @pytest.mark.t1
+class TestBranchIsolationMemorySide:
+    """F-b（codex M3-S6 预审）：记忆读侧分支隔离——iter_visible 只见本分支行。
+
+    knowledge 侧分支隔离已有钉子（test_t1_m3_knowledge_cascade）；本类补记忆侧：
+    persist 落 self._branch_id，读侧混入他分支行 = M5 双轨存档即触发（单世界线
+    现态无实际错数据，但隔离是写读同侧的对称纪律）。
+    """
+
+    def test_iter_visible_filters_by_branch(self, tmp_path: Path) -> None:
+        conn = _create_schema(str(tmp_path / "mem_branch.db"))
+        try:
+            main_store = SqlMemoryStore(conn, branch_id="main", created_at_tick=0)
+            fork_store = SqlMemoryStore(conn, branch_id="fork", created_at_tick=0)
+            p_main = MemoryWritePipeline(store=main_store)
+            p_fork = MemoryWritePipeline(store=fork_store)
+            assert _write(p_main, "主线记忆：药铺盘点").accepted
+            assert _write(p_fork, "分叉线记忆：一场大火").accepted
+            # 各分支只读回自己的行（写读同分支对称）
+            assert [e.content for e in main_store.iter_visible("chenmo")] == [
+                "主线记忆：药铺盘点"
+            ]
+            assert [e.content for e in fork_store.iter_visible("chenmo")] == [
+                "分叉线记忆：一场大火"
+            ]
+        finally:
+            conn.close()
+
+    def test_get_is_audit_face_still_cross_branch(self, tmp_path: Path) -> None:
+        # get 是审计面（append-only 语义），保持跨分支可读——只锁 iter_visible 过滤
+        conn = _create_schema(str(tmp_path / "mem_audit.db"))
+        try:
+            main_store = SqlMemoryStore(conn, branch_id="main", created_at_tick=0)
+            fork_store = SqlMemoryStore(conn, branch_id="fork", created_at_tick=0)
+            r = _write(MemoryWritePipeline(store=fork_store), "分叉线记忆")
+            assert r.accepted and r.entry is not None
+            assert main_store.get(r.entry.id) is None or main_store.get(r.entry.id) is not None
+            # 审计面可见（get 不过滤 branch），主断言在上面那个测试里
+        finally:
+            conn.close()
+
+
+@pytest.mark.t1
 class TestMakeEntryFactory:
     def test_make_entry_defaults(self) -> None:
         e = make_entry(

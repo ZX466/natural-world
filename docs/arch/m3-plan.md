@@ -148,12 +148,12 @@ E1 事件（npc.hidden_emerge）与 knowledge 五列扩展（codex M3-S2 提案�
 
 | 钉子 | 来源 | 随批次 | 状态 |
 |---|---|---|---|
-| R2 vec 治理过滤 | codex M3-S1 ① | A4 | 🔴 RED 已派 |
-| C2 MatterPayload 域约束 | codex M3-S1 ② | C4 | 🔴 RED 已派 |
-| R1 knowledge 级联 | m3-preplan §4.1 | B3 | 待派 |
-| R4 分支隔离 | §4.1 | B2 | 待派 |
-| X2/X3 breakdown 死路 | §4.1 | B5 | 待派 |
-| R3 双列口径 | §4.1 | B1 裁决后 | 待派 |
+| R2 vec 治理过滤 | codex M3-S1 ① | A4 | 🟢 `test_t1_m3_vec_governance.py` |
+| C2 MatterPayload 域约束 | codex M3-S1 ② | C4 | 🟢 `test_t1_m3_matter_bounds.py` |
+| R1 knowledge 级联 | m3-preplan §4.1 | B3 | 🟢 `test_t1_m3_knowledge_cascade.py` |
+| R4 分支隔离 | §4.1 | B2 | 🟢 knowledge 侧 `test_t1_m3_knowledge_cascade.py`；记忆侧 `test_memory_store.py::TestBranchIsolationMemorySide`（S6 F-b 补） |
+| X2/X3 breakdown 死路 | §4.1 | B5 | 🟢 `test_t1_m3_breakdown_deadend.py`（S6 F-a 补） |
+| R3 双列口径 | §4.1 | B1 裁决后 | 🟢 `test_memory_store.py`（双列任一非空即不可见） |
 
 X5 触发词面扩面走 CR（新叙事文本与 trigger 词面交叉审查，词面变更纪律同 self-unknown §7）。
 
