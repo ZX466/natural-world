@@ -52,15 +52,39 @@ class MatterLedger:
             ledger._items[snap.matter_id] = snap
         return ledger
 
-    def register(self, matter_id: str, *, integrity: float, decay_rate: float) -> None:
+    def register(
+        self,
+        matter_id: str,
+        *,
+        integrity: float,
+        decay_rate: float,
+        tick: int = 0,
+        x: int = -1,
+        y: int = -1,
+    ) -> WorldEvent:
+        """注册物质对象并返回 MATTER_BUILD 立账事件。"""
         if matter_id in self._items:
             msg = f"物质对象重复注册: {matter_id}"
             raise ValueError(msg)
+        integrity_value = float(np.clip(integrity, 0.0, 1.0))
+        decay_rate_value = max(0.0, decay_rate)
+        event = matter_event(
+            tick=tick,
+            kind=EventKind.MATTER_BUILD,
+            matter_id=matter_id,
+            x=x,
+            y=y,
+            amount=0.0,
+            durability=integrity_value,
+            decay_rate=decay_rate_value,
+            note="register",
+        )
         self._items[matter_id] = MatterSnapshot(
             matter_id=matter_id,
-            integrity=float(np.clip(integrity, 0.0, 1.0)),
-            decay_rate=max(0.0, decay_rate),
+            integrity=integrity_value,
+            decay_rate=decay_rate_value,
         )
+        return event
 
     def state(self, matter_id: str) -> MatterSnapshot:
         return self._items[matter_id]
