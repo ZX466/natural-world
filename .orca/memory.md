@@ -147,11 +147,7 @@ schema.md §19.4/README/m3-plan 已同步已裁状态。实施放行 opencode「
 
 ## 当前任务
 
-**M3-C3 后续件已收编 main（本提交）**；register 立账事件落地。下一单等派发（M4/M5 方向）。
-
-## 进行中
-
-(空 — M5 anchors 施工时按 K4 对表 [T]/[O]/[C] 三类断言验收；8.7 sync_request 回错型列 M5 首修。下一单等 Claude 经 talking.txt 派发。)
+待命（M3-P3 bench 交付待收编：失效通路实测+红线提案。进行中不变：nightly 相对漂移观察。）
 
 
 ## 留言板
