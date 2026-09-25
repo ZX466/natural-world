@@ -125,12 +125,13 @@ SOAK_GC_OBJECT_GROWTH_LIMIT = 20_000
 # 句柄数增长上限（Windows 有效；其他平台 handle_count()==-1 自动跳过）。
 SOAK_HANDLE_GROWTH_LIMIT = 64
 
-# --- M3-P3：C3 chunk 失效通路提案（**提案待裁**，不卡 CI 红）---
+# --- M3-P3：C3 chunk 失效通路红线（2026-09-25 Claude 裁决：全采）---
 # 依据 docs/perf/m3-retrieval-budget.md 附录「M3-P3 chunk 失效实测」（2026-09-25）。
 # 口径与既有红线同源：暖态中位（warmup_rounds=1 + median）、固定seed、48×48=9 chunk 开阔图。
-# **状态**：pi 实测后提案值；Claude 裁前 bench 侧只记录不断言（见
-# test_bench_chunk_invalidation.py 头注 `_record_proposal`）。裁后按 M3-P2 先例：
-# 定标机硬断言（harness.assert_median_threshold）+ nightly advisory 门。**既有四行常量不动**。
+# **裁决（裁 13）**：两行全采——实测充分（多轮中位+成本模型 缓存条数×脏chunk 数），
+# 独立行不占 RETRIEVAL_TICK 预算的论证成立。**既有四行检索红线不动**。
+# 后续（M4 或定标机接入时）：bench 侧由 _record_proposal 切 harness.assert_median_threshold
+# 硬断言 + nightly advisory 门（M3-P2 先例）；当前观察态维持。
 # ① `event_tile_position` 纯函数每 tick 全事件遍历上限 = 0.10ms。
 #    实测 0.06ms/千事件（50 定位 0.007 / 200 混合 0.036 / 1000 0.054 / 5000 0.267ms）→ 1.7x 余量
 #    覆盖 ~1800 事件/tick（稳态 ~20 与 p99 50 均远在其内，budget.md §2.3）。
