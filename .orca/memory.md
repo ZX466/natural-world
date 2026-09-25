@@ -16,6 +16,19 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
+【2026-09-25 第十一轮｜C3 收编 + §19.4 裁决】opencode C3 收编 main（ff `5724aa7`）：
+chunk 失效量化通路（TileMap PrivateAttr 脏集 + with_collision 不可变换图断 PrivateAttr 串扰 +
+event_tile_position 事件桥 TILE_CHANGED 全量/MATTER x/y≥0/-1 哨兵不标 + Pathfinder
+observe_events/invalidate_dirty/observe_map 精确失效）+ 24 钉子（剔1留1/未定位 no-op/封格绕行/全封不可达）。
+门禁主树实测：**1117 passed / 56 skipped、bench 64、pyright 0、ruff ok**。
+碰撞极性核实：collision 数组语义=M0 遗留存可通行性，with_collision(x,y,walkable) 与既有 is_walkable 一致无反转。
+§19.4 裁决（main `16f2983`，matter-register-proposal.md §6）**四点全采主张**：
+①采 A register 返回 MATTER_BUILD 立账事件（amount=0/durability=integrity/note="register"）否 A' 新 kind；
+②返回事件不注入 EventSink；③structures 表 M3 不建留 M4；④x/y 默认 -1。
+实证依据：_project_matter 首事件即建行、折叠按 durability 非 amount；-1 哨兵与 C3 event_tile_position 衔接（纯注册不标脏）。
+schema.md §19.4/README/m3-plan 已同步已裁状态。实施放行 opencode「M3-C3 后续件」（register 签名+调用方接线+test_m3_matter_register 钉子）。
+坑：cline/pi/kilo merge 冲突均为「当前任务」小节（main 带 opencode 文本 vs 各树待命文本），按各树本地版权威解决；
+.orca 在子树也是 gitignore 的，tracked 文件须 `git add -f`。
 ## ② cline（依赖 / 配置 / 文档域）
 - 【2026-09-24 第九轮快照｜M2-C8 全闭环已收编】README §5 表至第八轮 47×5 行 + §2 文档地图补 m3-plan/m3-evidence-chain；卡片勘误（M3-D1 真身 opencode `4da190d`）。C1-C8 全收编。**active 约定**：CI 门禁按文件路径接不用 -m（P04 教训）；`perf/` 目录须 mkdir（git 不跟踪空目录，C5 根因）；Windows CRLF 假红已根除（.gitattributes，自检 `git ls-files --eol | grep -c 'w/crlf'` 期望 0）；`.orca/` 下新增文件须 `git add -f`（catch-all `.*/` 未豁免，规则 #4 语义）。**待命**：M3 收官时补 §5 M3 分节（现混装 M2/M3 行，等批次 B/D 收口后分节改名）。§2 遗留四行（m3-retrieval-budget/anchors-api/t1-sampling-10k/ci-calibration-m2p6）仍待裁。
 - 【历史】第五轮及更早快照（C4-C8 交付/验证/CI 实证细节，约 3k 字）已按 workflow §8 压缩为指针 → 考古命令 `git log --oneline -- .orca/memory.md` + 本树 talking.txt 留言板；现状看上方第九轮快照。
