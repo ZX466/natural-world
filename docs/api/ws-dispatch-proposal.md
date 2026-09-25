@@ -180,6 +180,11 @@ if reply is not None:
 
 > **为何单列**：`anchors-api.md:269` 把 `sync_request` 记为「完整（回 `control_ack`）」，**该记载有误**——K1 复核时漏判。本提案订正之，并在 `anchors-api.md` §4.1 同步修正。
 
+> **✅ M5-K5 已首修**（2026-09-25）：`sync_request` 分支改调 `snapshot_payload(loop, pf.tile_map)`。
+> **`tile_map` 经 `pf.tile_map` 取，签名未变**——`Pathfinder` 已暴露该 property（`pathfinding.py:96-98`），即 §8.5 备选案成立，`handle_client_message` 保持 `(raw, loop, pf)` 三参、纯函数可单测。
+> **`reason` 未透传**：`FullSnapshotMessage.additionalProperties:false`（封闭 schema），透传会破坏契约并使前端类型断言变红；`full_snapshot` 本就不带 reason（连接即发亦然）。
+> 实现见 `ws.py:258`；回归钉 `sim/tests/test_ws_gateway.py::TestSyncRequest`（5 例，含「不得退回 control_ack」「与 connect 快照同形」）。
+
 ## 5.1 error `code` 命名口径统一（P2）
 
 现状：`ws.py` 用 `unknown_type`/`bad_channel`/`auth_error`（**小写 snake**），但 `ws-protocol.md:211` 样例用 `IMPULSE_TOO_LONG`（**大写下划线**）——**两套口径并存**。
@@ -234,7 +239,7 @@ if reply is not None:
 | 11 | `load_anchor{anchor_id:"9f3c1a7b2e04"}`（不存在）→ `error{ref:"load_anchor",code:"load_failed",message:"<戏内>"}`，**连接保持**（后续可继续发消息收到回复） | `[T]` |
 | 12 | `load_anchor{anchor_id:<合法>}` → 回 `full_snapshot`（含 `map/actors/lights/structures/weather/combat` 六键） | `[T]` |
 | 13 | `load_anchor` **不因 `anc_` 前缀拒绝**（不透明串纪律）：`{anchor_id:"anc_01"}` 走正常查表路径（找不到 → `load_failed`，非 `bad_anchor`） | `[T]` |
-| 14 | `sync_request{reason:"reconnect"}` → 回 `full_snapshot`（**非 `control_ack`**，§5 钉子） | `[T]` |
+| 14 | `sync_request{reason:"reconnect"}` → 回 `full_snapshot`（**非 `control_ack`**，§5 钉子） | `[T]` **✅ M5-K5 已过**（`test_sync_request_returns_full_snapshot`） |
 | 15 | 所有 error 帧的 `code` ∈ §5.1 词表，且均为小写 snake（无大写） | `[T]` |
 | 16 | 出戏边界：三新路径的任何出站帧**不含** `tick`/`seed`/`seq`/`branch_id`/内部 entity_id（`ws-protocol.md` §5 表逐字段） | `[T]` |
 | 17 | `timescale` 帧由战斗事件驱动（`issue_combat_scale`→广播），**不由** `set_control` 触发 | `[T]` |
@@ -250,9 +255,9 @@ if reply is not None:
 | 8.2 | `set_control pause/resume` 携带 `speed` | **容忍忽略**（不报错），与 move_request 宽容风格一致 | 低 |
 | 8.3 | `player_impulse` 冲突度规则表 + 叙事化模板归属域 | 协议面本文定；规则表归 LLM 域（`sim/llm/` 或 `sim/perception/`） | 高（M4 施工前置） |
 | 8.4 | `load_anchor` 成功发 `full_snapshot` 的时机（短期同步 vs 长期 driver） | M5 先落**短期同步**（重放未实现），留 TODO 指向 §3.4 | 高（决定是否改签名） |
-| 8.5 | `handle_client_message` 增 `tile_map` 参数 | **建议改**（§3.4/§5 共用）；备选：从 `pf` 取 | 中（改签名 + 调用点） |
+| 8.5 | `handle_client_message` 增 `tile_map` 参数 | **建议改**（§3.4/§5 共用）；备选：从 `pf` 取。→ **M5-K5 定：备选案成立**（`pf.tile_map`，签名不变） | 中（改签名 + 调用点） |
 | 8.6 | `move_request` 静默缺陷是否本批修 | **建议本批只修非法类型（`bad_target`），不可达保留静默**（§4） | 低 |
-| 8.7 | `sync_request` 回错型 | **本批必修**（P1，§5）——一行级 | 中（契约正确性） |
+| 8.7 | `sync_request` 回错型 | **本批必修**（P1，§5）——一行级。→ **M5-K5 已修** ✅ | 中（契约正确性） |
 | 8.8 | error `code` 大小写口径 | **统一小写 snake**（§5.1） | 低（文档订正 + 未来钉子） |
 
 ## 9. 不在本文件范围

@@ -192,6 +192,7 @@ def handle_client_message(
     """不可信输入处理：type 白名单 + 字段校验。返回要回给该客户端的载荷（或 None）。
 
     move_request：目标格校验（界内+可通行）→ sim 寻路 → issue_move（走 apply 唯一写路径）。
+    sync_request：回全量 full_snapshot（ws-protocol.md §3.2；K4 §5 修订，勿退回 control_ack）。
     """
     msg_type = raw.get("type")
     if msg_type not in _ALLOWED_CLIENT_TYPES:
@@ -256,15 +257,11 @@ def handle_client_message(
         }
 
     if msg_type == "sync_request":
-        return {
-            "type": "control_ack",
-            "channel": "control",
-            "v": _PROTOCOL_VERSION,
-            "ws_seq": 0,
-            "action": "resume",
-            "applied": True,
-            "speed": 1,
-        }
+        # K4 提案 §5 / §8.7（8.7 sync_request 回错型首修）：契约要求回 full_snapshot
+        # （ws-protocol.md §3.2 + §4.4），旧代码错回 control_ack 与 set_control 确认语义冲突。
+        # tile_map 经 pf.tile_map 取得（Pathfinder 已持引用，见 pathfinding.py:96-98）——
+        # 不动 handle_client_message 签名（K4 §8.5 备选案），保持 handler 纯函数可单测。
+        return snapshot_payload(loop, pf.tile_map)
     return None
 
 

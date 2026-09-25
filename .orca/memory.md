@@ -147,11 +147,12 @@ schema.md §19.4/README/m3-plan 已同步已裁状态。实施放行 opencode「
 
 ## 当前任务
 
-**M3-C3 后续件已实施待收编**（register 返回 `MATTER_BUILD` 立账事件 + 9 钉子 + §19.4 文档回写；见 ③节 2026-09-25 快照与 talking.txt 回执）。当前无生产 register 调用点，不造调用方；等 Claude 收编或整改。
+**M3-C3 后续件已收编 main（本提交）**；register 立账事件落地。下一单等派发（M4/M5 方向）。
 
 ## 进行中
 
-(空 — 等 Claude 经 talking.txt 派发下一单。)
+(空 — M5 anchors 施工时按 K4 对表 [T]/[O]/[C] 三类断言验收；8.7 sync_request 回错型列 M5 首修。下一单等 Claude 经 talking.txt 派发。)
+
 
 ## 留言板
 
@@ -417,8 +418,8 @@ uv run pyright sim/
 （收编回执见 .orca/talking.txt 留言板）
 
 ## ⑥ kilo（接口 / 兼容性域）
-- 【2026-09-24 第九轮快照｜M5-K4 全闭环已收编】ws-dispatch-proposal 264 行交付，**裁 12 全采 8.1-8.8**：applied 恒 true 占位 / speed 容忍忽略 / 冲突度归 LLM 域 / load_anchor 同步发快照 / handler 增 tile_map 参数（已落地）/ move_request 只修非法类型 / **8.7 sync_request 回错型列 M5 首修**（sync_request 应回 full_snapshot 而非 error）/ error code 小写 snake。**active 约定**：K3 关键修正=subject 整删 + ext 侧 nullable=0 红线；切源解禁两条件（codegen.md §4.1）=M5 锚点路由落地 + sim 全局 404 声明。**待命**：M5 anchors 施工时按 K3 对表验收 + 8.7 首修；另提醒 M5 施工时订正 openapi_ext.py:17「anchors 不施工」与 test ADDED_SCHEMAS 白名单两处 M2-K3 遗留注释。
-- 【历史】M2-K2 复核 6 类全采信（切源暂缓，mock 源唯一真相源）；M2-K3 ext↔快照 diff 明细（17 schema 差异表+21 缺失 HTTP schema+nullable oneOf:null 修法）=ext 返工验收清单，返工已完成 K3 复验通过（M5 放行）；M5-K1 anchors 契约稿 306 行（`b849025`）；M5-K2/K3 复验链见 git log。
+- 【2026-09-25 第十轮快照｜M5-K5 sync_request 回错型已首修 `e763b04`】`sync_request` 分支改调 `snapshot_payload(loop, pf.tile_map)`（`ws.py:259-271`），不再回 `control_ack{action:resume,speed:1}`——契约要求全量快照（`ws-protocol.md:48` + §4.4:202）。**签名未变**：走 K4 §8.5 **备选案**（`Pathfinder.tile_map` property 已存在 `pathfinding.py:96-98`），`handle_client_message` 保持 `(raw, loop, pf)` 三参、`main.py` 调用点零改动、handler 纯函数可单测。**坑：`reason` 不可透传进 `full_snapshot`**（`FullSnapshotMessage.additionalProperties:false` 封闭 schema——透传必破契约且让前端 `protocol-types.test.ts` 变红；连接即发的快照也不带 reason）。**回归钉有效性要复验**：`test_ws_gateway.py::TestSyncRequest` 5 例（含「不得含 action/applied/speed」+「与 connect 快照同形」），stash 掉修复后 4/5 转红（第 5 例是纯 channel 校验与修复无关）才算钉子真咬住。**M5 施工待办（仍未落地）**：`set_control` 无分发块（静默 None）、`player_impulse`/`load_anchor` 未注册（§1/§2/§3 契约见 ws-dispatch-proposal.md）——`load_anchor` 落地时可复用 `pf.tile_map` 同路子径。**active 约定**：K3 关键修正=subject 整删 + ext 侧 nullable=0 红线；切源解禁两条件（codegen.md §4.1）=M5 锚点路由落地 + sim 全局 404 声明；`openapi_ext.py:17`「anchors 不施工」+ test ADDED_SCHEMAS 白名单两处 M2-K3 遗留注释留待 M5 路由落地时改（Claude 域文件）。**本机 bench 阈值不稳**：`test_bench_soak.py` 5 例 tick 延迟失败（p99 6.08ms vs 预算 2.02ms）＝ CPU 抖动/机型问题（pi 域口径），勿误判为代码回归。
+- 【历史】M5-K4 提案 264 行 + 裁 12 全采 8.1-8.8（8.5 已由 K5 按备选案兑现=签名不变；8.7 已首修）；M5-K3 ext↔快照 diff 17 schema 差异表=ext 返工验收清单，已返工+复验放行；M2-K2 复核 6 类全采信（切源暂缓，mock 源唯一真相源）；M5-K1 anchors 契约稿 306 行（`b849025`）；K2/K3 复验链见 git log。
 
 > ——kilo 树 memory.md（更新于 5f5f525：K04 完成回执 + 跨域发现）——
 > 用户规则 #7：本文件保存 **kilo 自己的记忆**，供新对话继续任务。**已入库**（main `3e320b9` 裁决），改动走提交；跨树融合由主导方（Claude）收编时合并（本树本地版 = 权威来源）。

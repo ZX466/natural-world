@@ -115,6 +115,64 @@ class TestUntrustedInput:
         assert reply is not None and reply["type"] == "error"
 
 
+class TestSyncRequest:
+    """K4 提案 §5/§8.7（M5-K5 首修）：sync_request 必须回 full_snapshot，
+    旧实现错回 control_ack（与 set_control 确认语义冲突，客户端无法据此重建世界）。"""
+
+    def test_sync_request_returns_full_snapshot(self, loop: TickLoop, pf: Pathfinder):
+        reply = handle_client_message(
+            {"type": "sync_request", "channel": "session", "reason": "reconnect"},
+            loop,
+            pf,
+        )
+        assert reply is not None
+        assert reply["type"] == "full_snapshot"
+        assert reply["channel"] == "render"
+
+    def test_sync_request_not_control_ack(self, loop: TickLoop, pf: Pathfinder):
+        """回归钉（回错型）：不得退回 set_control 的确认帧型。"""
+        reply = handle_client_message(
+            {"type": "sync_request", "channel": "session", "reason": "gap_detected"},
+            loop,
+            pf,
+        )
+        assert reply is not None
+        assert reply["type"] != "control_ack"
+        assert "action" not in reply and "applied" not in reply and "speed" not in reply
+
+    def test_sync_request_snapshot_matches_connect_snapshot(
+        self, loop: TickLoop, pf: Pathfinder, tile_map: TileMap
+    ):
+        """回帧与连接即发的全量快照同形（ws-protocol.md §4.4：full_snapshot 响应见 §4.1）。"""
+        reply = handle_client_message(
+            {"type": "sync_request", "channel": "session"},
+            loop,
+            pf,
+        )
+        assert reply is not None
+        assert set(reply.keys()) == set(snapshot_payload(loop, tile_map).keys())
+
+    def test_sync_request_snapshot_clean(self, loop: TickLoop, pf: Pathfinder):
+        import json
+
+        reply = handle_client_message(
+            {"type": "sync_request", "channel": "session", "reason": "after_load"},
+            loop,
+            pf,
+        )
+        assert reply is not None
+        text = json.dumps(reply)
+        assert "tick" not in text and "seed" not in text and "branch" not in text
+        assert "chenmo" not in text  # 内部 id 不可见
+        assert "rt-" in text
+
+    def test_sync_request_wrong_channel_rejected(self, loop: TickLoop, pf: Pathfinder):
+        """session 通道约束仍在（channel 校验前置于分发块）。"""
+        reply = handle_client_message({"type": "sync_request", "channel": "control"}, loop, pf)
+        assert reply is not None and reply["type"] == "error"
+        assert reply["code"] == "bad_channel"
+
+
 class TestOutOfCharacterBoundary:
     """W 系列：载荷绝不含 tick/seed/branch/内部 id。"""
 
