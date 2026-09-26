@@ -27,10 +27,16 @@ from sim.core.events import (
     EntropyInjectPayload,
     EventKind,
     HiddenEmergePayload,
+    MaterialMovedPayload,
     MatterPayload,
     MovePayload,
     NpcActPayload,
     NpcLodChangePayload,
+    StructureCheckpointPayload,
+    StructureCollapsedPayload,
+    StructureCompletedPayload,
+    StructureRemovedPayload,
+    StructureStartedPayload,
     TileChangedPayload,
     WorldCreatePayload,
 )
@@ -55,6 +61,12 @@ PAYLOAD_MODELS: dict[EventKind, type[BaseModel]] = {
     EventKind.MATTER_BUILD: MatterPayload,
     EventKind.MATTER_COLLAPSE: MatterPayload,
     EventKind.NPC_HIDDEN_EMERGE: HiddenEmergePayload,
+    EventKind.STRUCTURE_STARTED: StructureStartedPayload,
+    EventKind.STRUCTURE_CHECKPOINT: StructureCheckpointPayload,
+    EventKind.STRUCTURE_COMPLETED: StructureCompletedPayload,
+    EventKind.STRUCTURE_COLLAPSED: StructureCollapsedPayload,
+    EventKind.STRUCTURE_REMOVED: StructureRemovedPayload,
+    EventKind.MATERIAL_MOVED: MaterialMovedPayload,
 }
 
 

@@ -310,30 +310,33 @@ class Knowledge(TimestampMixin, Base):
     )
 ```
 
-### 4.9 structures 表
+### 4.9 structures 表（0006 已落地）
 
 ```python
 class Structure(TimestampMixin, Base):
     __tablename__ = "structures"
 
-    id = Column(String, primary_key=True)
     branch_id = Column(String, nullable=False)
-    tiles = Column(Text, nullable=False)  # JSON array
+    structure_id = Column(String, nullable=False)
+    tiles = Column(Text, nullable=False)
     kind = Column(String, nullable=False)
     material = Column(String, nullable=False)
-    integrity = Column(Float, nullable=False, default=1.0)
-    quality = Column(Float, nullable=False, default=0.5)
+    phase = Column(String, nullable=False, default="building")
     load_bearing = Column(Boolean, nullable=False, default=False)
-    supported_by = Column(Text, nullable=False, default="[]")  # JSON array
+    supported_by = Column(Text, nullable=False, default="[]")
     owner_id = Column(String, nullable=True)
     built_by = Column(String, nullable=True)
     built_at = Column(Integer, nullable=True)
 
     __table_args__ = (
+        PrimaryKeyConstraint("branch_id", "structure_id"),
         Index("idx_struct_branch", "branch_id"),
         Index("idx_struct_owner", "branch_id", "owner_id"),
+        Index("idx_struct_phase", "branch_id", "phase"),
     )
 ```
+
+熵态列 `integrity/quality/decay_rate/is_rubble` 留在 `matter_state`，本表不复制。
 
 ### 4.10 llm_profiles 表
 
@@ -560,43 +563,16 @@ def downgrade() -> None:
     op.drop_table("npc_memories")
 ```
 
-### 6.2 003_add_structures.py（M4 阶段）
+### 6.2 0006_m4_structures.py（M4-D2a 已落地）
 
-```python
-"""add structures — M4
+实际迁移：`sim/core/persistence/alembic/versions/0006_m4_structures.py`。
 
-Revision ID: 003
-"""
-from alembic import op
-import sqlalchemy as sa
-
-revision = "003"
-down_revision = "002"
-
-
-def upgrade() -> None:
-    op.create_table(
-        "structures",
-        sa.Column("id", sa.String, primary_key=True),
-        sa.Column("branch_id", sa.String, nullable=False),
-        sa.Column("tiles", sa.Text, nullable=False),
-        sa.Column("kind", sa.String, nullable=False),
-        sa.Column("material", sa.String, nullable=False),
-        sa.Column("integrity", sa.Float, nullable=False, server_default="1.0"),
-        sa.Column("quality", sa.Float, nullable=False, server_default="0.5"),
-        sa.Column("load_bearing", sa.Boolean, nullable=False, server_default="0"),
-        sa.Column("supported_by", sa.Text, nullable=False, server_default="[]"),
-        sa.Column("owner_id", sa.String, nullable=True),
-        sa.Column("built_by", sa.String, nullable=True),
-        sa.Column("built_at", sa.Integer, nullable=True),
-        sa.Column("created_at", sa.Float, nullable=False),
-    )
-    op.create_index("idx_struct_branch", "structures", ["branch_id"])
-
-
-def downgrade() -> None:
-    op.drop_table("structures")
-```
+- 新建 `structures`（§4.9 瘦身形状），主键 `(branch_id, structure_id)`；
+- `op.batch_alter_table("matter_state")` 将主键由 `subject_id` 改为
+  `(branch_id, subject_id)`，关闭跨分支投影串写；
+- 0004 旧 PK 未命名，迁移用 `naming_convention` 规范成
+  `pk_matter_state_subject_id` 后删除；索引在 batch 外维护；
+- downgrade 逆序：删 structures 索引/表，再把 matter PK 还原为单列。
 
 ---
 

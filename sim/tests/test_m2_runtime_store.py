@@ -185,7 +185,7 @@ class TestFlushMatterProjection:
 
         await ns.flush_tick([matter_event(7, EventKind.MATTER_DECAY, "wall-1", amount=-0.1)])
 
-        row = await session.get(MatterState, "wall-1")
+        row = await session.get(MatterState, ("main", "wall-1"))
         assert row is not None
         assert row.branch_id == "main"
         assert row.integrity == pytest.approx(1.0)
@@ -196,7 +196,7 @@ class TestFlushMatterProjection:
         await ns.flush_tick([matter_event(1, EventKind.MATTER_BUILD, "wall-1", durability=0.9)])
         await ns.flush_tick([matter_event(2, EventKind.MATTER_DAMAGE, "wall-1", durability=0.4)])
 
-        row = await session.get(MatterState, "wall-1")
+        row = await session.get(MatterState, ("main", "wall-1"))
         assert row is not None
         assert row.integrity == pytest.approx(0.4)
         assert row.is_rubble is False
@@ -206,7 +206,7 @@ class TestFlushMatterProjection:
         await ns.flush_tick([matter_event(1, EventKind.MATTER_BUILD, "wall-1", durability=0.3)])
         await ns.flush_tick([matter_event(2, EventKind.MATTER_COLLAPSE, "wall-1", durability=0.0)])
 
-        row = await session.get(MatterState, "wall-1")
+        row = await session.get(MatterState, ("main", "wall-1"))
         assert row is not None
         assert row.is_rubble is True
         assert row.integrity == 0.0

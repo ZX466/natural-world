@@ -15,20 +15,22 @@
 投影与事件写入同事务：`SqlEventStore.append(..., projection=...)` 的投影回调在
 commit 前于同一 session 执行，回调抛异常则整批回滚（无半写）。
 
-依赖表：npc_profiles / npc_health / matter_state（0004）、events / entropy_log（0001/0002）。
+依赖表：npc_profiles / npc_health / matter_state（0004）、events / entropy_log（0001/0002）、
+structures（0006）。
 """
 
 from __future__ import annotations
 
 import json
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass, replace
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sim.core.events import EventKind, WorldEvent
 from sim.core.flush import flush_rows
-from sim.core.persistence.models import MatterState, NpcHealth, NpcProfile
+from sim.core.persistence.models import MatterState, NpcHealth, NpcProfile, Structure
 from sim.core.persistence.store import SqlEventStore
 from sim.llm.memory_scan import (
     MemoryWritePipeline,
@@ -38,6 +40,7 @@ from sim.npc.contract import HiddenState
 from sim.npc.hidden import HiddenAttribute, HiddenProfile
 from sim.npc.model import NpcProfileData, needs_from_json
 from sim.world.matter import MatterLedger, MatterSnapshot
+from sim.world.structure import StructurePhase, StructureSnapshot
 
 #: LOD↔运行时物化范围（m2-npc-cognition §1.2）：L0=统计/1=效用/2=LLM。
 LOD_STATISTICAL = 0
@@ -105,6 +108,119 @@ def _load_str_list(raw: str | None) -> list[str]:
     if not isinstance(data, list):
         return []
     return [str(item) for item in data]
+
+
+def _structure_tiles_from_value(value: object) -> tuple[tuple[int, int], ...]:
+    if not isinstance(value, (list, tuple)) or not value:
+        msg = f"structures.tiles 必须是非空坐标数组: {value!r}"
+        raise NpcStoreError(msg)
+    tiles: list[tuple[int, int]] = []
+    for item in value:
+        if not isinstance(item, (list, tuple)) or len(item) != 2:
+            msg = f"structures.tiles 元素必须是坐标对: {item!r}"
+            raise NpcStoreError(msg)
+        x, y = item
+        if (
+            not isinstance(x, int)
+            or isinstance(x, bool)
+            or not isinstance(y, int)
+            or isinstance(y, bool)
+            or not (0 <= x < 4096 and 0 <= y < 4096)
+        ):
+            msg = f"structures.tiles 坐标非法: {item!r}"
+            raise NpcStoreError(msg)
+        tiles.append((x, y))
+    canonical = tuple(sorted(tiles))
+    if len(set(canonical)) != len(canonical):
+        msg = f"structures.tiles 不得重复: {value!r}"
+        raise NpcStoreError(msg)
+    return canonical
+
+
+def _structure_supports_from_value(value: object) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, (list, tuple)):
+        msg = f"structures.supported_by 必须是 id 数组: {value!r}"
+        raise NpcStoreError(msg)
+    if not all(isinstance(item, str) and item for item in value):
+        msg = f"structures.supported_by 元素必须是非空 str: {value!r}"
+        raise NpcStoreError(msg)
+    canonical = tuple(sorted(value))
+    if len(set(canonical)) != len(canonical):
+        msg = f"structures.supported_by 不得重复: {value!r}"
+        raise NpcStoreError(msg)
+    return canonical
+
+
+def _structure_tiles_from_json(raw: str) -> tuple[tuple[int, int], ...]:
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise NpcStoreError(f"structures.tiles JSON 损坏: {raw!r}") from exc
+    return _structure_tiles_from_value(value)
+
+
+def _structure_supports_from_json(raw: str) -> tuple[str, ...]:
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise NpcStoreError(f"structures.supported_by JSON 损坏: {raw!r}") from exc
+    return _structure_supports_from_value(value)
+
+
+def _row_to_structure_snapshot(row: Structure) -> StructureSnapshot:
+    try:
+        phase = StructurePhase(row.phase)
+    except ValueError as exc:
+        raise NpcStoreError(f"未知 structure phase: {row.phase!r}") from exc
+    return StructureSnapshot(
+        structure_id=row.structure_id,
+        tiles=_structure_tiles_from_json(row.tiles),
+        kind=row.kind,
+        material=row.material,
+        phase=phase,
+        load_bearing=row.load_bearing,
+        supported_by=_structure_supports_from_json(row.supported_by),
+        owner_id=row.owner_id or "",
+        built_by=row.built_by or "",
+        built_at=row.built_at,
+    )
+
+
+@dataclass(frozen=True)
+class _StructureEventFields:
+    structure_id: str
+    tiles: tuple[tuple[int, int], ...]
+    kind: str
+    material: str
+    load_bearing: bool
+    supported_by: tuple[str, ...]
+    owner_id: str
+    built_by: str
+
+
+def _structure_event_fields(event: WorldEvent) -> _StructureEventFields:
+    payload = event.payload
+    structure_id = str(payload.get("structure_id", ""))
+    if not structure_id:
+        raise NpcStoreError(f"STRUCTURE_* payload 缺 structure_id: {payload!r}")
+    raw_tiles = payload.get("tiles")
+    tiles = (
+        _structure_tiles_from_value(raw_tiles)
+        if event.event_type is EventKind.STRUCTURE_STARTED
+        else ()
+    )
+    return _StructureEventFields(
+        structure_id=structure_id,
+        tiles=tiles,
+        kind=str(payload.get("kind", "")),
+        material=str(payload.get("material", "")),
+        load_bearing=bool(payload.get("load_bearing", False)),
+        supported_by=_structure_supports_from_value(payload.get("supported_by", ())),
+        owner_id=str(payload.get("owner_id", "")),
+        built_by=str(payload.get("built_by", "")),
+    )
 
 
 class NpcStore:
@@ -274,6 +390,64 @@ class NpcStore:
             states = {k: v for k, v in states.items() if k in wanted}
         return MatterLedger.from_snapshots(states.values())
 
+    async def materialize_structures(
+        self, structure_ids: Sequence[str] | None = None
+    ) -> dict[str, StructureSnapshot]:
+        """快照路径：一次 SELECT 取当前拓扑/生命周期投影（分支隔离）。"""
+        stmt = select(Structure).where(Structure.branch_id == self._branch_id)
+        if structure_ids is not None:
+            ids = list(structure_ids)
+            if not ids:
+                return {}
+            stmt = stmt.where(Structure.structure_id.in_(ids))
+        async with self._events.session_factory() as session:
+            rows = (await session.execute(stmt)).scalars().all()
+        return {row.structure_id: _row_to_structure_snapshot(row) for row in rows}
+
+    async def materialize_structures_replay(
+        self, structure_ids: Sequence[str] | None = None
+    ) -> dict[str, StructureSnapshot]:
+        """重放路径：折叠 structure.* 事件（与投影共用 fold_structure_snapshot）。"""
+        states: dict[str, StructureSnapshot] = {}
+        raw = await self._events.read_range(self._branch_id, 0, 2**62 - 1)
+        for event in sorted(raw, key=lambda e: e["seq"]):
+            try:
+                kind = EventKind(str(event["event_type"]))
+            except ValueError:
+                continue
+            if kind not in _STRUCTURE_KINDS:
+                continue
+            fields = _structure_event_fields(
+                WorldEvent(
+                    branch_id=self._branch_id,
+                    tick=int(event["tick"]),
+                    event_type=kind,
+                    payload=event["payload"],
+                )
+            )
+            folded = fold_structure_snapshot(
+                states.get(fields.structure_id),
+                event_type=kind,
+                structure_id=fields.structure_id,
+                tick=int(event["tick"]),
+                tiles=fields.tiles,
+                kind=fields.kind,
+                material=fields.material,
+                load_bearing=fields.load_bearing,
+                supported_by=fields.supported_by,
+                owner_id=fields.owner_id,
+                built_by=fields.built_by,
+            )
+            if folded is None:
+                states.pop(fields.structure_id, None)
+            else:
+                states[fields.structure_id] = folded
+
+        if structure_ids is not None:
+            wanted = set(structure_ids)
+            states = {k: v for k, v in states.items() if k in wanted}
+        return states
+
     # -----------------------------------------------------------------------
     # 2. tick 批次 flush（事件 + 投影，同事务）
     # -----------------------------------------------------------------------
@@ -284,11 +458,11 @@ class NpcStore:
         *,
         extra_projection: ProjectionLike | None = None,
     ) -> None:
-        """本 tick 事件批次落库 + M2 事件投影（同一事务；无则 no-op）。
+        """本 tick 事件批次落库 + 事件投影（同一事务；无则 no-op）。
 
         - events 经 `flush_rows` 得 store 行与 entropy 行（entropy_inject 派生）；
-        - 投影：NPC_LOD_CHANGE → UPDATE npc_profiles.lod；
-                MATTER_* → UPSERT matter_state；
+        - 投影：NPC_LOD_CHANGE → npc_profiles.lod；MATTER_* → matter_state；
+                 STRUCTURE_* → structures 拓扑/生命周期；
         - extra_projection：给上层（M2-A2 runtime）追加投影的扩展缝，签名
           `async (session, seq_by_index, events) -> None`，同事务执行。
         """
@@ -298,7 +472,7 @@ class NpcStore:
         rows, entropy_rows = flush_rows(event_list)
 
         async def _project(session: AsyncSession, seq_by_index: dict[int, int]) -> None:
-            await _project_m2_events(session, self._branch_id, event_list)
+            await _project_events(session, self._branch_id, event_list)
             if extra_projection is not None:
                 await extra_projection(session, seq_by_index, event_list)
 
@@ -347,15 +521,17 @@ class NpcStore:
 # ---------------------------------------------------------------------------
 
 
-async def _project_m2_events(
+async def _project_events(
     session: AsyncSession, branch_id: str, events: Sequence[WorldEvent]
 ) -> None:
-    """M2 事件 → 派生表投影（同一事务）。仅处理 LOD 与物质熵增两类。"""
+    """事件 → 派生表投影（同一事务）：LOD、matter 熵态、structure 拓扑。"""
     for event in events:
         if event.event_type is EventKind.NPC_LOD_CHANGE:
             await _project_lod_change(session, branch_id, event)
         elif event.event_type in _MATTER_KINDS:
             await _project_matter(session, branch_id, event)
+        elif event.event_type in _STRUCTURE_KINDS:
+            await _project_structure(session, branch_id, event)
 
 
 async def _project_lod_change(session: AsyncSession, branch_id: str, event: WorldEvent) -> None:
@@ -378,6 +554,15 @@ _MATTER_KINDS = frozenset(
         EventKind.MATTER_DAMAGE,
         EventKind.MATTER_BUILD,
         EventKind.MATTER_COLLAPSE,
+    }
+)
+_STRUCTURE_KINDS = frozenset(
+    {
+        EventKind.STRUCTURE_STARTED,
+        EventKind.STRUCTURE_CHECKPOINT,
+        EventKind.STRUCTURE_COMPLETED,
+        EventKind.STRUCTURE_COLLAPSED,
+        EventKind.STRUCTURE_REMOVED,
     }
 )
 
@@ -442,7 +627,7 @@ async def _project_matter(session: AsyncSession, branch_id: str, event: WorldEve
     decay_rate = float(payload.get("decay_rate", -1.0))  # type: ignore[arg-type]
     is_collapse = event.event_type is EventKind.MATTER_COLLAPSE
 
-    existing = await session.get(MatterState, matter_id)
+    existing = await session.get(MatterState, (branch_id, matter_id))
     if existing is None:
         folded = fold_matter_snapshot(
             None,
@@ -487,3 +672,102 @@ async def _project_matter(session: AsyncSession, branch_id: str, event: WorldEve
     existing.is_rubble = folded.is_rubble
     existing.last_decay_tick = event.tick
     _ = amount  # amount 已折算进 durability/integrity；保留字段供审计
+
+
+def fold_structure_snapshot(
+    state: StructureSnapshot | None,
+    *,
+    event_type: EventKind,
+    structure_id: str,
+    tick: int,
+    tiles: tuple[tuple[int, int], ...] = (),
+    kind: str = "",
+    material: str = "",
+    load_bearing: bool = False,
+    supported_by: tuple[str, ...] = (),
+    owner_id: str = "",
+    built_by: str = "",
+) -> StructureSnapshot | None:
+    """**单一折叠规则**：STRUCTURE_* → 新拓扑快照（REMOVED 返回 None=删行）。
+
+    投影路径与重放路径共用本函数：phase 由事件种类推导，rubble 保留 tombstone；
+    planned/collapsing 留给后续批次。质量/完整度不在本表，归 matter 投影。
+    """
+    if event_type not in _STRUCTURE_KINDS:
+        msg = f"非 STRUCTURE_* 事件: {event_type}"
+        raise NpcStoreError(msg)
+    if event_type is EventKind.STRUCTURE_STARTED:
+        if state is not None:
+            msg = f"结构重复开始: {structure_id}"
+            raise NpcStoreError(msg)
+        return StructureSnapshot(
+            structure_id=structure_id,
+            tiles=tiles,
+            kind=kind,
+            material=material,
+            phase=StructurePhase.BUILDING,
+            load_bearing=load_bearing,
+            supported_by=supported_by,
+            owner_id=owner_id,
+            built_by=built_by,
+            built_at=None,
+        )
+    if state is None:
+        msg = f"未知结构事件: {structure_id} ({event_type.value})"
+        raise NpcStoreError(msg)
+    if event_type is EventKind.STRUCTURE_REMOVED:
+        return None
+    if event_type is EventKind.STRUCTURE_COMPLETED:
+        return replace(state, phase=StructurePhase.ACTIVE, built_at=tick)
+    if event_type is EventKind.STRUCTURE_COLLAPSED:
+        return replace(state, phase=StructurePhase.RUBBLE)
+    return state
+
+
+async def _project_structure(session: AsyncSession, branch_id: str, event: WorldEvent) -> None:
+    fields = _structure_event_fields(event)
+    existing = await session.get(Structure, (branch_id, fields.structure_id))
+    prior = _row_to_structure_snapshot(existing) if existing is not None else None
+    folded = fold_structure_snapshot(
+        prior,
+        event_type=event.event_type,
+        structure_id=fields.structure_id,
+        tick=event.tick,
+        tiles=fields.tiles,
+        kind=fields.kind,
+        material=fields.material,
+        load_bearing=fields.load_bearing,
+        supported_by=fields.supported_by,
+        owner_id=fields.owner_id,
+        built_by=fields.built_by,
+    )
+    if folded is None:
+        if existing is not None:
+            await session.delete(existing)
+        return
+    if existing is None:
+        session.add(
+            Structure(
+                branch_id=branch_id,
+                structure_id=folded.structure_id,
+                tiles=json.dumps(folded.tiles),
+                kind=folded.kind,
+                material=folded.material,
+                phase=folded.phase.value,
+                load_bearing=folded.load_bearing,
+                supported_by=json.dumps(folded.supported_by),
+                owner_id=folded.owner_id or None,
+                built_by=folded.built_by or None,
+                built_at=folded.built_at,
+            )
+        )
+        return
+    existing.tiles = json.dumps(folded.tiles)
+    existing.kind = folded.kind
+    existing.material = folded.material
+    existing.phase = folded.phase.value
+    existing.load_bearing = folded.load_bearing
+    existing.supported_by = json.dumps(folded.supported_by)
+    existing.owner_id = folded.owner_id or None
+    existing.built_by = folded.built_by or None
+    existing.built_at = folded.built_at
