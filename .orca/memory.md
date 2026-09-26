@@ -228,6 +228,7 @@ uv run pyright sim/
 > 每次完成后更新本文件「当前任务 / 进行中 / 已完成」；过时内容删掉。
 
 ## ④ codex（安全 / 合规 / 风险域）
+- 【2026-09-26 M4-S1 交付】346dfa1：m4-security-preplan.md——三面词面边界（念头注入面 WS 未扫描实测+三扫提案/意愿数值零文本闭合+扩模板CR/运气熵流零可见+PerceptionFrame 无 luck）+T4 探针集 P1-P5 ≥44 条 + profile 提案（t4-probe/claude-sonnet-5/temp0.7/零重试/60 预算）+ T1 钉子建议 2 条 + 四条待裁决。
 - 【2026-09-25 M3-S6b 收官门动态复验】686caa8：七钉子+S4 148 绿；S4 7 绿；功能非性能全量 1076/0；bench 批量红按裁 1 advisory（retrieval/rng/smell 单跑全绿）；pyright 0，ruff 仅 pi 域 pre-existing E501。preaudit §7 回填，m3-plan 宣告 M3 收官。
 - 【2026-09-25 M3-S6 收官门预审（静态）交付】700015a：m3-closure-preaudit.md——静态门通过（六钉子 137 绿 + S4 10k 144 同跑绿 + 对表 25/28）；5 发现：F-a X2/X3 钉子未落（建议关门 PR 补）、F-b R4 记忆侧 branch 过滤缺（二选一裁决）、F-c/F-d 文档漂移、F-e soak 抖动（pi 域）。动态复验清单 §5 待 C3 后续件收编后执行。
 - 【2026-09-24 第九轮快照｜M3-S5 已交付（提案层）】B3 验收+F1 复核完毕（零代码）。**D4 未落地（验时点）→ 交付提案层对表+D4 验收清单**。D3 提案对预审 7 要点 7/7 过：命名对齐（无 replacement 列）/级联接口沿 source_knowledge_id 递归有界幂等/invalidated 键与 evidence 闭环/0005+CHECK+downgrade/全 branch_id/落库走写入门（grep 实证现态零裸 INSERT）/R3 口径同 iter_visible。⚠️ 一项待实施落实：evidence_seq 回填须点名复用 seq_by_index 不造第二套（opencode D4 已照办）。**F1 复核实测留痕**：str→["b"] 与 dict→["ghost"]（迭代键洗白成见证人，新发现向量）均 ACCEPTED；123→TypeError、["ok",5]→ValidationError fail-closed 好；store 行级仍拒裸 str（纵深未破）。**验收形已落地**（main `64b7390`：Sequence[str]+isinstance 拒 str/bytes/dict）。D4 收编后按清单终验：R1 端到端三硬断言+X7 grep 审计+裁10④接线点+0005 downgrade 零漂移。
