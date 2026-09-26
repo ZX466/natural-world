@@ -16,6 +16,14 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
+【2026-09-26 第十九轮｜T5 全量验收测试+golden-nightly 派单】①test_golden_full.py
+（main `c73ee08`）：10 种子×10 游戏日+三断言组实跑，PI_T5_FULL=1 触发默认跳过；
+守恒判据在 golden 无持久层面=折叠自反+投影⊆事件（跨入库对账由 T2 每提交钉子覆盖
+——不是漏，是分层）；管线短切片 2000 tick 验证全绿、4 链完成率 1.0。②门禁 1391
+passed / ruff 0 / pyright 0。③T5 十种子全量首跑后台进行中（≈1.5h）；④cline 已派
+M4-C5 golden-nightly.yml（案 A matrix、首跑绿前不启 schedule、C3 实测 13-27min/种子
+timeout 90）。⑤M4 收官门清单：T5 首跑绿 → cline golden-nightly → T4 nightly 连续
+通过（用户 secrets）→ 宣告。
 【2026-09-26 第十八轮｜D 批 fixture+执行器落地（会话末）】①续接差事 fixture（`8179584`
 +c81463d 拆行）：ErrandChain{chain_id,steps,expected_actions} 4 条链（送信两步/探病
 三步/集市购木/夜路避险改道）；**坑**：ruff E501 按显示宽度计（CJK 全角=2），99 字符
