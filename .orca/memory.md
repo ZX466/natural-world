@@ -23,7 +23,10 @@
 passed / ruff 0 / pyright 0。③T5 十种子全量首跑后台进行中（≈1.5h）；④cline 已派
 M4-C5 golden-nightly.yml（案 A matrix、首跑绿前不启 schedule、C3 实测 13-27min/种子
 timeout 90）。⑤M4 收官门清单：T5 首跑绿 → cline golden-nightly → T4 nightly 连续
-通过（用户 secrets）→ 宣告。
+通过（用户 secrets）→ 宣告。⑥**T5 首跑被系统中止**（~95 分钟处，Claude Code 内存
+压力策略回收后台任务——非测试失败；输出未落盘）。重跑路径=cline M4-C5 的
+workflow_dispatch 手动触发（matrix 每 job 单种子，内存 1/10 不会再触压）；
+勿在本机后台全量重跑。
 【2026-09-26 第十八轮｜D 批 fixture+执行器落地（会话末）】①续接差事 fixture（`8179584`
 +c81463d 拆行）：ErrandChain{chain_id,steps,expected_actions} 4 条链（送信两步/探病
 三步/集市购木/夜路避险改道）；**坑**：ruff E501 按显示宽度计（CJK 全角=2），99 字符
