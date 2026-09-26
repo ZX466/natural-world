@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from sim.tests.fixtures.errands import ERRAND_CHAINS, ErrandChain
+from sim.tests.fixtures.errands import ERRAND_CHAINS
 
 
 @pytest.mark.t1
