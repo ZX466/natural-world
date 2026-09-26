@@ -189,3 +189,53 @@ M4-D1 §6.2 的 `MATERIAL_MOVED` 是**每笔转移一条事件**。建设性建�
   48×48=9 chunk、4096 缓存打满时 1.18ms；M4 若地图扩大需按 M3-P3 档位重算。
 - **4x/16x 档**：M4 建造推进在 4x 档每 tick 只有 4.16ms，必须走 `budget.md §4` 降采样
   （与 L1/感知同款），M4 落地时要显式声明建造推进的降采样节拍。
+
+## 6. 附录（M4-P2，2026-09-26）：定标实测 + 草案转正式红线
+> 实现已收编 main `240f9f7`（M4-D2a/b/c：`sim/world/structure.py` 施工推进 +
+> `sim/world/support_graph.py` 承重图按帧摊还级联）。本附录按 §4 框架对三条草案逐条
+> 实测定标，实测来自 `sim/tests/bench/test_bench_structure.py`（M4-P2 新增）。
+> 口径：与本仓 bench 同源 —— 暖态中位（`warmup_rounds=1` + median）、固定 seed、
+> 多轮取中位；红线 = 实测 × 1.7 慢机余量（裁 13 先例）。
+> **状态：观察态**（bench 用 `_record_proposal` 只记录不断言；硬断言待 nightly 数据后另裁）。
+
+### 6.1 实测定量（本机暖态中位，3 次独立跑取代表值）
+| 入口 | 规模 | 实测中位 | 备注 |
+|---|---|---|---|
+| `fold_structure_snapshot`（单折叠） | 1 事件 | **~2.0µs** | STARTED 1.9 / CHECKPOINT 0.3 / COMPLETED·COLLAPSED 2.7µs |
+| `advance_build`（施工推进） | **100 在建点** | **0.175ms** | ~1.75µs/点线性：50→0.091 / 150→0.262 / 1k→1.81 / 10k→31ms |
+| `fold` 重放核（无 SQL） | 1,000 事件 | **1.69ms** | ~1.7µs/事件；10k→19.8ms |
+| `materialize_structures`（投影重建·DB） | 1,000 行 | **11.4ms** | 10k→~127ms（临时库）/ 138ms（文件库）；**非每 tick** |
+| `build_support_graph`（图物化·链） | 100 / 1k / 10k | **0.060 / 0.575 / 6.11ms** | 事件驱动一次性（拓扑变更时）；**非每 tick** |
+| `build_support_graph`（图物化·DAG） | 10k, fanin 1/2/4/8 | 9.48 / 10.87 / 12.45 / **17.20ms** | 边数 9999→44624；环检测占主体 |
+| `advance_cascade`（坍塌单帧，budget=100） | 100 / 1k / 10k | **0.48-0.50ms/帧** | 单帧成本由事件预算封顶，**与级联总规模无关** |
+| `advance_cascade`（10k 全量摊还） | 10k（=100 帧） | 71.45ms 总 / **0.71ms/帧均值** | 最大单帧 ~1.1ms |
+
+### 6.2 三条草案逐条定标（草案值 → 定标值 → 依据）
+| # | 草案（M4-P1 §4.1） | 定标值 | 依据 |
+|---|---|---|---|
+| 1 | 施工推进单 tick ≤ 0.50ms | **0.30ms**（`BUILD_PROGRESS_TICK_LIMIT_MS`） | 实测 0.175ms × 1.7 = 0.30。**向下修正**：草案按预研模型的数组扫（0.03µs/点，1 万点 0.29ms）给，real `advance_build` 是带校验的 `dataclass replace`（~1.75µs/点）——同规模重 ~50x，但 100 并发点口径下绝对量更小。**红线绑定并发规模 ≤100 在建点**（>170 点即破，见 §6.4） |
+| 2 | 坍塌单帧 ≤ 2.00ms | **0.85ms**（`COLLAPSE_FRAME_LIMIT_MS`） | 实测 0.50ms/帧（三档一致）× 1.7 = 0.85。**向下修正**：草案按「一帧发完全部级联事件」的朴素口径（1000 节点 4.15ms>2.0 强制摊还）给；D2c 已用 `CASCADE_EVENT_BUDGET_PER_FRAME=100` 封顶，单帧成本**不再随级联规模增长**，2.00 余量过大（虚假宽松会掩盖退化）。口径**只含事件构造**；级联事件的 apply 走既有 `APPLY_P99_LIMIT_MS` |
+| 3 | 级联 100 节点每帧 | **不设数值红线**（`CASCADE_EVENT_BUDGET_PER_FRAME`=100 是代码契约常量） | 规模约束由代码常量硬咬（`test_t1_m4_support_graph` 10k=100 帧验收已覆盖）；性能侧只对**帧耗时**设线（#2），规模不变即不会退化。`test_bench_structure.py::test_cascade_frame_budget_is_100_nodes` 契约守卫复核 |
+| 附 | `_REBUILD_INFO_LIMIT_MS=500`（信息性，并列行） | 投影重建 1k=11.4ms / 图物化 10k=6.11ms | 二者均**非每 tick**（启动/拓扑变更触发）。量纲同 `SNAPSHOT_LIMIT_MS=500`（后台可完成，不阻塞 tick），只作观察不设硬线 |
+
+### 6.3 与预研成本模型的对照（预研 §2.3 vs 实测）
+- **BFS/级联本体**：预研 BFS 三档 0.010/0.099/1.27ms；real `advance_cascade` 把 BFS
+  与事件构造合并、且按 budget=100 分帧，单帧稳定 0.50ms（受事件构造主导，~5µs/事件 ×
+  100）。预研「逐对象事件 = binding 约束」的结论**被 D2c 的按帧摊还实现验证并消解**。
+- **图物化**：预研（纯邻接 + json.loads）0.10/1.11/11.17ms；real `build_support_graph`
+  链式 0.060/0.575/6.11ms（**更快**：无 SQL/JSON，直接从 `StructureSnapshot` 内存对象），
+  DAG fanin=2 10k 10.87ms（环检测 Kahn 遍历占主体）。
+- **施工推进**：预研模型 1 万点 0.29ms（数组扫）；real `advance_build` 1 万点 31ms
+  （`dataclass replace` + `__post_init__` 校验）——**预研低估 ~100x**，但 100 并发点
+  口径下仍远低阈（0.175ms vs 0.30ms 线）。
+
+### 6.4 观察项（定标引入，留预审核）
+- **施工并发规模是施工红线的真实变量**：`BUILD_PROGRESS_TICK_LIMIT_MS=0.30` 绑定
+  ≤100 在建点；>170 点破线。若 M4 行为层允许「全村同时盖房」，需
+  `advance_build` 向量化或 due 时间轮（预研 §3.2 反对过早引入，现给触发器 = 并发点 >100）。
+- **级联事件的 apply 未计入帧耗时**：单帧 0.50ms 只含事件构造；100 条 `STRUCTURE_COLLAPSED`
+  的 apply 另计 ~1.5ms（~15µs/事件，走既有 apply 行）。同帧并发多级联时，
+  **apply 才是总成本主项** → 建议保留预研 §5「全局每帧事件预算」的观察。
+- **DAG 图物化的环检测成本随 fanin 上升**（10k: fanin8 = 17.2ms）：图物化在**拓扑变更**
+  时触发，若「批量建造」一次性改大量边，单次物化可能 >16.6ms；建议增量物化或
+  脏标记批处理（预研 §5 观察项同源）。
