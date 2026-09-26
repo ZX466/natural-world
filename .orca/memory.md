@@ -16,6 +16,18 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
+【2026-09-26 第十八轮｜D 批 fixture+执行器落地（会话末）】①续接差事 fixture（`8179584`
++c81463d 拆行）：ErrandChain{chain_id,steps,expected_actions} 4 条链（送信两步/探病
+三步/集市购木/夜路避险改道）；**坑**：ruff E501 按显示宽度计（CJK 全角=2），99 字符
+中文行报 117——脚本重拆把字符串字面量拆坏（语法错 57 errors），git checkout 恢复后
+用 Edit 逐条拆（lesson：中文长行拆行用 Edit 别用 regex 脚本）。②chain_runner.py
+（`6160320`）：run_chain 每步 parse_intent→gate.validate→move_to 走 apply(MOVE)
+唯一写路径（事件 tick 单调约束 cur.tick+1）；@actor 占位解耦 fixture 与 harness
+实体 id（run_all_chains 收 actor_entity_map）；4 链真实 harness state 全通过、
+ErrandOutcome 直喂 errands_rate.measure_baseline——**T5 完成率素材面接通**。
+③门禁 not-bench **1391 passed**。④D 批剩：T5 十种子实跑（断言组就位）→ golden-
+nightly（cline 接）→ M4 收官门。⑤坑：gate M1_SUPPORTED_ACTIONS 无 buy/build/use
+（M4 建造动作接 gate 是后续件）；target_id 必须在 state.entities（@actor 机制）。
 【2026-09-26 第十七轮｜D 批开工：B3+D1+S3 收编+impulse_gate 实现】①三分支收编
 （codex S3 `df7aa94` I 系钉子 27 RED 预期指纹+行为表 96 行 impulse_gate(text,
 target_profile,*,triggered)->ImpulseVerdict 判梯 hidden→banned→操纵感；
