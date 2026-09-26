@@ -237,3 +237,72 @@ ERRANDS: tuple[ErrandCase, ...] = (
         '{"action": "wait", "reason": "一个念头冒了出来——心里却有点发怵。不行，这事做不得"}',
     ),
 )
+
+
+# ---------------------------------------------------------------------------
+# 续接差事（M4-D2，裁 17-3）：多决策脚本链——步间状态续接，测「计划跨决策存活」。
+# steps[i] 是第 i 步的 scripted LLM 原文（parse_intent 可解析）；完成判定 =
+# 全步过闸门且末步 action ∈ expected_actions。链 target 自洽（loc:/npc: 前缀
+# 或链内 actor_id）。
+# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class ErrandChain:
+    """多决策续接差事（T5 完成率断言的素材，fixture 优先零真实 LLM）。"""
+
+    chain_id: str  # 链 id（C5 稳定）
+    description: str  # 一句话差事背景（进 prompt thought 用）
+    thought: str  # 玩家/环境念头（第 0 步触发）
+    actor_id: str  # 执行 NPC
+    steps: tuple[str, ...]  # N 步 scripted LLM 原文（顺序即决策序）
+    expected_actions: frozenset[str]  # 末步可接受动作集
+
+
+ERRAND_CHAINS: tuple[ErrandChain, ...] = (
+    ErrandChain(
+        "C01_送信_两日两步",
+        "王婆托了送信的活，得先拿信再送去木匠家",
+        "王婆那边有活，先把信拿到手",
+        "chenmo",
+        (
+            '{"action": "talk_to", "target_id": "wangpo", "reason": "先找王婆拿信，她托我这趟活"}',
+            '{"action": "move_to", "target_pos": [9, 3], "reason": "信在手上了，去木匠家送去"}',
+        ),
+        frozenset({"move_to"}),
+    ),
+    ErrandChain(
+        "C02_雨天探病_三步",
+        "听说陈默咳疾犯了，先打听再探望再回报",
+        "听说陈默病了，去打听打听",
+        "wangpo",
+        (
+            '{"action": "investigate", "target_id": "npc:chenmo", "reason": "先看看他到底病得怎样，别空着手瞎操心"}',
+            '{"action": "move_to", "target_pos": [12, 8], "reason": "寻思着该去看看他，带上点吃的"}',
+            '{"action": "talk_to", "target_id": "npc:chenmo", "reason": "人都到了，跟他说上几句话探探病情"}',
+        ),
+        frozenset({"talk_to"}),
+    ),
+    ErrandChain(
+        "C03_集市日_购木修栏",
+        "集市日木价便宜，趁机买木头修栅栏",
+        "今天集市，木价便宜，去把栅栏的料备了",
+        "chenmo",
+        (
+            '{"action": "move_to", "target_pos": [20, 20], "reason": "先去集市看看木料的价"}',
+            '{"action": "buy", "target_id": "loc:market", "reason": "价合适就买下，栅栏等米下锅呢"}',
+            '{"action": "move_to", "target_pos": [6, 7], "reason": "料备齐了，扛回去修栅栏"}',
+        ),
+        frozenset({"build", "use", "move_to"}),
+    ),
+    ErrandChain(
+        "C04_夜路_避险改道",
+        "夜里送药遇野狗，改道绕行再送达",
+        "把药送去李家，路上仔细些",
+        "chenmo",
+        (
+            '{"action": "move_to", "target_pos": [14, 14], "reason": "抄近路先走着，夜里路上别耽搁"}',
+            '{"action": "flee", "target_id": "npc:chenmo", "reason": "前头有野狗嚎，我干嘛非走这条道，绕开便是"}',
+            '{"action": "move_to", "target_pos": [16, 18], "reason": "绕过大路了，接着把药送到地方"}',
+        ),
+        frozenset({"move_to", "talk_to"}),
+    ),
+)
