@@ -149,3 +149,30 @@ CHUNK_EVENT_SCAN_LIMIT_MS = 0.10
 #    2.0 = 1.18 实测 + ~1.7x 慢机余量。破限先查缓存规模/脏 chunk 数来源，
 #    再考虑「按 chunk 倒排索引」形态（当前 4096 条 × 9 chunk 下限规模无需索引）。
 CHUNK_INVALIDATION_TICK_LIMIT_MS = 2.0
+
+# --- M4-P2：施工推进 / 坍塌级联红线（2026-09-26 pi 定标；裁 14-2 草案转正式）---
+# 依据 docs/perf/m4-build-budget-preplan.md 附录「M4-P2 定标实测」（2026-09-26）+ 预研
+# 草案（M4-P1 `88284c3`）三条。实现 = M4-D2a/b/c（main `240f9f7`：sim/world/structure.py
+# 施工推进 + sim/world/support_graph.py 承重图按帧摊还级联）。口径与既有红线同源：
+# 定标机暖态中位（warmup_rounds=1 + median）、固定 seed、多轮取中位；阈值 = 实测 × 1.7
+# 慢机余量（裁 13 先例）。
+# **观察态起步**：bench 侧用 `_record_proposal` 只记录「实测中位 vs 建议阈值」，**不断言**
+# （硬断言待 nightly 数据后另裁，与 M3-P3 收口一致）。
+# `advance_build` × 100 并发在建点 —— 每 tick 施工推进上限 = 0.30ms。
+#   实测（本机暖态中位，bench 口径 = 只计时推进循环，状态预建）：S=100 **0.175ms**
+#   （~1.75µs/点，线性：50→0.09 / 150→0.26 / 1k→1.8ms）。0.175 × 1.7 ≈ 0.30。
+#   **向下修正预研草案 0.50ms**：草案按预研模型的数组扫（0.03µs/点，1 万点 0.29ms）
+#   估，real `advance_build` 是带校验的 `dataclass replace`（~1.75µs/点）——同规模重
+#   ~50x。红线**绑定并发规模 ≤100 在建点**：>170 点即破 0.30ms，实现层需向量化或
+#   due 队列（见附录 §P2.4）。破限先查在建点数是否失控，再查是否退化为逐点 DB 往返。
+BUILD_PROGRESS_TICK_LIMIT_MS = 0.30
+# `advance_cascade` 单帧（budget=CASCADE_EVENT_BUDGET_PER_FRAME=100）—— 每帧坍塌上限 = 0.85ms。
+#   实测（本机暖态中位）：三档（100/1k/10k 节点）均 ~0.50ms/帧（单帧成本由事件预算封顶，
+#   与级联总规模无关——100 事件 × ~5µs pydantic 构造成本）。0.50 × 1.7 = 0.85。
+#   **向下修正预研草案 2.00ms**：草案按「一帧发完全部级联事件」的朴素口径给（1000 节点
+#   4.15ms>2.0 强制摊还）；D2c 已用 `CASCADE_EVENT_BUDGET_PER_FRAME=100` 封顶，单帧成本
+#   不再随级联规模增长，2.00 余量过大。本行口径**只含事件构造**（级联事件的 apply 成本
+#   走既有 `APPLY_P99_LIMIT_MS` + `test_apply_50_events_batch`）。
+#   「级联 100 节点每帧」= 代码契约常量（`support_graph.CASCADE_EVENT_BUDGET_PER_FRAME`，
+#   非阈值；T1 已咬）——性能红线按本行的帧耗时覆盖，规模由该常量硬约束。
+COLLAPSE_FRAME_LIMIT_MS = 0.85
