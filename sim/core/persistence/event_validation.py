@@ -32,6 +32,7 @@ from sim.core.events import (
     MovePayload,
     NpcActPayload,
     NpcLodChangePayload,
+    NpcMonologuePayload,
     StructureCheckpointPayload,
     StructureCollapsedPayload,
     StructureCompletedPayload,
@@ -67,6 +68,7 @@ PAYLOAD_MODELS: dict[EventKind, type[BaseModel]] = {
     EventKind.STRUCTURE_COLLAPSED: StructureCollapsedPayload,
     EventKind.STRUCTURE_REMOVED: StructureRemovedPayload,
     EventKind.MATERIAL_MOVED: MaterialMovedPayload,
+    EventKind.NPC_MONOLOGUE: NpcMonologuePayload,
 }
 
 
