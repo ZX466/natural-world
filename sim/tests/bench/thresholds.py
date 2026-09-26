@@ -176,3 +176,20 @@ BUILD_PROGRESS_TICK_LIMIT_MS = 0.30
 #   「级联 100 节点每帧」= 代码契约常量（`support_graph.CASCADE_EVENT_BUDGET_PER_FRAME`，
 #   非阈值；T1 已咬）——性能红线按本行的帧耗时覆盖，规模由该常量硬约束。
 COLLAPSE_FRAME_LIMIT_MS = 0.85
+# --- M4-P3：意愿/独白热路径（2026-09-26 pi 定标提案；# 提案待裁）---
+# 依据 docs/perf/m4-willingness-hotpath.md + sim/tests/bench/test_bench_willingness.py。
+# 实现 = M4-B3（main `24eadb2`：NpcRuntime.tick 意愿注入缝 —— verdict 非空时每 NPC 每动作
+# 多一次 willingness_expression + band≥1 一条 npc_monologue_event）。口径与既有红线同源：
+# 定标机暖态中位（warmup_rounds=1 + median）、固定 seed、50 NPC/tick（DESIGN §13 L1 规模）；
+# 阈值 = 实测 × 1.7 慢机余量（裁 13 先例）。
+# **观察态起步**：bench 侧用 `_record_proposal` 只记录「实测中位 vs 建议阈值」，**不断言**
+# （硬断言待 nightly 数据后另裁，与 M3-P3 / M4-P2 收口一致）。
+# 口径 = 注入态 NpcRuntime.tick（50 NPC，band≥1 最坏）端到端每 tick。
+#   实测（本机暖态中位）：None 基线 0.720ms/tick；band=0 +0.004ms（全早退）；
+#   band≥1 **+0.20ms/tick**（~200µs = 每 NPC 一条独白事件构造，~3.4µs/NPC）。
+#   建议值 0.35ms = 增量 0.20 × 1.7 ≈ 0.34 → 取整 0.35（与裁 13 的 1.7x 先例同源）。
+#   红线**只管插入增量**（表现面成本），不吞 NpcRuntime 全量（后者走
+#   `L1_UTILITY_TICK_LIMIT_MS=6.0` 基线）——避免与 L1 行叠加双算。
+#   破限先查：独白事件是否表现面才产（band≥1）而非每 tick 全量；
+#   再查独白事件构造是否退化。
+WILLINGNESS_TICK_LIMIT_MS = 0.35
