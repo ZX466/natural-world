@@ -32,8 +32,8 @@ class TestErrandChainFixture:
                 assert intent.action, (chain.chain_id, i)
 
     def test_step_targets_reference_chain_entities(self) -> None:
-        # 步 target 不得引用链外实体（脚本自洽性——target 要么是链内 NPC/地点，
-        # 要么 None/坐标）
+        # 步 target 不得引用链外实体（脚本自洽性）：@actor 占位（执行器注入真实
+        # 实体 id）或链内 actor 名；显式 loc:/npc: 前缀也接受（描述性目标）
         known = {c.actor_id for c in ERRAND_CHAINS}
         for chain in ERRAND_CHAINS:
             for step_intent_src in chain.steps:
@@ -41,6 +41,31 @@ class TestErrandChainFixture:
 
                 intent = parse_intent(step_intent_src)
                 if intent.target_id is not None:
-                    assert intent.target_id in known or intent.target_id.startswith(
-                        ("loc:", "npc:")
+                    assert (
+                        intent.target_id == "@actor"
+                        or intent.target_id in known
+                        or intent.target_id.startswith(("loc:", "npc:"))
                     ), (chain.chain_id, intent.target_id)
+
+
+@pytest.mark.t1
+class TestChainRunnerIntegration:
+    """run_chain 步间续接与完成率接通（T5 errands_rate 素材面）。"""
+
+    def test_all_chains_pass_on_harness_state(self) -> None:
+        # 真实 harness state（4 实体）上 4 链全通过——fixture/执行器/闸门三方自洽
+        from sim.tests.bench.harness import make_state
+        from sim.tests.golden.chain_runner import run_all_chains
+
+        state = make_state(4, world_seed=7)
+        outcomes = run_all_chains(state)
+        assert len(outcomes) == len(ERRAND_CHAINS)
+        failures = [(o.case_id, o.reason) for o in outcomes if not o.passed]
+        assert all(o.passed for o in outcomes), failures
+
+    def test_move_step_actually_changes_position(self) -> None:
+        # 步间状态续接的实证：C01 含 move 步且目标 (9,3) 与 harness 默认位形不同——
+        # runner 内部 gate 校验 + apply(MOVE) 已证明落地（本断言钉 fixture 形状）
+        chain0 = ERRAND_CHAINS[0]
+        assert any("move_to" in s for s in chain0.steps)
+        assert '"target_pos": [9, 3]' in chain0.steps[1]

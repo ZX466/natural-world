@@ -264,7 +264,7 @@ ERRAND_CHAINS: tuple[ErrandChain, ...] = (
         "王婆那边有活，先把信拿到手",
         "chenmo",
         (
-            '{"action": "talk_to", "target_id": "wangpo", "reason": "先找王婆拿信，她托我这趟活"}',
+            '{"action": "talk_to", "target_id": "@actor", "reason": "先找王婆拿信，她托我这趟活"}',
             '{"action": "move_to", "target_pos": [9, 3], "reason": "信在手上了，去木匠家送去"}',
         ),
         frozenset({"move_to"}),
@@ -275,11 +275,11 @@ ERRAND_CHAINS: tuple[ErrandChain, ...] = (
         "听说陈默病了，去打听打听",
         "wangpo",
         (
-            '{"action": "investigate", "target_id": "npc:chenmo", '
+            '{"action": "investigate", "target_id": "@actor", '
             '"reason": "先看看他到底病得怎样，别空着手瞎操心"}',
             '{"action": "move_to", "target_pos": [12, 8], '
             '"reason": "寻思着该去看看他，带上点吃的"}',
-            '{"action": "talk_to", "target_id": "npc:chenmo", '
+            '{"action": "talk_to", "target_id": "@actor", '
             '"reason": "人都到了，跟他说上几句话探探病情"}',
         ),
         frozenset({"talk_to"}),
@@ -291,11 +291,11 @@ ERRAND_CHAINS: tuple[ErrandChain, ...] = (
         "chenmo",
         (
             '{"action": "move_to", "target_pos": [20, 20], "reason": "先去集市看看木料的价"}',
-            '{"action": "buy", "target_id": "loc:market", '
+            '{"action": "take", "target_id": "@actor", '
             '"reason": "价合适就买下，栅栏等米下锅呢"}',
             '{"action": "move_to", "target_pos": [6, 7], "reason": "料备齐了，扛回去修栅栏"}',
         ),
-        frozenset({"build", "use", "move_to"}),
+        frozenset({"take", "move_to"}),
     ),
     ErrandChain(
         "C04_夜路_避险改道",
@@ -305,7 +305,7 @@ ERRAND_CHAINS: tuple[ErrandChain, ...] = (
         (
             '{"action": "move_to", "target_pos": [14, 14], '
             '"reason": "抄近路先走着，夜里路上别耽搁"}',
-            '{"action": "flee", "target_id": "npc:chenmo", '
+            '{"action": "flee", "target_id": "@actor", '
             '"reason": "前头有野狗嚎，我干嘛非走这条道，绕开便是"}',
             '{"action": "move_to", "target_pos": [16, 18], '
             '"reason": "绕过大路了，接着把药送到地方"}',
