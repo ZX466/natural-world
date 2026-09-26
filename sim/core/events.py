@@ -41,6 +41,11 @@ class EventKind(StrEnum):
     STRUCTURE_COLLAPSED = "structure.collapsed"
     STRUCTURE_REMOVED = "structure.removed"
     MATERIAL_MOVED = "material.moved"
+    # ---- M5（m5-k8 意愿独白 S2C）----
+    #: NPC 意愿独白（§8 三形态的产码来源）。**先落事件流=可重放**（§14 世界真相
+    #: 进事件日志）→ WS 侧 `ws.monologue_events_to_frames` 投影成独立 monologue
+    #: 帧，按 form 路由（bubble/plan 广播；thought 定向本人，见 ws.py 投递面契约）。
+    NPC_MONOLOGUE = "npc.monologue"
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +124,26 @@ class NpcActPayload(BaseModel):
     action: str
     target: str = ""
     params: dict[str, str] = {}  # 白名单键见 actions.ACTION_PAYLOAD_KEYS
+
+
+class NpcMonologuePayload(BaseModel):
+    """NPC 意愿独白（M5-K8，§8 独白三形态产码；§10 四档表现）。
+
+    **字段白名单（X 系出戏边界，extra="forbid" 强制）**：只有 npc_id/form/content。
+    - form ∈ bubble|thought|plan（§8 三形态；投递面路由见 ws.py 契约）；
+    - content = 第一人称世界内语言（will.py 模板词面，**无数值无系统词**）；
+    - 冲突度 score / band 档位号 / w₁-w₄ 权重**永不进本载荷**（元信息铁律：
+      band 是装配层选模板的输入，落库只留表现文本）。band≥1 才有本事件。
+
+    defers 语义不在此载荷（先做别的再绕回来 → 走 K7 的 plan 账本，见
+    sim/npc/plan_view.py），故不在事件面重复表达。
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    npc_id: str
+    form: str = Field(pattern=r"^(bubble|thought|plan)$")
+    content: str = Field(min_length=1, max_length=512)
 
 
 class MatterPayload(BaseModel):
@@ -460,6 +485,30 @@ def npc_act_event(
         branch_id=branch_id,
         tick=tick,
         event_type=EventKind.NPC_ACT,
+        payload=p.model_dump(mode="json"),
+    )
+
+
+def npc_monologue_event(
+    tick: int,
+    npc_id: str,
+    form: str,
+    content: str,
+    branch_id: str = "main",
+) -> WorldEvent:
+    """意愿独白事件（M5-K8）。form ∈ bubble|thought|plan；content 第一人称叙事。
+
+    唯一构造入口：payload schema（NpcMonologuePayload）在此强制——数值/档位号
+    无法夹带（extra="forbid"）。band≥1 才有本事件（调用方 will 域保证）。
+    actor_id 填 npc_id（本文事件的主体就是该 NPC）；不设 target/witnesses
+    （独白是自言自语，供渲染与重放，非社会传播）。
+    """
+    p = NpcMonologuePayload(npc_id=npc_id, form=form, content=content)
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.NPC_MONOLOGUE,
+        actor_id=npc_id,
         payload=p.model_dump(mode="json"),
     )
 

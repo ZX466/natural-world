@@ -109,6 +109,41 @@ def reset_plan_registry() -> None:
     _REGISTRY._broadcast = None
 
 
+#: defers 计划前缀（M5-K8 §3：band=3「先做别的再绕回来」的计划面体现）。
+#: 独白模板已含「先去别处转一圈，缓过来再说」（will.py），本前缀是**计划看板**面
+#: 的结构化标记——看板显示「（缓一缓）<原计划>」，表示该项被主动后置。
+#: 用戏内措辞（非「DEFERRED」系统词）：看板是戏内 UI，§19 禁元信息词。
+#: 括号用全角（ruff allowed-confusables 白名单内，字面非 ASCII、非系统词）。
+DEFER_PLAN_PREFIX = "（缓一缓）"
+
+
+def defer_plan_text(base_text: str) -> str:
+    """把 band=3 的推迟意图编码进计划文本（K8 §3 defers→plan 联动）。
+
+    幂等：已带前缀则不重复加（同一计划被多次写入不叠加标记）。
+    空 base（无计划）→ 空串（不制造「（缓一缓）」孤标记）。
+    """
+    if not base_text:
+        return ""
+    if base_text.startswith(DEFER_PLAN_PREFIX):
+        return base_text
+    return DEFER_PLAN_PREFIX + base_text
+
+
+def set_plan_from_expression(entity_id: str, base_text: str, *, band: int, defers: bool) -> None:
+    """意愿表现 → 计划账本写入（K8 §3 唯一联动入口）。
+
+    - band≥1（有独白）且 defers（band=3）→ 计划带推迟前缀；
+    - 其余 band → 原计划文本（不含标记）；
+    - 空 base_text 一律清空项（无计划），不吃 defers 前缀。
+    写即覆盖（PlanDeltaStore 值语义）。
+    """
+    if not base_text:
+        set_plan(entity_id, "")
+        return
+    set_plan(entity_id, defer_plan_text(base_text) if defers else base_text)
+
+
 #: band → cue 表现映射（M5-K7 §2 钩子缝；§2.1 表）。
 #: WillingnessExpression.band（will.py 四档）→ ImpulseFeedbackMessage.cue 四值。
 #: ws.py `_impulse_cue` 的旧占位是纯词面启发式（问号→hesitation）；本表是

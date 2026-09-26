@@ -178,7 +178,11 @@ async def ws_endpoint(ws: WebSocket) -> None:
         await ws.close(code=4003)  # 4003 = origin rejected（自定义码段 4000+）
         return
     await ws.accept()
-    manager.register(ws)
+    # K8：玩家连接=主角本人视角（thought 面板定向投递给它；其余连接=旁观者，
+    # 只收 bubble/plan）。身份由服务端定（不采客户端自报，防越权读他人面板）。
+    from sim.api.ws import subscriber_for_protagonist
+
+    manager.register(ws, subscriber_id=subscriber_for_protagonist(app.state.loop))
     pf = _pathfinder()
     try:
         # 接入即发全量快照（kilo ws-protocol：sync 的答案）

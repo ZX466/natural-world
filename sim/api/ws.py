@@ -10,6 +10,14 @@ move_request / hello / sync_request / set_control / player_impulse / load_anchor
 
 出戏边界（W 系列）：state_delta/full_snapshot 只含 rtoken/位置/精灵名等
 戏内渲染字段；tick/seed/branch/内部 id 绝不出网关。
+
+M5-K8 意愿独白 S2C（产码走事件流）——两案对比与主张：
+- 案 A（采纳）：NPC 独白先落 **`npc.monologue` WorldEvent**（§14 世界真相进事件
+  日志），WS 侧只做「事件 → 帧」投影按 form 投递。可重放、可审计、与 npc.act /
+  matter.* 同口径；内容零改写（逐位一致）。
+- 案 B（否决）：直接构造 monologue 帧广播、不落事件日志。省一次投影，但**帧不
+  可重放/重连不可重建**（§14 铁律），且绕过事件白名单护栏（数值可夹带）。
+  流量收益微不足道（每帧一次 delta 内可选批量带出），不足以抵倒可重放性。
 """
 
 from __future__ import annotations
@@ -25,6 +33,7 @@ import structlog
 from fastapi import WebSocket
 
 from sim.core.calendar import game_time
+from sim.core.events import EventKind, WorldEvent
 from sim.core.tick import TickLoop
 from sim.world.map import TileMap
 from sim.world.pathfinding import Pathfinder
@@ -125,27 +134,57 @@ class ConnectionManager:
 
     def __init__(self) -> None:
         self._connections: list[WebSocket] = []
+        #: 每连接订阅者身份（K8 独白投递面路由）：WebSocket → entity_id。
+        #: 缺席=旁观者（未绑定视角，默认）；在册=绑定该实体视角的「本人」连接。
+        #: 无身份登记时全部按旁观者处理（向后兼容 M0-M5：现有测试不传 subscriber）。
+        self._subscribers: dict[WebSocket, str] = {}
 
-    def register(self, ws: WebSocket) -> None:
+    def register(self, ws: WebSocket, subscriber_id: str | None = None) -> None:
+        """登记连接；subscriber_id 非空=绑定该实体视角（本人面板），空=旁观者。"""
         self._connections.append(ws)
+        if subscriber_id is not None:
+            self._subscribers[ws] = subscriber_id
 
     def unregister(self, ws: WebSocket) -> None:
         if ws in self._connections:
             self._connections.remove(ws)
+        self._subscribers.pop(ws, None)
 
     @property
     def count(self) -> int:
         return len(self._connections)
 
+    def subscriber_of(self, ws: WebSocket) -> str | None:
+        """该连接绑定的实体视角 id；None=旁观者。"""
+        return self._subscribers.get(ws)
+
     async def broadcast_json(self, payload: dict[str, Any]) -> None:
+        await self._send_to(self._connections, payload)
+
+    async def send_to_subscriber(self, entity_id: str, payload: dict[str, Any]) -> None:
+        """定向投递：只发给绑定该实体视角的连接（独白 thought 面板用）。"""
+        targets = [ws for ws in self._connections if self._subscribers.get(ws) == entity_id]
+        await self._send_to(targets, payload)
+
+    async def _send_to(self, targets: list[WebSocket], payload: dict[str, Any]) -> None:
         dead: list[WebSocket] = []
-        for ws in self._connections:
+        for ws in targets:
             try:
                 await ws.send_json(payload)
             except Exception:
                 dead.append(ws)
         for ws in dead:
             self.unregister(ws)
+
+
+#: 独白 form → 投递面（M5-K8 契约，§8 三形态）。
+#: - bubble：头顶气泡，**旁观者可见** → 广播全部连接；
+#: - thought：思维面板，**仅本人可见**（他人不可知心里话）→ 定向订阅者；
+#: - plan：计划看板，**旁观者可见**（计划是外在可观察行为面，非私密）→ 广播。
+#: 帧本身不带 actor/rtoken（ws-protocol §4.2 W7 字段最小化：独白只含 form+content），
+#: 故路由**只能由服务端按 form 决定**，不进载荷——这是刻意的出戏边界（防客户端反推）。
+MONOLOGUE_DELIVERY_ALL = frozenset({"bubble", "plan"})
+MONOLOGUE_DELIVERY_SELF = frozenset({"thought"})
 
 
 def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
@@ -212,6 +251,58 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
     if plan_items:
         payload["plan"] = plan_items
     return payload
+
+
+def monologue_payload(form: str, content: str) -> dict[str, Any]:
+    """独白帧（monologue，narrative 通道；§8 三形态）。
+
+    帧只含 form + content（ws-protocol §4.2 W7 字段最小化：**无 rtoken/actor**）。
+    投递面由 `route_monologue` 按 form 决定，不进载荷（出戏边界）。
+    """
+    return {
+        "type": "monologue",
+        "channel": "narrative",
+        "v": _PROTOCOL_VERSION,
+        "ws_seq": 0,
+        "form": form,
+        "content": content,
+    }
+
+
+def monologue_events_to_frames(events: list[WorldEvent]) -> list[tuple[str, dict[str, Any]]]:
+    """本帧 npc.monologue 事件 → [(actor_id, 帧), ...]（K8 事件进流案的 WS 侧）。
+
+    事件是真相来源（§14，进事件日志可重放）；本函数只做「事件 → 投递单元」的
+    投影，**不改内容**（逐位一致：帧 content 即事件 payload content）。actor_id
+    从事件 actor_id 取（路由用，不出网关——帧里没有它）。
+    """
+    frames: list[tuple[str, dict[str, Any]]] = []
+    for e in events:
+        if e.event_type is not EventKind.NPC_MONOLOGUE:
+            continue
+        payload = e.payload
+        frames.append(
+            (
+                e.actor_id,
+                monologue_payload(str(payload["form"]), str(payload["content"])),
+            )
+        )
+    return frames
+
+
+async def route_monologue(manager: ConnectionManager, actor_id: str, frame: dict[str, Any]) -> None:
+    """按 form 投递独白帧（M5-K8 投递面契约）。
+
+    - bubble/plan → 广播（旁观者可见：气泡/看板是外在可观察面）；
+    - thought    → 定向本人（思维面板=私密心里话，他人不可知）；
+    - 未知 form   → fail-closed 不投递（不猜面，防未来档位扩展时误广播私密内容）。
+    """
+    form = str(frame.get("form", ""))
+    if form in MONOLOGUE_DELIVERY_ALL:
+        await manager.broadcast_json(frame)
+    elif form in MONOLOGUE_DELIVERY_SELF:
+        await manager.send_to_subscriber(actor_id, frame)
+    # 未知 form：静默不投（fail-closed）
 
 
 def map_static_payload(tile_map: TileMap) -> dict[str, Any]:
@@ -469,6 +560,15 @@ def _protagonist_id(loop: TickLoop) -> str | None:
     return None
 
 
+#: 主角连接的独白订阅者标识（M5-K8 投递面路由）。
+#: 由**服务端**取主角 id（不采客户端自报，防身份自授/越权读他人思维面板）；
+#: 玩家连接=本人视角，其余连接=旁观者。真实多视角切换（M1 协议显式指定主角）
+#: 到位后此处替换为「按连接绑定的视角实体」，ConnectionManager 无需再改。
+def subscriber_for_protagonist(loop: TickLoop) -> str | None:
+    """连接订阅者身份：主角 id（无实体时 None=纯旁观者）。"""
+    return _protagonist_id(loop)
+
+
 async def run_world_driver(
     loop: TickLoop,
     manager: ConnectionManager,
@@ -516,3 +616,10 @@ async def run_world_driver(
             payload = delta_payload(loop, moved)
             payload["ws_seq"] = seq
             await manager.broadcast_json(payload)
+        # K8：意愿独白帧（事件进流案的 WS 侧投影）。按 form 投递面路由；
+        # 事件已随上面 on_flush 落库（真相先于投递，与 delta 同帧；广播在落库之后
+        # 与主 delta 相反是有意的——独白是「已发生」的叙述，须事件先入日志）。
+        for actor_id, frame in monologue_events_to_frames(events):
+            seq += 1
+            frame["ws_seq"] = seq
+            await route_monologue(manager, actor_id, frame)
