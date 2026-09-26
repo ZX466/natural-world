@@ -16,6 +16,19 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
+【2026-09-26 第十六轮｜M4 二波五单收编 + 裁 16/17 + D2/D 批前置全就位】①五分支收编
+（main `b9a0b50`）：opencode D2d `7b38afd`（material_balances 投影+0007+derive_tile_events
+→C3 失效接线+15 钉子——**D2 四批全收官**）；pi P2 `6e7182e`（11 bench 用例定标，红线
+草案转正式，fold 2.0µs/推进 1.75µs/图 6.11ms@10k）；kilo K8 `732e8c8`（NPC_MONOLOGUE
+事件进流+payload extra=forbid 挡数值+三形态投递面路由：bubble/plan 广播 thought 定向
+本人未知 form fail-closed+defers→plan）；cline C3 `e23e7c5`（T5 脚手架：虚拟时钟+有界
+帧驱动+1 种子满日实测 53.98s→10 种子 1.5h，案 A 独立 golden-nightly 主张）；codex S2
+`24d858d`（巧合安规：mix.adverse 流名/值零可见/灰区放行/T5 熵 off）。②**裁 16**（S2
+V1-V4 全采）+**裁 17**（T5 六条：守恒逐位相等/完成率 10 日重定标/孤儿硬红/种子十枚定版/
+golden-nightly 断言就位后建/builder 上提不做）。③门禁（`b9a0b50`）：not-bench
+**1330 passed / 0 failed**、ruff 0、pyright 0。④**下一步=Claude 域 D 批行为链开工**：
+巧合连锁熵注入（mix.adverse 事件族+感知帧零泄漏断言）+ T5 断言组填充（三断言按裁 17
+口径）+ 差事 fixture 多决策续接 + impulse 三扫接线（I 系，codex 出断言）。
 【2026-09-26 第十五轮｜M4 首波四单收编 + 裁 15】①四分支全收编（main `d409f29`）：
 opencode D2a/b/c 三批（建造事件族六 kind+0006 迁移 structures 瘦身表+**matter_state 改
 (branch_id,subject_id) 复合主键**+fold_structure_snapshot 两入口逐位相等+checkpoint
