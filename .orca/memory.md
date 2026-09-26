@@ -16,6 +16,18 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
+【2026-09-26 第十七轮｜D 批开工：B3+D1+S3 收编+impulse_gate 实现】①三分支收编
+（codex S3 `df7aa94` I 系钉子 27 RED 预期指纹+行为表 96 行 impulse_gate(text,
+target_profile,*,triggered)->ImpulseVerdict 判梯 hidden→banned→操纵感；
+cline C4 `9969589` T5 断言组三件+17 单测——**折叠复用数据域单一实现不重算**关键纪律；
+pi P3 `3eaec73` 意愿 bench 0.35ms 提案+4 观察项）+ Claude B3 `24eadb2`（NpcRuntime
+willingness 缝：verdict 只产 NPC_MONOLOGUE 不改 NPC_ACT，「最终都执行」逐位钉死）
++ D1 `76a4672`（mix.adverse 熵流钉子 7 件：状态零驻留+三面零泄漏构造隔离）。
+②**裁 18**：pi 口径问采**增量口径**（0.35ms=表现面增量 vs None 基线；整量 0.92ms
+属 L1 基线不混入）。③**impulse_gate 实现**（`7504873`）：sim/agent/impulse_gate.py
+照 S3 行为表——hidden_leak_scan 入站即拒/操纵感 observation 不含原文/scan()+阶梯
+同码，**28/28 codex 钉子一次全绿**。门禁 not-bench **1386 passed / 0 failed**。
+④D 批剩余：差事 fixture 多决策续接（#4）→ T5 实跑（#5）→ M4 收官门。
 【2026-09-26 第十六轮｜M4 二波五单收编 + 裁 16/17 + D2/D 批前置全就位】①五分支收编
 （main `b9a0b50`）：opencode D2d `7b38afd`（material_balances 投影+0007+derive_tile_events
 →C3 失效接线+15 钉子——**D2 四批全收官**）；pi P2 `6e7182e`（11 bench 用例定标，红线
