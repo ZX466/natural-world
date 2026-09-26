@@ -283,6 +283,28 @@ CREATE VIRTUAL TABLE npc_memory_vec USING vec0(
 
 ---
 
+### 9.1 material_balances（材料余额投影 — M4-D2d 已落地）
+
+`MATERIAL_MOVED` 事件流是材料转移真相；本表只存当前净余额。迁移：
+`0007_m4_material_balances`。
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| `branch_id` | TEXT | PRIMARY KEY, NOT NULL | 分支 |
+| `ref` | TEXT | PRIMARY KEY, NOT NULL | `world:/npc:/structure:` 持有者 |
+| `material_id` | TEXT | PRIMARY KEY, NOT NULL | 材料 id |
+| `quantity` | REAL | NOT NULL DEFAULT 0.0 | 当前净余额 |
+| `updated_at_tick` | INTEGER | NOT NULL DEFAULT 0 | 最后变更 tick |
+| `created_at` | REAL | NOT NULL | 投影维护时间 |
+
+**索引**：`idx_material_branch_material` ON `(branch_id, material_id)`。
+
+**守恒口径**：每事件同材料 from 减、to 加，净额和为 0（浮点容差 1e-9）；
+`world:*` 是外部供给基准、允许净负；`npc/structure` 余额不足即 fail-closed，
+异常经 `flush_tick` 同事务回滚 events + structures + material_balances 三面。
+
+---
+
 ## 10. llm_profiles（LLM 配置档案）
 
 §15 成本治理：api_key 用 Fernet 加密落库。

@@ -14,7 +14,12 @@ from enum import StrEnum
 from typing import Final
 
 from sim.core.calendar import TICKS_PER_GAME_DAY
-from sim.core.events import WorldEvent, structure_checkpoint_event
+from sim.core.events import (
+    EventKind,
+    WorldEvent,
+    structure_checkpoint_event,
+    tile_changed_event,
+)
 
 BUILD_RULE_VERSION: Final[str] = "m4-v1"
 CHECKPOINT_INTERVAL_TICKS: Final[int] = TICKS_PER_GAME_DAY
@@ -156,3 +161,37 @@ def build_checkpoint_event(state: BuildProgress, *, tick: int) -> WorldEvent | N
 def recompute_tail(checkpoint: BuildProgress, *, target_tick: int) -> BuildProgress:
     """以最近 checkpoint 自带版本确定性重算尾部。"""
     return advance_build(checkpoint, target_tick=target_tick)
+
+
+_TILE_DERIVING_KINDS: Final[frozenset[EventKind]] = frozenset(
+    {
+        EventKind.STRUCTURE_COMPLETED,
+        EventKind.STRUCTURE_COLLAPSED,
+        EventKind.STRUCTURE_REMOVED,
+    }
+)
+
+
+def derive_tile_events(
+    event: WorldEvent,
+    snapshot: StructureSnapshot,
+    *,
+    tile_id: int,
+) -> tuple[WorldEvent, ...]:
+    """结构终态 → 逐 tile TILE_CHANGED（纯派生；tile_id 由调用方给）。
+
+    STARTED/CHECKPOINT 不改 tile 占用；snapshot.tiles 已排序去重，故输出确定。
+    COLLAPSED/REMOVED 的还原目标由静态 TileMap 解析，事件本身不携带旧 tile_id。
+    """
+    if event.event_type not in _TILE_DERIVING_KINDS:
+        return ()
+    return tuple(
+        tile_changed_event(
+            event.tick,
+            x,
+            y,
+            tile_id,
+            branch_id=event.branch_id,
+        )
+        for x, y in snapshot.tiles
+    )
