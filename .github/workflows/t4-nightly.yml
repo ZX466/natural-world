@@ -1,0 +1,87 @@
+name: T4 Nightly（真模型出戏探针）
+
+# DESIGN §16：T4 = 出戏探针 + 意愿抱怨合规（「是不是AI」「重来一次」「谁指使你」…），
+# 真模型、**每日 nightly、锁定模型版本**；§16 铁律「真模型测试进 nightly 不进 CI：烧钱且抖动」
+# ——故本工作流**只有 schedule / workflow_dispatch**，`ci.yml` 不得引用本文件（纪律同 ci.yml 头注）。
+# 能力域：配置/CI = cline（m4-plan §4/§6 裁 14 第 4 条已裁「T4 接线归 cline」）；探针集 = codex。
+# 模型 id **硬编码在本文件 env，不进代码**（§16 锁版本防静默回归）：T4_MODEL。
+# api_key 只经 GitHub secrets 注入（名 `T4_MODEL_API_KEY`），**不落盘、不进日志、不进仓库**。
+
+on:
+  schedule:
+    # UTC 19:30 = 北京 03:30；与 nightly-bench.yml（UTC 18:00 / 北京 02:00）错开，避免同刻挤兑 runner
+    - cron: "30 19 * * *"
+  workflow_dispatch:
+
+env:
+  T4_MODEL: claude-sonnet-5
+  T4_MODEL_API_KEY: ${{ secrets.T4_MODEL_API_KEY }}
+
+jobs:
+  t4:
+    name: T4 出戏探针（真模型 · 锁版本）
+    runs-on: ubuntu-latest
+    # 护栏：真模型调用有墙钟上限；探针集规模定标后再调整（§15 成本治理：监控先行、阈值后调）
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: 同步虚拟环境（严格按锁文件）
+        run: uv sync --frozen
+
+      - name: 记录模型锁版本证据（§16 锁版本：模型 id 变更即需显式改本 workflow env）
+        run: |
+          mkdir -p t4-results
+          {
+            echo "date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "runner: ubuntu-latest"
+            echo "nproc: $(nproc)"
+            echo "model_id: ${T4_MODEL}"
+            echo "python: $(uv run python -V)"
+          } > t4-results/model-lock.txt
+          cat t4-results/model-lock.txt
+
+      - name: secrets 就绪检查（只判存在，不打印值）
+        # 骨架期约定：secret 未配置时**不红**（探针尚未接线），只在 step summary 留痕；
+        # 探针接线后（见下一 step 的 TODO）改为硬失败，避免「静默跳过」被误读成「探针全绿」。
+        run: |
+          if [ -z "${T4_MODEL_API_KEY}" ]; then
+            echo "::notice::未配置 secret T4_MODEL_API_KEY——T4 探针阶段跳过（骨架期预期行为）"
+            echo "### T4 Nightly（骨架期）" >> "$GITHUB_STEP_SUMMARY"
+            echo "- secret \`T4_MODEL_API_KEY\` 未配置 → 探针阶段跳过" >> "$GITHUB_STEP_SUMMARY"
+            echo "- 探针集待 codex M4-S1 接线（提案 \`346dfa1\`）" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::notice::T4_MODEL_API_KEY 已配置（值不回显）"
+          fi
+
+      # ===== TODO(codex M4-S1 交付后接)：T4 探针步骤 =====
+      # 探针集提案已交付：codex `346dfa1 docs(security): M4-S1 念头/意愿/运气三面词面边界 + T4 探针集提案`
+      #   （分支 ZX466/codex；接前先确认已收编 main，避免 nightly 跑不存在的入口）。
+      # 接线约定（探针落地后照此替换本段）：
+      #   1. `pytest.ini` 已有 `t4` marker（--strict-markers 要求先注册，见本轮 cline 提交）；
+      #   2. 探针文件落 `sim/tests/test_t4_*.py`（**文件路径 + marker 双纪律**，不靠 -m 单门禁）；
+      #   3. 命令形：`uv run pytest -m t4 --junitxml=t4-results/t4.xml`（结果随下方 artifact 归档）；
+      #   4. 探针必须断言「零直陈出戏命中」——命中即红（§16 T4 内容 + §19 抱怨不指向外部命令源）；
+      #   5. 模型/温度/词面扫描全部读 `T4_MODEL` 等 env，**不得在测试里硬编码模型 id**。
+      # 本 step 在探针交付前保持注释态——不执行任何真模型调用（骨架期零烧钱）。
+
+      - name: "归档结果（model-lock + 探针 junit；`if: always()` 保证红灯也留证据）"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: t4-result
+          path: t4-results/
+          if-no-files-found: warn
+
+      - name: 失败通知（写 step summary + 注解；不吞失败）
+        if: failure()
+        run: |
+          echo "### T4 Nightly 失败" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 模型：${T4_MODEL}（锁版本口径，见 §16）" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 诊断：先看 t4-result artifact 的 model-lock.txt 与探针 junit" >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::T4 nightly 失败（模型 ${T4_MODEL}）——详见 step summary 与 t4-result artifact"

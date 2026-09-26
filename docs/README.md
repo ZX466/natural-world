@@ -21,6 +21,7 @@
 | `docs/arch/m0-core.md` | 架构（Claude） | ✅ main | M0 内核：clock（TimeScale/累加器）/ rng（分流 PCG64）/ entropy（注入走 apply）/ events（EventBus 唯一写路径）/ tick loop（异步驱动 + 同步确定性 tick + 固定执行序）/ map（chunk）/ pathfinding（A* + chunk 失效）/ EventStore Protocol 边界 |
 | `docs/arch/m0-client.md` | 前端/体验（Claude） | ✅ main | M0 渲染闭环：Phaser(canvas 世界) 与 React(canvas 外 UI) 经 Zustand store 单桥、对象池、插值、摄像机；M0 边界与出戏字段禁令 |
 | `docs/arch/m3-plan.md` | 架构（Claude） | ✅ main | M3 规划整合稿：批次 A-D 切分（A 向量 / C 地图可并行，B 等 A 接口冻结，D 收尾）+ 安规钉子横切 + §6 待裁决队列；第五批续写批次 B 模块/文件级施工图与 B1 |
+| `docs/arch/m4-plan.md` | 架构（Claude） | ✅ main | M4 规划：批次 A–D 切分 + 裁 14 六条裁决记录 + 门禁归属速查 + **「T4 全绿」定义**（锁定模型版本下 nightly 连续通过，非每次提交绿） |
 | `docs/security/m1-checklist.md` | 安全/合规/风险（Codex） | ✅ main | M1 安全检查清单 27 项：K1–K8 密钥（Fernet/主密钥/日志脱敏/SSRF）、M1-A–I 出戏断言、O1–O6 LLM 输出边界、W1–W5 WS 白名单、G1–G4 通用 |
 | `docs/security/threat-model.md` | 安全/合规/风险（Codex） | ✅ main | 轻量威胁模型：4 资产 / 10 威胁→缓解映射 / 出戏防线 5 层 / 非目标 / Top-5 技术安全风险 |
 | `docs/security/t3-corpus.md` | 安全/合规/风险（Codex） | ✅ main | T3 出戏对抗样本集：分类攻击语料（元信息直问/诱导/存档意识/操纵感/时间戳探针/身体否定）；**期望响应形态 = 第一人称世界内回应，不是拒绝话术**；M1-C/D/E/I 的 fixture 来源 |
@@ -28,6 +29,7 @@
 | `docs/security/m3-preplan.md` | 安全/合规/风险（Codex） | ✅ main | M3 安规预研：R1-R7 记忆/知识传播缝、C1-C13 建造输入面、X1-X8 triggered 扫描面 + §4 验收口径 |
 | `docs/security/m3-evidence-chain.md` | 安全/合规/风险（Codex） | ✅ main | R5 证据链契约：witnessed（emerge 事件 + witnesses 双证据）/ told（链上衰减 0.9×0.6^n、下限 0.1、断链即失效）/ inferred（禁他人属性，无例外）三路判定 + E1 浮现事件提案 + knowledge 五列扩展 + §8 七条 T1 验收钉子 |
 | `docs/security/t1-sampling-10k.md` | 安全/合规/风险（Codex） | ✅ main | T1 信息边界 10k 采样验收口径：采样对象/触发分布/判据（零直陈泄露 + 零误伤）+ 与 S1 双路径测试的关系（单测=逻辑覆盖，10k=规模化终验）；配套 `test_m2_t1_sampling_10k.py` |
+| `docs/security/m3-closure-preaudit.md` | 安全/合规/风险（Codex） | ✅ 已收官 | M3 收官门预审：静态六钉子对表 + S4 10k 闭环核对 + 5 发现；§7 动态门于 2026-09-25 在 main 回填（全量 1076 passed / 0 failed）→ 宣告 M3 收官 |
 | `docs/perf/budget.md` | 性能（Pi） | ✅ main | 每 tick 16.6ms（1x=60tick/s）预算表：7 子系统名义 7.00ms / 上限 12.35ms（M1 分解）；4x/16x 与战斗时间尺特例；采集告警点 |
 | `docs/perf/hotspots.md` | 性能（Pi） | ✅ main | 热点预判 H-1–H-6：感知传播分区/增量、L0 向量化、SQLite append-only 批量写与索引、WS 增量合批、超速倍率、LLM 异步延迟（信息性） |
 | `docs/perf/bench-plan.md` | 性能（Pi） | ✅ main | 基准方案：M0 必带 bench 清单、pytest-benchmark/真实 tick loop harness 选型、回归阈值、nightly 节奏、已知不可测项 |
@@ -37,13 +39,13 @@
 | `docs/perf/l1-spec.md` | 性能（Pi） | ✅ main | L1 算法规格：原型↔实现对账 + 红线实测回填 + soak L1 feeder 两阶段 |
 | `docs/perf/m3-retrieval-budget.md` | 性能（Pi） | ✅ main | M3 检索缝预算案：候选/打分/退化哨兵/tick 四红线设计稿（实测候选 0.019ms、打分 600 候选 0.862ms、正常形态 ≈0.05ms/NPC）+ V5 裁决输入 + baseline.json 8 步建立流程 |
 | `docs/perf/ci-calibration-m2p6.md` | 性能（Pi） | ✅ main | CI 档位定标提案：nightly advisory 门（`PI_BENCH_ADVISORY`）+ CI 实测档位基线口径（RNG 1M 警戒 300→330 的依据） |
-| `docs/perf/m4-build-budget-preplan.md` | 性能（Pi） | ⏳ 待收编 | M4-P1 建造预算预研：现状 tick 预算盘点（上限表余量 2.10ms=13%）+ 坍塌级联成本模型实测（BFS 10k=1.27ms vs 逐对象事件 51ms=307% tick）+ 施工推进语义 perf 建议（支持 M4-D1 checkpoint）+ 红线草案框架 |
+| `docs/perf/m4-build-budget-preplan.md` | 性能（Pi） | ✅ main `88284c3` | M4-P1 建造预算预研：现状 tick 预算盘点（上限表余量 2.10ms=13%）+ 坍塌级联成本模型实测（BFS 10k=1.27ms vs 逐对象事件 51ms=307% tick）+ 施工推进语义 perf 建议（支持 M4-D1 checkpoint）+ 红线草案框架 |
 | `docs/data/schema.md` | 数据/数据库（opencode） | ✅ main | SQLite schema：事件日志（append-only）/分支树/快照分层/玩家 anchor/NPC 记忆 + sqlite-vec 占位；索引与约束对齐 §6 契约 |
 | `docs/data/event-sourcing.md` | 数据/数据库（opencode） | ✅ main | 事件溯源：`apply(event)` 唯一写路径、读档重放流程、回放确定性（RNG/熵随事件落库） |
 | `docs/data/migration.md` | 数据/数据库（opencode） | ✅ main | Alembic 迁移策略（async env.py / alembic.ini / 首版迁移骨架） |
 | `docs/data/vec-preplan.md` | 数据/数据库（opencode） | ✅ main | M3 记忆向量检索预研：sqlite-vec vs numpy 余弦、5 万条量级估算（非瓶颈）、`LlmClient.embed` 缝、V1-V7 待裁决清单 |
 | `docs/data/matter-register-proposal.md` | 数据/数据库（opencode） | ✅ 已裁并实施 | §19.4 注册持久化：`register` 返回 `MATTER_BUILD` 立账事件（零 schema），structures M3 不建；4 点裁决 + 9 用例实施记录 |
-| `docs/data/build-domain-preplan.md` | 数据/数据库（opencode） | ⏳ 待裁 | M4-D1 建造数据面：structures 拓扑投影、建造事件族、checkpoint 推进、承重图、材料守恒；7 个待裁点 |
+| `docs/data/build-domain-preplan.md` | 数据/数据库（opencode） | ✅ main `a725a65` | M4-D1 建造数据面：structures 拓扑投影、建造事件族、checkpoint 推进、承重图、材料守恒；**裁 14 采信主干 7 点全裁**（细则见 `docs/arch/m4-plan.md` §6 第 2 条） |
 | `docs/api/ws-protocol.md` | 接口/兼容性（kilo） | ✅ main | WS 消息协议：消息类型清单与字段 schema、出戏边界（哪些字段绝不外发） |
 | `docs/api/openapi.md` | 接口/兼容性（kilo） | ✅ main | HTTP 端点设计：设置页 / Profile 管理 / 存档 anchor CRUD；api_key 只在后端流转 |
 | `docs/api/codegen.md` | 接口/兼容性（kilo） | ✅ main | OpenAPI → `shared/protocol.ts` 生成管线（openapi-typescript + banner + prettier）；CI 三道守卫（漂移检测已接 ci.yml / banner / 禁手写） |
@@ -187,9 +189,21 @@ M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI
 | M3-D4 knowledge 治理七列（B3 实施） | opencode | `0005_m3_knowledge_governance`（add_column×7 + 索引×3 + CHECK×3，CHECK 走 `op.batch_alter_table`）+ `sim/core/persistence/knowledge_store.py` + `sim/llm/memory_scan.py`（`decide()` 抽出为唯一判梯）+ `sim/tests/test_t1_m3_knowledge_cascade.py`（20 用例） | ✅ main `30dd087` | 裁 10 全采：继承失效不继承替代（沿 `source_knowledge_id` 广度递归、表内无替代指针、已失效行幂等仍下钻、全 SQL 带 `branch_id`）；X7 写入门=记忆/知识共用 `decide()`，知识表不可能成扫描旁路；`evidence_seq` 复用 M2-D3 `seq_by_index` 投影缝回填；门禁 995 passed / 55 skipped、ruff ok、pyright 0 error、alembic 零漂移 |
 | M3-C3 chunk 失效通路 + §19.4 提案 | opencode | `sim/world/{map,pathfinding}.py` + `sim/tests/test_m3_chunk_invalidation.py` + `docs/data/matter-register-proposal.md` | ✅ main `5724aa7` | `TileMap` PrivateAttr 脏集（mark/drain/`with_collision` 不可变换图）+ `event_tile_position`（TILE_CHANGED 全量、MATTER 仅 x/y≥0、-1 哨兵不标）+ `Pathfinder.observe_events`/`observe_map` 精确失效；24 用例钉死「剔 1 留 1 / 未定位 no-op / 封格绕行 / 全封不可达」；提案主张 MATTER_BUILD 立账否 structures 注册主路径（全量 1081 passed / ruff / pyright 0） |
 | M3-§19.4 注册持久化裁决 | Claude | `docs/data/matter-register-proposal.md`（提案→已裁）+ `docs/data/schema.md` §19.4 + `docs/arch/m3-plan.md` §6 同步 | ✅ main `16f2983` | 四点全采：①采 A 否 A'（零新 kind，`register` 产 `MATTER_BUILD` 立账）②采「返回事件不注入 EventSink」③structures M3 不建、留给 M4 ④x/y 默认 -1（与 C3 `event_tile_position` 哨兵天然衔接）；依据=主树实证 `_project_matter` 首事件即建行、折叠按 `durability` 而非 `amount`；实施放行 opencode（M3-C3 后续件） |
+| M3-S6 收官门静态预审 | codex | `docs/security/m3-closure-preaudit.md`（`700015a`） | ✅ main `700015a` | 六钉子逐条对表 + S4 10k 闭环核对 + **5 发现**待裁（动态门结论见下行 M3-S6b） |
 | M3-S6b 收官门动态复验（M3 收官行） | codex | `docs/security/m3-closure-preaudit.md` §7 回填 + `docs/arch/m3-plan.md` 状态行（`ZX466/codex` `686caa8`） | ⏳ 待收编 | 动态收官门通过：功能非性能全量 **1076 passed / 0 failed**、S4 10k 7 passed、七钉子+S4 148 passed；bench 11 failed/60 passed 按裁 1 advisory 判为负载抖动（retrieval/rng/smell 单独复跑全绿），soak CI smoke 单独红但仅性能门不阻断；pyright 0 error；**宣告 M3 收官（2026-09-25）**——分支已交付未进 main，收编后本行改 ✅ main |
 
-### 5.3 M5 预备（接口锚点，零代码契约先行）
+### 5.3 M4 交付状态（进行中 · 批次 A/B/C/D 按裁 14 切分）
+
+| 路 | Agent | 交付物（提交） | 状态 | 实测 / 结论 |
+|---|---|---|---|---|
+| M4-C1 计划骨架 + M4-C2 T4 nightly 接线（本域） | cline | `docs/arch/m4-plan.md`（136 行骨架→裁 14 填实）+ `.github/workflows/t4-nightly.yml` + `pytest.ini` `t4` marker | ✅ main `4b19f31`（C1）＋ C2 本轮交付待收编 | 裁 14 六条落档（批次边界照切 / 看板落前端 / 运气只进事件流 / D 批担 T5…）；**T4 接线骨架**：锁 `claude-sonnet-5`（模型 id 硬编码 workflow env，不进代码）、secret `T4_MODEL_API_KEY`、cron UTC 19:30（与 nightly-bench UTC 18:00 错开）、**仅 schedule/dispatch 不进每提交 CI**（§16 铁律）、探针步骤留 TODO 指向 M4-S1；`t4` marker 补注册（`--strict-markers` 要求先注册） |
+| M4-D1 建造域数据面预研 | opencode | `docs/data/build-domain-preplan.md` | ✅ main `a725a65` | structures 拓扑投影瘦身 + 建造事件族 + checkpoint 推进 + 承重图 + 材料守恒；**裁 14 采信主干 7 点全裁**（细则见 `m4-plan.md` §6 第 2 条，含 pi M4-P1 摊还硬约束交叉对账） |
+| M4-P1 建造预算预研 | pi | `docs/perf/m4-build-budget-preplan.md` | ✅ main `88284c3` | tick 预算盘点（余量 2.10ms=13%）+ 坍塌 BFS 成本模型（BFS 10k=1.27ms vs 逐对象事件 51ms=307% tick）+ 施工推进语义 perf 建议 + 红线草案框架 |
+| M4-B2 意愿冲突度管线 v0 | Claude | `sim/agent/will.py` + `sim/tests/test_m4_willingness.py` | ✅ main `5a8c1b9` | w₁–w₄ 加权和（初版均分 0.25）+ 四档表现（0.3/0.6/0.8）+ 12 钉子；抱怨词面全自我怀疑族（§19 禁被操纵感）；frozen `WillingnessVerdict` + 模板确定性（C5）；「但最终都执行」由类型层保证（不回写效用分数） |
+| M4-S1 三面词面边界 + T4 探针集提案 | codex | 念头/意愿/运气三面词面边界 + T4 探针集提案（`ZX466/codex` `346dfa1`） | ⏳ 待收编 | **T4 接线唯一缺口**：探针集收编后由 cline 把探针步骤接进 `t4-nightly.yml`（接线约定五条已写在 workflow 注释） |
+| M4-D2 建造数据面施工 | opencode | 基于 D1 预研的施工件（在途） | ⏳ 在途 | 裁 14 第 2 条七点细则施工；同轮修正 `(branch_id, structure_id)` 复合主键 + matter identity 对账 = 首个迁移件 |
+
+### 5.4 M5 预备（接口锚点，零代码契约先行）
 
 | 路 | Agent | 交付物（提交） | 状态 | 实测 / 结论 |
 |---|---|---|---|---|
