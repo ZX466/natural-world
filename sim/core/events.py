@@ -12,8 +12,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from enum import StrEnum
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 
 
 class EventKind(StrEnum):
@@ -33,6 +34,13 @@ class EventKind(StrEnum):
     MATTER_COLLAPSE = "matter.collapse"  # 物质熵增：耐久归零坍塌（简化版）
     # ---- M3（m3-plan 批次 B / m3-evidence-chain §3；裁 8）----
     NPC_HIDDEN_EMERGE = "npc.hidden_emerge"  # 隐藏属性新进触发窗口（E1：浮现即事件，R5 证据链根）
+    # ---- M4（m4-plan 批次 D2 / 裁 14-2）----
+    STRUCTURE_STARTED = "structure.started"
+    STRUCTURE_CHECKPOINT = "structure.checkpoint"
+    STRUCTURE_COMPLETED = "structure.completed"
+    STRUCTURE_COLLAPSED = "structure.collapsed"
+    STRUCTURE_REMOVED = "structure.removed"
+    MATERIAL_MOVED = "material.moved"
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +158,168 @@ class HiddenEmergePayload(BaseModel):
 
     npc_id: str
     attr_ids: tuple[str, ...]
+
+
+_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+_ID = Annotated[str, Field(min_length=1, max_length=64, pattern=_ID_PATTERN)]
+_OPTIONAL_ID = Annotated[
+    str,
+    Field(max_length=64, pattern=r"^(?:|[A-Za-z0-9][A-Za-z0-9_.:-]{0,63})$"),
+]
+_SLUG = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_]*$")]
+_REF = Annotated[
+    str,
+    Field(min_length=3, max_length=128, pattern=r"^[a-z]+:[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"),
+]
+_TILE_COORD = Annotated[int, Field(strict=True, ge=0, lt=4096)]
+_DURATION_TICKS = Annotated[int, Field(strict=True, gt=0, le=1_000_000_000)]
+
+
+def _reject_bool(value: Any) -> Any:
+    if isinstance(value, bool):
+        msg = "bool 不可作数值"
+        raise ValueError(msg)
+    return value
+
+
+_UNIT_FLOAT = Annotated[
+    float,
+    BeforeValidator(_reject_bool),
+    Field(ge=0.0, le=1.0, allow_inf_nan=False),
+]
+_POSITIVE_FLOAT = Annotated[
+    float,
+    BeforeValidator(_reject_bool),
+    Field(gt=0.0, allow_inf_nan=False),
+]
+
+StructureCollapseCause = Literal["decay", "damage", "support_lost"]
+StructureRemoveReason = Literal["demolished", "cleanup"]
+MaterialMoveReason = Literal[
+    "build_reserved",
+    "build_consumed",
+    "build_refunded",
+    "demolish_yield",
+]
+
+
+class StructureStartedPayload(BaseModel):
+    """施工开始：结构拓扑与计划输入（裁 14-2 ①/②/④）。"""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    structure_id: _ID
+    tiles: tuple[tuple[_TILE_COORD, _TILE_COORD], ...]
+    kind: _SLUG
+    material: _SLUG
+    owner_id: _OPTIONAL_ID = ""
+    built_by: _OPTIONAL_ID = ""
+    load_bearing: bool = False
+    supported_by: tuple[_ID, ...] = ()
+    planned_duration_ticks: _DURATION_TICKS
+    recipe_id: _ID
+    recipe_version: _ID
+    build_rule_version: _ID
+
+    @field_validator("tiles")
+    @classmethod
+    def _canonical_tiles(cls, value: tuple[tuple[int, int], ...]) -> tuple[tuple[int, int], ...]:
+        if not value:
+            msg = "tiles 不得为空"
+            raise ValueError(msg)
+        canonical = tuple(sorted(value))
+        if len(set(canonical)) != len(canonical):
+            msg = "tiles 不得重复"
+            raise ValueError(msg)
+        return canonical
+
+    @field_validator("supported_by")
+    @classmethod
+    def _canonical_supports(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        canonical = tuple(sorted(value))
+        if len(set(canonical)) != len(canonical):
+            msg = "supported_by 不得重复"
+            raise ValueError(msg)
+        return canonical
+
+    @model_validator(mode="after")
+    def _reject_self_support(self) -> StructureStartedPayload:
+        if self.structure_id in self.supported_by:
+            msg = "结构不得支撑自身"
+            raise ValueError(msg)
+        return self
+
+
+class StructureCheckpointPayload(BaseModel):
+    """施工检查点：累计进度/质量/完整度（每游戏日一次，裁 14-2 ②）。"""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    structure_id: _ID
+    progress: _UNIT_FLOAT
+    quality: _UNIT_FLOAT
+    integrity: _UNIT_FLOAT
+    build_rule_version: _ID
+
+
+class StructureCompletedPayload(BaseModel):
+    """施工完成：终态质量与完整度。"""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    structure_id: _ID
+    quality: _UNIT_FLOAT
+    integrity: _UNIT_FLOAT
+
+
+class StructureCollapsedPayload(BaseModel):
+    """结构坍塌：领域因果；matter 熵态仍由 MATTER_COLLAPSE 折叠。"""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    structure_id: _ID
+    cause: StructureCollapseCause
+    support_path: tuple[_ID, ...] = ()
+    integrity: _UNIT_FLOAT = 0.0
+
+    @field_validator("support_path")
+    @classmethod
+    def _unique_support_path(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if len(set(value)) != len(value):
+            msg = "support_path 不得重复"
+            raise ValueError(msg)
+        return value
+
+
+class StructureRemovedPayload(BaseModel):
+    """结构移除：主动拆除或清理；坍塌不走本事件。"""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    structure_id: _ID
+    reason: StructureRemoveReason
+
+
+class MaterialMovedPayload(BaseModel):
+    """材料转移：来源→去向，守恒账本的唯一事件形态（裁 14-2 ⑦）。"""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    transfer_id: _ID
+    material_id: _ID
+    quantity: _POSITIVE_FLOAT
+    from_ref: _REF
+    to_ref: _REF
+    reason: MaterialMoveReason
+    structure_id: _OPTIONAL_ID = ""
+    recipe_id: _OPTIONAL_ID = ""
+
+    @model_validator(mode="after")
+    def _reject_self_transfer(self) -> MaterialMovedPayload:
+        if self.from_ref == self.to_ref:
+            msg = "材料转移来源与去向不得相同"
+            raise ValueError(msg)
+        return self
 
 
 class WorldEvent(BaseModel):
@@ -362,4 +532,172 @@ def hidden_emerge_event(
         event_type=EventKind.NPC_HIDDEN_EMERGE,
         payload=p.model_dump(mode="json"),
         witnesses=list(witnesses or []),
+    )
+
+
+# ---- M4 工厂（建造域；裁 14-2）----
+
+
+def _reject_washed_sequence(value: Any, field_name: str) -> None:
+    if isinstance(value, (str, bytes, dict)) or not isinstance(value, Sequence):
+        msg = f"{field_name} 必须是序列（禁 str/bytes/dict 洗白）: {value!r}"
+        raise TypeError(msg)
+
+
+def structure_started_event(
+    tick: int,
+    *,
+    structure_id: str,
+    tiles: Sequence[tuple[int, int]],
+    kind: str,
+    material: str,
+    planned_duration_ticks: int,
+    recipe_id: str,
+    recipe_version: str,
+    build_rule_version: str,
+    owner_id: str = "",
+    built_by: str = "",
+    load_bearing: bool = False,
+    supported_by: Sequence[str] = (),
+    branch_id: str = "main",
+) -> WorldEvent:
+    """施工开始事件；tiles/支撑在工厂层先拒可迭代洗白。"""
+    _reject_washed_sequence(tiles, "tiles")
+    _reject_washed_sequence(supported_by, "supported_by")
+    payload = StructureStartedPayload(
+        structure_id=structure_id,
+        tiles=tuple(tiles),
+        kind=kind,
+        material=material,
+        owner_id=owner_id,
+        built_by=built_by,
+        load_bearing=load_bearing,
+        supported_by=tuple(supported_by),
+        planned_duration_ticks=planned_duration_ticks,
+        recipe_id=recipe_id,
+        recipe_version=recipe_version,
+        build_rule_version=build_rule_version,
+    )
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.STRUCTURE_STARTED,
+        payload=payload.model_dump(mode="json"),
+    )
+
+
+def structure_checkpoint_event(
+    tick: int,
+    *,
+    structure_id: str,
+    progress: float,
+    quality: float,
+    integrity: float,
+    build_rule_version: str,
+    branch_id: str = "main",
+) -> WorldEvent:
+    payload = StructureCheckpointPayload(
+        structure_id=structure_id,
+        progress=progress,
+        quality=quality,
+        integrity=integrity,
+        build_rule_version=build_rule_version,
+    )
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.STRUCTURE_CHECKPOINT,
+        payload=payload.model_dump(mode="json"),
+    )
+
+
+def structure_completed_event(
+    tick: int,
+    *,
+    structure_id: str,
+    quality: float,
+    integrity: float,
+    branch_id: str = "main",
+) -> WorldEvent:
+    payload = StructureCompletedPayload(
+        structure_id=structure_id,
+        quality=quality,
+        integrity=integrity,
+    )
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.STRUCTURE_COMPLETED,
+        payload=payload.model_dump(mode="json"),
+    )
+
+
+def structure_collapsed_event(
+    tick: int,
+    *,
+    structure_id: str,
+    cause: StructureCollapseCause,
+    support_path: Sequence[str] = (),
+    integrity: float = 0.0,
+    branch_id: str = "main",
+) -> WorldEvent:
+    _reject_washed_sequence(support_path, "support_path")
+    payload = StructureCollapsedPayload(
+        structure_id=structure_id,
+        cause=cause,
+        support_path=tuple(support_path),
+        integrity=integrity,
+    )
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.STRUCTURE_COLLAPSED,
+        payload=payload.model_dump(mode="json"),
+    )
+
+
+def structure_removed_event(
+    tick: int,
+    *,
+    structure_id: str,
+    reason: StructureRemoveReason,
+    branch_id: str = "main",
+) -> WorldEvent:
+    payload = StructureRemovedPayload(structure_id=structure_id, reason=reason)
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.STRUCTURE_REMOVED,
+        payload=payload.model_dump(mode="json"),
+    )
+
+
+def material_moved_event(
+    tick: int,
+    *,
+    transfer_id: str,
+    material_id: str,
+    quantity: float,
+    from_ref: str,
+    to_ref: str,
+    reason: MaterialMoveReason,
+    structure_id: str = "",
+    recipe_id: str = "",
+    branch_id: str = "main",
+) -> WorldEvent:
+    payload = MaterialMovedPayload(
+        transfer_id=transfer_id,
+        material_id=material_id,
+        quantity=quantity,
+        from_ref=from_ref,
+        to_ref=to_ref,
+        reason=reason,
+        structure_id=structure_id,
+        recipe_id=recipe_id,
+    )
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.MATERIAL_MOVED,
+        payload=payload.model_dump(mode="json"),
     )

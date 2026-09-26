@@ -236,28 +236,33 @@ CREATE VIRTUAL TABLE npc_memory_vec USING vec0(
 
 ---
 
-## 9. structures（建筑/结构物）
+## 9. structures（建筑/结构物 — M4-D2 已落地）
 
-§6 Structure：可建造/可破坏的物理结构。
+**当前拓扑与生命周期投影**；熵态真相仍在 §14 `matter_state`。迁移：
+`0006_m4_structures`。复合主键允许同 `structure_id` 在不同分支共存。
 
-| 字段 | 类型 | 约束 | 说明 | 对齐 |
-|------|------|------|------|------|
-| `id` | TEXT | PRIMARY KEY | 结构物 UUID | — |
-| `branch_id` | TEXT | NOT NULL | 所属分支 | — |
-| `tiles` | TEXT | NOT NULL | JSON 数组：占据的 tile 坐标 [(x,y), ...] | §6 |
-| `kind` | TEXT | NOT NULL | 结构类型（木棚/石墙/...） | §6 |
-| `material` | TEXT | NOT NULL | 材料 | §6 |
-| `integrity` | REAL | NOT NULL DEFAULT 1.0 | 完整度 0.0–1.0，归零变 rubble | §6/§14 |
-| `quality` | REAL | NOT NULL DEFAULT 0.5 | 质量 0.0–1.0，影响衰减速度 | §6 |
-| `load_bearing` | INTEGER | NOT NULL DEFAULT 0 | 是否承重 | §6 |
-| `supported_by` | TEXT | NOT NULL DEFAULT '[]' | JSON 数组：支撑结构 id 列表 | §6 |
-| `owner_id` | TEXT | NULL | 所有者 | §6 |
-| `built_by` | TEXT | NULL | 建造者 | §6 |
-| `built_at` | INTEGER | NULL | 建造 tick | §6 |
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `structure_id` | TEXT | PRIMARY KEY | 结构稳定 id（分支内唯一） |
+| `branch_id` | TEXT | PRIMARY KEY, NOT NULL | 所属分支 |
+| `tiles` | TEXT | NOT NULL | JSON 数组 `[[x,y], ...]` |
+| `kind` | TEXT | NOT NULL | 结构类型 slug（木棚/石墙…） |
+| `material` | TEXT | NOT NULL | 单材料 slug（M5 再议多材料） |
+| `phase` | TEXT | NOT NULL DEFAULT 'building' | planned/building/active/collapsing/rubble |
+| `load_bearing` | INTEGER | NOT NULL DEFAULT 0 | 是否承重；planned 不承重 |
+| `supported_by` | TEXT | NOT NULL DEFAULT '[]' | JSON 支撑 id 数组（无环/同分支由领域校验） |
+| `owner_id` | TEXT | NULL | 所有者 |
+| `built_by` | TEXT | NULL | 建造者 |
+| `built_at` | INTEGER | NULL | 建成 tick |
+| `created_at` | REAL | NOT NULL | 投影维护时间 |
+
+**不存**：`integrity/quality/decay_rate/is_rubble`（避免与 `matter_state` 双真相）。
+坍塌保留 `phase=rubble` tombstone，不删行。
 
 **索引**：
 - `idx_struct_branch` ON `(branch_id)` — 按分支查询
 - `idx_struct_owner` ON `(branch_id, owner_id)` — 按所有者查询
+- `idx_struct_phase` ON `(branch_id, phase)` — 施工看板/生命周期筛选
 
 ---
 
@@ -387,12 +392,12 @@ relationships / npc_memories / knowledge。迁移：`0004_m2_npc_attributes`。
 events 流的 `tile_changed` / `matter.*` 事件驱动**（§19 禁止直接赋值；
 §11 熵材料随事件落库）——快照 + 事件重放可逐位重建。
 
-迁移：`0004_m2_npc_attributes`（structures 完整玩法 M4/M5，见 §9）。
+迁移：`0004_m2_npc_attributes` 建表；`0006_m4_structures` 将主键改为分支复合键。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
-| `subject_id` | TEXT | PRIMARY KEY | 对象稳定 id |
-| `branch_id` | TEXT | NOT NULL | 所属分支 |
+| `branch_id` | TEXT | PRIMARY KEY, NOT NULL | 所属分支 |
+| `subject_id` | TEXT | PRIMARY KEY, NOT NULL | 对象稳定 id（分支内唯一） |
 | `subject_kind` | TEXT | NOT NULL DEFAULT 'structure' | structure/item/terrain/natural |
 | `material` | TEXT | NOT NULL DEFAULT '' | 材料（木/石/...） |
 | `integrity` | REAL | NOT NULL DEFAULT 1.0 | 完整度 0.0–1.0，归零变 rubble |

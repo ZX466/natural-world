@@ -442,7 +442,7 @@ async def _project_matter(session: AsyncSession, branch_id: str, event: WorldEve
     decay_rate = float(payload.get("decay_rate", -1.0))  # type: ignore[arg-type]
     is_collapse = event.event_type is EventKind.MATTER_COLLAPSE
 
-    existing = await session.get(MatterState, matter_id)
+    existing = await session.get(MatterState, (branch_id, matter_id))
     if existing is None:
         folded = fold_matter_snapshot(
             None,

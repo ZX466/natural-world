@@ -130,16 +130,20 @@ class TestMatterReplayTwoEntry:
         assert (await ns.materialize_matter_replay([]))._items == {}
 
     async def test_replay_branch_isolated(self, store) -> None:
-        """分支隔离：重放只看本分支 events（R4 纪律）。"""
+        """分支隔离：同 matter_id 在两分支各自重建，不串值（R4 + 裁 14-2 ③）。"""
         ns_main = NpcStore(store, branch_id="main")
         ns_b = NpcStore(store, branch_id="branch-b")
         await ns_main.flush_tick(
-            [matter_event(1, EventKind.MATTER_BUILD, "w-main", durability=0.7)]
+            [matter_event(1, EventKind.MATTER_BUILD, "shared", durability=0.7)]
         )
-        await ns_b.flush_tick([matter_event(1, EventKind.MATTER_BUILD, "w-b", durability=0.3)])
+        await ns_b.flush_tick([matter_event(1, EventKind.MATTER_BUILD, "shared", durability=0.3)])
 
-        assert set((await ns_main.materialize_matter_replay())._items) == {"w-main"}
-        assert set((await ns_b.materialize_matter_replay())._items) == {"w-b"}
+        main_ledger = await ns_main.materialize_matter_replay()
+        branch_ledger = await ns_b.materialize_matter_replay()
+        assert set(main_ledger._items) == {"shared"}
+        assert set(branch_ledger._items) == {"shared"}
+        assert main_ledger.state("shared").integrity == pytest.approx(0.7)
+        assert branch_ledger.state("shared").integrity == pytest.approx(0.3)
 
     async def test_replay_is_pure_read(self, store, engine) -> None:
         """重放纯读：不写 matter_state（C4 唯一写路径不变）。"""

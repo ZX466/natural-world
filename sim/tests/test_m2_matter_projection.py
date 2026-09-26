@@ -59,7 +59,7 @@ class TestIntegrityTripleConsistency:
         ns = NpcStore(store)
         await ns.flush_tick(events)
 
-        row = await session.get(MatterState, "food-1")
+        row = await session.get(MatterState, ("main", "food-1"))
         assert row is not None
         # 三方：账本 = payload.durability = 投影列（投影 clip(0,1) 不改变 0..1 值）
         snap = ledger.state("food-1")
@@ -74,7 +74,7 @@ class TestIntegrityTripleConsistency:
         dmg = ledger.damage("wall-1", amount=-0.35, tick=2)
         await ns.flush_tick([dmg])
 
-        row = await session.get(MatterState, "wall-1")
+        row = await session.get(MatterState, ("main", "wall-1"))
         assert row is not None
         snap = ledger.state("wall-1")
         assert dmg.payload["durability"] == pytest.approx(snap.integrity)
@@ -87,7 +87,7 @@ class TestIntegrityTripleConsistency:
         ns = NpcStore(store)
         await ns.flush_tick(events)
 
-        row = await session.get(MatterState, "hut-1")
+        row = await session.get(MatterState, ("main", "hut-1"))
         assert row is not None
         assert row.integrity == pytest.approx(0.0)
         assert ledger.state("hut-1").integrity == pytest.approx(0.0)
@@ -105,7 +105,7 @@ class TestRubbleTripleConsistency:
         ns = NpcStore(store)
         await ns.flush_tick(events)
 
-        row = await session.get(MatterState, "hut-1")
+        row = await session.get(MatterState, ("main", "hut-1"))
         assert row is not None
         assert row.is_rubble is ledger.state("hut-1").is_rubble is True
 
@@ -116,7 +116,7 @@ class TestRubbleTripleConsistency:
         ns = NpcStore(store)
         await ns.flush_tick([dmg])
 
-        row = await session.get(MatterState, "wall-1")
+        row = await session.get(MatterState, ("main", "wall-1"))
         assert row is not None
         assert row.is_rubble is True
         assert ledger.state("wall-1").is_rubble is True
@@ -127,7 +127,7 @@ class TestRubbleTripleConsistency:
         ns = NpcStore(store)
         await ns.flush_tick([ledger.build("wall-1", amount=0.0, tick=1)])
 
-        row = await session.get(MatterState, "wall-1")
+        row = await session.get(MatterState, ("main", "wall-1"))
         assert row is not None
         assert row.is_rubble is False
 
@@ -146,7 +146,7 @@ class TestDecayRateCarried:
         ns = NpcStore(store)
         await ns.flush_tick([ledger.build("food-1", amount=0.0, tick=1)])
 
-        row = await session.get(MatterState, "food-1")
+        row = await session.get(MatterState, ("main", "food-1"))
         assert row is not None
         # 方案 A：投影承载账本静态率（重放保真恢复）
         assert row.decay_rate == pytest.approx(ledger.state("food-1").decay_rate)

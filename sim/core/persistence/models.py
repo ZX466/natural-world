@@ -379,7 +379,7 @@ class MatterState(TimestampMixin, Base):
 
     __tablename__ = "matter_state"
 
-    subject_id: Mapped[str] = mapped_column(String, primary_key=True)  # 对象稳定 id
+    subject_id: Mapped[str] = mapped_column(String)  # 对象稳定 id（分支内唯一）
     branch_id: Mapped[str] = mapped_column(String, nullable=False)
     subject_kind: Mapped[str] = mapped_column(String, nullable=False, default="structure")
     material: Mapped[str] = mapped_column(String, nullable=False, default="")
@@ -394,7 +394,36 @@ class MatterState(TimestampMixin, Base):
     updated_at_tick: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     __table_args__ = (
-        PrimaryKeyConstraint("subject_id"),
+        PrimaryKeyConstraint("branch_id", "subject_id"),
         Index("idx_matter_branch", "branch_id"),
         Index("idx_matter_branch_kind", "branch_id", "subject_kind"),
+    )
+
+
+class Structure(TimestampMixin, Base):
+    """结构拓扑投影（M4-D2，裁 14-2 ③④⑤）。
+
+    事件流是熵态真相；本表只存当前拓扑与生命周期，不复制 integrity/quality/
+    decay_rate/is_rubble。rubble 保留 tombstone 行（phase=rubble）。
+    """
+
+    __tablename__ = "structures"
+
+    branch_id: Mapped[str] = mapped_column(String, nullable=False)
+    structure_id: Mapped[str] = mapped_column(String, nullable=False)
+    tiles: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    material: Mapped[str] = mapped_column(String, nullable=False)
+    phase: Mapped[str] = mapped_column(String, nullable=False, default="building")
+    load_bearing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    supported_by: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    owner_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    built_by: Mapped[str | None] = mapped_column(String, nullable=True)
+    built_at: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("branch_id", "structure_id"),
+        Index("idx_struct_branch", "branch_id"),
+        Index("idx_struct_owner", "branch_id", "owner_id"),
+        Index("idx_struct_phase", "branch_id", "phase"),
     )
