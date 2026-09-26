@@ -16,6 +16,22 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
+【2026-09-26 第十三/十四轮｜M3 收官 + M4 开工 + 裁 14】①五树交付全收编（main `57e1dc9`）：
+codex S6b `686caa8` 收官门动态复验通过——**M3 正式收官**（功能全量 1076 passed/0 failed、
+S4 10k 零回归、七钉子+S4 148 passed、bench 11F 判裁 1 抖动）；kilo K6 `13cb5b5` WS 分发块
+六类 C→S 全落地 56 钉子（TDD stash 复验真咬；set_control 栈式会话态/impulse 乐观 feedback/
+load_anchor 不透明串+失败不断线；两处 LLM 域占位 _impulse_cue/叙事模板待 M4-B 替换；
+_ANCHOR_IDS/_ANCHOR_LOAD_HOOK 两处部署债登记在 anchors-api）；cline C1 `4b19f31` m4-plan.md
+136 行骨架（A‖C→B→D；T4=锁模型 nightly 连续通过）；opencode D1 `a725a65` 建造域预研
+（structures 瘦身/structure 事件族/checkpoint 施工/内存图/MATERIAL_MOVED，7 待裁点）；
+pi P1 `88284c3` 预算预研（M4 可用 2.10ms/13%；BFS 成本模型；4 红线草案；与 D1 7 行交叉对账，
+硬约束=collapse 事件按帧摊还 10k 级 307% tick）。②**裁 14 六条全落 m4-plan §6**：批次边界
+照切 / M4-D1 主干采信+7 点全裁（复合主键同轮修正、phase 入表、rubble=tombstone、quality 归
+matter 投影、单材料起步、图触发器=频率×成本、材料同事务守恒）/ 计划看板落前端 / T4=codex
+探针+锁 claude-sonnet-5+cline 接 nightly / 运气=只进事件流 / 批次 D 承担 T5 golden。
+③门禁（`57e1dc9`）：not-bench **1112 passed / 0 failed**、ruff 清零（裁 13 引入的 E501 我域已修
+——codex 判「pi 域」系误判，文件是我写的）、pyright 0。④教训：pi↔opencode 提案交叉对账模式
+效果好（性能侧逐条表态设计侧），M4 各域预研继续用。
 【2026-09-25 第十二轮｜五树收编 + S6 预审裁决 + M3 收口件】①五分支全收编（opencode C3b `29f9d6c` register 返回 MATTER_BUILD 立账事件+9 钉子；kilo K5 `e763b04` sync_request 改回 full_snapshot 复用 snapshot_payload 不动签名+5 钉子；pi P3 `1a745ea` 失效通路实测+红线提案两行 0.10/2.0 待裁；cline C9 `5e3719d` README 三节拆分+§2 补四行——当场勘误我卡里 D4 hash 笔误；codex S6 `700015a` 收官门静态预审 117 行+5 发现）。②S6 五发现全裁：F-a 采 M3 内补（我主树 test_t1_m3_breakdown_deadend.py 4 钉子：prompt 三段零 bias 词面/白名单无诊断键/persistence+norms 零 breakdown 构造隔离扫描——注意 X2 死路=写入侧不喂，非 norms 二次过滤，BIAS_NAMES 不在 banned 词表是前提）；F-b 采① M3 内补（iter_visible 补 branch_id 过滤+TestBranchIsolationMemorySide 2 钉子；get 保持审计面跨分支）；F-c 采（m3-plan §4 六行 🔴/待派→🟢）；F-d 采（norms 补 TestNormsSelectionBoundary 3 用例对齐记录）；F-e 无动作留痕。③pi 红线提案待裁（失效通路独立行 0.10/2.0 不占 retrieval 预算）——我倾向采，留待收官门后一并落。④pyright 坑：Literal source 别硬编码字符串（"observed" 不在 MemorySource）、SimpleNamespace 喂 ORM 类型须 cast、MemoryHit.breakdown 声明 tuple 别用 += tuple 拼接再传。⑤ruff E501 坑：中文断言行 101 字符必炸，列表字面量拆行。
 ⑥门禁终态（main `0ee9cb6` 实测两轮）：非 bench **1131 passed / 56 skipped / 0 failed**＝CI 口径全绿；bench 全量跑 16 failed / 单独跑 11 failed，但失败集合轮换且 rng/retrieval 单独复跑全绿（5/5、8/8）＝**负载抖动实证**（第七轮同模式，裁 1 advisory 口径），非代码回归。教训：后台全量跑时源码被并发修改则该轮作废（第二次全量因此重跑）；判定 bench 抖动必须「单独复跑同一文件」对照。
 ⑦pi P3 红线已裁 13 全采（CHUNK_EVENT_SCAN 0.10 / CHUNK_INVALIDATION_TICK 2.0，独立行不占检索预算）；bench 侧维持 _record_proposal 观察态。
