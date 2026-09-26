@@ -181,20 +181,37 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
 
 
 def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
-    """增量（state_delta）。只含移动过的实体。"""
+    """增量（state_delta）。只含移动过的实体。
+
+    `plan` 是顶层可选键（m4-plan 裁 14-3：改计划不必伴随移动——塞 ActorDelta
+    会被 moved 过滤漏掉，故与 actors/lights 并列）。账本为空则**不发该键**
+    （可选字段不制造噪声）；已清计划的实体发 `text:""`（前端收起看板）。
+    rtoken 替身出网关；账本可能残留已注销实体 → 按世界表过滤。
+    """
+    from sim.npc.plan_view import registry
+
     actors = []
     for entity_id in moved_entity_ids:
         entity = loop.state.entities.get(entity_id)
         if entity is None:
             continue
         actors.append({"rtoken": _rtoken(entity_id), "x": entity.pos[0], "y": entity.pos[1]})
-    return {
+    payload: dict[str, Any] = {
         "type": "state_delta",
         "channel": "render",
         "v": _PROTOCOL_VERSION,
         "ws_seq": 0,
         "actors": actors,
     }
+    known = registry().entries()
+    plan_items = [
+        {"rtoken": _rtoken(entity_id), "text": plan_text}
+        for entity_id, plan_text in sorted(known.items())
+        if entity_id in loop.state.entities
+    ]
+    if plan_items:
+        payload["plan"] = plan_items
+    return payload
 
 
 def map_static_payload(tile_map: TileMap) -> dict[str, Any]:
@@ -374,7 +391,14 @@ def _handle_player_impulse(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def _impulse_cue(text: str) -> str:
-    """§8.3 占位：冲突度规则表在 M4 前由 LLM 域定稿；此处只做非接受态的粗判。"""
+    """§8.3 占位：冲突度规则表在 M4 前由 LLM 域定稿；此处只做非接受态的粗判。
+
+    **M5-K7 钩子缝**：真实规则表接入点 = `WillingnessExpression.band → cue`
+    映射（映射表在 `sim/npc/plan_view.py` 的 `band_to_cue`，will.py 四档
+    pure function 是输入真源）。接入时执行器把 `WillingnessVerdict.band`
+    透传到本函数签名（新增 band 参即可，词面启发式分支整体退役）；在那之前
+    本占位保持既有语义不回退——问号/感叹号启发式已有测试钉住。
+    """
     stripped = text.strip()
     if stripped.endswith(("？", "?")):
         return "hesitation"
