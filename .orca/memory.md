@@ -16,6 +16,23 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
+【2026-09-26 第十五轮｜M4 首波四单收编 + 裁 15】①四分支全收编（main `d409f29`）：
+opencode D2a/b/c 三批（建造事件族六 kind+0006 迁移 structures 瘦身表+**matter_state 改
+(branch_id,subject_id) 复合主键**+fold_structure_snapshot 两入口逐位相等+checkpoint
+fail-closed+10k SupportGraph 稳定排序 BFS+级联按帧摊还每帧≤100 条跨帧幂等，85 钉子）；
+kilo K7（state_delta 顶层 plan 字段——空账本不发键/已清实体发空串/rtoken 出网关；
+_impulse_cue 升级钩子缝且 band→cue 真源指回 will.py 跨域衔接一次做对；anchors.py
+两路由+register_anchor_id 注入还部署债 #1，852 行 52 钉子）；cline C2（t4-nightly.yml
+schedule-only UTC19:30 与 bench 错开+锁模型 env+secrets 骨架期 ::notice:: 不红防「静默
+跳过误读全绿」+探针五条接线约定 TODO 指 S1）；codex S1（143 行：念头 WS 入站三扫
+I-1 banned/I-2 hidden 按被注入 NPC profile/I-3 操纵感预污染——**WS 是 M1 后新增未扫描
+面**；运气 L-1/L-2/L-3 含 PerceptionFrame 无 luck 字段 DESIGN §16 补充断言；4 待裁）。
+②**裁 15 四条全落** S1 §10：I-2 采主案（入站即扫脏文本不进口，接线点=impulse 入站
+后 prompt 装配前）/熵流 dev 日志留痕 OK 三面禁入/T4 预算 60/夜采/P4P5 排批次 A·D 后。
+③门禁（`d409f29` 实测）：not-bench **1273 passed / 0 failed**（复合主键迁移零回归）、
+ruff 0、pyright 0。④待办：opencode D2d（材料投影+TILE_CHANGED 接线）待派；pi 转
+M4-P2 定标待派；B 批接线（runtime 消费 verdict+impulse 三扫接线）Claude 域在途。
+⑤用户侧待办：GitHub 仓库创建 T4_MODEL_API_KEY secret（cline 卡里列明）。
 【2026-09-26 第十三/十四轮｜M3 收官 + M4 开工 + 裁 14】①五树交付全收编（main `57e1dc9`）：
 codex S6b `686caa8` 收官门动态复验通过——**M3 正式收官**（功能全量 1076 passed/0 failed、
 S4 10k 零回归、七钉子+S4 148 passed、bench 11F 判裁 1 抖动）；kilo K6 `13cb5b5` WS 分发块
