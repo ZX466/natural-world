@@ -16,7 +16,7 @@
 commit 前于同一 session 执行，回调抛异常则整批回滚（无半写）。
 
 依赖表：npc_profiles / npc_health / matter_state（0004）、events / entropy_log（0001/0002）、
-structures（0006）。
+structures（0006）、material_balances（0007）。
 """
 
 from __future__ import annotations
@@ -30,7 +30,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from sim.core.events import EventKind, WorldEvent
 from sim.core.flush import flush_rows
-from sim.core.persistence.models import MatterState, NpcHealth, NpcProfile, Structure
+from sim.core.persistence.models import (
+    MaterialBalance,
+    MatterState,
+    NpcHealth,
+    NpcProfile,
+    Structure,
+)
 from sim.core.persistence.store import SqlEventStore
 from sim.llm.memory_scan import (
     MemoryWritePipeline,
@@ -198,6 +204,31 @@ class _StructureEventFields:
     supported_by: tuple[str, ...]
     owner_id: str
     built_by: str
+
+
+@dataclass(frozen=True)
+class _MaterialEventFields:
+    material_id: str
+    quantity: float
+    from_ref: str
+    to_ref: str
+
+
+def _material_event_fields(event: WorldEvent) -> _MaterialEventFields:
+    payload = event.payload
+    material_id = str(payload.get("material_id", ""))
+    from_ref = str(payload.get("from_ref", ""))
+    to_ref = str(payload.get("to_ref", ""))
+    quantity = float(payload.get("quantity", 0.0))  # type: ignore[arg-type]
+    if not material_id or not from_ref or not to_ref or quantity <= 0.0:
+        msg = f"MATERIAL_MOVED payload 非法: {payload!r}"
+        raise NpcStoreError(msg)
+    return _MaterialEventFields(
+        material_id=material_id,
+        quantity=quantity,
+        from_ref=from_ref,
+        to_ref=to_ref,
+    )
 
 
 def _structure_event_fields(event: WorldEvent) -> _StructureEventFields:
@@ -448,6 +479,54 @@ class NpcStore:
             states = {k: v for k, v in states.items() if k in wanted}
         return states
 
+    async def materialize_material_balances(
+        self, material_ids: Sequence[str] | None = None
+    ) -> dict[tuple[str, str], float]:
+        """快照路径：一次 SELECT 取本分支 `(ref, material)` 净余额。"""
+        stmt = select(MaterialBalance).where(MaterialBalance.branch_id == self._branch_id)
+        if material_ids is not None:
+            ids = list(material_ids)
+            if not ids:
+                return {}
+            stmt = stmt.where(MaterialBalance.material_id.in_(ids))
+        async with self._events.session_factory() as session:
+            rows = (await session.execute(stmt)).scalars().all()
+        return {(row.ref, row.material_id): row.quantity for row in rows}
+
+    async def materialize_material_balances_replay(
+        self, material_ids: Sequence[str] | None = None
+    ) -> dict[tuple[str, str], float]:
+        """重放路径：折叠 MATERIAL_MOVED（与投影共用 fold_material_balance）。"""
+        balances: dict[tuple[str, str], float] = {}
+        raw = await self._events.read_range(self._branch_id, 0, 2**62 - 1)
+        for event in sorted(raw, key=lambda e: e["seq"]):
+            try:
+                kind = EventKind(str(event["event_type"]))
+            except ValueError:
+                continue
+            if kind is not EventKind.MATERIAL_MOVED:
+                continue
+            fields = _material_event_fields(
+                WorldEvent(
+                    branch_id=self._branch_id,
+                    tick=int(event["tick"]),
+                    event_type=kind,
+                    payload=event["payload"],
+                )
+            )
+            from_key = (fields.from_ref, fields.material_id)
+            to_key = (fields.to_ref, fields.material_id)
+            balances[from_key], balances[to_key] = fold_material_balance(
+                balances.get(from_key, 0.0),
+                balances.get(to_key, 0.0),
+                quantity=fields.quantity,
+                from_ref=fields.from_ref,
+            )
+        if material_ids is not None:
+            wanted = set(material_ids)
+            balances = {k: v for k, v in balances.items() if k[1] in wanted}
+        return balances
+
     # -----------------------------------------------------------------------
     # 2. tick 批次 flush（事件 + 投影，同事务）
     # -----------------------------------------------------------------------
@@ -462,7 +541,7 @@ class NpcStore:
 
         - events 经 `flush_rows` 得 store 行与 entropy 行（entropy_inject 派生）；
         - 投影：NPC_LOD_CHANGE → npc_profiles.lod；MATTER_* → matter_state；
-                 STRUCTURE_* → structures 拓扑/生命周期；
+                 STRUCTURE_* → structures；MATERIAL_MOVED → material_balances；
         - extra_projection：给上层（M2-A2 runtime）追加投影的扩展缝，签名
           `async (session, seq_by_index, events) -> None`，同事务执行。
         """
@@ -532,6 +611,8 @@ async def _project_events(
             await _project_matter(session, branch_id, event)
         elif event.event_type in _STRUCTURE_KINDS:
             await _project_structure(session, branch_id, event)
+        elif event.event_type is EventKind.MATERIAL_MOVED:
+            await _project_material_moved(session, branch_id, event)
 
 
 async def _project_lod_change(session: AsyncSession, branch_id: str, event: WorldEvent) -> None:
@@ -771,3 +852,65 @@ async def _project_structure(session: AsyncSession, branch_id: str, event: World
     existing.owner_id = folded.owner_id or None
     existing.built_by = folded.built_by or None
     existing.built_at = folded.built_at
+
+
+def fold_material_balance(
+    from_quantity: float,
+    to_quantity: float,
+    *,
+    quantity: float,
+    from_ref: str,
+) -> tuple[float, float]:
+    """**单一材料折叠规则**：from 减 quantity、to 加 quantity。
+
+    `world:*` 是外部供给基准，允许净负；其他 ref 余额不足即 fail-closed。
+    """
+    if quantity <= 0.0:
+        msg = f"材料转移数量必须为正: {quantity!r}"
+        raise NpcStoreError(msg)
+    from_after = from_quantity - quantity
+    to_after = to_quantity + quantity
+    if from_after < 0.0 and not from_ref.startswith("world:"):
+        msg = f"材料余额不足: {from_ref} {from_quantity} - {quantity} < 0"
+        raise NpcStoreError(msg)
+    return from_after, to_after
+
+
+async def _project_material_moved(session: AsyncSession, branch_id: str, event: WorldEvent) -> None:
+    fields = _material_event_fields(event)
+    from_key = (branch_id, fields.from_ref, fields.material_id)
+    to_key = (branch_id, fields.to_ref, fields.material_id)
+    from_row = await session.get(MaterialBalance, from_key)
+    to_row = await session.get(MaterialBalance, to_key)
+    from_after, to_after = fold_material_balance(
+        from_row.quantity if from_row is not None else 0.0,
+        to_row.quantity if to_row is not None else 0.0,
+        quantity=fields.quantity,
+        from_ref=fields.from_ref,
+    )
+    if from_row is None:
+        session.add(
+            MaterialBalance(
+                branch_id=branch_id,
+                ref=fields.from_ref,
+                material_id=fields.material_id,
+                quantity=from_after,
+                updated_at_tick=event.tick,
+            )
+        )
+    else:
+        from_row.quantity = from_after
+        from_row.updated_at_tick = event.tick
+    if to_row is None:
+        session.add(
+            MaterialBalance(
+                branch_id=branch_id,
+                ref=fields.to_ref,
+                material_id=fields.material_id,
+                quantity=to_after,
+                updated_at_tick=event.tick,
+            )
+        )
+    else:
+        to_row.quantity = to_after
+        to_row.updated_at_tick = event.tick

@@ -427,3 +427,24 @@ class Structure(TimestampMixin, Base):
         Index("idx_struct_owner", "branch_id", "owner_id"),
         Index("idx_struct_phase", "branch_id", "phase"),
     )
+
+
+class MaterialBalance(TimestampMixin, Base):
+    """材料余额投影（M4-D2d）— MATERIAL_MOVED 的 from/to 双边消费。
+
+    事件流是真相；本表只存每个 `(branch, ref, material)` 当前净余额。
+    `world:*` 是外部供给基准，允许净负；`npc/structure` 不得为负。
+    """
+
+    __tablename__ = "material_balances"
+
+    branch_id: Mapped[str] = mapped_column(String, nullable=False)
+    ref: Mapped[str] = mapped_column(String, nullable=False)
+    material_id: Mapped[str] = mapped_column(String, nullable=False)
+    quantity: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    updated_at_tick: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("branch_id", "ref", "material_id"),
+        Index("idx_material_branch_material", "branch_id", "material_id"),
+    )

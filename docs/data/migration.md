@@ -576,6 +576,14 @@ def downgrade() -> None:
 
 ---
 
+### 6.3 0007_m4_material_balances.py（M4-D2d 已落地）
+
+- 新建 `material_balances`：复合主键 `(branch_id, ref, material_id)`；
+- 索引 `(branch_id, material_id)`；
+- 纯 `create_table`，无需 batch；downgrade 先删索引再删表。
+
+---
+
 ## 7. 迁移执行命令
 
 ```bash
