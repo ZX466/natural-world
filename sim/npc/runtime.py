@@ -18,7 +18,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
-from sim.core.events import WorldEvent, hidden_emerge_event, npc_act_event
+from sim.agent.will import WillingnessVerdict, willingness_expression
+from sim.core.events import (
+    WorldEvent,
+    hidden_emerge_event,
+    npc_act_event,
+    npc_monologue_event,
+)
 from sim.npc.actions import ACTION_PAYLOAD_KEYS
 from sim.npc.contract import HiddenState
 from sim.npc.model import NpcProfileData
@@ -28,10 +34,16 @@ from sim.npc.utility import UtilityModel, evaluate_batch
 
 @dataclass
 class NpcRuntime:
-    """50 NPC 装配（§1.3）：内存态 = {npc_id: NpcProfileData}（物化产物）。"""
+    """50 NPC 装配（§1.3）：内存态 = {npc_id: NpcProfileData}（物化产物）。
+
+    willingness（M4-B3）：全队共享的意愿冲突注入（测试/接线缝）——传入时每个
+    NPC 动作执行面产 NPC_MONOLOGUE 事件（K8 通路）；None = 无意愿面（M2 行为
+    完全不变）。「最终都执行」由实现保证：verdict 不改 NPC_ACT。
+    """
 
     profiles: dict[str, NpcProfileData]
     utility: UtilityModel
+    willingness: WillingnessVerdict | None = None
     _order: list[str] = field(default_factory=list, init=False)
 
     def __post_init__(self) -> None:
@@ -107,6 +119,20 @@ class NpcRuntime:
                     params=params,
                 )
             )
+            # M4-B3 意愿面（DESIGN §10「但最终都执行」）：verdict 只产表现
+            # （band≥1 → NPC_MONOLOGUE），不改 action/params——决策结果与
+            # 无意愿管线逐位一致（test_m4_b3_wiring 钉死）。
+            if self.willingness is not None:
+                expr = willingness_expression(self.willingness, npc_name=nid)
+                if expr is not None:
+                    events.append(
+                        npc_monologue_event(
+                            tick=tick,
+                            npc_id=nid,
+                            form="thought",
+                            content=expr.monologue,
+                        )
+                    )
 
         self.profiles = advanced
         return events
