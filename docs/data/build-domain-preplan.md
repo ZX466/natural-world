@@ -2,7 +2,9 @@
 
 > **实施状态（2026-09-26）**：D2a 落地事件族最小集 + payload/factory/行级登记，
 > `structures` 瘦身表与 `(branch_id, structure_id)` 复合主键、`matter_state` 分支复合身份
-> （迁移 `0006_m4_structures`）。D2b 起做投影/重放、checkpoint 纯函数、承重图、
+> （迁移 `0006_m4_structures`）。D2b 落地 `fold_structure_snapshot` 投影/重放单折叠、
+> `materialize_structures(_replay)` 逐位相等与 `sim/world/structure.py` 施工推进纯函数
+> （每游戏日 checkpoint、build_rule_version fail-closed、尾部重算）。D2c 起做承重图、
 > 材料守恒与 TILE_CHANGED 派生。裁 14-2 明确：`MATTER_COLLAPSE` 保持纯熵态折叠，
 > rubble=structures tombstone，planned 不占承重，quality 归 matter 投影，单材料起步。
 

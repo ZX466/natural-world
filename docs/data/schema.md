@@ -264,6 +264,17 @@ CREATE VIRTUAL TABLE npc_memory_vec USING vec0(
 - `idx_struct_owner` ON `(branch_id, owner_id)` — 按所有者查询
 - `idx_struct_phase` ON `(branch_id, phase)` — 施工看板/生命周期筛选
 
+**投影/重放（M4-D2b 已落地）**：
+- `STRUCTURE_STARTED/CHECKPOINT/COMPLETED/COLLAPSED/REMOVED` 经
+  `fold_structure_snapshot` 单折叠；投影与 `materialize_structures_replay` 共用，
+  两入口逐位相等；
+- phase 由事件种类推导：STARTED→building、COMPLETED→active、
+  COLLAPSED→rubble（保留 tombstone）、REMOVED→删行；
+- `NpcStore.materialize_structures` 为快照路径（一次 SELECT、分支隔离），
+  `materialize_structures_replay` 为纯读重放路径；
+- 施工推进纯函数在 `sim/world/structure.py`：每游戏日 checkpoint、
+  `build_rule_version` 选规则，未知版本 fail-closed，尾部确定性重算。
+
 ---
 
 ## 10. llm_profiles（LLM 配置档案）
