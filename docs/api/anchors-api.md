@@ -260,20 +260,22 @@ components.setdefault("responses", {})["Problem"] = {
 
 ### 4.1 sim WS 分发现状（施工前必读）
 
-`handle_client_message`（`ws.py:188`）当前分发 `move_request` / `hello` / `sync_request` 三类，其余进白名单后也**静默 `return None`**：
+`handle_client_message`（`ws.py:210`）当前分发**六类**（K4 提案 §1-§5 已由 M5-K6 全量施工），各走独立 `_handle_*` 纯函数：
 
-| 消息 | 白名单 `_ALLOWED_CLIENT_TYPES` | `_CHANNEL_FOR` | 分发块 | 现状（M5-K5 后） |
+| 消息 | 白名单 `_ALLOWED_CLIENT_TYPES` | `_CHANNEL_FOR` | 分发块 | 现状（M5-K6 后） |
 |---|---|---|---|---|
-| `move_request` | ✅ | ✅ render | ✅ | 完整（寻路 + `issue_move`）；**校验失败静默 `return None`**（`ws.py:221,230,234`，同属静默缺陷，见 `ws-dispatch-proposal.md` §4） |
-| `hello` | ✅ | ✅ session | ✅ | 完整（鉴权握手） |
-| `sync_request` | ✅ | ✅ session | ✅ | **M5-K5 已修**：回 `full_snapshot`（`ws.py:258`，经 `snapshot_payload(loop, pf.tile_map)`）。K1 时曾误记「完整（回 `control_ack`）」——实为**回错型**，契约（`ws-protocol.md:48`）要求回全量快照；K4 发现、`M5-K5` 首修（K4 提案 §5/§8.7），回归钉 `test_ws_gateway.py::TestSyncRequest` |
-| `set_control` | ✅ | ✅ control | ❌ 无 | **静默忽略**——白名单放行但落 `return None`，客户端收不到 ack 也不知被拒。修法见 `ws-dispatch-proposal.md` §1 |
-| `player_impulse` | ❌ | ❌ | ❌ | 压根未注册 → 回 `unknown_type` error 帧。修法见 `ws-dispatch-proposal.md` §2 |
-| `load_anchor` | ❌ | ❌ | ❌ | 压根未注册 → 回 `unknown_type` error 帧。修法见 `ws-dispatch-proposal.md` §3 |
+| `move_request` | ✅ | ✅ render | ✅ | 完整。**8.6 已修**：非法类型目标（含 bool）→ `error{code:"bad_target"}`；不可达/主角不存在保留静默（§4 权衡，高频消息免噪声） |
+| `hello` | ✅ | ✅ session | ✅ | 完整（鉴权握手；错/缺 → `auth_error`） |
+| `sync_request` | ✅ | ✅ session | ✅ | **M5-K5 已修**：回 `full_snapshot`（经 `snapshot_payload(loop, pf.tile_map)`）。K1 时曾误记「完整（回 `control_ack`）」——实为**回错型**，契约（`ws-protocol.md:48`）要求回全量快照；K4 发现、K5 首修（提案 §5/§8.7），回归钉 `test_ws_gateway.py::TestSyncRequest` |
+| `set_control` | ✅ | ✅ control | ✅ | **M5-K6 已修**：回 `control_ack{action,applied:true,speed?}`（`applied` 恒 true = 8.1 占位）；`pause`/`resume` 走连接级 `_PRE_PAUSE_SPEED` 栈（§1.2：不进 `GameClock`）；`resume` 回 `speed`=暂停前值；`pause` 的 ack 不带 `speed`（schema enum 无 0）；携带 `speed` 容忍忽略（8.2）；`bad_action`/`bad_speed` 拒绝面见 §1.4 |
+| `player_impulse` | ✅ | ✅ control | ✅ | **M5-K6 已修**：注册两处（白名单 + channel）成对。入站校验 `bad_impulse`（缺失/非串/全空白）与 `impulse_too_long`（>64 字，戏内 message「话说得太长了，说不清。」）；通过即回**乐观** `impulse_feedback{injected:true,cue,reaction_monologue}`（§2.4「入网即回」，不 await LLM、不改世界态）。`preset` 非串容忍忽略。**`cue` 规则是占位**——冲突度规则表归 LLM 域（8.3），M4 前定稿 |
+| `load_anchor` | ✅ | ✅ session | ✅ | **M5-K6 已修**：注册两处。`anchor_id` 缺失/空/非串 → `bad_anchor`；**不透明串纪律**（§6.5）：`anc_01` 等不被前缀特征拒绝，走正常查表 → 找不到即 `load_failed`；**失败不断线**（§3.3），载入异常降级 `load_failed` 不炸 handler。成功走**短期同步路径**：`snapshot_payload` 回 `full_snapshot`（8.4 定案），长期 driver 化 TODO 见提案 §3.4 |
 
 > **M5-K4 交付**：上表四类待修项的分发块契约已出（`docs/api/ws-dispatch-proposal.md`），含验收对表 20 项 + 待裁清单 8 项。本节表格从「现状描述」转为「施工进度跟踪」。
 >
 > **M5-K5 进度**：8.7（sync_request 回错型）已首修，表中该行由 ⚠️ 转 ✅。K4 §8.4/8.5（load_anchor 发 `full_snapshot` 的时机 + `tile_map` 传递）也已顺便确证走 `pf.tile_map`——`Pathfinder` 已暴露该 property（`pathfinding.py:96-98`），**签名无需变更**（K4 §8.5 备选案成立）。
+>
+> **M5-K6 进度**：K4 提案 §1-§5.1 全量施工落地（8.1-8.6/8.8 兑现；8.3 规则表与 8.7 sync_request 除外）。§7 验收对表 20 项除 14（K5 已过）外逐条落钉，**钉子共 56 例**（含 8 项 M5-K6 新增边界）。**load_anchor 的两处部署债**：① `_ANCHOR_IDS` 是进程内登记集（同步查表替身）——真实 `GET /api/anchors` 路由（`anchors-api.md` §4）尚未实现，落地时应改为 `register_anchor_id()` 由落库路径调用；② `_ANCHOR_LOAD_HOOK` 是载入钩子占位——「定位→快照→重放」异步 driver 化（提案 §3.4 长期方案）时接入。**error code 词表已收敛**：10 项全小写 snake（`_ERROR_*` 常量），§7 #15 有越界钉子防新码脱管。
 
 **对 M5 的三条影响**（下列为 K1 时点判断；完整分发块契约见 `ws-dispatch-proposal.md`）：
 
