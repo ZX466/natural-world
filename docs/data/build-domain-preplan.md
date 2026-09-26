@@ -4,8 +4,10 @@
 > `structures` 瘦身表与 `(branch_id, structure_id)` 复合主键、`matter_state` 分支复合身份
 > （迁移 `0006_m4_structures`）。D2b 落地 `fold_structure_snapshot` 投影/重放单折叠、
 > `materialize_structures(_replay)` 逐位相等与 `sim/world/structure.py` 施工推进纯函数
-> （每游戏日 checkpoint、build_rule_version fail-closed、尾部重算）。D2c 起做承重图、
-> 材料守恒与 TILE_CHANGED 派生。裁 14-2 明确：`MATTER_COLLAPSE` 保持纯熵态折叠，
+> （每游戏日 checkpoint、build_rule_version fail-closed、尾部重算）。D2c 落地
+> `sim/world/support_graph.py`：10k 内存正/反向图、同分支/无环/承重资格校验、
+> 稳定排序级联游标与每帧 100 事件预算。D2d 起做材料守恒与 TILE_CHANGED 派生。
+> 裁 14-2 明确：`MATTER_COLLAPSE` 保持纯熵态折叠，
 > rubble=structures tombstone，planned 不占承重，quality 归 matter 投影，单材料起步。
 
 > 数据域（opencode），M4-D1，2026-09-25。**本文只出提案，不写 `models.py`、不出迁移、不改事件实现。**

@@ -275,6 +275,12 @@ CREATE VIRTUAL TABLE npc_memory_vec USING vec0(
 - 施工推进纯函数在 `sim/world/structure.py`：每游戏日 checkpoint、
   `build_rule_version` 选规则，未知版本 fail-closed，尾部确定性重算。
 
+**承重图与级联（M4-D2c 已落地）**：`sim/world/support_graph.py` 从本分支
+`materialize_structures()` 结果一次物化内存正/反向图；同分支、悬空/自环/重复边、
+环、planned/building 承重一律拒绝。级联游标按 id 稳定排序，每帧最多
+`CASCADE_EVENT_BUDGET_PER_FRAME=100` 条 `STRUCTURE_COLLAPSED`，10k 节点验收规模
+`SUPPORT_GRAPH_ACCEPTANCE_NODES=10000`；support_path 只记直接失去的支撑。
+
 ---
 
 ## 10. llm_profiles（LLM 配置档案）
