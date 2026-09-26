@@ -27,16 +27,23 @@ sim/tests/golden/
 ├─ seeds.py               # 【已落】10 种子写死清单 + TICKS_PER_SEED = 864,000
 ├─ driver.py              # 【已落】run_golden / DayWindow / GoldenRun + smoke_loop / mock_feeder
 ├─ test_golden_smoke.py   # 【已落】1 种子 × 1 游戏日冒烟（env 门 PI_GOLDEN_SMOKE=1）
-├─ assertions/            # 【待 D 批】三断言组
-│  ├─ conservation.py     #   物质总量不变式（§3.1）
-│  ├─ errands_rate.py    #   差事完成率（§3.2）
-│  └─ orphan_changes.py  #   投影 ↔ 事件源双向对账（§3.3）
+├─ assertions/            # 【已落 M4-C4，裁 17 口径】三断言组
+│  ├─ conservation.py     #   物质/材料/结构守恒（逐位相等；折叠复用数据域单一规则）
+│  ├─ orphan_changes.py   #   孤儿双向对账（硬红；熵 + 删行两个合法排除已写死）
+│  └─ errands_rate.py     #   完成率**基线实测壳**（裁 17-1：10 日重定标，暂不设阈值）
+├─ test_assertions_*.py   # 【已落 M4-C4】三组最小单元测试（真实账本/假投影，不跑满日）
 └─ snapshots/             # 【待】期望快照：宏观指标基线 JSON（按种子分文件）
 docs/arch/t5-golden-scaffold.md      # 本提案
 .github/workflows/golden-nightly.yml # 【待】跑法落地（§4 案 A），断言组就位后再建
 ```
 
-## 3. 三断言组可测化（**只给口径，不写断言**）
+## 3. 三断言组可测化（**口径已由 M4-C4 落码，裁 17 定阈值**）
+
+> **落码要点（M4-C4）**：三个断言模块只做「事件流折叠 ↔ 投影」对账，**折叠一律复用数据域单一
+> 实现**（`npc_store.fold_matter_snapshot` / `fold_structure_snapshot` / `fold_material_balance`），
+> 不重算领域算术——否则断言自己就会与投影/重放分叉（§19.3 要防的正是这个）。事件顺序前置条件：
+> 调用方给 **seq 升序**（driver 的 `on_events` 收集天然有序）。
+> **裁 17-1 阈值**：守恒 = 逐位相等（不给浮差）／完成率 = 10 日重定标（当前只落基线实测壳，不设阈值）／孤儿 = 硬红。
 
 ### 3.1 材料守恒（物质总量不变式）
 
@@ -60,12 +67,16 @@ docs/arch/t5-golden-scaffold.md      # 本提案
 
 ### 3.3 无孤儿变更
 
-判据：**两个方向都要查**——有投影无事件源（孤儿投影）、有事件无投影（孤儿事件）。对账 SQL 骨架（`<projection>` 按面分表：map tiles / structures / matter_state；实表名待 opencode 投影定稿后替换）：
+判据：**两个方向都要查**——有投影无事件源（孤儿投影）、有事件无投影（孤儿事件）。
+
+**裁 17-④ 投影表已定稿（opencode D2 收官）**，实表名：`structures`（0006）、`material_balances`（0007）、`matter_state`（M2-D2 起的 `subject_id` 命名）。
+
+**但两张 structures 相关表都没有 `last_event_seq` 列**（0006 列集：branch_id/structure_id/tiles/kind/material/phase/load_bearing/supported_by/owner_id/built_by/built_at/created_at）⇒ **本轮落码的断言走 id/来源级判定**（`orphan_changes.py`：投影 id 必须有对应事件；事件侧按**折叠终态**比对），可在**无数据库**的纯内核 golden 跑里执行。下面的 SQL 骨架是 **DB 侧更强判据**（需投影表补 `last_event_seq` 或按 seq 区间对账），留给 D 批接线：
 
 ```sql
 -- A. 孤儿投影：投影行记了 (last_event_kind, last_event_seq)，事件日志里找不到
 SELECT p.kind, p.rowid
-FROM <projection> p
+FROM structures p            -- 或 matter_state / material_balances
 LEFT JOIN events e
   ON e.kind = p.last_event_kind AND e.seq = p.last_event_seq
 WHERE e.seq IS NULL;
@@ -73,7 +84,7 @@ WHERE e.seq IS NULL;
 -- B. 孤儿事件：事件已落，投影没有对应行
 SELECT e.kind, e.seq, e.payload
 FROM events e
-LEFT JOIN <projection> p ON p.last_event_seq = e.seq
+LEFT JOIN structures p ON p.last_event_seq = e.seq
 WHERE e.kind IN ('tile.changed', 'structure.started', 'structure.checkpoint',
                  'structure.completed', 'structure.collapsed', 'structure.removed',
                  'matter.build', 'matter.decay', 'matter.damage', 'matter.collapse',
@@ -81,7 +92,9 @@ WHERE e.kind IN ('tile.changed', 'structure.started', 'structure.checkpoint',
   AND p.rowid IS NULL;
 ```
 
-**已知口径坑（必须写进断言，否则必假红）**：熵注入只进事件流、world state 不留痕（§11 + 裁 14-5）→ 方向 B **必须排除 `entropy_inject`**，否则每个熵事件都会被判成孤儿。
+**两个合法排除（已写进 `orphan_changes.py`，漏一个就必假红）**：
+1. `entropy_inject`——熵注入只进事件流、world state 与 prompt 面永不留痕（§11 + 裁 14-5）；
+2. `structure.removed`——投影语义是**删行**（`fold_structure_snapshot` 对 REMOVED 返回 None）⇒ 方向 B 改用**折叠终态**比对，拆除后的 id 不再算孤儿（用「见过的事件 id 全集」判会误报）。
 
 ## 4. 跑法：两案 + 主张（**每提交 CI 不跑**，§16 T5 每日）
 
@@ -109,14 +122,14 @@ WHERE e.kind IN ('tile.changed', 'structure.started', 'structure.checkpoint',
 - 实测：满一日 `1 passed in 53.98s`（本机 10 实体口径）；秒级切片（3,600 tick）`1 passed in 0.55s`。
 - 未置 env 时整文件 skip → 每提交 CI 秒过（§16「T5 每日跑」纪律落到代码层）。
 
-## 6. 待裁 / 遗留
+## 6. 待裁 / 遗留（**裁 17 已落定 1/2/4/5，逐条状态见 §7**）
 
-1. **三断言组的阈值与容差**：守恒容差（建议逐位相等、不给浮差）、完成率线（沿用 M1 80% 还是按 10 日重定标）、孤儿分级（硬红 vs 告警）——按纪律**不先写死**。
-2. **种子清单**：`GOLDEN_SEEDS = (7, 11, 101, 1009, 2003, 3001, 4001, 5003, 6007, 7001)` 是否照此（**改种子 = 改验收口径**，须显式裁决）。
-3. **差事 fixture 补「多决策续接」**：D 批任务（否则完成率退化为 M1 单轮口径）。
-4. **投影表定稿**后把 §3.3 的 `<projection>` 换成实表名（opencode 域）。
-5. **`golden-nightly.yml` 落地时机**：断言组就位后（不先建空跑）。
-6. **耦合提示**：`driver.py` import 性能域 `sim/tests/bench/{harness,soak}.py`（**只读不改**）；若 pi 改签名需同步。备选：把共用 builder 上提到 `sim/tests/_builders.py`（提案，本轮未做——跨域重构须先请裁）。
+1. ~~三断言组的阈值与容差~~ → **已裁（§7-1）**：守恒逐位相等／完成率 10 日重定标／孤儿硬红。**M4-C4 已按此落码**。
+2. ~~种子清单是否照此~~ → **已裁（§7-2）**：十枚定版，改动走 CR。
+3. **差事 fixture 补「多决策续接」**：**D 批任务**（Claude 域，§7-3）——未落前完成率壳只出基线数值，不设阈值（裁 17-1）。
+4. ~~投影表定稿后换实表名~~ → **已裁（§7-4）**：`structures` / `material_balances` / `matter_state`，**M4-C4 文档已换**（§3.3）。
+5. **`golden-nightly.yml` 落地**：**断言组已就位**（§7-5 采案 A：独立 workflow + 种子分片 matrix，接线归 cline）→ 下一步可建；本轮**未建空跑 workflow**。
+6. **耦合提示**：`driver.py` 与断言组只读 import 性能域 `sim/tests/bench/{harness,soak}.py` 与数据域 `npc_store.fold_*`（**只读不改**）；`_builders.py` 上提**暂不做**（§7-6，YAGNI）。
 ---
 
 ## 7. 裁决（裁 17，2026-09-26 Claude 主树）

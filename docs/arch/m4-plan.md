@@ -86,7 +86,7 @@ opencode M4-D1 建造数据面提案 ──→ 批次 C（建造破坏）──�
 | 负责域 | 熵注入点与运气状态 = Claude（§11 注入真随机 vs 确定性混沌分工）；T4 探针集 = codex 提案；**T4 nightly 接线 = cline（配置域）**；tokens 日汇总 = pi（§15/llm-monitoring） |
 | 依赖 | A/B/C 全部完成 |
 | 验收口径（裁 14 已裁） | §17 三条全绿 + T4 在**锁定模型版本**下 nightly 连续通过（§16）+ **T5 golden 归本批**（10 种子×10 游戏日） |
-| **已派任务** | **待派**（裁 14 第 6 条已定本批担 T5；开工前需 A/B/C 就位）。**T5 脚手架已立**（M4-C3）：提案 `docs/arch/t5-golden-scaffold.md`（形态/文件布局/三断言组可测化/跑法两案）+ `sim/tests/golden/{seeds,driver,test_golden_smoke}.py`；1 种子 × 1 游戏日冒烟实跑通过（53.98s @本机），三断言组待本批填 |
+| **已派任务** | **待派**（裁 14 第 6 条已定本批担 T5；开工前需 A/B/C 就位）。**T5 脚手架已立**（M4-C3）：提案 `docs/arch/t5-golden-scaffold.md`（形态/文件布局/三断言组可测化/跑法两案）+ `sim/tests/golden/{seeds,driver,test_golden_smoke}.py`；1 种子 × 1 游戏日冒烟实跑通过（53.98s @本机），**三断言组已按裁 17 落码**（M4-C4：`assertions/{conservation,orphan_changes,errands_rate}.py` + 三组最小单元测试；折叠复用数据域 `fold_*` 单一规则，孤儿硬红含熵/删行两个合法排除） |
 
 ## 4. 「T4 全绿」与 M4 验收的关系（§16 / §17 / §20 对账）
 
