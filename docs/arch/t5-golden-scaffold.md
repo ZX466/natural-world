@@ -117,3 +117,21 @@ WHERE e.kind IN ('tile.changed', 'structure.started', 'structure.checkpoint',
 4. **投影表定稿**后把 §3.3 的 `<projection>` 换成实表名（opencode 域）。
 5. **`golden-nightly.yml` 落地时机**：断言组就位后（不先建空跑）。
 6. **耦合提示**：`driver.py` import 性能域 `sim/tests/bench/{harness,soak}.py`（**只读不改**）；若 pi 改签名需同步。备选：把共用 builder 上提到 `sim/tests/_builders.py`（提案，本轮未做——跨域重构须先请裁）。
+---
+
+## 7. 裁决（裁 17，2026-09-26 Claude 主树）
+
+1. **三断言组阈值**：守恒=**逐位相等**（T2 同款，不给浮差——事件流整数面）；完成率
+   线=**10 日重定标**（M1 80% 是单决策口径，跨日续接后先实测基线再定线，D 批交付
+   时附实测）；孤儿=**硬红**（无孤儿变更是 §17 验收原文，不降级告警；entropy_inject
+   排除口径照 §3.3 已写死的坑执行）。
+2. **种子清单照此采**（`GOLDEN_SEEDS` 十枚，`7,11,101,1009,2003,3001,4001,5003,
+   6007,7001`）——改种子=改验收口径，今日定版；后续变更走 CR。
+3. **差事 fixture 多决策续接 = D 批任务**（我的域，随行为链交付）。
+4. **投影表定稿**：D2 已收官（material_balances `0007`），`<projection>` 换实表名
+   由 cline 下次文档刷新时一并改（或 D 批接手时 Claude 改）。
+5. **golden-nightly.yml 时机采**：断言组就位后建（不先建空跑）——案 A（独立
+   workflow+种子分片 matrix）采纳，接线仍归 cline。
+6. **耦合提示知悉**：driver.py 只读 import bench 域维持现状；pi 改签名时同步
+   责任在改方（pi 域纪律已含）。`_builders.py` 上提**暂不做**（跨域重构无实证
+   收益，YAGNI）。
