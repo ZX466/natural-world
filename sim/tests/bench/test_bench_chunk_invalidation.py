@@ -8,7 +8,8 @@
   ① `event_tile_position` 纯函数本身 —— 每 tick 对**全事件流**遍历一遍的开销上界；
   ② `observe_events` 失效本体 —— 标脏 → `drain_dirty` → 逐 chunk `PathCache.invalidate`
      （「剔 N 留 M」：只删途经脏 chunk 的条目）。
-**状态：裁 13 已裁（2026-09-25 全采）**，bench 侧维持 `_record_proposal` 观察态——本文件常量 `CHUNK_EVENT_SCAN_LIMIT_MS` /
+**状态：裁 13 已裁（2026-09-25 全采）**，bench 侧维持 `_record_proposal` 观察态——
+本文件常量 `CHUNK_EVENT_SCAN_LIMIT_MS` /
 `CHUNK_INVALIDATION_TICK_LIMIT_MS` 是 pi 实测后的**提案值**（见 docs/perf/
 m3-retrieval-budget.md 附录 M3-P3），Claude 裁前**不卡 CI 红**：用 `_record_proposal`
 只记录「实测中位 vs 提案阈值」，裁后按 M3-P2 先例转 `harness.assert_median_threshold`。

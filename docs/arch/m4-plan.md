@@ -117,14 +117,37 @@ T4 探针与 M4 四个批次的对应（建议）：
 | T5 golden | C/D | 每日 | Claude 主导口径，pi 配合性能门 |
 | 性能预算 | C（承重级联） | nightly | pi 域（阈值真相源 `sim/tests/bench/thresholds.py`） |
 
-## 6. 待裁队列（本文维护，裁后移入各域预稿）
+## 6. 待裁队列（裁 14，2026-09-26 Claude 裁——六条全落）
 
-1. **批次边界**：A/B/C/D 切分是否照此（本文全部标「建议」）。
-2. **批次 C 数据面**：建造材料/结构 schema 由 opencode M4-D1 提案（先提案后动，schema 纪律同 M3 §19.4 流程）。
-3. **计划看板归属**：三形态已含在 §8 独白管线，是否整块落前端域（Claude）。
-4. **T4 nightly 接法**：谁提供 profile/锁哪个模型版本/探针集从哪来（codex 提案 + cline 接线）。
-5. **运气状态存储口径**：熵日志只在开发模式（§11），world state 侧不可见——落点待裁。
-6. **批次 D 是否承担 T5 golden**：§16 T5 与 §17「核心闭环成立」的分工。
+1. **批次边界：照此切（裁 14-1）**。A=念头注入+因果未知、B=计划看板+意愿系统、
+   C=建造破坏、D=巧合连锁+核心闭环验收；依赖序 A‖C → B → D 维持。
+2. **批次 C 数据面：采 opencode M4-D1 提案主干（裁 14-2，细则见下）**——
+   structures=拓扑投影瘦身（去 integrity/quality/decay_rate/is_rubble 熵态列，
+   熵态真相在事件流）、新 structure 事件族、施工=STARTED+有界 checkpoint+终态、
+   承重内存图（M4 不建 SQL 边表）、MATERIAL_MOVED 带 quantity。7 待裁点裁决（**含 pi M4-P1 交叉对账硬约束**：每受影响对象一条 collapse 事件
+   在 10k 级=307% tick → 级联坍塌事件**按帧摊还**、全局每帧事件预算，红线草案
+   施工 0.50/坍塌单帧 2.00/级联 100 节点每帧，M4 真实现后定标）：
+   ①事件族=新小型 structure 族（STRUCTURE_STARTED/CHECKPOINT/COMPLETED/COLLAPSED/
+   REMOVED 最小集），STRUCTURE_COLLAPSED 承载级联语义、MATTER_COLLAPSE 保持纯熵态
+   折叠不动；②checkpoint cadence=pi 实测支持（0.014ms/tick@K=1440），**每游戏日
+   1 次 + build rule version 入 payload**，规则淘汰=重放遇旧版本按尾部确定性重算；
+   ③**同轮修正**：(branch_id, structure_id) 复合主键与 matter identity 对账一起做
+   （M4-D2 首个迁移件）；④phase 入表（current phase 列，事件可重算但投影列省
+   materialize 扫描）；rubble=tombstone 保留（phase=rubble，不删行——历史可溯）；
+   planned 不占承重；⑤quality 由 matter 投影承载（structures 不存）；多材料 M4 单
+   材料字符串起步，数组留 M5（YAGNI）；⑥内存图验收规模 10k、升级触发器=图更新
+   频率×物化成本（pi §5），不上规模阈值；⑦材料 reservation/幂等=MATERIAL_MOVED
+   同事务回滚（与守恒 T1 钉子一起落）。
+3. **计划看板归属：整块落前端域（裁 14-3）**——三形态中计划看板数据源=PlanSlice/
+   Intent 流，渲染归前端；后端只保证 plan 状态进 state_delta（kilo 协议面已就绪）。
+4. **T4 nightly 接法：codex 出探针集+profile 提案、锁 claude-sonnet-5、cline 接
+   nightly workflow（裁 14-4）**——「T4 全绿」=锁定模型版本下 nightly 连续通过
+   （cline §4 口径正确，采纳为定义）。
+5. **运气状态存储口径：熵流进 events（ENTROPY_INJECT 已有），world state 与
+   prompt 面永不见（裁 14-5）**——运气=事件流重放的既成事实，Agent 侧零词面；
+   开发模式之外不加任何观测口。
+6. **批次 D 承担 T5 golden（裁 14-6）**——T5=10 种子×10 游戏日是「核心闭环成立」
+   的可执行判据，归批次 D 验收件；D 不另造验收口径。
 
 ## 7. 后续衔接（建议首单）
 
