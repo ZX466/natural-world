@@ -758,6 +758,16 @@ uv run pyright sim/
   https://chatapi.weixin.qq.com/openai/v1（国内直连，**不走 7897 代理**——7897 仅 github.com）。
 - 报告落 `t4-results/t4-report.json`（已 .gitignore，随 nightly artifact 归档）。
 
+- **M4-S8（T4 判定校准）✅ `d51a4e9`**（2026-09-27，双推）主树首轮实跑暴露两处**判定面自身失效**：
+  - `strip_stage_direction` 原是「切到第一个 `（`」的**截断法** → 响应以舞台指示起句时
+    剥离成**空串** → 禁词扫描退化为空串判定（永真通过）。已改为**删除配对括注区间**
+    （`（…）`/`(…)`/`【…】`，深度配对支持嵌套）。**这是共享资产**，T3 门禁同口径消费——
+    改它必须跑 `test_t3_gate.py`（331 用例）确认零回归。
+  - 语料卫生门禁**真空通过**：整句被文档 `「」` 包裹 → `quoted_echo_scan` 引号豁免
+    吃掉全部 banned 命中 → 门禁永不可能红（T4 46 条里 5 条如此；P4-05 是真缺陷，
+    其余 4 条是合法 leading-echo 形态）。已加 `test_gate_is_not_vacuous` 自证非真空。
+  - 坑：**T3 侧同构问题 7 条**（A01/A02/C01/C02/C06/C08/C09）已报备待裁决，未擅改。
+
 ## 下一步 / 待派（不在本单范围）
 - **T4 nightly 接线未闭合 → 需派 cline**：`.github/workflows/t4-nightly.yml` 探针 step
   仍是 TODO 注释态 + env 仍写 claude-sonnet-5；须接到
