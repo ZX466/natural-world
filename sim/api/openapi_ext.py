@@ -15,6 +15,13 @@ FastAPI 只为 HTTP 路由生成 schema：WS 消息与设置页响应模型的�
 形状对齐依据：ws.py 实发（ControlAck 三项=action/applied/speed、channel=control）；
 hello/hello_ack（W6 鉴权握手）**故意不进联合**（安全域裁决，勿补齐）。
 anchors 三 schema（M5 阶段）与 ProblemDetail/WsEnvelope 无路由可挂，不施工。
+
+**M5-K10（裁 19 CRITICAL 修复，2026-09-27）**：新增 `PlanDelta` 第 15 个公共子
+schema（`{rtoken→RToken, text}`，both required，`additionalProperties: False`）+
+`StateDeltaMessage.plan`（`readonly PlanDelta[]`，**不进 required**）。K7 曾先于
+schema 实发 `state_delta.plan`（K9 抓为 CRITICAL 缝：schema 无该键且信封全局
+`additionalProperties:false`）。本处定义必须与 shared/openapi.json 快照**逐字段相等**
+（钉子在 sim/tests/test_m5_plan_delta.py::TestPlanDeltaSchema）。
 """
 
 from __future__ import annotations
@@ -163,6 +170,20 @@ _SUB_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         "additionalProperties": False,
     },
+    # M5-K10（裁 19 CRITICAL 修复）：K7 state_delta.plan 顶层数组的**项** schema。
+    # 形状从 ws.py::delta_payload 现发数据对拍（逐字段相等，防「实现先跑 schema
+    # 后补」再次打架）：{"rtoken": _rtoken(entity_id), "text": plan_text}。
+    # `text` 可空串（前端收起看板 = 明确无计划）；账本空时 state_delta **不发
+    # plan 键**（可选字段不制造噪声），故项内无 "有无计划" 标志位。
+    "PlanDelta": {
+        "type": "object",
+        "required": ["rtoken", "text"],
+        "properties": {
+            "rtoken": {"$ref": "#/components/schemas/RToken"},
+            "text": {"type": "string"},
+        },
+        "additionalProperties": False,
+    },
     "CombatInfo": {
         "type": "object",
         "required": ["active"],
@@ -281,6 +302,11 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
                 "type": "array",
                 "items": {"$ref": "#/components/schemas/StructureDelta"},
             },
+            # M5-K10（裁 19 修复）：K7 起的 plan 顶层可选键——计划看板数据面
+            # （m4-plan 裁 14-3：后端只保证 plan 状态进 state_delta；渲染归前端）。
+            # **顶层**而非塞 ActorDelta：改计划不必伴随移动，塞 ActorDelta 会被
+            # driver 的 moved 过滤漏掉。可选（不进 required）：账本空则不发该键。
+            "plan": {"type": "array", "items": {"$ref": "#/components/schemas/PlanDelta"}},
             "weather": {"$ref": "#/components/schemas/Weather"},
         },
         ["actors"],

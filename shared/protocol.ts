@@ -344,6 +344,10 @@ export type components = {
       readonly v: string;
       readonly ws_seq: number;
     };
+    readonly PlanDelta: {
+      readonly rtoken: components['schemas']['RToken'];
+      readonly text: string;
+    };
     readonly PlayerImpulseMessage: {
       /** @enum {string} */
       readonly channel: 'control';
@@ -430,6 +434,7 @@ export type components = {
       /** @enum {string} */
       readonly channel: 'render';
       readonly lights?: readonly components['schemas']['LightDelta'][];
+      readonly plan?: readonly components['schemas']['PlanDelta'][];
       readonly structures?: readonly components['schemas']['StructureDelta'][];
       /**
        * @description discriminator enum property added by openapi-typescript

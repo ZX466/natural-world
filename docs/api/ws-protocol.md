@@ -95,12 +95,24 @@ sim/api/ws  (FastAPI WebSocket 网关)
   ],
   "lights": [ { "rtoken": "rt_7", "flicker": 0.35 } ],
   "weather": { "visual": "heavy_rain", "ambient_light": 0.5 },
-  "structures": [ { "rtoken": "rt_s2", "phase": "collapsing" } ]
+  "structures": [ { "rtoken": "rt_s2", "phase": "collapsing" } ],
+  "plan": [ { "rtoken": "rt_1", "text": "去河边看看" } ]     // 可选；见下方 plan 键
 }
 ```
 
 - 增量以 `rtoken` 为键；`op` 缺省视为 update。
 - 客户端按 `ws_seq` 顺序应用；发现缺口超过阈值即发 `sync_request`。
+- **`plan` 键**（§8 计划看板数据面；M4 裁 14-3 / M5-K10 落地）：**顶层可选数组**
+  （与 `actors`/`lights` 并列），每项＝`PlanDelta {rtoken, text}`
+  （`additionalProperties:false`，二者均 required）。**不塞进 `ActorDelta`**：
+  改计划不必伴随移动，塞 ActorDelta 会被 driver 的 moved 增量过滤漏掉
+  （see `run_world_driver`：`state_delta` 仅在 `moved` 非空时广播）。
+  - 账本空时**不出现该键**（可选字段不制造噪声；有内容时视为自上次广播的增量）；
+  - `text` 为**空串** = 明确无计划（前端收起看板），与「键缺失」是两种语义；
+  - `rtoken` 是不透明渲染替身（§5 禁 `entity_id` 直出）；`text` 是第一人称戏内
+    计划文本，禁数值/系统词。
+  - K7 曾先于 schema 实发该键（K9 抓为 CRITICAL 缝），M5-K10 已补 `PlanDelta`
+    组件并经 `gen-protocol` 生成 `shared/protocol.ts`——契约与实现自此同源。
 
 #### combat_event.data（§9 决策点制表现）
 

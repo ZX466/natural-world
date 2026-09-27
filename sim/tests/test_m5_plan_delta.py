@@ -3,14 +3,17 @@
 判据源自 docs/arch/m4-plan.md §6 裁 14-3：计划看板数据源=PlanSlice/Intent 流，渲染归
 前端；**后端只保证 plan 状态进 state_delta**。本文把该承诺的协议面与 sim 实发面钉住：
 
-- `plan` 是 state_delta 顶层可选数组（与 actors/lights 并列，不塞进 ActorDelta——
-  改计划不必伴随移动，塞 ActorDelta 会被 moved 过滤漏掉；m4-plan 裁 14-3 语义）。
-- 每项 `{rtoken, text}`：rtoken 不透明替身（出戏边界，§5 禁 entity_id）；
-  text=当前计划文本（可空串=无计划）。`PlanDelta.additionalProperties:false`。
-- cue 钩子缝对齐 WillingnessExpression.band（will.py 纯函数）：band→cue 映射表
-  放在 sim/agent 侧（真源），ws.py 占位规则表迁走，保留占位语义不回退。
+ - `plan` 是 state_delta 顶层可选数组（与 actors/lights 并列，不塞进 ActorDelta——
+   改计划不必伴随移动，塞 ActorDelta 会被 moved 过滤漏掉；m4-plan 裁 14-3 语义）。
+ - 每项 `{rtoken, text}`：rtoken 不透明替身（出戏边界，§5 禁 entity_id）；
+   text=当前计划文本（可空串=无计划）。项的组件 schema 是
+   `PlanDelta`（`sim/api/openapi_ext.py` → shared/openapi.json → shared/protocol.ts），
+   `additionalProperties:false`；**M5-K10（裁 19）前该组件缺失**——K7 曾把这条
+   不成立的假设写成判据，现由 `TestPlanDeltaSchema` 引真实 schema 钉住（§1.5）。
+ - cue 钩子缝对齐 WillingnessExpression.band（will.py 纯函数）：band→cue 映射表
+   放在 sim/agent 侧（真源），ws.py 占位规则表迁走，保留占位语义不回退。
 
-EXTEND/DROP 模式先于 WS 分发出轨：plan 数据经显式 delta 传播，不依赖 moved 集。
+ EXTEND/DROP 模式先于 WS 分发出轨：plan 数据经显式 delta 传播，不依赖 moved 集。
 """
 
 from __future__ import annotations
@@ -259,3 +262,87 @@ class TestImpulseFeedbackUsesHook:
             "cue",
             "reaction_monologue",
         }
+
+
+class TestPlanDeltaSchema:
+    """M5-K10（裁 19 CRITICAL 修复）：plan 项引**真实** `PlanDelta` 组件。
+
+    K7 原钉子在模块 docstring 写「`PlanDelta.additionalProperties:false`」时该
+    组件并不存在（实现先跑、schema 未补，K9 抓为 CRITICAL）。现组件已落
+    `sim/api/openapi_ext.py` 并经 `gen-protocol` 生成为 `shared/protocol.ts`；
+    本类把「假设」换成「对真实组件的断言」，防未来再漂：
+      1. `PlanDelta` 组件存在且封闭（additionalProperties:false）；
+      2. 字段集恰为 {rtoken, text} 且均 required（对拍 delta_payload 实发）；
+      3. `state_delta.plan` 属性确实引 PlanDelta 且**不进 required**（可选）；
+      4. delta_payload 实发项不越 PlanDelta 边界（额外字段=越界）。
+    """
+
+    @staticmethod
+    def _snapshot() -> dict:
+        """shared/openapi.json 快照（gen-protocol 的唯一真相源）。"""
+        import json
+        from pathlib import Path
+
+        path = Path(__file__).parents[2] / "shared" / "openapi.json"
+        return json.loads(path.read_text(encoding="utf-8"))["components"]["schemas"]
+
+    def test_component_exists_and_is_closed(self) -> None:
+        schema = self._snapshot()["PlanDelta"]
+        assert schema["type"] == "object"
+        assert schema["additionalProperties"] is False
+
+    def test_fields_exact_and_required(self) -> None:
+        schema = self._snapshot()["PlanDelta"]
+        assert set(schema["properties"]) == {"rtoken", "text"}
+        assert set(schema["required"]) == {"rtoken", "text"}
+
+    def test_rtoken_refs_the_opaque_substitute(self) -> None:
+        """出戏边界：rtoken 引用共享替身组件，不是裸 string（禁内部 id 直出）。"""
+        schema = self._snapshot()["PlanDelta"]
+        assert schema["properties"]["rtoken"] == {"$ref": "#/components/schemas/RToken"}
+
+    def test_state_delta_plan_refs_component_and_stays_optional(self) -> None:
+        delta = self._snapshot()["StateDeltaMessage"]
+        assert delta["properties"]["plan"] == {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/PlanDelta"},
+        }
+        # 可选：账本空时 delta_payload 不发该键（test_plan_absent_when_store_empty 钉）
+        assert "plan" not in delta["required"]
+
+    def test_emitted_items_within_component_bounds(self) -> None:
+        """实发项不得含 PlanDelta 之外的字段（additionalProperties:false 镜像）。"""
+        from sim.api.ws import delta_payload
+        from sim.npc.plan_view import set_plan
+
+        set_plan("chenmo", "去河边看看")
+        try:
+            loop = TestDeltaPayloadPlan()._loop()
+            payload = delta_payload(loop, set(loop.state.entities))
+            allowed = set(self._snapshot()["PlanDelta"]["properties"])
+            for item in payload["plan"]:
+                assert set(item) <= allowed
+        finally:
+            from sim.npc.plan_view import reset_plan_registry
+
+            reset_plan_registry()
+
+    def test_ext_source_matches_snapshot(self) -> None:
+        """sim 侧组件定义（openapi_ext）与快照逐字段相等——防两处定义漂移。
+
+        顺序敏感：`openapi_ext` 顶层 `from sim.api.main import app`，而 `main`
+        模块级又 `from sim.api.openapi_ext import install`——先 import main 避开
+        循环初始化（反向导入会拿到半初始化模块）。
+        """
+        import sim.api.main  # noqa: F401  # 先初始化 main，防循环 import
+        from sim.api.openapi_ext import _SUB_SCHEMAS
+
+        assert _SUB_SCHEMAS["PlanDelta"] == self._snapshot()["PlanDelta"]
+
+    def test_generated_ts_type_carries_plan(self) -> None:
+        """生成物 protocol.ts 已含 `plan?`（前端可达性的最终判据）。"""
+        from pathlib import Path
+
+        text = (Path(__file__).parents[2] / "shared" / "protocol.ts").read_text(encoding="utf-8")
+        assert "readonly PlanDelta: {" in text
+        assert "readonly plan?: readonly components['schemas']['PlanDelta'][];" in text
