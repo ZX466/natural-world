@@ -80,12 +80,14 @@ Push-Location client; npx tsc --noEmit; npx eslint .; npx prettier --check .; np
 $env:T4_MODEL='Deepseek-v4-flash'
 $env:T4_MODEL_BASE_URL='https://chatapi.weixin.qq.com/openai/v1'
 $env:T4_MODEL_API_KEY='<临时填：控制台粘贴，不入库不入日志>'
+$env:T4_RUN='1'   # 第二把锁：显式选择真跑（M4-S7 三把锁；缺此必 skip，见 codex 树 S7 回执）
 
 uv run pytest -m t4 --junitxml=t4-results/t4.xml
 ```
 
-- `T4_MODEL_API_KEY` **可选**：探针集里标了「无 key 即 skip」的用例会在缺 key 时跳过（零烧钱），
-  这类 skip 属**预期**，不算失败。已设 key 时它们会真调模型。
+- `T4_RUN=1` **必填**：探针集三把锁的第二把（key 存在 + T4_RUN=1 + ≤60 预算闸）。
+  只设 key 不设 `T4_RUN` → 全部 skip（防每提交 CI 误选中 t4 用例真烧钱——cline C6 实测
+  `-m "not bench"` 会收集到 t4 marker 用例）。
 - **key 纪律**（与 §5 一致）：只经环境变量，**绝不**写进 `t4-nightly.yml`、`.env`、`docs/` 或任何提交；
   跑完可 `Remove-Item Env:T4_MODEL_API_KEY` 清掉本会话值。
 - 探针集本体归 **codex**（`sim/tests/test_t4_probes.py`，M4-S7）；本文只管**怎么跑**。
