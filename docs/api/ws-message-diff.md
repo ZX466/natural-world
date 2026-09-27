@@ -5,6 +5,7 @@
 > 真相源：`shared/openapi.json`（裁决：切源暂缓，见 `docs/api/codegen.md` §4.1，cline M2-C4 已落档）。
 > ext 基线：`sim/api/openapi_ext.py` @ `59ffd86`——`git log --oneline --follow` 确认 59ffd86 之后该文件**零改动**。
 > 比对方式：`TestClient(app).get("/openapi.json")` 实跑生成本机生成物，与快照做**结构 diff**（非目测）；`LZ_MASTER_KEY` 用本地临时值不入库。与 M2-K2 同口径。
+> **后续订正提示（2026-09-27 裁 21-A / M5-K2）**：本文是 M2-K3 时点记录，**基线不再更新**。其中 §2 成员 9（`RToken`）的描述文字「连接生命周期内有效」已订正为**稳定派生**口径（现行描述见 `openapi_ext.py::_SUB_SCHEMAS.RToken` 与 `ws-protocol.md` §5）；**schema 形态未变**。
 
 ---
 

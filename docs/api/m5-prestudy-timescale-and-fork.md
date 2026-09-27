@@ -1,8 +1,9 @@
 # M5 接口面预研：时间刻度控制面 + 读档=分叉协议面
 
-> 能力域：接口 / 兼容性（kilo） | 状态：**提案稿（预研），零代码零 schema 改动**
+> 能力域：接口 / 兼容性（kilo） | 状态：**提案稿（预研）→ D-1~D-9 已全裁（`docs/arch/m5-rulings.md` 裁 21-A，2026-09-27）**
 > 派单：Claude 主树 `.orca/talking.txt`「M5-K1」（2026-09-27）
-> 门禁：本稿只列问题、提案与待裁点。**不改** `sim/**`、`shared/**`、`client/**`，**不碰** `shared/protocol.ts`。
+> K1 门禁：交付时零代码零 schema 改动（本稿只列问题、提案与待裁点，不改 `sim/**`、`shared/**`、`client/**`，不碰 `shared/protocol.ts`）。
+> **裁决状态**：D-1~D-9 **九条全采本稿主张**（无一改口）；**D-8 已由 M5-K2 施工落地**（`b188ba0`，文档四处 + `RToken.description` 经生成管线同步 + 口径钉子，协议形态与版本号零变更）。其余施工面（`fast_forward` 新 action / 合并后的新 session 首帧 / `GET /api/anchors/current` 路由 / D-3 暂停语义批）**待 Claude 派单**，本稿 §2.7/§3.8/§5 各表已标裁况。
 > 依据：DESIGN.md §2 C6 / §10 时间锁定 / §12 双轨存档 / §13 十个现实系统 / §17 M5 行 / §19 禁止事项
 > 既有资产：`ws-dispatch-proposal.md`（K4 §8.1-8.8 裁决）→ K6 落地（`set_control` pause/resume/speed 连接级栈）→ K9 集成对账 → K10（`PlanDelta` schema）
 
@@ -19,11 +20,11 @@
 5. **`timescale`（S→C）已定义但零实现**（G-5）：`sim/api/` 内除 `openapi_ext.py` 外无任何 `timescale` / `COMBAT_SCALE` 引用 ⇒ 战斗慢镜前端当前无感知。
 6. **「世界已分叉」不能靠 diff 告知**（§3.2）：可用的游标只有 `ws_seq`（传输序号，跨连接不连续），而 `tick`/`seq`/`branch_id` 一律禁出网关（`ws-protocol.md` §2/§5）⇒ **M5 走全量 `full_snapshot`**，增量 diff 若要则必须先引入不透明 `catchup_token`。
 7. **rtoken 跨分叉稳定**（`_rtoken` = `sha256(entity_id)[:12]`，`ws.py:122`）⇒ **同一 rtoken 在分叉前后可指不同状态**，前端绝不可拿它做跨分支 diff 或身份连续性推断。分叉/读档**必重发全量**。
-8. **`versioning.md` §8-1 与实现相悖**（G-8/D-8）：文档写「rtoken 连接生命周期内有效、重连由 full_snapshot 重分配」，实现是**稳定派生、跨连接不变**。措辞需订正（挂账，不在 M5-K1 门禁内）。
+8. **✅ 已裁 21-A / 已落（M5-K2）**：`versioning.md` §8-1「rtoken 连接生命周期内有效、重连由 full_snapshot 重分配」与实现（稳定派生、跨连接不变）相悖（G-8/D-8）——**裁 21-A 采①文档订正、实现不动**，`ws-protocol.md` §5 + `versioning.md` §7/§8-1/§8-4 + `RToken.description` 已全部改口径，协议形态与版本号不变。
 9. **重连后前端不知道当前刻度**（G-7/D-5）：连接期只发一帧 `full_snapshot`，没有「当前是否暂停 / 当前倍率 / 当前游标」下发面。M5 一旦上刻度面板与读档 UI，这是**前必修**。
 10. **生成管线不变量**：以上全部字段将来一律走 `openapi_ext.py` → `shared/openapi.json` → `npm run gen:protocol`，**禁手写 `protocol.ts`**。字段级归属清单见 §4.2。
 
-**待裁清单导航**：D-1~D-5（时间刻度）见 §2.7；D-6~D-9（读档分叉）见 §3.8；汇总表见 §5。
+**待裁清单导航**：D-1~D-5（时间刻度）见 §2.7；D-6~D-9（读档分叉）见 §3.8；汇总表见 §5。**✅ 裁 21-A（`docs/arch/m5-rulings.md` §A，2026-09-27）九条全采本稿主张。**
 
 ---
 
@@ -65,16 +66,16 @@
 
 | # | 缺口 | 证据 | 严重度 |
 |---|---|---|---|
-| G-1 | `pause→pause→resume` 实发 `control_ack{action:"resume", speed:0}`，**违反** `ControlAckMessage.speed` 枚举 `[1,4,16]` | 本机实测：`ws.py:429` `int(restored)`，restored=`0.0`；schema `openapi_ext.py:393` | **HIGH（协议违约，前端类型断言红）** |
-| G-2 | 无暂停时 `resume` 静默把倍率改回 1x 并回 `applied:true` | 本机实测（栈空 → 回落 1.0）；`ws.py:429` | MEDIUM（未声明的状态变更） |
-| G-3 | 暂停期间 `set_speed` **立即解除暂停**（暂停无独立表示，等价于 speed=0）；随后 `resume` 又按栈弹回旧值 | 本机实测序列 `pause→set_speed 16→resume`：clock `0.0→16.0→1.0`，末态既非 16x 也非暂停 | MEDIUM（刻度面板上线后成可见 bug） |
-| G-4 | `_PRE_PAUSE_SPEED` 模块级全局，多连接互窃倍率 | `ws.py:452`（K9 已记） | MEDIUM |
-| G-5 | `timescale` 帧零广播实现 | `rg timescale sim/api/` 仅命中 `openapi_ext.py` | MEDIUM |
+| G-1 | `pause→pause→resume` 实发 `control_ack{action:"resume", speed:0}`，**违反** `ControlAckMessage.speed` 枚举 `[1,4,16]` | 本机实测：`ws.py:429` `int(restored)`，restored=`0.0`；schema `openapi_ext.py:393` | **HIGH（协议违约，前端类型断言红）**｜✅ 裁 21-A D-3 采①，**施工时清** |
+| G-2 | 无暂停时 `resume` 静默把倍率改回 1x 并回 `applied:true` | 本机实测（栈空 → 回落 1.0）；`ws.py:429` | MEDIUM｜✅ 裁 21-A D-3，施工时清 |
+| G-3 | 暂停期间 `set_speed` **立即解除暂停**（暂停无独立表示，等价于 speed=0）；随后 `resume` 又按栈弹回旧值 | 本机实测序列 `pause→set_speed 16→resume`：clock `0.0→16.0→1.0`，末态既非 16x 也非暂停 | MEDIUM（刻度面板上线后成可见 bug）｜✅ 裁 21-A D-3，施工时清 |
+| G-4 | `_PRE_PAUSE_SPEED` 模块级全局，多连接互窃倍率 | `ws.py:452`（K9 已记） | MEDIUM｜✅ 裁 21-A D-3 附带清（连接级化） |
+| G-5 | `timescale` 帧零广播实现 | `rg timescale sim/api/` 仅命中 `openapi_ext.py` | MEDIUM（未裁，施工时随战斗慢镜面接） |
 | G-6 | 分叉零写入方（见 §1.3 末行） | 全仓 grep | **阻塞 M5**（非接口域） |
-| G-7 | 无「连接期刻度/游标初值」下发面 | `ws.py:340-349` 连接首帧只回 `hello_ack`，此后 `full_snapshot` | MEDIUM（M5 UI 前必修） |
-| G-8 | `versioning.md` §8-1「rtoken 连接生命周期内有效、重连重分配」与实现（稳定派生）相悖 | `ws.py:122-130` vs `versioning.md:67` | LOW（文档措辞，挂账） |
+| G-7 | 无「连接期刻度/游标初值」下发面 | `ws.py:340-349` 连接首帧只回 `hello_ack`，此后 `full_snapshot` | MEDIUM｜✅ 裁 21-A D-5+D-6（合并一帧新 session 帧），**施工时清** |
+| G-8 | `versioning.md` §8-1「rtoken 连接生命周期内有效、重连重分配」与实现（稳定派生）相悖 | `ws.py:122-130` vs `versioning.md:69` | **✅ 已关闭**（裁 21-A 采①，M5-K2 落地：文档四处 + `RToken.description` 经管线同步 + 口径钉子） |
 
-> G-1/G-2/G-3 为本轮**新发现**（既有测试只覆盖单次 pause/resume：`test_ws_gateway.py:306/327/403`），零代码门禁下**只记录不修**，建议随 M5 刻度面施工一并收（见 §5 D-3）。
+> G-1/G-2/G-3 为本轮**新发现**（既有测试只覆盖单次 pause/resume：`test_ws_gateway.py:306/327/403`），零代码门禁下**只记录不修**；**裁 21-A D-3 = ①幂等单值**已把这三宗 + G-4 纳入同一施工批（详见 `docs/arch/m5-rulings.md` §A）。
 
 ---
 
@@ -167,15 +168,15 @@ DESIGN 里「时间刻度」出现在两处，所指不同：
 - K9 抓的 **MEDIUM**「`_PRE_PAUSE_SPEED` 模块级全局」= 本块 G-4，方案 ① 一并清。
 - G-5「`timescale` 零广播」= 本块 D-4 的前置（战斗慢镜当前前端无感知）。
 
-### 2.7 本块待裁
+### 2.7 本块待裁（✅ 裁 21-A 全采）
 
-| # | 待裁 | 选项 | kilo 建议 | 影响面 |
-|---|---|---|---|---|
-| D-1 | M5「时间刻度」指玩家快进还是世界日历内容 | ①玩家侧快进/变速 ②世界侧日历/节气 ③两者都做 | ①（②的呈现需求已由 `story_label` 承接） | 整块范围；②成立则本块零改动 |
-| D-2 | 是否扩 `speed` 枚举 | ①不扩（新增 action）②扩到 64 ③不扩也不新增 | ③→若 D-1=① 则采① | `clock.ALLOWED_SPEEDS`／`ControlAckMessage`／`client` 三处联动 |
-| D-3 | 暂停语义 | ①幂等单值 ②有界栈 ③暂停中禁变速 | ① | `ws.py:410-457` + G-1/G-2/G-3/G-4 |
-| D-4 | 是否新增刻度广播 | ①不新增 ②扩 `timescale` ③新增 `rate_change` | ① 现（M5 不触发），③ 登记预留 | `openapi_ext._WS_SCHEMAS` + `_TYPE_OF` |
-| D-5 | 连接期刻度/游标初值载体 | ①扩 `hello_ack` ②新增 session 首帧 | ②（与 D-6 合并成一帧） | WS 消息集合 +1 |
+| # | 待裁 | 选项 | kilo 建议 | 裁况（裁 21-A） | 影响面 |
+|---|---|---|---|---|---|
+| D-1 | M5「时间刻度」指玩家快进还是世界日历内容 | ①玩家侧快进/变速 ②世界侧日历/节气 ③两者都做 | ①（②的呈现需求已由 `story_label` 承接） | **✅ 采①**（§17 验收指向分叉不是日历；日历归 M6 打磨面） | 整块范围；②成立则本块零改动 |
+| D-2 | 是否扩 `speed` 枚举 | ①不扩（新增 action）②扩到 64 ③不扩也不新增 | ③→若 D-1=① 则采① | **✅ 采①**（快进走新 action `fast_forward`，pi 预算红线随附） | `clock.ALLOWED_SPEEDS`／`ControlAckMessage`／`client` 三处联动 |
+| D-3 | 暂停语义 | ①幂等单值 ②有界栈 ③暂停中禁变速 | ① | **✅ 采①**（附带清 G-1/G-2/G-3/G-4，施工时收） | `ws.py:410-457` |
+| D-4 | 是否新增刻度广播 | ①不新增 ②扩 `timescale` ③新增 `rate_change` | ① 现（M5 不触发），③ 登记预留 | **✅ 采①+③**（不定义 schema，只登记预留名+触发条件） | `openapi_ext._WS_SCHEMAS` + `_TYPE_OF` |
+| D-5 | 连接期刻度/游标初值载体 | ①扩 `hello_ack` ②新增 session 首帧 | ②（与 D-6 合并成一帧） | **✅ 采②**（与 D-6 合并一帧） | WS 消息集合 +1 |
 
 ---
 
@@ -207,14 +208,15 @@ DESIGN §17 M5 行验收：「**离线再回来世界已变**；C6 测试绿」�
 ### 3.3 rtoken 语义：稳定 ≠ 身份 ≠ 跨分支连续性
 
 - **实现**：`sha256(entity_id)[:12]`，同一 `entity_id` 永远同一 rtoken，**跨连接、跨分支都不变**（`ws.py:122-130`）。
-- **文档**：`versioning.md:67` 写「rtoken 连接生命周期内有效、不可反查游戏状态、**重连由 full_snapshot 重分配**」⇒ **与实现相悖**（G-8）。
+- **文档（本稿发现时的原文）**：`versioning.md` §8-1 写「rtoken 连接生命周期内有效、不可反查游戏状态、**重连由 full_snapshot 重分配**」⇒ **与实现相悖**（G-8）。**该处已按裁 21-A 订正**（M5-K2）。
 - **分叉下的含义**：读档分叉后，同一个 `rt_xxxx`（同一个陈默）在两条分支上**位置/状态/关系可能完全不同**。前端若拿 rtoken 做「增量合并」或「身份连续性」推断，会把两条时间线**焊死**。
 
-**kilo 主张（D-8）**：
+**kilo 主张（D-8）** — **✅ 已裁 21-A（2026-09-27）：采①「文档订正、实现不动」，本稿措辞即终裁口径，M5-K2 已落地**：
 
 1. **保持稳定派生**（不改实现）——rtoken 稳定对渲染缓存/精灵复用/前端 diff 有利；
-2. **在 `ws-protocol.md` 明文三句**：rtoken ≠ 身份标识，≠ 跨分支连续性，**分叉/读档后必重发全量**；
-3. **订正 `versioning.md` §8-1 措辞**（挂账给 cline/我域下一单）——把「重连由 full_snapshot 重分配」改为「重连恒以 `full_snapshot` 重建前端状态，rtoken 本身稳定不变」。
+2. **在 `ws-protocol.md` §5 明文三句**：rtoken ≠ 身份标识，≠ 跨分支连续性，**分叉/读档后必重发全量**（已落，并附「口径订正记录」小节留痕）；
+3. **订正 `versioning.md` §8-1 措辞**——「重连由 full_snapshot 重分配」→「重连恒以 `full_snapshot` 重建前端状态，rtoken 本身稳定不变」（已落；§7 加注「版本号不变」、§8 加第 4 条裁决记录）；
+4. **附带**：`RToken.description` 同一口径错误经生成管线同步（`openapi_ext.py` → `shared/openapi.json` → `shared/protocol.ts`），**协议形态零变更**；`ws-message-diff.md` 加一行「本文为 M2-K3 时点记录」提示；`sim/tests/test_m2_openapi_rework.py::test_rtoken_opaque_shape` 补口径断言做钉子。
 
 ### 3.4 「世界已分叉」的告知载体
 
@@ -264,14 +266,14 @@ DESIGN §17 M5 行验收：「**离线再回来世界已变**；C6 测试绿」�
 
 > 注意 `REWRITE_MAP`（`banned_words.py:93-103`）：`分支→岔路`、`快照→留影`、`回放→复述`。若分叉告知最终**走 narrative 通道**（S6 摘要），这些替换词面就是 sim 侧的默认改写路径——但**改写后仍须复扫**，且**协议面不得替 sim 决定措辞**（禁词治理归安规域 codex）。
 
-### 3.8 本块待裁
+### 3.8 本块待裁（✅ 裁 21-A 全采）
 
-| # | 待裁 | 选项 | kilo 建议 | 影响面 |
-|---|---|---|---|---|
-| D-6 | 分叉告知载体 | ①新增 session 帧 ②塞 `full_snapshot` 可选键 ③纯 HTTP | ①（与 D-5 合并成一帧） | WS 消息集合 +1；render 边界零污染 |
-| D-7 | 重同步走全量还是增量 | ①全量 ②diff+不透明 token | ①（②需先裁带宽需求） | 前端重连/读档路径 |
-| D-8 | rtoken 跨连接/跨分叉口径 | ①文档订正、实现不动 ②改成每连接重分配 | ① | `ws-protocol.md` §5 + `versioning.md` §8-1 措辞 |
-| D-9 | 「当前游标」只读面 | ①新增 HTTP 路由 ②WS 承载 ③不做 | ① | `anchors-api.md` 增路由（Claude 域施工） |
+| # | 待裁 | 选项 | kilo 建议 | 裁况（裁 21-A） | 影响面 |
+|---|---|---|---|---|---|
+| D-6 | 分叉告知载体 | ①新增 session 帧 ②塞 `full_snapshot` 可选键 ③纯 HTTP | ①（与 D-5 合并成一帧） | **✅ 采①** | WS 消息集合 +1；render 边界零污染 |
+| D-7 | 重同步走全量还是增量 | ①全量 ②diff+不透明 token | ①（②需先裁带宽需求） | **✅ 采①**（同 kilo 主张：在此之前不预留 `catchup_token`） | 前端重连/读档路径 |
+| D-8 | rtoken 跨连接/跨分叉口径 | ①文档订正、实现不动 ②改成每连接重分配 | ① | **✅ 已裁 21-A 采①，M5-K2 已落**（`b188ba0`） | `ws-protocol.md` §5 + `versioning.md` §7/§8 措辞 + `RToken.description`（形态零变更） |
+| D-9 | 「当前游标」只读面 | ①新增 HTTP 路由 ②WS 承载 ③不做 | ① | **✅ 采①**（戏外只读路由，字段同 `AnchorListItem`、零原始数值） | `anchors-api.md` 增路由（施工待派） |
 
 ---
 
@@ -316,7 +318,7 @@ DESIGN §17 M5 行验收：「**离线再回来世界已变**；C6 测试绿」�
 | G-4 | `_PRE_PAUSE_SPEED` 模块级全局 | `ws.py:452` | 同上（方案 ① 顺带清） |
 | G-5 | `timescale` 零广播 | `sim/api/` | Claude 域（`run_world_driver` 接线） |
 | G-7 | 无连接期刻度/游标初值面 | `ws.py:340-349` | 随 D-5/D-6 落地 |
-| G-8 | `versioning.md` §8-1 措辞与实现相悖 | `versioning.md:67` | 我域下一单（文档） |
+| G-8 | ~~`versioning.md` §8-1 措辞与实现相悖~~ | —— | **✅ 已清**（M5-K2：裁 21-A 采①，`ws-protocol.md` §5 / `versioning.md` §7+§8-1+§8-4 / `ws-message-diff.md` 头注 / `RToken.description` 经管线同步） |
 | 旧债 | `openapi_ext.py:17`「anchors 不施工」注释 + 测试 `ADDED_SCHEMAS` 白名单两处 M2-K3 遗留注释 | `openapi_ext.py` | 待 M5 锚点路由落地时改（Claude 域文件） |
 
 ### 4.4 验收命令（M5 任何协议面改动后必跑）
@@ -331,21 +333,21 @@ uv run pytest sim/tests/test_ws_gateway.py sim/tests/test_m5_plan_delta.py
 
 ---
 
-## 5. 待裁清单汇总（交 Claude）
+## 5. 待裁清单汇总（✅ 裁 21-A 九条全采，见 `docs/arch/m5-rulings.md` §A）
 
-| # | 待裁 | 选项 | kilo 建议 | 阻塞谁 |
-|---|---|---|---|---|
-| D-1 | M5「时间刻度」语义归属 | ①玩家快进/变速 ②世界日历内容 ③两者 | ① | 整块 §2；②成立则本块零改动 |
-| D-2 | 是否扩 `speed` 枚举 | ①不扩+新 action ②扩到 64 ③两者都不 | ③→D-1=① 时采① | `clock` / `ControlAckMessage` / client 三处 |
-| D-3 | 暂停语义 | ①幂等单值 ②有界栈 ③暂停禁变速 | ① | `ws.py` 施工 + G-1~G-4 |
-| D-4 | 刻度广播 | ①不新增 ②扩 `timescale` ③新增 `rate_change` | ①现（M5 不触发）+ ③登记预留 | WS 消息集合 |
-| D-5 | 连接期刻度/游标初值 | ①扩 `hello_ack` ②新 session 首帧 | ②（与 D-6 合并） | 前端重连恢复 |
-| D-6 | 分叉告知载体 | ①新 session 帧 ②`full_snapshot` 可选键 ③纯 HTTP | ① | 读档 UI |
-| D-7 | 重同步全量 vs diff | ①全量 ②diff+不透明 token | ① | 前端重连/读档路径 |
-| D-8 | rtoken 口径 | ①文档订正、实现不动 ②改实现 | ① | 文档两处措辞 |
-| D-9 | 「当前游标」只读面 | ①新增 HTTP 路由 ②WS 承载 ③不做 | ① | `anchors-api.md` 增路由 |
+| # | 待裁 | 选项 | kilo 建议 | 裁况 | 阻塞谁 |
+|---|---|---|---|---|---|
+| D-1 | M5「时间刻度」语义归属 | ①玩家快进/变速 ②世界日历内容 ③两者 | ① | **✅ 裁 21-A 采①** | 整块 §2（②成立则本块零改动） |
+| D-2 | 是否扩 `speed` 枚举 | ①不扩+新 action ②扩到 64 ③两者都不 | ③→D-1=① 时采① | **✅ 采①**（`fast_forward`） | `clock` / `ControlAckMessage` / client 三处 |
+| D-3 | 暂停语义 | ①幂等单值 ②有界栈 ③暂停禁变速 | ① | **✅ 采①** | `ws.py` 施工 + G-1~G-4 |
+| D-4 | 刻度广播 | ①不新增 ②扩 `timescale` ③新增 `rate_change` | ①现（M5 不触发）+ ③登记预留 | **✅ 采①+③** | WS 消息集合（预留不定义） |
+| D-5 | 连接期刻度/游标初值 | ①扩 `hello_ack` ②新 session 首帧 | ②（与 D-6 合并） | **✅ 采②** | 前端重连恢复 |
+| D-6 | 分叉告知载体 | ①新 session 帧 ②`full_snapshot` 可选键 ③纯 HTTP | ① | **✅ 采①** | 读档 UI |
+| D-7 | 重同步全量 vs diff | ①全量 ②diff+不透明 token | ① | **✅ 采①** | 前端重连/读档路径 |
+| D-8 | rtoken 口径 | ①文档订正、实现不动 ②改实现 | ① | **✅ 采①，已施工（`b188ba0`）** | 已清零 |
+| D-9 | 「当前游标」只读面 | ①新增 HTTP 路由 ②WS 承载 ③不做 | ① | **✅ 采①** | `anchors-api.md` 增路由 |
 
-**裁 D-1 之前，§2 的其余提案都只是「若」**；建议先裁 D-1，再一次性裁 D-2~D-5。
+**裁决后待派施工面（我域）**：`fast_forward` 新 action（D-2）→ 合并后的新 session 首帧（D-5+D-6）→ `GET /api/anchors/current` 只读路由（D-9）→ D-3 暂停语义批（连带清 G-1~G-4）。**协议面一律走 §4.1 五步管线：先钉子、后 `openapi_ext`、再快照、最后 `gen-protocol`（禁手写 `protocol.ts`）。**
 
 ---
 

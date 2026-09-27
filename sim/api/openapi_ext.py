@@ -69,10 +69,17 @@ def _member(
 
 #: 公共子 schema（K3 §2.1 #1-#14）——与 shared/openapi.json 逐字段一致。
 _SUB_SCHEMAS: dict[str, dict[str, Any]] = {
+    # 裁 21-A / M5-K2（D-8 口径订正，实现不动）：rtoken 是**稳定派生**
+    # （ws.py::_rtoken = sha256(entity_id)[:12]），跨连接与跨分支都不变——
+    # 早期描述写「连接生命周期内有效、重连由 full_snapshot 重分配」与实现相悖。
+    # 现行口径三句见 docs/api/ws-protocol.md §5「rtoken 规则」。
     "RToken": {
         "type": "string",
         "description": "不透明渲染替身：仅用于精灵跟踪，与内部 entity_id 解耦、"
-        "不可反查游戏状态、连接生命周期内有效（ws-protocol.md §5）",
+        "不可反查游戏状态；由 sim 稳定派生（同一实体恒得同一 rtoken，"
+        "跨连接与跨分支均不变），rtoken 不等于身份标识、不等于跨分支连续性，"
+        "重连与读档分叉后一律以 full_snapshot 全量重建前端状态"
+        "（ws-protocol.md §5 / 裁 21-A）",
     },
     "Facing": {"type": "string", "enum": ["n", "e", "s", "w"]},
     "Actor": {

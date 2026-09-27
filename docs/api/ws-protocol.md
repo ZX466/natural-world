@@ -260,7 +260,15 @@ sim/api/ws  (FastAPI WebSocket 网关)
 
 **render 通道允许暴露的**：玩家自然能"看见为像素"的视觉空间事实——位置/朝向/精灵/动画/光照/天气视觉/弹幕表现/坍塌 phase。这些是像素原料，不作为数值文本呈现，且永不回流 Agent prompt。
 
-**rtoken 规则**：`rtoken` 由 sim 端 render 投影层分配，是**仅用于精灵跟踪的不透明短命令牌**，与内部 entity_id 解耦、不可反查游戏状态、连接生命周期内有效；重连后由 `full_snapshot` 重新分配。
+**rtoken 规则**：`rtoken` 是**仅用于精灵跟踪的不透明短命令牌**，与内部 entity_id 解耦、不可反查游戏状态。**由 sim 稳定派生**——同一实体恒得同一 rtoken，**跨连接、跨分支都不变**（实现见 `sim/api/ws.py::_rtoken`；口径由裁 21-A / M5-K2 定稿）。
+
+**三条推论（前端必读）**：
+
+1. `rtoken` **不是身份标识**——它只是渲染替身，前端不得据此推断「这是同一个人」，更不得当作持久主键入库。
+2. `rtoken` **不是跨分支连续性**——读档分叉（§12）后，同一 rtoken 在新旧两条时间线上可指**完全不同的位置 / 状态 / 关系**。
+3. 因此**重连后与读档分叉后一律必收全量 `full_snapshot`**：重建的是**前端状态**，不是 rtoken 本身；**禁止**用 rtoken 做增量合并或跨分支 diff。
+
+> **口径订正记录（裁 21-A / M5-K2，2026-09-27）**：本节与 `versioning.md` §8-1 的早期版本写的是「rtoken 连接生命周期内有效；重连后由 `full_snapshot` 重新分配」，**与实现相悖**（实现为稳定派生）。现行口径 = **稳定派生 + 全量重建前端状态**，schema `RToken.description` 已按此同步（经 `openapi_ext` → `openapi.json` → `gen-protocol` 管线落进 `shared/protocol.ts`）。**协议形态零变更**。
 
 ## 6. 节奏与一致性
 

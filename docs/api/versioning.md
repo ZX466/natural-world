@@ -62,11 +62,14 @@ client ◄──hello_ack── { "v": "1.1", "server_versions": ["1.0","1.1"], 
 |---|---|---|---|
 | 1.0 | 协议基线（ws-protocol.md 全量消息 + rtoken/时间口径裁决） | client+sim | 2026-09-19 |
 
+> 2026-09-27（裁 21-A / M5-K2）：rtoken 生命周期口径**文档订正**，**协议形态与版本号均不变**（仅 `RToken.description` 描述文字修订，走 §5 生成管线），见 §8-4。
+
 ## 8. 已批裁决记录（Claude 评审 TASK-001，2026-09-19）
 
-1. **rtoken 口径**：render 通道用 `rtoken`（不透明渲染替身）替代内部 `entity_id`。服务端维护 `rtoken ↔ 内部 id` 映射表（属世界真相，留在 sim）；前端只接触 `rtoken`，永不接触真实 id。`rtoken` 连接生命周期内有效、不可反查游戏状态、重连由 `full_snapshot` 重分配。与 C3/C10 对齐。
+1. **rtoken 口径**：render 通道用 `rtoken`（不透明渲染替身）替代内部 `entity_id`。服务端维护 `rtoken ↔ 内部 id` 映射表（属世界真相，留在 sim）；前端只接触 `rtoken`，永不接触真实 id。`rtoken` 由 sim **稳定派生**（同一实体恒得同一 rtoken，**跨连接、跨分支均不变**）、不可反查游戏状态。**重连时以 `full_snapshot` 全量重建的是前端状态，不是 rtoken 本身**；rtoken 既非身份标识、也非跨分支连续性（读档分叉后同一 rtoken 可指不同状态 ⇒ 分叉/重连后必重发全量）。细则与前端三条推论见 `ws-protocol.md` §5。与 C3/C10 对齐。**（口径订正：早期版本写「连接生命周期内有效、重连由 full_snapshot 重分配」，与实现相悖；裁 21-A / M5-K2 定为「稳定派生 + 全量重建前端状态」，实现不动。）**
 2. **时间口径**：信封用 `ws_seq`（传输层单调计数，仅丢帧/乱序检测），**不是世界 tick**。世界 `tick`/`seed`/事件 `seq` 一律不进任何 WS 载荷（§11）。anchor 戏外元数据用叙事化 `story_label`，不回传原始 `tick`/`seq`（比 §11 更保守，已批）。
 3. **WS schema 进 OpenAPI**：WS 消息与 HTTP 端点共用同一 OpenAPI（`components/schemas`），经 `openapi-typescript` 生成单一生成物 `shared/protocol.ts`；前端 `net/protocol.ts` 一个 re-export 拿全。FastAPI 端 WS 路由复用同一 pydantic 模型（落地由 Claude 架构域 + cline 配置域；codegen 脚本由 kilo）。
+4. **rtoken 跨连接 / 跨分叉口径**（**裁 21-A / M5-K2**，2026-09-27，评审 Claude；提案见 `m5-prestudy-timescale-and-fork.md` §3.3 G-8/D-8）：§8-1 的「连接生命周期内有效、重连由 `full_snapshot` 重分配」**与实现相悖**——实现是 `ws.py::_rtoken` = `sha256(entity_id)[:12]` **稳定派生**（跨连接、跨分支恒定）。**定口径：实现不动、文档订正**为「稳定派生；rtoken 不等于身份标识、不等于跨分支连续性；分叉/重连后必重发全量 `full_snapshot`——重建的是前端状态而非 rtoken」。schema `RToken.description` 经生成管线同步落进 `shared/protocol.ts`；**协议形态与版本号不变**。
 
 > 上述裁决已落进 `shared/openapi.json`（mock）与 `tools/gen-protocol.ts`、`client/src/net/protocol.ts`，并被类型断言单测守护（`client/src/net/__tests__/protocol-types.test.ts`）。
 
