@@ -274,7 +274,7 @@ schema.md §19.4/README/m3-plan 已同步已裁状态。实施放行 opencode「
 
 ## 当前任务
 
-**M4-D2 四批已交待收编**（D2a `c719171` / D2b `345d5ae` / D2c `e5d0f65` / D2d 待写入；见 ③节 2026-09-26 快照与 talking.txt 回执）。**M4-D 批数据面收官**；后续等 Claude 派新单。已知生产接线缝（world.py EventBus / world 级 Pathfinder / previous_tile_id / collapse sink）属架构或需裁。
+**M4-D2 四批已收编**（D2a `c719171` / D2b `345d5ae` / D2c `e5d0f65` / D2d `7b38afd`；见 ③节 2026-09-26 快照与 talking.txt 回执）。**M4-D 批数据面收官**；后续等 Claude 派新单。已知生产接线缝（world.py EventBus / world 级 Pathfinder / previous_tile_id / collapse sink）属架构或需裁。
 
 
 ## 留言板
