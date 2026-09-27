@@ -16,6 +16,17 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
+【2026-09-27 第二十二轮｜M4 收官门 T5 面关闭+收官门前必修清零】①三单收编（main
+`73c6f06`）：cline C5b（**T5 首跑 10/10 全绿**——run 36301690490，10 job 并行 4m20s、
+单种子 108-200s、864,000 tick×10、三断言组 CI 档位全成立（守恒逐位/孤儿硬红/完成率
+4-4=1.0）；**schedule 已放开** UTC 20:30 三错开；C3 的 13-27min 预估改注首跑实测）；
+kilo K10（PlanDelta schema 补齐——openapi_ext 注组件+gen-protocol+钉子改引真 schema，
+K9 CRITICAL 关闭）；codex S4b（banned+=概率/注定+词面钉子+白名单复核无误伤，F-1 关闭）。
+②门禁 **1418 passed / 0 failed**、ruff 0、pyright 0。③**M4 收官门状态**：T5 面 ✅ 关闭
+（首跑绿+schedule 已放）；安规面 ✅（K10/F-1/F-2 全清）；**T4 面=用户改约「本地真模型
+探针一轮」**（不建 GitHub secret，M4 收官时本地验证，等效验收——memory 立此存照）。
+④**M4 只剩宣告动作**：本地 T4 探针跑一轮绿 → 宣告 M4 收官 → M5 规划（数据域预研
+先找 opencode）。
 【2026-09-27 第二十一轮｜M4 收官门四单收编+裁 19+F2 接线】①四分支收编（main `6dde038`）：
 cline C5 `53175ca`（golden-nightly.yml：matrix 十种子/fail-fast false/timeout 90/零 secrets/
 schedule 注释待首跑绿；T5 报告器 GOLDEN_REPORT_DIR 可选落盘）；kilo K9 `2606999`（集成
