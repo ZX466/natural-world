@@ -74,6 +74,19 @@ class TestSubSchemasAdded:
         assert rt["type"] == "string"
         assert "description" in rt
 
+    def test_rtoken_description_states_fork_口径(self, schemas: dict) -> None:
+        """裁 21-A / M5-K2（D-8）：描述必须写「稳定派生 + 分叉必重发全量」。
+
+        钉住 rtoken 生命周期口径，防回退到与实现相悖的旧措辞
+        （旧：「连接生命周期内有效、重连由 full_snapshot 重分配」）。
+        口径全文见 docs/api/ws-protocol.md §5「rtoken 规则」。
+        """
+        desc = schemas["RToken"]["description"]
+        assert "稳定派生" in desc
+        assert "跨分支" in desc
+        assert "full_snapshot" in desc
+        assert "连接生命周期内有效" not in desc
+
     def test_facing_enum(self, schemas: dict) -> None:
         assert schemas["Facing"] == {"type": "string", "enum": ["n", "e", "s", "w"]}
 

@@ -412,7 +412,7 @@ export type components = {
       readonly y0: number;
       readonly y1: number;
     };
-    /** @description 不透明渲染替身：仅用于精灵跟踪，与内部 entity_id 解耦、不可反查游戏状态、连接生命周期内有效（ws-protocol.md §5） */
+    /** @description 不透明渲染替身：仅用于精灵跟踪，与内部 entity_id 解耦、不可反查游戏状态；由 sim 稳定派生（同一实体恒得同一 rtoken，跨连接与跨分支均不变），rtoken 不等于身份标识、不等于跨分支连续性，重连与读档分叉后一律以 full_snapshot 全量重建前端状态（ws-protocol.md §5 / 裁 21-A） */
     readonly RToken: string;
     readonly SetControlMessage: {
       /** @enum {string} */
