@@ -5,20 +5,25 @@ name: Golden Nightly（T5 · 10 种子 × 10 游戏日）
 # 形态：**案 A（裁 17-5 采纳）——matrix 每 job 单种子**：
 #   - 内存占用 = 1/10（这正是规避单进程全量内存压力的正解；M4-C3 本机全量在 ~95 min 处被内存
 #     压力策略中止，非测试失败）；
-#   - 墙钟 ≈ 单种子时长（C3 实测 13–27 min/种子 @50 NPC；本跑 10 实体口径更轻）；
+#   - 墙钟 ≈ 单种子时长（C3 预估值 13–27 min/种子 @50 NPC；**首跑实测 108–200 s/种子**，
+#     因本跑 10 实体口径远轻于 50 NPC；`timeout-minutes: 90` 仍是 3x 以上余量）；
 #   - 失败可定位到具体种子（`fail-fast: false`，红也跑完其余种子，失败清单在 step summary）。
 # 种子真相源：`sim/tests/golden/seeds.py::GOLDEN_SEEDS`——**下方 matrix 硬编码同步**（GitHub Actions
 # 的 matrix 不能从代码读取；改种子必须两处同改，seeds.py 是验收口径的真相源）。
 # 零 LLM 零网络：全链 fixture 回放 ⇒ **不使用任何 secrets**（与 `t4-nightly.yml` 的真模型 T4 相反）。
+# ── 首跑结果（2026-09-27 cline，run 36301690490）────────────────────────────────
+# **dispatch 首跑 10/10 全绿**（conclusion=success；10 job 并行墙钟 4min20s，单种子 108–200s），
+# 三断言组（守恒逐位相等 / 孤儿双向硬红 / 完成率基线 4-4=rate 1.0）在真实 CI 档位下成立。
+# 据此按首跑纪律**放开 schedule**（UTC 20:30，与 18:00 bench / 19:30 T4 错开）。
+# 档位实录（artifact `golden-result-seed-*`）：ubuntu-latest / nproc 4 / AMD EPYC 7763 /
+# Python 3.12.3 / uv 0.12.19；每种子 ticks_run=864,000、days_covered=10、events=1,728,000，
+# mean_tick_ms 0.125–0.232（区间反映共享 runner 负载抖动，非回归）。
 
 on:
   workflow_dispatch:
-  # ── 首跑纪律（2026-09-26 Claude）────────────────────────────────────────────
-  # **dispatch 首跑绿之前不启 schedule**。首跑绿后由 cline 放开下面这段并回执；红则按失败种子
-  # 指纹裁决（记忆/超时/断言）后再议。放开方式：删掉下三行的注释。
-  # schedule:
-  #   # UTC 20:30 = 北京 04:30（与 nightly-bench UTC 18:00、t4-nightly UTC 19:30 再错开）
-  #   - cron: "30 20 * * *"
+  schedule:
+    # UTC 20:30 = 北京 04:30（与 nightly-bench UTC 18:00、t4-nightly UTC 19:30 再错开）
+    - cron: "30 20 * * *"
 
 env:
   PI_T5_FULL: "1" # §16 T5 触发门（测试内 skipif 读它）
