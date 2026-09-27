@@ -1,0 +1,86 @@
+name: Golden Nightly（T5 · 10 种子 × 10 游戏日）
+
+# DESIGN §16：T5 = golden 场景「10 种子 × 10 游戏日，断言宏观结果」，fixture 优先、每日跑。
+# 铁律：T5 **不进每提交 CI**（长跑 + 每提交秒级红线）→ 本工作流独立存在，**`ci.yml` 不引用本文件**。
+# 形态：**案 A（裁 17-5 采纳）——matrix 每 job 单种子**：
+#   - 内存占用 = 1/10（这正是规避单进程全量内存压力的正解；M4-C3 本机全量在 ~95 min 处被内存
+#     压力策略中止，非测试失败）；
+#   - 墙钟 ≈ 单种子时长（C3 实测 13–27 min/种子 @50 NPC；本跑 10 实体口径更轻）；
+#   - 失败可定位到具体种子（`fail-fast: false`，红也跑完其余种子，失败清单在 step summary）。
+# 种子真相源：`sim/tests/golden/seeds.py::GOLDEN_SEEDS`——**下方 matrix 硬编码同步**（GitHub Actions
+# 的 matrix 不能从代码读取；改种子必须两处同改，seeds.py 是验收口径的真相源）。
+# 零 LLM 零网络：全链 fixture 回放 ⇒ **不使用任何 secrets**（与 `t4-nightly.yml` 的真模型 T4 相反）。
+
+on:
+  workflow_dispatch:
+  # ── 首跑纪律（2026-09-26 Claude）────────────────────────────────────────────
+  # **dispatch 首跑绿之前不启 schedule**。首跑绿后由 cline 放开下面这段并回执；红则按失败种子
+  # 指纹裁决（记忆/超时/断言）后再议。放开方式：删掉下三行的注释。
+  # schedule:
+  #   # UTC 20:30 = 北京 04:30（与 nightly-bench UTC 18:00、t4-nightly UTC 19:30 再错开）
+  #   - cron: "30 20 * * *"
+
+env:
+  PI_T5_FULL: "1" # §16 T5 触发门（测试内 skipif 读它）
+  GOLDEN_REPORT_DIR: golden-results # 报告落盘目录（测试内可选写盘；未设则不写）
+
+jobs:
+  golden:
+    name: T5 golden（seed ${{ matrix.seed }}）
+    runs-on: ubuntu-latest
+    # 护栏：单种子 10 游戏日 = 864,000 tick；C3 实测 13–27 min/种子，90 min = 3x 余量
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false # 一个种子红不掐掉其余（失败种子清单在 step summary/artifact）
+      matrix:
+        # 真相源 sim/tests/golden/seeds.py::GOLDEN_SEEDS（十枚，硬编码同步）
+        seed: [7, 11, 101, 1009, 2003, 3001, 4001, 5003, 6007, 7001]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: 同步虚拟环境（严格按锁文件）
+        run: uv sync --frozen
+
+      - name: 记录机器档位（bench-plan §3 口径：跨机器比对应按档位线性缩放，勿硬比绝对值）
+        run: |
+          mkdir -p golden-results
+          {
+            echo "date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "runner: ubuntu-latest"
+            echo "nproc: $(nproc)"
+            echo "cpu: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs)"
+            echo "python: $(uv run python -V)"
+            echo "uv: $(uv --version)"
+            echo "seed: ${{ matrix.seed }}"
+            echo "ticks: 864000"
+          } > golden-results/runner.txt
+          cat golden-results/runner.txt
+
+      - name: 跑 T5 golden（单种子 10 游戏日 + 三断言组实跑）
+        # 用例 id 与 seeds.py 参数化一致；--junitxml 随下方 artifact 归档
+        run: >-
+          uv run pytest
+          "sim/tests/golden/test_golden_full.py::test_golden_seed_full[${{ matrix.seed }}]"
+          -q --junitxml=golden-results/t5-${{ matrix.seed }}.xml
+
+      - name: "归档（GoldenRun JSON + junit + 机档；`if: always()` 保证红灯也留证据）"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-result-seed-${{ matrix.seed }}
+          path: golden-results/
+          if-no-files-found: warn
+
+      - name: 失败通知（step summary + 注解；不吞失败）
+        if: failure()
+        run: |
+          echo "### T5 golden 失败（seed ${{ matrix.seed }}）" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 机档：见 artifact 内 \`runner.txt\`（runner/nproc/cpu/python/uv）" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 指纹：\`golden-${{ matrix.seed }}.json\`（ticks_run/days_covered/mean_tick_ms/windows）" >> "$GITHUB_STEP_SUMMARY"
+          echo "- junit：\`t5-${{ matrix.seed }}.xml\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::T5 golden 失败（seed ${{ matrix.seed }}）——指纹见 golden-result-seed-${{ matrix.seed }} artifact"

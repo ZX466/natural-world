@@ -107,7 +107,7 @@ WHERE e.kind IN ('tile.changed', 'structure.started', 'structure.checkpoint',
 
 量纲锚点：`TICKS_PER_GAME_DAY = 86,400`（1 tick = 1 游戏秒）→ 10 游戏日 = **864,000 tick / 种子**。
 
-**案 A（主张）独立 `golden-nightly.yml` + 种子分片 matrix**
+**案 A（主张）独立 `golden-nightly.yml` + 种子分片 matrix —— 已落地（M4-C5）**：`.github/workflows/golden-nightly.yml`，matrix **每 job 单种子**（内存 1/10＝规避单进程内存压力的正解）、`timeout-minutes: 90`、`fail-fast: false`、每种子 artifact（GoldenRun JSON + junit + 机档 `runner.txt`，`if: always()`）、失败 step summary + `::error::`、**零 secrets**（T5 全 fixture）。**首跑纪律：dispatch 绿之前 schedule 段保持注释**（首跑绿后由 cline 放开并回执）。
 - 10 个种子 → `strategy.matrix`（每 job 1 种子，`timeout-minutes: 90`），artifact 归档每种子的 `GoldenRun` JSON + 机器档位（照 `nightly-bench.yml` 已有的「记录机器档位」步）。
 - 优点：①种子间并行 → 墙钟 ≈ 单种子时长（13–27 min），不是 2.2–4.5 h 串行；②失败可定位到具体种子；③T5（fixture、免 secret）与 T4（真模型、锁版本、烧钱）**性质不同，不混一个 job**；④T4 的 `timeout-minutes: 30` 护栏不适配 T5 的 13–27 min/种子。
 - 代价：多一个 workflow（我域成本低，`t4-nightly.yml` 可直接抄结构）。
