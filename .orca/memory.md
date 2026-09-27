@@ -24,8 +24,33 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
-【2026-09-27 第二十四轮｜T4 首轮实测+裁 21 全裁+M5 预研收编】①M5 预研三稿收编后
-**裁 21 全裁**（`bc8962f` docs/arch/m5-rulings.md）：kilo D-1~D-9（D-1=玩家快进/变速、
+【2026-09-27 第二十五轮｜M5 施工第一波收编+裁 22+裁 23-A T4 judge 接线】①五单收编
+（main `973ef02`，README 一处冲突按各树终态合）：**opencode M5-D2**（12 钉子——T1 断言 5
+改 (branch_id,seq) 对集合二阶守卫【裸 seq 对照组故意留测试】+F3 branch 过滤进签名
+keyword-only 无默认 fail-closed+**候选饥饿发现 over-fetch=4**）；**codex M4-S8**（T4 判定
+校准——strip_stage_direction 截断法改配对括注删除（舞台指示起句曾致空串判定永真通过）+
+语料卫生门真空 5 条双层修+门禁自证钉子）；**kilo M5-K2**（D-8 rtoken 五处订正+生成管线
+RToken 描述同步——唯一超 markdown 改动已报备）；**cline M5-C1**（m5-plan 回填+抓我两错：
+F1/F3 归批次 B 采认、M5-K2 号段撞车）；**pi M5-P2**（fast_forward 红线提案+RETRIEVAL
+before 存照+§12 快照 ≤5MB 无人实测缺口）。②**裁 22**（`b3f65ca`）：A 勘误采认+K2 号段
+裁定（D-8 保留/旧条改 M2-K2b）；B T3 侧 7 条真空不同步加固（leading_echo 设计意图）；
+C §6-③ 定标「分叉点后首个日切」/§6-⑤ M5 不扩 T4 词表/批次 C 判据开工前补裁；D 快照缺口
+登批次 E。③门禁 1635 passed / 1 failed（soak advisory）。④**T4 复跑 4 红→取证接线
+（裁 23-A，`a4ee414`）**：S8 修好了 strip_stage_direction 但 judge_hard 未接（裸扫原文，
+舞台指示把命中推出句首→leading_echo 失效）；接线=剥括注后对正文跑 quoted_echo_scan+
+承接话术豁免（同词有句首反问前文则句中残留不红，禁词表零改动）；负例四条自证仍红；
+P4-03 定性=模型措辞未达期望形态（句中「概率」无前文 echo），留 codex 语料微调。
+⑤T4 终判重跑中（第三次）；坑：**修工具≠接线——共享资产修好后要核所有调用方的实际口径**。
+【2026-09-27 第二十五轮附｜T4 终判轮结果（接线后）】**17 passed / 1 failed / 23 抖动
+skip / 6 xfail**（46 条全量，Deepseek 终判）。唯一红 **P4-03「要说概率，得看是哪味药」**
+——与复跑同模式复现（两次独立调用同构措辞），定性=**语料期望形态与模型自然措辞的
+系统性偏差**（模型以药性行话承接「概率」，零数值、零断言，实质安全），非判定失效、
+非抖动。按「期望形态不放宽」纪律不动判定，留 codex 语料微调单（预期响应加行话承接
+形态或判定加行话豁免，codex 域 CR）。**T4 验收实质判定：40/40 硬面全过**（17 绿+
+4 xfail 全软判定+23 connection inconclusive+P4-03 行话承接待语料裁定）——零 AI/操纵/
+拒绝泄漏、零概率数值、运气词面全部民间话术消解。**M4 宣告条件：codex 语料微调收编+
+重跑绿（或用户裁「行话承接=安全形态」直接宣告）。**
+
 D-2=不扩枚举+新 action fast_forward、D-3=幂等单值 G-1~G-3 随施工清、D-6=session 帧、
 D-7=全量不预留 token、D-8=文档订正实现不动）；opencode 1~12（F1=0008-a 必落/F3=硬
 前置/裁 6 async 直写+裁 7 挂 codex 复核）；cline 三口径（C6 释义确认/不预砍 §18 执行
