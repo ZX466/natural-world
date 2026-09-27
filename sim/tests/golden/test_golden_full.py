@@ -12,7 +12,11 @@ C5：种子写死（seeds.py），虚拟时钟有界帧驱动——同种子重�
 """
 from __future__ import annotations
 
+import json
 import os
+from dataclasses import asdict
+from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -33,6 +37,33 @@ pytestmark = pytest.mark.skipif(
 
 #: 完成率素材：每种子首日跑一轮续接差事（执行器在 world state 上步进）
 _DAYS_FOR_ERRANDS = 1
+
+#: 报告目录（可选，M4-C5）：golden-nightly 置 `GOLDEN_REPORT_DIR=golden-results` 时
+#: 每种子落一份 `golden-<seed>.json` 供 artifact 归档；**未设则完全不写盘**（本机/CI 每提交
+#: 路径零副作用）。内容只取 driver 的确定性数（C5：无 random/time）。
+_REPORT_DIR = os.environ.get("GOLDEN_REPORT_DIR", "")
+
+
+def _write_report(seed: int, run: Any, baseline: Any) -> None:
+    """把 GoldenRun 关键数落盘（mean_tick_ms / 逐日窗口 / 事件计数 / 完成率基线）。"""
+    if not _REPORT_DIR:
+        return
+    out = Path(_REPORT_DIR)
+    out.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "seed": seed,
+        "ticks_run": run.ticks_run,
+        "days_covered": run.days_covered,
+        "total_events": run.total_events,
+        "total_tiles_changed": run.total_tiles_changed,
+        "wall_s": round(run.wall_s, 3),
+        "mean_tick_ms": round(run.mean_tick_ms(), 4),
+        "windows": [asdict(w) for w in run.windows],
+        "errands_baseline": asdict(baseline),
+    }
+    (out / f"golden-{seed}.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 @pytest.mark.t1
@@ -69,6 +100,9 @@ def test_golden_seed_full(seed: int) -> None:
     outcomes = run_all_chains(loop.state)
     baseline = measure_baseline(outcomes)
     assert_baseline_recorded(baseline)
+
+    # 4) 报告落盘（可选；golden-nightly 置 GOLDEN_REPORT_DIR 才写）
+    _write_report(seed, run, baseline)
 
 
 def _project_matter(events: list) -> dict:

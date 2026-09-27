@@ -22,7 +22,8 @@
 | `docs/arch/m0-client.md` | 前端/体验（Claude） | ✅ main | M0 渲染闭环：Phaser(canvas 世界) 与 React(canvas 外 UI) 经 Zustand store 单桥、对象池、插值、摄像机；M0 边界与出戏字段禁令 |
 | `docs/arch/m3-plan.md` | 架构（Claude） | ✅ main | M3 规划整合稿：批次 A-D 切分（A 向量 / C 地图可并行，B 等 A 接口冻结，D 收尾）+ 安规钉子横切 + §6 待裁决队列；第五批续写批次 B 模块/文件级施工图与 B1 |
 | `docs/arch/m4-plan.md` | 架构（Claude） | ✅ main | M4 规划：批次 A–D 切分 + 裁 14 六条裁决记录 + 门禁归属速查 + **「T4 全绿」定义**（锁定模型版本下 nightly 连续通过，非每次提交绿） |
-| `docs/arch/t5-golden-scaffold.md` | 架构/文档（cline 起草 · Claude 裁） | ✅ main | T5 golden 脚手架提案：形态（虚拟时钟+有界帧驱动+录制 fixture 回放）+ 文件布局 + 三断言组口径（裁 17 定阈值：守恒逐位相等/完成率 10 日重定标/孤儿硬红）+ 跑法两案（采独立 `golden-nightly.yml` 种子分片 matrix）+ runtime 实测（10 游戏日=864,000 tick/种子） |
+| `docs/arch/t5-golden-scaffold.md` | 架构/文档（cline 起草 · Claude 裁） | ✅ main | T5 golden 脚手架提案：形态（虚拟时钟+有界帧驱动+录制 fixture 回放）+ 文件布局 + 三断言组口径（裁 17 定阈值：守恒逐位相等/完成率 10 日重定标/孤儿硬红）+ 跑法两案（采独立 `golden-nightly.yml` 种子分片 matrix，M4-C5 已接）+ runtime 实测（10 游戏日=864,000 tick/种子） |
+| `sim/tests/golden/` + `.github/workflows/golden-nightly.yml` | 测试分级/CI（cline） | ✅ main | T5 golden 资产包：驱动器 `driver.py`（虚拟时钟有界帧驱动）+ 十种子清单 `seeds.py`（真相源）+ 三断言组 `assertions/*`（裁 17 口径）+ 全量验收 `test_golden_full.py`（`PI_T5_FULL=1`）+ 冒烟 `test_golden_smoke.py`（`PI_GOLDEN_SMOKE=1`）；**均 env 门默认跳过，不进每提交 CI**（§16 T5 每日跑） |
 | `docs/security/m1-checklist.md` | 安全/合规/风险（Codex） | ✅ main | M1 安全检查清单 27 项：K1–K8 密钥（Fernet/主密钥/日志脱敏/SSRF）、M1-A–I 出戏断言、O1–O6 LLM 输出边界、W1–W5 WS 白名单、G1–G4 通用 |
 | `docs/security/threat-model.md` | 安全/合规/风险（Codex） | ✅ main | 轻量威胁模型：4 资产 / 10 威胁→缓解映射 / 出戏防线 5 层 / 非目标 / Top-5 技术安全风险 |
 | `docs/security/t3-corpus.md` | 安全/合规/风险（Codex） | ✅ main | T3 出戏对抗样本集：分类攻击语料（元信息直问/诱导/存档意识/操纵感/时间戳探针/身体否定）；**期望响应形态 = 第一人称世界内回应，不是拒绝话术**；M1-C/D/E/I 的 fixture 来源 |
@@ -210,6 +211,7 @@ M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI
 | M4-S1 三面词面边界 + T4 探针集提案 | codex | 念头/意愿/运气三面词面边界 + T4 探针集提案（`ZX466/codex` `346dfa1`） | ⏳ 待收编 | **T4 接线唯一缺口**：探针集收编后由 cline 把探针步骤接进 `t4-nightly.yml`（接线约定五条已写在 workflow 注释） |
 | M4-D2 建造数据面施工 | opencode | 基于 D1 预研的施工件（在途） | ⏳ 在途 | 裁 14 第 2 条七点细则施工；同轮修正 `(branch_id, structure_id)` 复合主键 + matter identity 对账 = 首个迁移件 |
 | M4-C3 脚手架 + M4-C4 断言组（本域） | cline | `docs/arch/t5-golden-scaffold.md` + `sim/tests/golden/{seeds,driver,test_golden_smoke}.py` + `sim/tests/golden/assertions/{conservation,orphan_changes,errands_rate}.py` + `test_assertions_*.py` | ✅ main（脚手架 `f940ea0`）＋ 断言组本轮待收编 | 形态=虚拟时钟+有界帧驱动（对齐 `run_world_driver` 帧序/日切跨越判定）；冒烟满一日实跑 53.98s；**断言按裁 17 落码**：守恒逐位相等（折叠复用 `npc_store.fold_*` 单一规则，不重算领域算术）、孤儿双向硬红（熵只进事件流 + `structure.removed` 删行两个合法排除）、完成率只出基线壳（10 日重定标，暂不设阈值）；17 条最小单元测试全绿 |
+| M4-C5 golden-nightly 接线（本域） | cline | `.github/workflows/golden-nightly.yml`（新建）+ `test_golden_full.py` 加可选报告器（`GOLDEN_REPORT_DIR`） | ⏳ 本轮待收编 | 案 A 落地：**matrix 每 job 单种子**（内存 1/10＝规避本机单进程内存压力正解）、`timeout-minutes: 90`、`fail-fast: false`、每种子 artifact（GoldenRun JSON + junit + 机档 runner.txt，`if: always()`）、失败 step summary + `::error::`、**零 secrets**（T5 全 fixture）；种子 matrix 与 `seeds.py` 十枚**自动对拍一致**；**首跑绿前 schedule 段保持注释**（首跑＝dispatch，绿后放开） |
 
 ### 5.4 M5 预备（接口锚点，零代码契约先行）
 
