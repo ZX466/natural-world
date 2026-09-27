@@ -32,6 +32,7 @@ from typing import Any
 import structlog
 from fastapi import WebSocket
 
+from sim.agent.impulse_gate import impulse_gate
 from sim.core.calendar import game_time
 from sim.core.events import EventKind, WorldEvent
 from sim.core.tick import TickLoop
@@ -467,13 +468,29 @@ def _handle_player_impulse(raw: dict[str, Any]) -> dict[str, Any]:
         return _error_frame("player_impulse", _ERROR_BAD_IMPULSE, "念头还没成形。")
     if len(text) > 64:  # PlayerImpulseMessage.text maxLength 64
         return _error_frame("player_impulse", _ERROR_IMPULSE_TOO_LONG, "话说得太长了，说不清。")
+    # M4-A2（裁 19-F2）：入站三扫接线（I-1 banned / I-3 操纵感；I-2 hidden 的
+    # target_profile 随批次 A 感知层接线注入——玩家念头是全局注入，当前无特定
+    # 目标 NPC 可查）。拒收 → injected:false + 结构化 error 码（不新增戏外词面），
+    # observation 标签只进 dev 日志（S3 行为表 §6）。
+    verdict = impulse_gate(text)
+    if not verdict.admitted:
+        code = {
+            "too_many_hits": _ERROR_IMPULSE_TOO_LONG,
+        }.get(verdict.reason or "", _ERROR_BAD_IMPULSE)
+        logger.warning(
+            "ws.impulse_rejected",
+            reason=verdict.reason,
+            observation=verdict.observation or "",
+        )
+        return _error_frame("player_impulse", code, "这个念头进不去。")
+    cleaned = verdict.content
     return {
         "type": "impulse_feedback",
         "channel": "control",
         "v": _PROTOCOL_VERSION,
         "ws_seq": 0,
         "injected": True,  # §2.5：已接受并投递（不保证 LLM 已处理——异步）
-        "cue": _impulse_cue(text),
+        "cue": _impulse_cue(cleaned),
         "reaction_monologue": {
             "form": "thought",
             "content": "这话我记下了。",

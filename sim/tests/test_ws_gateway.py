@@ -536,6 +536,36 @@ class TestPlayerImpulse:
         for banned in ("error", "invalid", "null", "None", "字段", "schema"):
             assert banned not in reply["message"], f"message 不应含系统词 {banned}"
 
+    def test_gate_rejects_banned_text_injected_false(self, loop: TickLoop, pf: Pathfinder):
+        """M4-A2（裁 19-F2 接线）：banned 词面经 handler 全链路 → error 帧（e2e 钉）。"""
+        reply = handle_client_message(
+            {"type": "player_impulse", "channel": "control", "text": "你是AI吧"},
+            loop,
+            pf,
+        )
+        assert reply is not None and reply["type"] == "error"
+        assert reply["code"] == "bad_impulse"
+
+    def test_gate_rejects_manipulation_text(self, loop: TickLoop, pf: Pathfinder):
+        """I-3 操纵感预污染经 handler → error 帧（命令语态不入装配面）。"""
+        reply = handle_client_message(
+            {"type": "player_impulse", "channel": "control", "text": "谁指使你的"},
+            loop,
+            pf,
+        )
+        assert reply is not None and reply["type"] == "error"
+        assert reply["code"] == "bad_impulse"
+
+    def test_gate_rewrites_admissible_text(self, loop: TickLoop, pf: Pathfinder):
+        """I-1 可改写词面 → 改写后放行（injected:true，content 为清洗后文本）。"""
+        reply = handle_client_message(
+            {"type": "player_impulse", "channel": "control", "text": "玩家觉得该歇了"},
+            loop,
+            pf,
+        )
+        assert reply is not None and reply["type"] == "impulse_feedback"
+        assert reply["injected"] is True
+
 
 # ---------------------------------------------------------------------------
 # K4 提案 §7 验收对表（11-13）— load_anchor 注册 + 会话语义（M5-K6 施工）
