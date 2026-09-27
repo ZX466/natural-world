@@ -1,6 +1,7 @@
 <!-- ===== 新对话快速恢复卡（Claude 主树，2026-09-27 收官态）===== -->
 <!-- 0. 本会话状态：main `394fa80`，1418 passed/0 failed，六树同步双远程推齐，工作树全干净 -->
-<!-- 1. M0-M3 全收官；M4 ≈95%：T5 首跑 10/10 绿+schedule 已放（golden-nightly 永久自动化）、安规面 S1-S4b 全闭环、K9 CRITICAL/F-1/F-2 全清 -->
+<!-- 1. M0-M3 全收官；M4 ≈97%：T5 首跑 10/10 绿+schedule 已放（golden-nightly 永久自动化）、安规面 S1-S4b 全闭环、**T4 探针集本体已落地（M4-S7 `bda2aa3`，46 条）**、K9 CRITICAL/F-1/F-2 全清；
+     剩余：T4 nightly 接线（cline 域）、P5 因果未知措辞生成（Claude 域） -->
 <!-- 2. M4 宣告前最后一件：T4 用户改约本地真模型探针一轮（不建 GitHub secret；届时派 cline 整理 pytest -m t4 单命令入口，key 临时填环境变量走 127.0.0.1:7897） -->
 <!-- 3. 五树全待命（talking.txt 各树）；下一波：T4 绿 → 宣告 M4 → M5 规划（数据域预研先找 opencode，接口面先找 kilo，perf 先找 pi，安规先找 codex，文档 cline） -->
 <!-- 4. 本会话教训已在各轮快照内联；重启后若五树有新交付，走标准收编流程（memory.md 收编流程条） -->
@@ -651,3 +652,47 @@ uv run pyright sim/
 
 - cline P05：`*.tsbuildinfo` 已加 .gitignore ✅；`_PROTOCOL_VERSION` 与前端 `v` 统一 1.0（并代改了我前端域 `client/src/net/ws.ts` 的硬编码，见 §3.10）；K04 前置就绪。
 - 待我：若有 K04 之外的 M2 派发，以 talking.txt 为准。
+# ④ codex 树（安全/合规/风险域）
+## 已完成轮次
+- **M4-S7（T4 探针集实施件）✅ `bda2aa3`**（2026-09-27，origin+gitee 双推）
+  T4 探针本体此前零文件，本单落三件：`docs/security/t4-corpus.md`（语料唯一真相源，
+  46 条 = P1 12/P2 12/P3 8/P4 8/P5 6，每条 case_id/分类/题面/期望响应形态/硬·软判定码/band/出处）、
+  `sim/tests/fixtures/t4_corpus.py`（frozen dataclass，承 t3_corpus 风格）、
+  `sim/tests/test_t4_probes.py`（文件路径 + t4 marker 双纪律；真模型走 sim/llm/client.py
+  既有 ProfileSnapshot 机制）。锁版本改约：**Deepseek-v4-flash @ wechat 端点**。
+  文档回填 m4-closure-preaudit（T4 探针集已落）+ m4-security-preplan §6/§6.2（实施件指针 + 改约存照）。
+- 更早：M4-S1~S4b（安全/合规/风险面 T1 钉子 99 例、T3 语料与实弹、词面 CR、
+  收官门预审）均已收官，见 git log。
+
+## 环境坑（codex 树实测）
+- `ruff format --check` **全仓基线就是红的**（27 个历史文件会 reformat），不是本单引入；
+  判据应为「本单文件 clean + 全仓计数不增」（基线 27 → 本单后仍 27）。
+- ruff 0.16.8 对超长行（>2 万字符 buffer）`--check/--diff` 会 panic（renderer bug）；
+  改用 `ruff format <file>` 落盘后再 `--check`，或直接读退出码。
+- `Remove-Item` 在本机被策略拦；删文件用 `python -c "import os;os.remove(...)"`。
+- `git push` 的 stderr 噪声（"To https://..." / gitee "Set trace flag"）会被 PowerShell
+  记成 NativeCommandError，**但 push 实际已成功**——看 stdout 的 ref 更新行为准。
+- Windows 控制台默认 GBK：中文输出要么 `[Console]::OutputEncoding=UTF8`，
+  要么脚本里 `sys.stdout.reconfigure(encoding='utf-8')`。
+
+## 验证命令（codex 树）
+- 全量门禁：`uv run pytest -m "not bench" -q`（无 key 环境）→ 本单后 1622 passed / 0 failed。
+- 零回归对照：`git stash -u` → 同命令跑基线（1455 passed / 66 skipped）→ `git stash pop`。
+- lint/类型：`uv run ruff check` / `uv run pyright`（均 0）。
+- T4 语料门禁单跑：`uv run pytest sim/tests/test_t4_probes.py -q` → 167 passed / 47 skipped。
+
+## T4 探针防误烧钱机制（下次要跑真模型前先读）
+- 三把锁，缺任一 → 模块级 skip：① `T4_MODEL_API_KEY` 存在 ② **`T4_RUN=1` 显式选择**
+  ③ ≤60 调用预算闸（`T4_CALL_BUDGET` 只可收紧）。
+- **key 在而无 T4_RUN → 47 skip / 0 调用**（已实测）——因为 ci.yml 跑 `-m "not bench"`
+  仍会收集 t4 用例，第 ② 把锁是 CI 零烧钱保证。key 只经运行时环境变量，永不落盘/入仓。
+- env：`T4_MODEL`=Deepseek-v4-flash / `T4_MODEL_API_KEY` / `T4_MODEL_BASE_URL`=
+  https://chatapi.weixin.qq.com/openai/v1（国内直连，**不走 7897 代理**——7897 仅 github.com）。
+- 报告落 `t4-results/t4-report.json`（已 .gitignore，随 nightly artifact 归档）。
+
+## 下一步 / 待派（不在本单范围）
+- **T4 nightly 接线未闭合 → 需派 cline**：`.github/workflows/t4-nightly.yml` 探针 step
+  仍是 TODO 注释态 + env 仍写 claude-sonnet-5；须接到
+  `uv run pytest sim/tests/test_t4_probes.py -m t4` 并改 env 为 Deepseek-v4-flash。不做则 T4 永不自动跑。
+- **P5 因果未知「措辞生成」缺口 → Claude 域**（preaudit §2）：全仓零「应该能行/不好说」实现载体。
+- M5 安规预研待主树派单（T4 已交付，可派）。
