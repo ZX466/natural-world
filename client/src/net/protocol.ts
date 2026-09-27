@@ -39,6 +39,8 @@ export type WsErrorMessage = Schemas['WsErrorMessage'];
 export type Actor = Schemas['Actor'];
 export type ActorDelta = Schemas['ActorDelta'];
 export type Structure = Schemas['Structure'];
+/** 计划看板一项（M5-K10）：rtoken 替身 + text 第一人称计划文本；见 ws-protocol.md §4.1 */
+export type PlanDelta = Schemas['PlanDelta'];
 export type Projectile = Schemas['Projectile'];
 export type Hit = Schemas['Hit'];
 export type RToken = Schemas['RToken'];

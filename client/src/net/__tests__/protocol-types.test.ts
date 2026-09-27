@@ -13,6 +13,10 @@
  * 玩家唯一主动动作是念头注入（player_impulse，见 ws-protocol.md §3.1）——按已批协议实现，
  * 此处对 player_impulse 断言。rtoken 已由 Claude 评审批准为「不透明替身」（前端永不接触真实 id），
  * 故本测试断言真实内部 id 缺席、rtoken 仅 render 通道出现。
+ *
+ * K10 扩展（2026-09-27，M5-K10 / 裁 19）：`state_delta.plan` 顶层可选数组与
+ * `PlanDelta` 项形状——K7 实发先于 schema 的 CRITICAL 缝修复后，把「前端可达」
+ * 钉在生成物类型上（可选性 + 项字段 + 出戏边界）。
  */
 import { describe, it, expectTypeOf } from 'vitest';
 import type {
@@ -34,6 +38,7 @@ import type {
   Actor,
   ActorDelta,
   Structure,
+  PlanDelta,
   Projectile,
   Hit,
   AnchorListItem,
@@ -352,5 +357,17 @@ describe('ws-protocol 类型与出戏边界', () => {
     expectTypeOf<WsMessage>().not.toHaveProperty('entity_id');
     expectTypeOf<WsMessage>().not.toHaveProperty('source_id');
     expectTypeOf<WsMessage>().not.toHaveProperty('branch_id');
+  });
+
+  // ── K10（M5-K10 / 裁 19）：state_delta.plan 计划看板数据面 ──────────────────
+  it('K10 #1 state_delta.plan 顶层可选且项为 PlanDelta（前端可达）', () => {
+    // 顶层可选：账本空时 sim 不发该键（非 null 占位）
+    expectTypeOf<StateDeltaMessage['plan']>().toEqualTypeOf<readonly PlanDelta[] | undefined>();
+    // 项形状：rtoken 替身 + text 第一人称计划文本（无数值/系统词）
+    expectTypeOf<PlanDelta['rtoken']>().toEqualTypeOf<string>();
+    expectTypeOf<PlanDelta['text']>().toEqualTypeOf<string>();
+    expectTypeOf<PlanDelta>().not.toHaveProperty('entity_id');
+    expectTypeOf<PlanDelta>().not.toHaveProperty('plan_id');
+    expectTypeOf<PlanDelta>().not.toHaveProperty('tick');
   });
 });

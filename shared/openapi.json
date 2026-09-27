@@ -373,6 +373,15 @@
         },
         "additionalProperties": false
       },
+      "PlanDelta": {
+        "type": "object",
+        "required": ["rtoken", "text"],
+        "properties": {
+          "rtoken": { "$ref": "#/components/schemas/RToken" },
+          "text": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
       "Weather": {
         "type": "object",
         "required": ["visual", "ambient_light"],
@@ -528,6 +537,7 @@
           "actors": { "type": "array", "items": { "$ref": "#/components/schemas/ActorDelta" } },
           "lights": { "type": "array", "items": { "$ref": "#/components/schemas/LightDelta" } },
           "structures": { "type": "array", "items": { "$ref": "#/components/schemas/StructureDelta" } },
+          "plan": { "type": "array", "items": { "$ref": "#/components/schemas/PlanDelta" } },
           "weather": { "$ref": "#/components/schemas/Weather" }
         },
         "additionalProperties": false

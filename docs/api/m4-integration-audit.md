@@ -3,6 +3,7 @@
 > 能力域：接口 / 兼容性（kilo，跨域集成对账）
 > 依据：`.orca/talking.txt` M5-K9 派单卡（M4 收官对账单）；对齐 DESIGN §4/§8/§14/§19、`docs/api/ws-protocol.md`、`docs/api/ws-dispatch-proposal.md`、`docs/arch/m4-plan.md`、`docs/arch/t5-golden-scaffold.md`
 > 树：ZX466/kilo @ `1f55579`（= main） · 日期：2026-09-27 · 性质：**只读对账（不改码）**，产出本文件 + **1 处 CRITICAL 回执标红**（见 §1，修复提案待新单）
+> **后续（M5-K10 / 裁 19，2026-09-27）**：§1 的 CRITICAL **已修复**（`PlanDelta` 组件落地 + `plan` 进 schema + `gen-protocol` 生成 + K7 钉子改引真实 schema）；§2.3（plan-only 不广播）与 §2.5（`_PRE_PAUSE_SPEED` 全局栈）**仍未修**。详见 §1.6 修复记录。
 > 口径：✓ = 已对齐且可证；⚠ = 已知缺陷/悬空面（**多为批次待派的显式延迟**，不阻断本单）；🔴 = **CRITICAL 缝**（同一域内自相矛盾、可致收官门红）
 
 ---
@@ -11,11 +12,11 @@
 
 | # | 轴 | 结论 |
 |---|---|---|
-| 1 | 协议面 K6×K7×K8 汇聚 | 🔴 **1 处 CRITICAL**：K7 发 `state_delta.plan` 顶层键，但**冻结 schema 无 `plan` 且 `additionalProperties:false`** → 语义打架、plan 面不可达前端 |
+| 1 | 协议面 K6×K7×K8 汇聚 | 🔴 **1 处 CRITICAL**（K7 发 `state_delta.plan` 顶层键但冻结 schema 无该键）——**已于 M5-K10 修复**，见 §1.6 |
 | 2 | 8 新 kind 注册完整性 | ⚠ **5 kind 无生产者**（`structure.started/completed/removed`、`material.moved`、`npc.lod_change`）——**批次 C 行为链待派**的显式延迟，非实现缺陷 |
 | 3 | 协议↔安规 | ⚠ **`impulse_gate` 已实现未接线**（28 钉子绿），`impulse_feedback.injected:false` 分支**在线上不可达**——**批次 A 接线归 Claude** 的显式延迟 |
 
-**对收官门的影响**：轴 1 是**我方（kilo）域内**的 schema/实现打架，**建议开新单直修**（改 `openapi_ext.py` + 重生成 `shared/openapi.json`/`protocol.ts`，走生成管线，禁手写）——**本单只读，不改码**（派单卡纪律：只读+文档）。轴 2/3 是**跨域已裁的显式延迟**，只需在台账留痕，不改码。
+**对收官门的影响**：轴 1 是**我方（kilo）域内**的 schema/实现打架（**M5-K10 已修复**，见 §1.6；剩 §2.3 / §2.5 待新单）。轴 2/3 是**跨域已裁的显式延迟**，只需在台账留痕，不改码。
 
 ---
 
@@ -61,17 +62,23 @@ VERDICT: SCHEMA-ILLEGAL (plan key rejected by frozen schema)
 
 但全仓（`sim/`、`shared/`、`docs/`）**无任何 `PlanDelta` schema 定义**（`rg "PlanDelta"` 仅命中 `PlanDeltaStore` 类与测试注释）。⇒ K7 的钉子**把一条并不成立的 schema 假设写成判据**，而 schema 从未落地。**这是「实现了没注册」在协议- schema 面的实例**，坐实 CRITICAL。
 
-### 1.4 修复提案（最小、走管线）
+### 1.4 修复提案（最小、走管线）——已被 M5-K10 采行
 
-- **改 schema 真源**：`sim/api/openapi_ext.py` 的 `"StateDeltaMessage"` 增 `plan` 属性：
-  ```python
-  "plan": {"type": "array", "items": {"$ref": "#/components/schemas/PlanItem"}},
-  ```
-  并新增 `PlanItem` 子 schema（`{rtoken: RToken, text: string}`，`additionalProperties:false`，required 二者）。`plan` **不进 `required`**（可选字段，账本空时不发）。
-- **重生成物**：`npm run gen:protocol`（勿手写 `protocol.ts`），提交 `shared/openapi.json` + `shared/protocol.ts` 生成物。
-- **补钉子**：`test_m2_openapi_rework.py` 同款「实发 schema ≡ 快照」断言扩到 `plan` 属性；并加一条**运行期帧校验**（`delta_payload` 带 plan 时 ⊂ schema 属性集）防再犯。
+> 原提案：`sim/api/openapi_ext.py` 增 `plan` 属性 + 新增子 schema + `npm run gen:protocol` + 补钉子。**裁 19 采纳本提案**，唯一偏差是子 schema **命名为 `PlanDelta`**（对齐 K7 测试/注释既有词面）而非提案写的 `PlanItem`。
 
-> 归口：本单**只读**，修复**另开新单**（待派单卡授权动码）；本文件已标红并即时回执。
+### 1.6 修复记录（M5-K10，2026-09-27）
+
+| 步 | 落点 | 结果 |
+|---|---|---|
+| ① 注入组件 | `sim/api/openapi_ext.py` 的 `_SUB_SCHEMAS` 增 `PlanDelta`（`{rtoken→RToken, text}`，both required，`additionalProperties:False`）；`StateDeltaMessage` 增 `plan` 属性（引 PlanDelta，**不进 required**） | ✓ |
+| ①′ 快照 | `shared/openapi.json` 同步同两处（生成管线唯一真相源） | ✓ |
+| ② 生成物 | `npm run gen:protocol` → `shared/protocol.ts` 增 `readonly PlanDelta` 与 `readonly plan?: readonly components['schemas']['PlanDelta'][]`（**勿手写**） | ✓ |
+| ③ 钉子改引真实 schema | `sim/tests/test_m5_plan_delta.py` docstring 改为「组件已落地」；新增 `TestPlanDeltaSchema` 7 例（组件存在且封闭 / 字段恰 `{rtoken,text}` 且均 required / `rtoken` 引 `RToken` / `plan` 引组件且可选 / **实发项 ⊆ 组件属性** / ext 定义 ≡ 快照 / **生成物 TS 已含 `plan?`**），旧的「不存在假设」判据删除 | ✓ |
+| ④ 文档 | `ws-protocol.md` §4.1 `state_delta.data` 增 `plan` 键描述（顶层可选、空串 vs 缺键、rtoken 替身、不走 ActorDelta 的理由）；本文件 §1 标已修复 | ✓ |
+
+- **根治口径**：钉子 `test_ext_source_matches_snapshot` 把 `openapi_ext._SUB_SCHEMAS["PlanDelta"]` 与 **快照**逐字段钉平，杜绝「ext 一份 / 快照一份」再漂；`test_generated_ts_type_carries_plan` 直接把前端可达性钉在生成物上。
+- **坑（复用提示）**：`openapi_ext` 顶层 `from sim.api.main import app`，而 `main` 模块级又 `from sim.api.openapi_ext import install`——测试里 import `openapi_ext` **必须**先 import `sim.api.main`，否则半初始化模块报 `circular import`。
+- **未修项（仍在）**：§2.3「plan-only 变更不广播」与 §2.5「`_PRE_PAUSE_SPEED` 全局栈」——**非本次 scope**（裁 19 只补 schema），留待新单。
 
 ---
 

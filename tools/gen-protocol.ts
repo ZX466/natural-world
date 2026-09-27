@@ -22,11 +22,21 @@
  *     settings {profile_id} 同逻辑：对齐 FastAPI 形参名）。快照两处 + 本生成物同步；
  *     生成物里 `readonly anchor_id: string;` 共 4 处（paths 的 path 参数 1 + path 级
  *     parameters 1 + operations 的 renameAnchor/deleteAnchor 各 1），path key 1 处。
- *     **`/api/anchors/{id}` 残留清零**：全仓唯一合法残留是
- *     client/src/net/__tests__/protocol-types.test.ts K03 #5 的
- *     `expectTypeOf<paths>().not.toHaveProperty('/api/anchors/{id}')`（负断言本身，
- *     故意保留作为防回退钉子）；其余任何位置的 `/api/anchors/{id}` 均为漂移。
- *     sim/api/anchors.py 形参名必须逐字为 `anchor_id`，否则 FastAPI 生成 {id} → 漂移。
+   *   **`/api/anchors/{id}` 残留清零**：全仓唯一合法残留是
+   *   client/src/net/__tests__/protocol-types.test.ts K03 #5 的
+   *   `expectTypeOf<paths>().not.toHaveProperty('/api/anchors/{id}')`（负断言本身，
+   *   故意保留作为防回退钉子）；其余任何位置的 `/api/anchors/{id}` 均为漂移。
+   *   sim/api/anchors.py 形参名必须逐字为 `anchor_id`，否则 FastAPI 生成 {id} → 漂移。
+   *
+   * 变更登记：
+   *   - M5-K10（2026-09-27）：新增 `PlanDelta` 公共子 schema（`{rtoken→RToken, text}`，
+   *     both required，additionalProperties:false）+ `StateDeltaMessage.plan`
+   *     （`readonly PlanDelta[]`，**可选**——账本空时 sim 不发该键）。这是裁 19
+   *     CRITICAL 修复：K7 实发 state_delta.plan 先于 schema，导致 protocol.ts 无
+   *     `plan`、计划看板前端不可达。源侧两份（sim/api/openapi_ext.py 的
+   *     `_SUB_SCHEMAS` 与 shared/openapi.json 快照）必须逐字段相等，钉子见
+   *     sim/tests/test_m5_plan_delta.py::TestPlanDeltaSchema。
+   *     前端可达性钉死：client/src/net/__tests__/protocol-types.test.ts K10 #1。
  *
  * 运行（在 client/ 下，复用其 node_modules）：
  *   npm run gen:protocol          # 生成（脚本别名由 cline 配置域提供，见 client/package.json）
