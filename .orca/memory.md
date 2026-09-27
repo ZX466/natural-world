@@ -24,6 +24,25 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
+【2026-09-27 第二十三轮｜M4 实施面收官收编（五单全收）+裁 20 T4 改 Deepseek】①五分支全收编
+（main `bd0879c`，零冲突）：**codex M4-S7**（T4 探针集实施件三件——t4-corpus.md 真相源
+46 条+fixture+test_t4_probes.py 167 用例；**三把锁防烧钱**=key+T4_RUN=1 显式选择+≤60 预算闸；
+4 项偏离留痕：规模 46 非 44 因各类最小样本数求和、.gitignore 增 t4-results/、语料卫生门
+改文档非放宽、P5 生成侧措辞归 Claude 域）；**cline M4-C6**（dev-workflow T4 本地跑法+
+t4-nightly.yml 改约存照 schedule 注释+m5-plan.md 骨架 A-E 批次+⚠实测 not-bench 会选中 t4
+用例=防烧钱必须靠探针 env 门）；**opencode M5-D1**（536 行双轨存档预研；**F1 npc_profiles
+单列主键分叉必撞=0008 前置**/**F2 记忆知识关系三表无事件源不可纯重放**/**F3 向量召回零
+分支隔离=M5 硬前置**）；**kilo M5-K1**（359 行协议预研；🔴**G-1 pause→pause→resume 回
+speed:0 破 ControlAck schema**/🔴**G-6 分叉零写入方**；D-1~D-9 待裁，头号 D-1「时间刻度」
+术语消歧）；**pi M5-P1**（234 行 perf 预研；60x/300x 全红线破 13x-216x→降采样唯一出路；
+已回填 D1 §7 对账表 9 点）。②**裁 20（用户）**：T4 锁版本=Deepseek-v4-flash @
+https://chatapi.weixin.qq.com/openai/v1（OpenAI 兼容国内直连不走 7897；key 只运行时
+环境变量；实测三方对齐：probes 缺省/yml env/dev-workflow 同值）。③门禁：not-bench
+**1620 passed / 2 failed**（willingness sanity 单独复跑 17/17 绿=同进程抖动；soak=pi 域
+既有账 advisory）；ruff 0 / pyright 0。④**M4 状态：实施面全清，剩 T4 本地一轮真跑**
+（T4_RUN=1+key → 绿即宣告 M4）→ M5 裁决（D-1 术语消歧先行，kilo G-6+opencode F1/F3
+三方互证=分叉写入方是 M5 施工头号前置）。⑤cline 三口径问待裁：C6 测试=T1 历史不可销毁
+释义确认 / §17 不做=—与 §18 缩范围张力 / 不新造 T6。
 【2026-09-27 第二十二轮｜M4 收官门 T5 面关闭+收官门前必修清零】①三单收编（main
 `73c6f06`）：cline C5b（**T5 首跑 10/10 全绿**——run 36301690490，10 job 并行 4m20s、
 单种子 108-200s、864,000 tick×10、三断言组 CI 档位全成立（守恒逐位/孤儿硬红/完成率
