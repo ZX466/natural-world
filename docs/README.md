@@ -22,7 +22,8 @@
 | `docs/arch/m0-client.md` | 前端/体验（Claude） | ✅ main | M0 渲染闭环：Phaser(canvas 世界) 与 React(canvas 外 UI) 经 Zustand store 单桥、对象池、插值、摄像机；M0 边界与出戏字段禁令 |
 | `docs/arch/m3-plan.md` | 架构（Claude） | ✅ main | M3 规划整合稿：批次 A-D 切分（A 向量 / C 地图可并行，B 等 A 接口冻结，D 收尾）+ 安规钉子横切 + §6 待裁决队列；第五批续写批次 B 模块/文件级施工图与 B1 |
 | `docs/arch/m4-plan.md` | 架构（Claude） | ✅ main | M4 规划：批次 A–D 切分 + 裁 14 六条裁决记录 + 门禁归属速查 + **「T4 全绿」定义**（锁定模型版本下 nightly 连续通过，非每次提交绿） |
-| `docs/arch/m5-plan.md` | 架构/文档（cline 起草 · Claude 裁） | 🟡 骨架待裁 | M5 规划骨架：§17 M5 行七件事拆条（混沌/双轨存档分叉重放/时间刻度/权力牙齿/火灾蔓延/生态/断线降级演练）+ 批次 A–E 切分（**全部待裁**）+ 门禁归属 + §18 缩范围张力（生态/火灾蔓延/权力牙齿都在「先砍」侧）+ §6 待裁队列七条**留白**；验收＝「离线再回来世界已变；C6 测试绿」（C6＝T1 历史不可销毁） |
+| `docs/arch/m5-plan.md` | 架构/文档（cline 起草 · Claude 裁） | ✅ main（**裁 21 已回填**） | M5 规划：§17 M5 行七件事拆条（混沌/双轨存档分叉重放/时间刻度/权力牙齿/火灾蔓延/生态/断线降级演练）+ 批次 A–E 切分（**边界沿用骨架**）＋ **各批次行已回填裁 21 裁决指针与已派任务**（A＝裁 21-A D-1~D-4，**时间刻度＝玩家侧快进/变速**非日历；B＝裁 21-B 裁 1~12 ＋ F3/0008-a 前置；C/D＝**§18 可砍序位 5 / 生态 1 / 蔓延 2，只注不砍**；E＝裁 21-C③ 演练级挂 T5 体系）＋ 门禁归属（**M5 预期新增 nightly 只有「演练级」＝ `golden-nightly` 扩展候选、批次 E 接线**）＋ **§2 G-6 解锁条件（F1 ＋ F3 两前置齐）** ＋ §6 裁决区七条逐条落裁况（**两条留待开工前补裁**：权力牙齿验收判据 / 离线判据量纲）；验收＝「离线再回来世界已变；C6 测试绿」（C6＝T1 历史不可销毁） |
+| `docs/arch/m5-rulings.md` | 架构/裁决（Claude 主导） | ✅ main `bc8962f` | **M5 裁决 21**：§A kilo 协议面 D-1~D-9（时间刻度＝玩家快进/变速、不扩 speed 枚举 ＋ 新 action `fast_forward`、暂停幂等单值并清 G-1~G-3、new session 帧分叉告知且 `branch_id` 禁出网关、**不预留 catchup 字段**、戏外 HTTP 只读路由）／§B opencode 数据面 裁 1~12（F1 **必落 0008-a**、**不加 global_seq**、F3 **M5 硬前置**、**不破冻结事件基线**）／§C cline 三口径（**C6 测试绿＝T1 历史不可销毁** 确认、**不预砍**、**不新造 T6**）／§D pi soak 继续 advisory ＋ 3 轮红强制定标机／§E T4 判定口径（舞台指示剥离 ＋ P4-05 语料改写） |
 | `docs/arch/t5-golden-scaffold.md` | 架构/文档（cline 起草 · Claude 裁） | ✅ main | T5 golden 脚手架提案：形态（虚拟时钟+有界帧驱动+录制 fixture 回放）+ 文件布局 + 三断言组口径（裁 17 定阈值：守恒逐位相等/完成率 10 日重定标/孤儿硬红）+ 跑法两案（采独立 `golden-nightly.yml` 种子分片 matrix，M4-C5 已接）+ runtime 实测（10 游戏日=864,000 tick/种子） |
 | `sim/tests/golden/` + `.github/workflows/golden-nightly.yml` | 测试分级/CI（cline） | ✅ main | T5 golden 资产包：驱动器 `driver.py`（虚拟时钟有界帧驱动）+ 十种子清单 `seeds.py`（真相源）+ 三断言组 `assertions/*`（裁 17 口径）+ 全量验收 `test_golden_full.py`（`PI_T5_FULL=1`）+ 冒烟 `test_golden_smoke.py`（`PI_GOLDEN_SMOKE=1`）；**均 env 门默认跳过，不进每提交 CI**（§16 T5 每日跑） |
 | `docs/security/m1-checklist.md` | 安全/合规/风险（Codex） | ✅ main | M1 安全检查清单 27 项：K1–K8 密钥（Fernet/主密钥/日志脱敏/SSRF）、M1-A–I 出戏断言、O1–O6 LLM 输出边界、W1–W5 WS 白名单、G1–G4 通用 |
@@ -45,18 +46,20 @@
 | `docs/perf/m4-build-budget-preplan.md` | 性能（Pi） | ✅ main `88284c3`（+ 附录 M4-P2 待收编） | M4-P1 建造预算预研 + **M4-P2 定标附录**：tick 预算盘点（上限表余量 2.10ms=13%）+ 坍塌级联成本模型（BFS 10k=1.27ms vs 逐对象事件 51ms=307% tick）+ 施工推进语义 perf 建议 + **红线定标实测**（施工推进 0.30ms / 坍塌单帧 0.85ms，向下修正草案）|
 | `docs/perf/m4-willingness-hotpath.md` | 性能（Pi） | ⏳ 待收编 | M4-P3 意愿/独白热路径补数：`willingness_expression` 0.04-0.4µs/调用 + B3 注入缝 2.1(band0)/167µs(band≥1) + `runtime.tick` 增量 None→注入 **+0.20ms/tick** + 提案 `WILLINGNESS_TICK_LIMIT_MS=0.35`（观察态）|
 | `docs/perf/m4-p4-golden-runner-review.md` | 性能（Pi） | ⏳ 待收编 | M4-P4 golden runner 档位复核：golden 与 bench 选择集互斥（不撞 M4-P2/P3 红线）+ `timeout-minutes: 90` 余量（CI 外推 10 实体 ~1-2min/种子，50 实体 ~4.6min）+ **内存风险**（全事件累积 10 实体 3.4GB / 50 实体 17GB）+ CI 档位红线余量（施工 0.89x 越线 / 意愿 band1 0.97x 贴线）|
+| `docs/perf/m5-time-scale-fork-budget.md` | 性能（Pi） | ✅ main（**裁 21-D 已裁**） | M5 性能预研（M5-P1，提案制零代码）：时间刻度快进 ＋ 双轨存档多分支 fold 成本模型，与 opencode M5-D1 九点交叉对账；裁 21-D：soak 继续 advisory ＋ **追加观察项「soak 连续 3 轮全量门禁红 ⇒ 强制定标机复测」**；派生单 **M5-P2**（`fast_forward` 预算提案 ＋ F3 落地后 `RETRIEVAL_*` before/after，在途） |
 | `docs/data/schema.md` | 数据/数据库（opencode） | ✅ main | SQLite schema：事件日志（append-only）/分支树/快照分层/玩家 anchor/NPC 记忆 + sqlite-vec 占位；索引与约束对齐 §6 契约 |
 | `docs/data/event-sourcing.md` | 数据/数据库（opencode） | ✅ main | 事件溯源：`apply(event)` 唯一写路径、读档重放流程、回放确定性（RNG/熵随事件落库） |
 | `docs/data/migration.md` | 数据/数据库（opencode） | ✅ main | Alembic 迁移策略（async env.py / alembic.ini / 首版迁移骨架） |
 | `docs/data/vec-preplan.md` | 数据/数据库（opencode） | ✅ main | M3 记忆向量检索预研：sqlite-vec vs numpy 余弦、5 万条量级估算（非瓶颈）、`LlmClient.embed` 缝、V1-V7 待裁决清单 |
 | `docs/data/matter-register-proposal.md` | 数据/数据库（opencode） | ✅ 已裁并实施 | §19.4 注册持久化：`register` 返回 `MATTER_BUILD` 立账事件（零 schema），structures M3 不建；4 点裁决 + 9 用例实施记录 |
 | `docs/data/build-domain-preplan.md` | 数据/数据库（opencode） | ✅ main `a725a65` | M4-D1 建造数据面：structures 拓扑投影、建造事件族、checkpoint 推进、承重图、材料守恒；**裁 14 采信主干 7 点全裁**（细则见 `docs/arch/m4-plan.md` §6 第 2 条） |
-| `docs/data/m5-fork-archive-preplan.md` | 数据/数据库（opencode） | ⏳ 待收编 | M5-D1 双轨存档存储面（读档=分叉）：branch_id 全局化取舍（同表加列 vs 分文件，0008 只预估）、分叉物理形态（克隆 vs 重放 vs 谱系回退读）、玩家档游标表 schema 草案、fold 跨分支 C1-C6、T2 分叉重放 R1-R3 口径、与 pi M5-P1 九点交叉对账；三条硬发现（`npc_profiles` 主键单列 / 语料三表无事件源 / 向量召回零分支隔离）+ 12 待裁点 |
+| `docs/data/m5-fork-archive-preplan.md` | 数据/数据库（opencode） | ✅ main（**裁 21-B 十二点全裁**） | M5-D1 双轨存档存储面（读档=分叉）：branch_id 全局化取舍（同表加列 vs 分文件，0008 只预估）、分叉物理形态（克隆 vs 重放 vs 谱系回退读）、玩家档游标表 schema 草案、fold 跨分支 C1-C6、T2 分叉重放 R1-R3 口径、与 pi M5-P1 九点交叉对账；三条硬发现（`npc_profiles` 主键单列 / 语料三表无事件源 / 向量召回零分支隔离）+ 12 待裁点 |
 | `docs/api/ws-protocol.md` | 接口/兼容性（kilo） | ✅ main | WS 消息协议：消息类型清单与字段 schema、出戏边界（哪些字段绝不外发） |
 | `docs/api/openapi.md` | 接口/兼容性（kilo） | ✅ main | HTTP 端点设计：设置页 / Profile 管理 / 存档 anchor CRUD；api_key 只在后端流转 |
 | `docs/api/codegen.md` | 接口/兼容性（kilo） | ✅ main | OpenAPI → `shared/protocol.ts` 生成管线（openapi-typescript + banner + prettier）；CI 三道守卫（漂移检测已接 ci.yml / banner / 禁手写） |
 | `docs/api/versioning.md` | 接口/兼容性（kilo） | ✅ main | 协议版本策略：WS version 字段/协商方式，client 与 sim 独立演进 |
 | `docs/api/ws-message-diff.md` | 接口/兼容性（kilo） | ✅ main | ext↔快照逐成员 diff 明细 + K3 复验结论（§4.3：白名单外 diff = 0、契约对齐完成；未消项**不阻塞** M5，切源解禁仍待 M5 + sim 404 声明） |
+| `docs/api/m5-prestudy-timescale-and-fork.md` | 接口/兼容性（kilo） | ✅ main（**裁 21-A D-1~D-9 全裁**） | M5 接口面预研（M5-K1，零代码）：§1.4 协议面既有缺口 **G-1~G-8**（G-1 协议违约 `speed:0`／G-6 **分叉零写入方＝阻塞 M5**／G-7 无连接期刻度下发面…）＋ 时间刻度控制面 ＋ 读档=分叉协议面；派生单 **M5-K2**（D-8 rtoken 文档订正，已交待收编） |
 | `docs/api/anchors-api.md` | 接口/兼容性（kilo） | ✅ main | anchors 三路由契约稿（字段/校验/状态码/示例四要素齐）+ §5 施工清单 + 验收对表（[T] pytest / [O] OpenAPI 静态形状 / [C] 前端类型三类断言）+ §5.1 OpenAPI responses 注入点 |
 | `docs/dev-workflow.md` | 依赖/配置/文档（cline） | ✅ main | 环境与常用命令：uv/pytest/ruff/pyright、npm/tsc/eslint/vitest、T1–T5 marker 跑法、bench nightly 跑法、CI 对应关系 |
 
