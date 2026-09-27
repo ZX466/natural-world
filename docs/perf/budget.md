@@ -144,6 +144,9 @@ M1 名义合计 7.00ms / 上限 12.35ms，仍 ≤16.6 ✓。LLM 推理本身（�
 **M5 时间刻度外推（60x/300x）**：`docs/perf/m5-time-scale-fork-budget.md` §1 给出 `16.6ms/R` 派生预算
 （60x=0.277ms / 300x=0.0556ms）与 fold/感知降级策略（沿用本 §4 的降采样/合并 tick，**只改节拍不改折叠规则**）；
 越线一律 advisory 口径。
+**fast_forward 承接已裁 D-2**（裁 21-A）：不扩 `speed` 枚举，快进走新 action `fast_forward`（长跨度推进、
+批处理语义）——预算口径与红线见 `docs/perf/m5-fast-forward-budget.md`（单帧 tick 上限 + 批量 fold 摊还，
+对照 collapse `CASCADE_EVENT_BUDGET_PER_FRAME=100` 先例；红线待裁后施工）。
 
 **对账（M2-P1，2026-09-20，L1 效用 + 嗅觉推算）**：
 - L1 满属性向量化 ~0.02ms + 嗅觉 ~0.01ms，相比 M1 合计（实际 ~4.4ms）增量可忽略；**M2 对 4x/16x 降采节拍无新增压力**。

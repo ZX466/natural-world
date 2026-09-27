@@ -425,7 +425,15 @@ uv run pyright sim/
 - (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)
 
 ## ⑤ pi（性能域）
-- 【2026-09-27 第十七轮快照｜M5-P1 时间刻度 + 双轨存档 perf 预研（零代码，未提交待收编）】产出 `docs/perf/m5-time-scale-fork-budget.md`（纯文档）+ `budget.md §4` 追加一段外推指针（0 删除既有行）。**两块**：
+- 【2026-09-27 第十八轮快照｜M5-P2 fast_forward 预算提案 + RETRIEVAL_* before 存照（零代码，未提交待收编）】产出 `docs/perf/m5-fast-forward-budget.md`（新，纯文档）+ `budget.md §4` 补一行「fast_forward 承接已裁 D-2」。承接裁 21-A D-2（不扩 speed 枚举、新 action `fast_forward` 长跨度推进/批处理语义）。
+  - **fast_forward 形态定位**：离散长任务≠稳态倍率 → **不套 `16.6/R` 派生红线**，改给「单帧 tick 上限 + 批量 fold 摊还」两红线。单帧墙钟 = `FAST_FORWARD_TICKS_PER_FRAME`(草案 240) × mean_tick：实测 @10 实体 **14.2ms/帧**（<16.6 ✅）/ @50 实体 **431ms/帧**（**26x 破**）→ 50 实体必降采样。整段推进净成本 = N×mean_tick（日 86400tick @10=5.1s / @50=155s）；**落库叠加超 10 实体计算**：日推进 20ev/tick × 78.7µs = 136s（@10 计算仅 5.1s）→ 必批量事务 flush。
+  - **批量 fold 摊还**（对齐 collapse 先例）：**禁每 tick 全量重放**（日推进 1.728M 事件×0.74µs=1.28s/帧级→破线 23x）；窗口 fold 封顶（`_FOLD_WINDOW_EVENTS` 草案 100，同 `CASCADE_EVENT_BUDGET_PER_FRAME`）。
+  - **降采样节拍常量（代码契约常量，非 bench 红线）**：`FAST_FORWARD_TICKS_PER_FRAME`(240) / `_FOLD_WINDOW_TICKS` / `_FOLD_WINDOW_EVENTS`(100) / `_PERCEPTION_STRIDE_FAST`（沿用 `_PERCEPTION_EVERY_N_TICKS` 先例）。
+  - **「只改节拍不改折叠规则」守卫点**（D1-C2/R2-B）：G1 窗口 fold 调同一批 `fold_*` 函数（禁快进专用折叠）；G2 无跨 tick 状态（T2 逐位一致）；G3 窗口分支内；G4 不改事件流结构。
+  - **RETRIEVAL_* before 存照（本机实测，2026-09-27，3 跑取代表值）**：①候选 **0.198ms**/0.30（1.52x，**偏紧**）/ ②打分 **0.063ms**/0.30（4.8x）/ ③哨兵 **1.145ms**/2.00（1.75x，偏紧）/ ④tick 总量 **2.93ms**/12.0（决策驱动 10 次，4.1x）/ 反模式 106.9ms（无硬断言探测量）。**baseline.json 不含 retrieval 行**（用例 2026-09-23 22:11 才入库，晚于 baseline commit ee05ab0）→ before=本机实测。**F3（`vec_candidate_ids` 加 `branch_id`）交付后复跑：重点看 ①候选**（直接改动面），漂移超 advisory 门则报数。
+  - **纪律**：零代码（不碰 sim/、thresholds.py、迁移）；不干扰 kilo 树。
+- 【2026-09-27 观察项（裁 21-D）】soak 连续 3 轮全量门禁红则强制定标机复测——本轮第 1 红（均值漂移 2.81x）已记，**不动作**，仅记观察项。
+- 【2026-09-27 第十七轮快照｜M5-P1 时间刻度 + 双轨存档 perf 预研（零代码，已进 main `bd0879c`）】产出 `docs/perf/m5-time-scale-fork-budget.md`（纯文档）+ `budget.md §4` 追加一段外推指针（0 删除既有行）。**两块**：
   - **时间刻度**：每 tick 预算 = `16.6ms / R`（派生量，不设独立常量）。外推档 **60x=0.277ms / 300x=0.0556ms**（DESIGN §10 现锁定仅 {0,1,4,16}x，按「新增档位」处理）。实测：golden 首跑 CI 档 mean_tick **0.125–0.232ms** → 单日 86400 tick 计算墙钟 **10.8–20.0s**；本机 driver 口径 @10 实体 **0.059ms**（单日 5.1s）/ @50 实体 **1.796ms**（单日 155s）。**所有子系统红线（感知 3.6 / L1 6.0 / 检索 12.0ms）在 60x/300x 档全部破线 13x–216x → 降级是唯一出路**，走 `budget.md §4` 降采样/合并 tick，**只改节拍不改折叠规则**（守 D1-C2/R2-B）。摊还对齐 **M4-P1 collapse 先例**（事件预算封顶、与规模解耦）。
   - **双轨存档多分支成本模型**（与 opencode M5-D1 交叉对账）：克隆 `INSERT…SELECT` = **0.608µs/行**（50k 纯文本行）/**5.090µs/行**（10k 行含 1536B 向量，向量主导 8.3x）；重放 = **0.74µs/事件**（`fold_matter` 1k/10k/100k 恒定）；**克隆 vs 重放交叉判据 r=行数/事件数 < 0.145**（现实语料表重放通常更便宜）。`SqlEventStore.append` **78.7µs/事件**（异步 SQLAlchemy+校验）→ 20 事件/tick=1.57ms 与 `budget.md §1` apply 行（1.00/2.00ms）**同量级→并入 apply 行不另立红线**；快照 7KB gzip **0.451ms/次** → 摊还 0.0005ms/tick 可忽略。`fold_matter` 单折叠 0.674µs / `fold_structure` STARTED 1.48µs / CHECKPOINT 0.147µs。
   - **红线草案（全 advisory，不动 thresholds.py）**：`16.6/R` 派生量 + 降采样节拍代码契约常量（`_PERCEPTION_EVERY_N_TICKS` 先例）+ fork 克隆 ≤6.0µs/行 + fold 重放 ≤1.0µs/事件 + 读档端到端 advisory 记录。
