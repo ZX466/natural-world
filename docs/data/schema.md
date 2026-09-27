@@ -168,6 +168,14 @@ CREATE VIRTUAL TABLE npc_memory_vec USING vec0(
 
 **注意**：sqlite-vec 要求固定维度。embedding model 选定后锁定维度（如 384 或 768）。
 
+**本表无 `branch_id` 列**（vec0 虚拟表只存向量，rowid 直接取 `npc_memories.id`）。
+向量召回的**分支隔离**因此只能由 JOIN 侧承担：`vec_candidate_ids` 的召回句带
+`m.branch_id = ?` + 治理列过滤（`sim/core/persistence/vector.py`，M5-D2 / 裁 11
+F3 硬前置）。过滤必须留在召回句内（禁挪到 Python 侧后过滤，R2 纪律）；因 `k` 是
+vec0 在过滤**之前**的取回上限，召回按 `RECALL_OVERFETCH_FACTOR` 过取后裁到
+`top_k`（多分支下语料按分叉数复制，最近邻易被他分支占满 → 候选饥饿）。
+钉子：`sim/tests/test_t1_m3_vec_governance.py::TestVecBranchIsolation`。
+
 ---
 
 ## 7. relationships（NPC 关系）

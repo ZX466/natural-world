@@ -28,6 +28,18 @@
 
 实现归属：opencode A4（批次 A，前置 A3 VectorIndex 接口）。
 CI：test_t1_m3_* 前缀随 `-m "not bench"` 全量跑（m3-plan §6 钉子清单口径）。
+
+**M5-D2 追加（裁 11 采，M5 硬前置）**：`TestVecBranchIsolation` 类补向量召回面的
+**分支隔离**钉子。A4 收口时 `vector.py` 全文无 `branch_id`（`rg` 零命中），
+`vec_candidate_ids` 的召回 SQL 只 JOIN + 过滤治理列，**没有 `m.branch_id = ?`**
+——单世界线下是潜伏问题，**读档=分叉（§12）一旦存在，NPC 就会召回父分支/已弃分支
+的记忆**（T1 信息边界破口 + 出戏：NPC 记得本时间线里没发生的事）。本类锁死：
+1. 跨分支不召回（父分支/已弃分支天然不可见，隔离靠 branch_id 等值，**不 JOIN
+   branches 表**——那是给热路径加跨表 JOIN，status 语义由 driver 的 active 分支
+   概念保证）；2. 未知分支 → 空候选（fail-closed，**禁回落全库**）；
+3. 分支参数必填、keyword-only、无默认（fail-closed 签名守卫：fork 后新分支不是
+   'main'，默认值会静默读到错分支）；4. 过滤必须**进召回句**（同 R2 纪律：不得挪到
+   Python 侧后过滤）；5. 过滤后候选不足 `top_k` 时按 over-fetch 补足，候选数恒 ≤ `top_k`。
 """
 
 from __future__ import annotations
@@ -91,14 +103,19 @@ def _insert_memory(
     conn: sqlite3.Connection,
     entry_id: str,
     *,
+    branch_id: str = "main",
     superseded_by: str | None = None,
     invalid_reason: str | None = None,
 ) -> int:
-    """插一条 npc_memories 行，返回其自增 id（= vec rowid 关联键）。"""
+    """插一条 npc_memories 行，返回其自增 id（= vec rowid 关联键）。
+
+    branch_id：F3 分支隔离钉子用（M5-D2 追加）；默认 'main' 与既有治理钉子同侧。
+    """
     cur = conn.execute(
-        "INSERT INTO npc_memories (entry_id, npc_id, content, superseded_by, invalid_reason)"
-        " VALUES (?, ?, ?, ?, ?)",
-        (entry_id, "chenmo", "内容", superseded_by, invalid_reason),
+        "INSERT INTO npc_memories"
+        " (entry_id, npc_id, branch_id, content, superseded_by, invalid_reason)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
+        (entry_id, "chenmo", branch_id, "内容", superseded_by, invalid_reason),
     )
     rowid = cur.lastrowid
     assert rowid is not None
@@ -136,7 +153,7 @@ class TestVecGovernanceContract:
                 _insert_vec(conn, rid)
             conn.commit()
 
-            source = VecCandidateSource(conn)
+            source = VecCandidateSource(conn, branch_id="main")
             candidates = source.candidates(query_vector=_blob([1.0, 0, 0, 0, 0, 0, 0, 0]), top_k=10)
             got_ids = {c.id for c in candidates}
             assert superseded not in got_ids, "superseded 条目泄漏进向量候选"
@@ -157,7 +174,7 @@ class TestVecGovernanceContract:
             _insert_vec(conn, new)
             conn.commit()
 
-            source = VecCandidateSource(conn)
+            source = VecCandidateSource(conn, branch_id="main")
             q = _blob([1.0, 0, 0, 0, 0, 0, 0, 0])
             assert {c.id for c in source.candidates(query_vector=q, top_k=10)} == {old, new}
 
@@ -184,7 +201,7 @@ class TestVecGovernanceContract:
             rid = _insert_memory(conn, "e-live")
             _insert_vec(conn, rid)
             conn.commit()
-            source = VecCandidateSource(conn)
+            source = VecCandidateSource(conn, branch_id="main")
             candidates = source.candidates(query_vector=_blob([1.0, 0, 0, 0, 0, 0, 0, 0]), top_k=10)
             assert candidates
             assert all(isinstance(c, MemoryEntry) for c in candidates)
@@ -225,8 +242,138 @@ class TestVecQueryJoinSemantics:
                 conn,
                 query_vector=_blob([1.0, 0, 0, 0, 0, 0, 0, 0]),
                 top_k=10,
+                branch_id="main",
             )
             assert ids == [live]
             assert old not in ids and bad not in ids
         finally:
             conn.close()
+
+
+# ---------------------------------------------------------------------------
+# M5-D2 / 裁 11：向量召回面的分支隔离（F3，M5 硬前置）
+# ---------------------------------------------------------------------------
+
+
+def _insert_vec_distinct(conn: sqlite3.Connection, rowid: int, dim: int = 8, axis: int = 0) -> None:
+    """插一条向量，方向由 axis 指定（便于制造「另一分支更近」的饥饿场景）。"""
+    vals = [0.0] * dim
+    vals[axis] = 1.0
+    conn.execute(
+        f"INSERT INTO {VEC_TABLE}(rowid, embedding) VALUES (?, ?)",
+        (rowid, _blob(vals)),
+    )
+
+
+@pytest.mark.t1
+class TestVecBranchIsolation:
+    """F3：向量候选必须分支内（跨分支/父分支/已弃分支不可见，fail-closed）。"""
+
+    def test_candidates_exclude_other_branch(self) -> None:
+        """同 npc_id、同向量、两个分支 → 候选只含本分支（隔离对称于 iter_visible）。"""
+        from sim.core.persistence.vector import VecCandidateSource
+
+        conn = _vec_conn()
+        try:
+            mine = _insert_memory(conn, "e-mine", branch_id="main")
+            theirs = _insert_memory(conn, "e-theirs", branch_id="fork-a")
+            for rid in (mine, theirs):
+                _insert_vec(conn, rid)
+            conn.commit()
+
+            q = _blob([1.0, 0, 0, 0, 0, 0, 0, 0])
+            got = {c.id for c in VecCandidateSource(conn, branch_id="main").candidates(q, 10)}
+            assert got == {mine}, "另一分支的记忆泄漏进向量候选（F3）"
+            got_fork = {
+                c.id for c in VecCandidateSource(conn, branch_id="fork-a").candidates(q, 10)
+            }
+            assert got_fork == {theirs}, "分支隔离不对称：fork 侧看不到自己的行"
+        finally:
+            conn.close()
+
+    def test_parent_branch_invisible_after_fork(self) -> None:
+        """读档=分叉后，父分支（已弃）记忆对新分支不可见。
+
+        口径：隔离靠 branch_id 等值，**不 JOIN branches 表**（不给热路径加跨表
+        JOIN）。已弃分支天然不可见——新分支的 branch_id 是新 id，与父分支不相等。
+        """
+        from sim.core.persistence.vector import VecCandidateSource
+
+        conn = _vec_conn()
+        try:
+            parent = _insert_memory(conn, "e-parent", branch_id="main")
+            child = _insert_memory(conn, "e-child", branch_id="fork-b")
+            for rid in (parent, child):
+                _insert_vec(conn, rid)
+            conn.commit()
+
+            q = _blob([1.0, 0, 0, 0, 0, 0, 0, 0])
+            assert {
+                c.id for c in VecCandidateSource(conn, branch_id="fork-b").candidates(q, 10)
+            } == {child}, "新分支召回了父分支/已弃分支的记忆（历史泄漏进新时间线）"
+        finally:
+            conn.close()
+
+    def test_unknown_branch_returns_empty_fail_closed(self) -> None:
+        """未知分支 → 空候选；**禁回落全库**（回落即泄漏）。"""
+        from sim.core.persistence.vector import vec_candidate_ids
+
+        conn = _vec_conn()
+        try:
+            rid = _insert_memory(conn, "e-live")
+            _insert_vec(conn, rid)
+            conn.commit()
+            assert (
+                vec_candidate_ids(conn, _blob([1.0, 0, 0, 0, 0, 0, 0, 0]), 10, branch_id="ghost")
+                == []
+            )
+        finally:
+            conn.close()
+
+    def test_branch_filter_does_not_starve_local_candidates(self) -> None:
+        """另一分支占据最近邻时，本分支候选仍按 top_k 补足（over-fetch），且恒 ≤ top_k。"""
+        from sim.core.persistence.vector import vec_candidate_ids
+
+        conn = _vec_conn()
+        try:
+            # 8 条他分支的「极近」向量 + 3 条本分支的「较远」向量。
+            for i in range(8):
+                _insert_vec_distinct(
+                    conn, _insert_memory(conn, f"e-o{i}", branch_id="other"), axis=0
+                )
+            mine = [_insert_memory(conn, f"e-m{i}", branch_id="main") for i in range(3)]
+            for rid in mine:
+                _insert_vec_distinct(conn, rid, axis=7)
+            conn.commit()
+
+            ids = vec_candidate_ids(conn, _blob([1.0, 0, 0, 0, 0, 0, 0, 0]), 3, branch_id="main")
+            assert len(ids) == 3, f"本分支候选被过取饿死了：{ids}"
+            assert set(ids) == set(mine)
+            assert all(i in mine for i in ids)
+        finally:
+            conn.close()
+
+    def test_recall_sql_carries_branch_predicate(self) -> None:
+        """形状钉：分支过滤必须在**召回句内**（同 R2 纪律，禁 Python 侧后过滤）。"""
+        import inspect
+
+        from sim.core.persistence.vector import vec_candidate_ids
+
+        src = inspect.getsource(vec_candidate_ids)
+        assert "m.branch_id = ?" in src, "召回 SQL 未携带 m.branch_id = ?（F3 未落或被挪走）"
+
+    def test_branch_param_required_keyword_only(self) -> None:
+        """签名守卫：branch_id 必填 + keyword-only + 无默认（fail-closed）。"""
+        import inspect
+
+        from sim.core.persistence.vector import VecCandidateSource, vec_candidate_ids
+
+        for func in (vec_candidate_ids, VecCandidateSource.__init__):
+            param = inspect.signature(func).parameters["branch_id"]
+            assert param.kind is inspect.Parameter.KEYWORD_ONLY, (
+                f"{func.__qualname__}: branch_id 非 keyword-only"
+            )
+            assert param.default is inspect.Parameter.empty, (
+                f"{func.__qualname__}: branch_id 有默认值——fork 后新分支不是 'main'，"
+                "默认值会静默读到错分支（必须 fail-closed）"
+            )
