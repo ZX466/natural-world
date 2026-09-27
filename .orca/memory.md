@@ -312,6 +312,7 @@ uv run pyright sim/
 > 每次完成后更新本文件「当前任务 / 进行中 / 已完成」；过时内容删掉。
 
 ## ④ codex（安全 / 合规 / 风险域）
+- 【2026-09-27 M4-S4b F-1 词表补落】793137d：banned += 概率/注定（裁 16-4/19）+ 17 用例守卫（命中·骰·程度副词不误伤钉住防扩面走偏）+ preaudit F-1 已落。全量 1411 绿。动态门等 T5 绿 + F-2 接线。
 - 【2026-09-27 M4-S4 交付】2004d1f：m4-closure-preaudit.md——静态门通过（四钉 99 绿 + M3 141 零回归 + S4 7 + 1391 全绿 + pyright0/ruff clean）；两缝 F-1 裁 16-4 概率·注定已裁未落（我域 CR 补）/ F-2 impulse_gate 无生产调用方（三扫不生效，待 Claude 接线）；P5 因果未知措辞未落地；T5 熵排除口径正确。动态门等 T5 绿。
 - 【2026-09-26 M4-S3 交付】df7aa94：impulse_gate 行为表 + 27 RED 钉子——签名 ImpulseVerdict(admitted/content/reason/hits/observation)、判梯 hidden→banned→操纵感、I-3 词族三类、接线点=ws 长度校验后。Claude 照此实现转绿。
 - 【2026-09-26 M4-S2 交付】24d858d：m4-coincidence-preaudit.md——巧合状态存事件流+fold（驳内存/新表）+ T1 四断言（值零可见）+ 不顺判例三档（灰区建议放行）+ T5 熵流三条边界（禁 live/seed 纯函数/seq 序 fold）+ 四条待裁。实测缺口：EntropyMixer 零生产调用方。
