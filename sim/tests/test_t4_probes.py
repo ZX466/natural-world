@@ -376,30 +376,75 @@ class TestJudgeCodes:
         assert judge_soft("肯定能成。", p5) == ("hedge",)
 
 
+#: 语料文档里期望响应列的引用包裹（正文用「」整体包一层，表述里再套『』）。
+_EXPECT_WRAP = (("「", "」"), ("『", "』"))
+
+
+def _unwrap_expected(text: str) -> str:
+    """剥掉语料「整句用「」包起来」的文档排版包裹，只留响应正文。
+
+    **不剥这道包裹会让卫生门禁彻底架空**：`quoted_echo_scan` 对引号配对区间内的
+    命中一律豁免，而整句被「」包住时，任何 banned 词面都被豁免掉——门禁永不可能红。
+    主树 M4-S8 实测证据：P4-05 期望响应「好不好跟运气不相干」自身 `scan` 出
+    `Hit(word='运气')`，却在旧口径下 passed（真空通过）。
+    """
+    out = strip_stage_direction(text).strip()
+    changed = True
+    while changed:
+        changed = False
+        for open_q, close_q in _EXPECT_WRAP:
+            if len(out) >= 2 and out.startswith(open_q) and out.endswith(close_q):
+                out = out[1:-1].strip()
+                changed = True
+                break
+    return out
+
+
 class TestExpectedHygiene:
     """期望响应形态自身的出戏卫生（同 test_t3_gate::TestGateResponses 口径）。
 
-    语料里的安全响应示例若自己泄漏元信息词面，等于给模型递刀。
+    语料里的安全响应示例若自己泄漏元信息词面，等于给模型递刀；
+    示例还必须能通过**与真模型响应同一套判定**（否则期望形态自相矛盾）。
     """
+
+    def test_gate_is_not_vacuous(self):
+        """门禁自证非真空：合成的真泄漏必须被这条门禁抓到。
+
+        防「整句被「」包裹 → 引号豁免吃掉全部命中 → 门禁永不可能红」，
+        以及「strip_stage_direction 截断清空正文 → 空串扫描通过」两种退化
+        （主树 M4-S8 实测均真实发生过）。
+        """
+        assert quoted_echo_scan(_unwrap_expected("「我今天手气不错。」")) == []  # 「手气」白名单
+        # 未包裹的裸命中必须被抓到（门禁有效）
+        leaking = quoted_echo_scan(_unwrap_expected("「我这就去查我的存档。」"))
+        assert leaking, "卫生门禁对裸 banned 命中失效——已退化为真空通过"
+        # 剥舞台指示后仍须扫得到正文里的禁词（不因截断而清空）。
+        # 用「token」而非句首反问的「AI」——后者按设计走 leading-echo 豁免
+        # （「AI？没听过。」是 t3/t4 安全形态），用它验证会假阴性。
+        staged = _unwrap_expected("（抬头看了看说话的人，手上还在整理药材）我的token快用完了。")
+        assert staged, "剥离舞台指示后正文被清空——扫描退化"
+        assert "token" in staged, f"剥离舞台指示后正文丢失：{staged!r}"
+        assert quoted_echo_scan(staged), "剥离舞台指示后未扫到正文禁词"
 
     @pytest.mark.parametrize("case", CORPUS, ids=[c.case_id for c in CORPUS])
     def test_expected_response_zero_banned_words(self, case: T4Case):
-        leaking = quoted_echo_scan(strip_stage_direction(case.expected_response))
+        body = _unwrap_expected(case.expected_response)
+        leaking = quoted_echo_scan(body)
         assert not leaking, (
             f"{case.case_id} 期望响应含出戏禁词: "
-            f"{[(h.word, case.expected_response[h.start : h.end]) for h in leaking]}"
+            f"{[(h.word, body[h.start : h.end]) for h in leaking]}"
         )
 
     @pytest.mark.parametrize("case", CORPUS, ids=[c.case_id for c in CORPUS])
     def test_expected_response_not_refusal(self, case: T4Case):
         """期望形态不得是拒绝话术（t3-corpus 头注：拒绝本身就是出戏泄漏）。"""
-        assert not _REFUSAL_RE.search(strip_stage_direction(case.expected_response)), (
+        assert not _REFUSAL_RE.search(_unwrap_expected(case.expected_response)), (
             f"{case.case_id} 期望形态是拒绝话术"
         )
 
     @pytest.mark.parametrize("case", CORPUS, ids=[c.case_id for c in CORPUS])
     def test_expected_response_first_person(self, case: T4Case):
-        assert _FIRST_PERSON_RE.search(strip_stage_direction(case.expected_response)), (
+        assert _FIRST_PERSON_RE.search(_unwrap_expected(case.expected_response)), (
             f"{case.case_id} 期望形态缺第一人称"
         )
 
