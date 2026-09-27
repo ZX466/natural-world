@@ -14,7 +14,7 @@
 | 功能/非性能全量 | ✅ 静态绿 | **1391 passed / 0 failed**（main `1f55579` 数字一致） |
 | pyright / ruff | ✅ | 0 errors / clean |
 | T4 探针↔实现映射 | ⚠ **半闭环** | P1-P3 有实现对象；**P4/P5 前提解除但探针集未落地**（§2） |
-| 词面 CR 纪律 | ⚠ **1 处缝** | 裁 16-4「banned += 概率/注定」已裁未落（§3 F-1） |
+| 词面 CR 纪律 | ✅ 已落 | 裁 16-4「banned += 概率/注定」**S4b 已补落**（`7c8e3a1`，2026-09-27）＋ 17 用例词面守卫（§3 F-1） |
 | impulse_gate 接线 | ⚠ **未接线** | gate 本体已实现 + 28 钉全绿，但**无生产调用方**（§3 F-2） |
 
 ## 1. M4 新安规面钉子逐文件对表（S6 §1 同款）
@@ -57,7 +57,7 @@ S1 §6.1 提案五类探针的**实现对象现状**（2026-09-27 实测）：
 
 | # | 级别 | 发现 | 建议 |
 |---|---|---|---|
-| F-1 | 缝（词面 CR 纪律） | **裁 16-4 已裁「`BANNED_WORDS_META` 新增 `概率`/`注定`」但未落**——实测 `概率 in BANNED_WORDS=False`。后果：P4 探针「这概率多少」在 T4 输出侧无词面防线（I-1 banned 扫漏）；assembler 出站终扫也漏 | 词面变更走 CR（安全域 owner=Codex）→ 补 2 词 + 1 条「裁 16-4 已采」断言进 `test_t1_m4_adverse_lift.py` 或既有词面守卫 |
+| F-1 | ✅ 已落（S4b） | **裁 16-4「banned += 概率/注定」已裁未落** → **2026-09-27 S4b 补落**：`BANNED_WORDS_META += {概率, 注定}` + `test_t1_m4_probability_words.py` 17 用例（命中守卫 + 不加词口径守卫：命中/骰/程度副词不误伤 + 判梯/impulse_gate 同词表生效） | 无后续动作 |
 | F-2 | 缝（接线） | **`impulse_gate` 无生产调用方**——grep `impulse_gate(` 仅命中本体定义 + 钉子 helper；`_handle_player_impulse` 仍是「类型+长度→回 feedback」原样（无 gate 调用）。后果：I-1/I-2/I-3 三扫**当前完全不生效** | 批次 A 接线件：ws.py 长度校验后插 `impulse_gate`（接线点已写进 gate docstring + 钉子文件头）；接线后须补 1 条集成钉（ws 层 e2e：脏文本 → `injected:false`） |
 | F-3 | 观察（非缝） | 结构钉子 52 面 **强断言齐**（含 note 禁入 + bool 冒充 int + 自承重拒 + 三索引），但 §16 T1 六类里的**「材料守恒」在 T5 侧**（`test_assertions_conservation.py` 6 例）而非本文件——对表口径不冲突（守恒走 T5+T1 折返），记录备查 | 无动作 |
 | F-4 | 观察（顺序敏感） | `test_t1_m4_adverse_lift.py::test_replay_bit_exact` 锁「同序两次重放逐位一致」，但**未锁「异序结果不同」**（S2 §G-3 纪律：reseed 是哈希链推进，同批注入顺序不同结果不同）。属**增强项**非缺口 | 可选补 1 条断言（异序 → draw_key 不同），锁住 G-3 纪律 |
@@ -82,7 +82,7 @@ dispatch（pi/cline 域），**与安规口径无关**（不是断言红）。�
 
 | 项 | 域 | 说明 |
 |---|---|---|
-| F-1 词面 CR（概率/注定） | **codex**（本域 owner，词面变更走 CR） | 裁 16-4 已采，本单提出补落 |
+| F-1 词表补落 | **codex**（S4b 已完成，2026-09-27） | 词面 CR 已执行，`banned_words.py` + 17 用例守卫 |
 | F-2 impulse_gate 接线 | Claude（批次 A 接线件） | 接线点 + 集成钉要求已写进 gate docstring |
 | T4 探针集本体（44 条） | **codex**（S1 §6 提案已出，实体未落） | 另派单；接线约定见 t4-nightly.yml TODO 段 |
 | P5 因果未知措辞生成 | Claude（批次 A 补件） | §14 未知四轴 M4 行；T4 P5 前提 |
@@ -98,4 +98,4 @@ dispatch（pi/cline 域），**与安规口径无关**（不是断言红）。�
 
 ## 7. 动态复验结果（待填）
 
-（等 T5 首跑绿 + F-1/F-2 收口后由 codex 执行 §6 并回填。）
+（等 T5 首跑绿 + F-2 接线收口后由 codex 执行 §6 并回填 §7。）

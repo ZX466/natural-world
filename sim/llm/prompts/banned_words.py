@@ -45,6 +45,13 @@ BANNED_WORDS_META: frozenset[str] = frozenset(
         "profile",
         "prompt",
         "token",
+        # M4 裁 16-4 / 裁 19（F-1 词表补落，2026-09-27）：因果未知面（S1 §5 C-1）
+        # 与运气面（S1 §4 L-2）禁概率/命定词面——只给「应该能行、不好说」，
+        # 不给概率（DESIGN §14 未知四轴 M4 行 + §11 运气对 Agent 不可见）。
+        # 「命中/骰」按裁 16-4 **不加**：战斗语境「命中」是自然词，误报面大，
+        # 走白名单兜（反例：test_m4_probability_words_no_false_positive）。
+        "概率",
+        "注定",
     }
 )
 
