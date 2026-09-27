@@ -16,6 +16,20 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
+【2026-09-27 第二十一轮｜M4 收官门四单收编+裁 19+F2 接线】①四分支收编（main `6dde038`）：
+cline C5 `53175ca`（golden-nightly.yml：matrix 十种子/fail-fast false/timeout 90/零 secrets/
+schedule 注释待首跑绿；T5 报告器 GOLDEN_REPORT_DIR 可选落盘）；kilo K9 `2606999`（集成
+对账：**CRITICAL=K7 state_delta.plan 越界冻结 schema——PlanDelta 从未定义，plan 面不可达
+前端**；F 系多为显式延迟不阻断）；codex S4 `2004d1f`（安规终审静态：**F-1 裁 16-4 概率/
+注定已裁未落** codex 域补；**F-2 impulse_gate 无生产调用方**=三扫不生效）；pi P4
+`4984d75`（golden 与 bench 选择集互斥不撞红线；timeout 90 待首跑实测终裁）。②**裁 19**：
+CRITICAL 采提案修派 kilo（K10：openapi_ext 注 PlanDelta→gen-protocol→钉子改引真 schema）；
+F-1 放行 codex 落词表；**F-2 接线归我即做**；pi 意见采。③**F-2 接线已做**（`6dde038`）：
+ws.py `_handle_player_impulse` 长度校验后挂 impulse_gate（I-2 profile 随批次 A 感知层注入
+——玩家念头全局无目标 NPC）；拒收→error 帧（too_many_hits→impulse_too_long 同码）+
+observation 进 dev 日志；e2e 钉 3 件（banned 拒/操纵感拒/改写放行）。门禁 **1394 passed**。
+④M4 收官门前必修剩：kilo K10（PlanDelta schema）+codex F-1 词表——两单已可在其待命卡
+预告；T5 首跑=cline dispatch（关键路径）。
 【2026-09-26 第十九轮｜T5 全量验收测试+golden-nightly 派单】①test_golden_full.py
 （main `c73ee08`）：10 种子×10 游戏日+三断言组实跑，PI_T5_FULL=1 触发默认跳过；
 守恒判据在 golden 无持久层面=折叠自反+投影⊆事件（跨入库对账由 T2 每提交钉子覆盖
