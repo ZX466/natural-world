@@ -29,6 +29,9 @@ coverage/
 
 # Performance benchmark artifacts (pi 裁决：基线与 runner 信息入 docs/perf/ 入库；每日 JSON 不入库)
 perf/*.json
+# T4 探针运行产物（codex M4-S7：真模型响应正文不入库——同 perf 裁决；
+# 报告随 nightly artifact 归档，仓内只留 docs/security/t4-corpus.md 语料真相源）
+t4-results/
 .benchmarks/
 
 # Editor / OS
