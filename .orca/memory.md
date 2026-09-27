@@ -386,6 +386,18 @@ uv run pyright sim/
 - (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)
 
 ## ⑤ pi（性能域）
+- 【2026-09-27 第十七轮快照｜M5-P1 时间刻度 + 双轨存档 perf 预研（零代码，未提交待收编）】产出 `docs/perf/m5-time-scale-fork-budget.md`（纯文档）+ `budget.md §4` 追加一段外推指针（0 删除既有行）。**两块**：
+  - **时间刻度**：每 tick 预算 = `16.6ms / R`（派生量，不设独立常量）。外推档 **60x=0.277ms / 300x=0.0556ms**（DESIGN §10 现锁定仅 {0,1,4,16}x，按「新增档位」处理）。实测：golden 首跑 CI 档 mean_tick **0.125–0.232ms** → 单日 86400 tick 计算墙钟 **10.8–20.0s**；本机 driver 口径 @10 实体 **0.059ms**（单日 5.1s）/ @50 实体 **1.796ms**（单日 155s）。**所有子系统红线（感知 3.6 / L1 6.0 / 检索 12.0ms）在 60x/300x 档全部破线 13x–216x → 降级是唯一出路**，走 `budget.md §4` 降采样/合并 tick，**只改节拍不改折叠规则**（守 D1-C2/R2-B）。摊还对齐 **M4-P1 collapse 先例**（事件预算封顶、与规模解耦）。
+  - **双轨存档多分支成本模型**（与 opencode M5-D1 交叉对账）：克隆 `INSERT…SELECT` = **0.608µs/行**（50k 纯文本行）/**5.090µs/行**（10k 行含 1536B 向量，向量主导 8.3x）；重放 = **0.74µs/事件**（`fold_matter` 1k/10k/100k 恒定）；**克隆 vs 重放交叉判据 r=行数/事件数 < 0.145**（现实语料表重放通常更便宜）。`SqlEventStore.append` **78.7µs/事件**（异步 SQLAlchemy+校验）→ 20 事件/tick=1.57ms 与 `budget.md §1` apply 行（1.00/2.00ms）**同量级→并入 apply 行不另立红线**；快照 7KB gzip **0.451ms/次** → 摊还 0.0005ms/tick 可忽略。`fold_matter` 单折叠 0.674µs / `fold_structure` STARTED 1.48µs / CHECKPOINT 0.147µs。
+  - **红线草案（全 advisory，不动 thresholds.py）**：`16.6/R` 派生量 + 降采样节拍代码契约常量（`_PERCEPTION_EVERY_N_TICKS` 先例）+ fork 克隆 ≤6.0µs/行 + fold 重放 ≤1.0µs/事件 + 读档端到端 advisory 记录。
+  - **回填 opencode M5-D1 §7 对账表**（该文件在途未收编，`docs/data/m5-fork-archive-preplan.md`）：9 对账点全部回填（§4.6）。对账点 5（F3 `vec_candidate_ids` 加 `branch_id` 的 `RETRIEVAL_*` before/after）**待 D1 收编后实测**。
+  - **纪律**：零代码（不碰 sim/、thresholds.py、迁移）；不干扰 kilo 树。验证 = 纯文档，所有实测均本机 2026-09-27 多轮中位，来源已标注。
+- 【2026-09-27 第十六轮快照｜M4 性能域四单全交付（P1 `88284c3` 预研 / P2 `6e7182e` 定标 / P3 `3eaec73` 意愿 / P4 `4984d75` golden 复核），**均已进 main**】四单全在 `docs/perf/` + `sim/tests/bench/`，**不动既有 thresholds 行**（只追加 M4-P2/P3 两段，0 删除）。细节：
+  - **M4-P1 建造预算预研**（`docs/perf/m4-build-budget-preplan.md`，纯文档）：tick 预算盘点（上限表余量 **2.10ms=13%**，含 M3-P3 失效行 2.0）+ 坍塌成本模型实测（**BFS 本体 10k=1.27ms 可忽略；逐对象派生事件 10k=51ms=307% tick 才是 binding**，故坍塌必须按帧摊还）+ 施工推进语义 perf 支持 D1「STARTED+有界 checkpoint+终态」+ 红线草案框架。**口径勘误**：任务书「60s tick」应读 **16.6ms/tick**（1x=60tick/s）。
+  - **M4-P2 施工/坍塌红线定标**（`sim/tests/bench/test_bench_structure.py` 11 用例 + `thresholds.py` 27 行）：`BUILD_PROGRESS_TICK_LIMIT_MS=0.30`（实测 100 点 0.175ms，**向下修正草案 0.50**——real `advance_build` 是带校验 dataclass replace ~1.75µs/点，非预研模型数组扫；红线绑定并发 ≤100 在建点，>170 点破线）；`COLLAPSE_FRAME_LIMIT_MS=0.85`（实测三档均 ~0.50ms/帧，**向下修正草案 2.00**——D2c 已用 `CASCADE_EVENT_BUDGET_PER_FRAME=100` 封顶，单帧不随级联规模增长）；级联 100 节点/帧**不设数值红线**（是代码契约常量，T1 已咬 + 本件契约守卫）。物化实测：`build_support_graph` 链 0.06/0.58/6.11ms、`advance_cascade` 单帧 ~0.50ms、10k 全量摊还 100 帧=71ms。
+  - **M4-P3 意愿/独白热路径**（`sim/tests/bench/test_bench_willingness.py` 13 用例 + `thresholds.py` 17 行 + `docs/perf/m4-willingness-hotpath.md`）：`WILLINGNESS_TICK_LIMIT_MS=0.35`（实测 B3 注入增量 band≥1 **+0.20ms/tick** ×1.7）。**口径=注入增量**，不含 None 基线（后者走 `L1_UTILITY_TICK_LIMIT_MS=6.0`，避双算）。拆解：`willingness_expression` band0 早退 0.04µs/调用、band≥1 ~0.4µs/调用；成本主项=**`npc_monologue_event` 构造**（50 条 ~147µs，占 band≥1 增量 88%）。4 观察项（全队共享 verdict 是测试缝/band 常态率/构造是唯一主项/16x 档 0.2ms 占 19% 建议表现面才产）。
+  - **M4-P4 golden runner 档位复核**（`docs/perf/m4-p4-golden-runner-review.md`，纯文档只读）：①**golden 不撞 M4-P2/P3 红线**（选择集互斥：ci `-m "not bench"` / nightly `-m bench`；golden 零 import thresholds）；②`timeout-minutes: 90` **维持**（CI 档位 ×1.7 外推：10 实体 ~1-2min/种子 → 50-100x 余量，50 实体 ~4.6min → 19.5x）；③**本单第一风险是内存非 timeout**——真 test 累积全事件流 1.728M 条 ≈ **3.4GB**（10 实体）/ 17GB（50 实体外推），升 50 实体前须改 `on_events` 增量折叠（属 T5 数据面域）；④**CI 档位红线余量（新增）**：施工推进 CI 0.3371 vs 线 0.30 → **0.89x 越线**、意愿 band1 CI 0.361 vs 0.35 → **0.97x 贴线** → **转硬断言前需按档位重定线或声明「硬断言只留定标机」**（M2-P6 裁 1 口径）。 **首跑回填**（Claude 报）：golden 首跑实测 mean_tick **0.125-0.232ms**，落在本件 §2.2 外推区间（CI 10 实体 ~0.10-0.20ms），timeout 90 余量结论成立。
+- 【**跨档位定标纪律（本域固化）**】①本机=定标机（硬断言缺省 on）；CI=共享 4 核 EPYC 9V74（nightly `PI_BENCH_ADVISORY=1` 只记录）。②Python 侧主导负载 **CI/本机 ~1.55-1.93x（中位 ~1.7x）**，比 M2 档位（1.13-1.35x）更高（本轮 bench 多小对象高频构造）。③新红线一律：`_record_proposal` 观察态起步（只记录不断言）→ 数据累积后按 M2-P2/M3-P2 先例转 `harness.assert_median_threshold`。④`thresholds.py` 是唯一真相源，nightly yml 不复制阈值表。
 - 【2026-09-24 第九轮快照｜M3-P2 全闭环已收编】①四红线 bench 进 thresholds.py（VEC_CANDIDATE/RETRIEVAL_SCORE 0.30 / FULL_SCAN 2.00 / TICK 12.0，依 m3-retrieval-budget §1.3）；②**baseline.json 入库 + nightly 切 `--benchmark-compare-fail=median:25%` 相对漂移制**（裁 4/裁 11）。机型切换观察（EPYC 7763 vs 9V74，median 1.71）已进 bench-plan §4.1 step6 边界注记。**active 纪律**：25% 相对漂移限「跨 run 同档位」；机型迁移重对账；检索防呆红线（决策/prompt 驱动触发，禁每 tick 全量——反证数据是母本）；thresholds.py 唯一真相源，硬断言只在定标机。**待命**：下批=①nightly 新判定首跑观察（首个 --benchmark-compare run 漂移数字）；②A4 sqlite-vec 真实现后候选红线复核对账（参考实现 1.29x 余量偏紧，预期真实现更省）。
 - 【历史】M2-P3（l1-spec 对账+L1 feeder+p99 信息性守护 `1e3e36e`）、M2-P4（budget 预案+SMELL_WIRED 1.0 `82efcc2`→已收编）、M3-P1（四红线预研）、P2①（四红线落地 `48db6cf`）见 git log 原文。perf-worktree 技能（~/.agents/skills/）可完整恢复工作状态。
 
@@ -545,7 +557,8 @@ uv run pyright sim/
 
 ## 当前任务
 
-（空——M3-P2 ①② 均已交付，等 Claude 收编；下一步等 M3 批次 A4/embedding 相关派单（A1 定 V3 后 embed 监控事件族由 opencode 客户端照抄 llm-monitoring §7））
+（空——**M4 性能域四单（P1/P2/P3/P4）均已进 main**，见本节**顶部第十六轮快照**；
+等 Claude/主树派下一单。历史：M3-P2 ①② 亦已收编。）
 
 ## 进行中
 
