@@ -49,6 +49,12 @@ jobs:
         run: uv run pyright
 
       - name: pytest（T1/T2/T3；排除 bench —— 性能基准进 nightly）
+        # ⚠ T4 真模型零烧钱纪律（本轮实测，2026-09-27）：`-m "not bench"` **会选中 `t4` marker 的用例**
+        # （本机实测：t4 标记用例在 `-m "not bench"` 下 1 passed，即被收集）。
+        # 故 T4 的零烧钱**不靠 marker 排除**，而靠探针自身的 env 门：无 `T4_MODEL_API_KEY` 即整体 skip。
+        # ⚠ 若日后探针去掉 env 门，或新增 t4 用例未带该门，本步骤会**真调真模型烧钱**——
+        #   codex M4-S7 交付探针集时须保留 env 门；CI 日志若出现 t4 用例名（而非 skip）请立刻回查。
+        # 2026-09-27 用户改约后 T4 验收＝本地跑一轮（见 docs/dev-workflow.md §3），但「不进 CI」不变。
         run: uv run pytest -m "not bench"
 
       - name: pytest T3 门禁（对抗样本断言，独立红灯信号）

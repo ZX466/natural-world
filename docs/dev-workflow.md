@@ -54,7 +54,7 @@ Push-Location client; npx tsc --noEmit; npx eslint .; npx prettier --check .; np
 | T1 | 六类不变量断言（无 LLM，秒级） | `uv run pytest -m t1` | 每次提交（CI 含） |
 | T2 | 回放确定性（无 LLM） | `uv run pytest -m t2` | 每次提交（CI 含） |
 | T3 | 闸门对抗样本（录制 fixture，codex S03-3；**无 marker，按文件选**） | `uv run pytest sim/tests/test_t3_gate.py` | 每次提交（随 `-m "not bench"` 全量跑；ci.yml 另有命名独立门禁步骤，已实跑 45 passed） |
-| T4 | 出戏探针（真模型，烧钱） | nightly（无 CI 门禁） | 每日，锁定模型版本 |
+| T4 | 出戏探针（真模型，烧钱） | **本地一轮**（见下方小节） | 本地手动一轮＝等效验收；不进每提交 CI |
 | T5 | golden 场景（10 种子 × 10 游戏日） | `uv run pytest -m t5` | 每日 |
 | bench | 性能基准 | `uv run pytest -m bench` | **nightly，不进每提交 CI** |
 
@@ -65,6 +65,43 @@ Push-Location client; npx tsc --noEmit; npx eslint .; npx prettier --check .; np
   - 量纲要求：**无 LLM、秒级~分钟级**；步骤内显式 `-m "not bench"`（性能红线是抖动域，属 nightly）。
   - ⚠ **不要**把完整验收「50 NPC × 7 游戏日自转无崩溃」做成该前缀下的普通测试：DESIGN §10「1 tick = 1 游戏秒」⇒ 7 游戏日 = **604,800 tick**，它会被 `-m "not bench"` 全量 CI 收集，把每提交 CI 拖成小时级（ci.yml 该步骤的 `timeout-minutes: 15` 就是这道护栏）。完整跑接 `nightly-bench.yml`（接法待 Claude 裁）。
   - 现役文件（6 件）：`test_m2_npc_base.py` / `test_m2_utility.py` / `test_m2_matter.py` / `test_m2_smell.py`（架构域）+ `test_m2_weather.py`（配置域风场）+ `test_m2_runtime_store.py`（opencode 数据层）；M2 交付盘点见 `docs/README.md` §5。
+
+### T4 本地探针一轮（真模型 · 锁版本）
+
+> **2026-09-27 用户改约存照**：T4 **不建 GitHub secret**，`t4-nightly.yml` 的 `schedule` 已注释
+> （只留 `workflow_dispatch` 供未来恢复）。**「T4 全绿」＝本地跑一轮真模型探针**＝等效验收
+> （§16 频率列的本地等价形态；仍然**不进每提交 CI**——「烧钱且抖动」的理由不变）。
+> 模型端点走 **OpenAI 兼容国内直连**，因此**不需要 `127.0.0.1:7897` 代理**（该代理只对 github.com 域生效）。
+
+三件套 env **只在本会话有效**（新开 PowerShell 即失效，天然不落盘）：
+
+```powershell
+# 锁版本：模型 id 写死在本机命令里，不进代码、不进仓库（§16 锁版本防静默回归）
+$env:T4_MODEL='Deepseek-v4-flash'
+$env:T4_MODEL_BASE_URL='https://chatapi.weixin.qq.com/openai/v1'
+$env:T4_MODEL_API_KEY='<临时填：控制台粘贴，不入库不入日志>'
+
+uv run pytest -m t4 --junitxml=t4-results/t4.xml
+```
+
+- `T4_MODEL_API_KEY` **可选**：探针集里标了「无 key 即 skip」的用例会在缺 key 时跳过（零烧钱），
+  这类 skip 属**预期**，不算失败。已设 key 时它们会真调模型。
+- **key 纪律**（与 §5 一致）：只经环境变量，**绝不**写进 `t4-nightly.yml`、`.env`、`docs/` 或任何提交；
+  跑完可 `Remove-Item Env:T4_MODEL_API_KEY` 清掉本会话值。
+- 探针集本体归 **codex**（`sim/tests/test_t4_probes.py`，M4-S7）；本文只管**怎么跑**。
+  文件未落盘时 `-m t4` 会**收集 0 用例并返回退出码 5**——那不是「全绿」，是「探针还没接线」。
+
+**结果判读**（`t4-results/t4.xml` + 终端汇总）：
+
+| 判读 | 含义 | 该做什么 |
+|---|---|---|
+| **硬红**（failed） | **出戏词面命中**（§16 T4：「谁指使你」「是不是AI」「重来一次」…）或闸门拒收 | 真回归。查命中的是哪条探针的哪句断言，**不放宽断言**；按 §20 三层防御（锚定/过滤/重生成）定位 |
+| **inconclusive** | 软判定不足以定性（模型给了模糊措辞，既没硬命中词面、也不足以证明合规） | **留人工复核**：记下用例 id + 原始输出，别当绿也别当红；同一措辞反复 inconclusive 再找 codex 议词表 |
+| 全 pass | 锁版本下本轮零硬命中 | 满足 M4 的「T4 全绿」验收（本地形态） |
+| 全 skip / 退出码 5 | 没设 key、或探针文件未落盘 | **不是绿灯**，按上表最后两行处理 |
+
+> `timeout-minutes` 护栏在 workflow 侧是 30；本地一轮若明显超 10 分钟，先看是不是 prompt 装配退化，
+> 而不是直接放宽超时（口径同 codex 裁 15-3：只加 `timeout-minutes`，不另设成本红线）。
 
 ### bench 跑法（性能域）
 
