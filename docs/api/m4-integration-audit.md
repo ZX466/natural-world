@@ -211,3 +211,19 @@ if moved:                      # ← plan-only 变更（无移动）时整帧不
 - schema 越界实证：读 `shared/openapi.json` 的 `StateDeltaMessage.properties` 与 `additionalProperties`，比对 `ws.delta_payload` 的键集
 - error code 闭合：`pytest sim/tests/test_ws_gateway.py::TestErrorCodeVocabulary`
 - 协议生成物一致：`npm run gen:protocol:check`（在 `client/`）
+
+---
+
+## 裁 19（2026-09-27 Claude 主树）
+
+**CRITICAL（K7 plan 越界冻结 schema）——采 kilo 提案，修复派回 kilo（域内自纠）**：
+PlanDelta schema 缺失是 K7 实现与冻结 schema 的真缝（钉子把不成立的假设写成判据）。
+修复路径三步（kilo M5-K10 执行）：①openapi_ext 注入 PlanDelta 组件（additionalProperties
+同封闭口径）②gen-protocol 生成→protocol.ts 同步 ③K7 钉子的 schema 假设改为引用
+真实 schema。**修复完成后 plan 面才可达前端**——列入 M4 收官门前必修，K7 回归钉随修随绿。
+**F-1（codex S4：裁 16-4 已裁未落）——采**：banned 词表补「概率/注定」是 codex 域
+CR 纪律内（词面变更 owner=codex），本域放行，随 M4-S4b 落。
+**F-2（impulse_gate 无生产调用方）——采，接线归我（Claude 批次 A 件）**：接线点
+ws.py `_handle_player_impulse` 长度校验后插 gate 调用+injected:false 分支+
+1 条 ws 层 e2e 钉——本裁决后我立即做，不另派单。
+**pi P4 复核意见采**：timeout 90 维持（等 C5 首跑实测数再终裁）。
