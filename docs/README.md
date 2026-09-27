@@ -22,6 +22,7 @@
 | `docs/arch/m0-client.md` | 前端/体验（Claude） | ✅ main | M0 渲染闭环：Phaser(canvas 世界) 与 React(canvas 外 UI) 经 Zustand store 单桥、对象池、插值、摄像机；M0 边界与出戏字段禁令 |
 | `docs/arch/m3-plan.md` | 架构（Claude） | ✅ main | M3 规划整合稿：批次 A-D 切分（A 向量 / C 地图可并行，B 等 A 接口冻结，D 收尾）+ 安规钉子横切 + §6 待裁决队列；第五批续写批次 B 模块/文件级施工图与 B1 |
 | `docs/arch/m4-plan.md` | 架构（Claude） | ✅ main | M4 规划：批次 A–D 切分 + 裁 14 六条裁决记录 + 门禁归属速查 + **「T4 全绿」定义**（锁定模型版本下 nightly 连续通过，非每次提交绿） |
+| `docs/arch/m5-plan.md` | 架构/文档（cline 起草 · Claude 裁） | 🟡 骨架待裁 | M5 规划骨架：§17 M5 行七件事拆条（混沌/双轨存档分叉重放/时间刻度/权力牙齿/火灾蔓延/生态/断线降级演练）+ 批次 A–E 切分（**全部待裁**）+ 门禁归属 + §18 缩范围张力（生态/火灾蔓延/权力牙齿都在「先砍」侧）+ §6 待裁队列七条**留白**；验收＝「离线再回来世界已变；C6 测试绿」（C6＝T1 历史不可销毁） |
 | `docs/arch/t5-golden-scaffold.md` | 架构/文档（cline 起草 · Claude 裁） | ✅ main | T5 golden 脚手架提案：形态（虚拟时钟+有界帧驱动+录制 fixture 回放）+ 文件布局 + 三断言组口径（裁 17 定阈值：守恒逐位相等/完成率 10 日重定标/孤儿硬红）+ 跑法两案（采独立 `golden-nightly.yml` 种子分片 matrix，M4-C5 已接）+ runtime 实测（10 游戏日=864,000 tick/种子） |
 | `sim/tests/golden/` + `.github/workflows/golden-nightly.yml` | 测试分级/CI（cline） | ✅ main | T5 golden 资产包：驱动器 `driver.py`（虚拟时钟有界帧驱动）+ 十种子清单 `seeds.py`（真相源）+ 三断言组 `assertions/*`（裁 17 口径）+ 全量验收 `test_golden_full.py`（`PI_T5_FULL=1`）+ 冒烟 `test_golden_smoke.py`（`PI_GOLDEN_SMOKE=1`）；**均 env 门默认跳过，不进每提交 CI**（§16 T5 每日跑） |
 | `docs/security/m1-checklist.md` | 安全/合规/风险（Codex） | ✅ main | M1 安全检查清单 27 项：K1–K8 密钥（Fernet/主密钥/日志脱敏/SSRF）、M1-A–I 出戏断言、O1–O6 LLM 输出边界、W1–W5 WS 白名单、G1–G4 通用 |
