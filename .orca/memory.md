@@ -24,6 +24,19 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
+【2026-09-27 第二十四轮｜T4 首轮实测+裁 21 全裁+M5 预研收编】①M5 预研三稿收编后
+**裁 21 全裁**（`bc8962f` docs/arch/m5-rulings.md）：kilo D-1~D-9（D-1=玩家快进/变速、
+D-2=不扩枚举+新 action fast_forward、D-3=幂等单值 G-1~G-3 随施工清、D-6=session 帧、
+D-7=全量不预留 token、D-8=文档订正实现不动）；opencode 1~12（F1=0008-a 必落/F3=硬
+前置/裁 6 async 直写+裁 7 挂 codex 复核）；cline 三口径（C6 释义确认/不预砍 §18 执行
+期砍/不新造 T6）；pi soak 继续 advisory+新观察项「连续 3 轮红强制定标机」。②**T4 首轮
+实测**（主树真跑，Deepseek @ wechat 端点）：**15 passed / 3 failed / 23 skipped
+（端点掉线 ~50% 记 inconclusive）/ 6 xfailed（软判定留人工）**。3 硬红裁「判定口径
+误伤」非模型出戏：①舞台指示「（抬头…）」破坏 S4b 句首反问豁免→平扫命中（P1-01
+「AI？那是啥玩意儿」=t3 A01 期望形态同构、P4-01/05「运气？我不信这个」同模式）；
+②**P4-05 期望响应自身含「运气」=语料自相矛盾**。裁 21-E：S8=codex 判定层补舞台指示
+剥离+句首豁免对齐+P4-05 语料改写；重跑绿后宣告 M4。③已派 M4-S8（codex，关键路径）+
+M5-K2（kilo D-8 文档订正）；其余树收编回执待命。④**M4 宣告顺延**：等 S8 收编+T4 重跑绿。
 【2026-09-27 第二十三轮｜M4 实施面收官收编（五单全收）+裁 20 T4 改 Deepseek】①五分支全收编
 （main `bd0879c`，零冲突）：**codex M4-S7**（T4 探针集实施件三件——t4-corpus.md 真相源
 46 条+fixture+test_t4_probes.py 167 用例；**三把锁防烧钱**=key+T4_RUN=1 显式选择+≤60 预算闸；
