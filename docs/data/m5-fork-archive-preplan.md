@@ -4,8 +4,12 @@
 > 基线：DESIGN.md §11 不可逆两层（分支间可回退 = 读档分叉）、§12 双轨存档、§16 T1/T2/T5、§17 M5 行
 > 自有资产：`docs/data/schema.md`、`docs/data/event-sourcing.md`、`docs/data/vec-preplan.md`、
 > `docs/data/build-domain-preplan.md`（同款提案体例）、`sim/core/persistence/{models,store,vector,memory_store}.py`
-> 交叉对账：pi M5-P1（M5 perf 预研，在途；§7 留空位）
+> 交叉对账：pi M5-P1（M5 perf 预研）= `docs/perf/m5-time-scale-fork-budget.md`；**§7 已回填**（2026-09-27）
 > **本文档零代码、零 schema、零迁移**；所有迁移号（0008）只做预估，不动手。
+>
+> **施工进度（勿把提案当现状读）**：裁决见 `docs/arch/m5-rulings.md` §B（12 点全裁）。
+> 已落：①§2.4 案 C（T1 断言 5 口径）+ ②§5-C5（F3 向量召回分支隔离，裁 11）——**M5-D2**。
+> 未落：0008 迁移（裁 1/3/4/9）、fork 事务与克隆（裁 6/10）、R2 三断言。进度表见 §9。
 
 ---
 
@@ -17,15 +21,15 @@
 |---|---|---|---|
 | **F1** | `npc_profiles` 主键是**单列 `id`**，`branch_id` 只是普通列——13 张表里唯一的例外 | `models.py:292-293`（`id = mapped_column(String, primary_key=True)`，`__table_args__` 只有两个 Index） | 读档克隆 `npc_profiles` 必撞主键；同 id 跨分支**物理不可能共存**。修复＝0008 batch 改复合主键（0006 对 `matter_state` 的同款手法，本树有先例） |
 | **F2** | `npc_memories` / `knowledge` / `relationships` **没有事件源**——19 个 `EventKind` 里没有任何「记忆/知识/关系被写入」的事件，`NPC_ACT.params` 白名单只有 `path/site/food_id/hours/radius/to_npc` | `event_validation.py:53-72`（`PAYLOAD_MODELS` 全 19 kind）、`actions.py:22-29` | 这三张表**不可从事件流重建** → 「读档=分叉」若走「纯事件追加 + 重放投影」路线，对语料表在结构上不成立（详见 §3.2 判据表） |
-| **F3** | 向量召回面**零分支隔离**：`vector.py` 全文没有 `branch_id`；`vec_candidate_ids` 的召回 SQL 是 `JOIN npc_memories ON m.id = v.rowid WHERE superseded_by IS NULL AND invalid_reason IS NULL`——**没有 `m.branch_id = ?`** | `vector.py:204-226`（`rg -n "branch" sim/core/persistence/vector.py` → 0 命中） | 单分支下是潜伏问题；**一旦分叉存在，NPC 会召回已被弃分支/父分支的记忆**——既是 T1 信息边界破口，也是出戏风险（NPC 记得本时间线里没发生的事）。列为 M5 硬前置 |
+| **F3** | 向量召回面**零分支隔离**：`vector.py` 全文没有 `branch_id`；`vec_candidate_ids` 的召回 SQL 是 `JOIN npc_memories ON m.id = v.rowid WHERE superseded_by IS NULL AND invalid_reason IS NULL`——**没有 `m.branch_id = ?`** | `vector.py:204-226`（`rg -n "branch" sim/core/persistence/vector.py` → 0 命中） | 单分支下是潜伏问题；**一旦分叉存在，NPC 会召回已被弃分支/父分支的记忆**——既是 T1 信息边界破口，也是出戏风险（NPC 记得本时间线里没发生的事）。列为 M5 硬前置 → ✅ **M5-D2 已落**（裁 11 = 采）：召回句加 `m.branch_id = ?` + 6 钉子 + over-fetch 抗饥饿（§5-C5） |
 
-### 0.2 六条主张（待裁）
+### 0.2 六条主张（12 点已全裁，见 `docs/arch/m5-rulings.md` §B）
 
 | 编号 | 主张 | 一句话理由 |
 |---|---|---|
 | **A1** | 事件流主表**不需要再加 `branch_id` 列**（它已是 PK `(branch_id, seq)` 的一部分）；真正缺的是 ①`npc_profiles` 的分支身份（复合 PK）②可选的全局总序 `global_seq` | 问题要拆成「身份唯一性 / 总序 / 谱系引用」三件事，混着问会得出错的迁移 |
 | **A2** | **同表加列 ≫ 分文件**。分文件只保留为 §12 已定的 abandoned 分支冷归档搬移形态，不做主存储布局 | 分文件作废跨表 JOIN（治理 JOIN、`vec_candidate_ids` 正是跨表）、分裂事务边界、破坏 `UNIQUE(entry_id)` 类约束 |
-| **A3** | **零迁移先让 T1 断言 5 可证伪**：断言对象从「seq 整数集合」改成「`(branch_id, seq)` 对集合」——复合主键已保证唯一，**不需要任何 schema 改动**就能让 C6 从「不可证伪」变成「可证伪」 | 现在 `before <= world.all_event_seqs()` 在分叉下是**恒真**的：删掉父分支 51–100 再在新分支重写成 1–50，断言照样过 |
+| **A3** ✅ 已落 | **零迁移先让 T1 断言 5 可证伪**：断言对象从「seq 整数集合」改成「`(branch_id, seq)` 对集合」——复合主键已保证唯一，**不需要任何 schema 改动**就能让 C6 从「不可证伪」变成「可证伪」 | 现在 `before <= world.all_event_seqs()` 在分叉下是**恒真**的：删掉父分支 51-100 再在新分支重写成 1-50，断言照样过（**实测补一条**：旧口径的鉴别力还是偶然的——子分支一推进到同量重占 seq，它就完全看不见；只有对口径稳定） |
 | **A4** | 读档分叉物理形态＝**有界表克隆 + 语料表按分叉点截断克隆**；**否决谱系回退读**；纯事件重放路线对语料表结构上不成立（F2） | 克隆保住了全域 `WHERE branch_id = ?` 纪律（D4 R4「跨分支 id 视作不存在」是明文裁决），零读路径改动 |
 | **A5** | 玩家档游标表**只指 `(branch_id, seq)`，不复制世界态**；唯一 JSON 载荷是 `agent_override`，且必须是**封闭 schema + 版本号 + 纯函数应用**（否则同一 anchor 载入两次结果不同 → T2 破） | `agent_override` 是玩家所有权物，不是世界态副本；可重放性要求它进折叠链 |
 | **A6** | **anchor 引用即热钉**：被任一 anchor 指向的分支永不整分支冷归档 | §12 体积治理（abandoned 整体移出主库）与 §12 读档流程（anchor 可指向 abandoned 分支）**互相打架**——不钉住就读不回来 |
@@ -89,7 +93,7 @@
 - DESIGN §16 的写法：`before = world.all_event_seqs()` → `load_anchor` → `assert before <= world.all_event_seqs()`。
 - 仓内**无 `all_event_seqs` 实现、无对应 T1 钉子**（`rg "all_event_seqs" sim/` → 0 命中；`sim/tests/test_t1_*` 14 个文件里无此项）。
 - **在分叉下该断言恒真（不可证伪）**：seq 是分支内整数，两个分支的 seq 空间重叠；
-  删掉父分支的 51–100、在新分支重写成 1–50，整数集合视角下断言照过。→ 必须换口径（§2.3 案 C / §6.2）。
+  删掉父分支的 51–100、在新分支重写成 1–50，整数集合视角下断言照过。→ 必须换口径（§2.4 案 C / §6.2）。
 
 ---
 
@@ -133,7 +137,16 @@
 
 **结论**：分文件**否决为主方案**（A2）。保留为 abandoned 分支的冷归档搬移形态，且必须先解 §4.6 的 anchor 热钉问题。
 
-### 2.4 案 C｜零迁移：改断言口径（推荐先落）
+### 2.4 案 C｜零迁移：改断言口径 —— ✅ **已落（M5-D2）**
+
+> 实施记录：`sim/tests/test_t1_m5_history_preserved.py`（6 钉子，零 schema）。
+> oracle = `world_event_keys(sf) -> set[tuple[str, int]]`（跨全部分支读
+> `(branch_id, seq)`）；对照组 `naive_seq_set` 保留在测试里**不删**，用来证明新口径
+> 确有鉴别力。二阶守卫 `test_falsifiability_guard_pair_keys_detects_delete_and_rewrite`
+> 实测：把 oracle 换成裸 seq 会红 4 个钉子（已本地验证）。
+> **实测补一条**：裸 seq 口径的鉴别力是**偶然**的——子分支尚未跑够时被删的 seq
+> 还没被重占，此时它能抓到；一旦新分支推进到相同条数（同量重占 seq），它就完全
+> 看不见了。故旧口径的「有时能抓」不可依赖，只有对口径稳定。
 
 不动任何 schema，把 T1 断言 5 的比较对象从「seq 整数集合」改成「`(branch_id, seq)` 对集合」：
 
@@ -398,7 +411,7 @@ agent_override = {
 | **C2** | **折叠规则单一来源——分叉不许引入第三套语义** | ✅ `fold_matter_snapshot` / `fold_structure_snapshot` / `fold_material_balance` 三处都被快照路径与重放路径共用（M3-C2 逐位相等的纪律） | 分叉重放**必须**调同一批 fold 函数；新增「分叉专用折叠」= 违规，CR 拦 |
 | **C3** | **治理态随克隆集整体继承；级联绝不跨分支** | ✅ `_cascade` 带 `branch_id`；克隆把治理列一起带走（`invalidated` / `invalid_reason` / `superseded_by` / `source_knowledge_id` / `source_memory`） | 钉子：子分支里某条 knowledge 已失效 → 重级联不重复计数、不改 `invalid_reason`；父分支后续治理动作**不影响**子分支（父已 abandoned，本就无新写入） |
 | **C4** | **证据链跨分支会悬空**：`knowledge.evidence_seq` 锚定的是**父分支**的事件（事件不克隆） | ❌ 现无解析规则 | 三选一（待裁点 4）：①加 `evidence_branch_id` 列（0008-d，引用变二元组，最干净）；②定义谱系解析（沿 `forked_from_branch` 上溯）；③置 NULL（**否决**：信息销毁，违 §19） |
-| **C5** | **向量候选集必须分支内** | ❌ **F3 破** | **M5 硬前置**：`vec_candidate_ids` 召回 SQL 加 `AND m.branch_id = ?`，参数从 `VecCandidateSource` 传入；配 T1 钉子（跨分支同 npc_id 的记忆不得互召回）。注意这会改动 M3-A4 收口的 SQL → 需重跑 `test_t1_m3_vec_governance` 与 pi 的 `RETRIEVAL_*` 基准（**§7 对账点 5**） |
+| **C5** | **向量候选集必须分支内** | ✅ **已落（M5-D2 / 裁 11）**——见下 | **M5 硬前置**：`vec_candidate_ids` 召回 SQL 加 `AND m.branch_id = ?`（同句 push-down，不是 Python 侧后过滤，R2 纪律）；`branch_id` **必填 + keyword-only + 无默认**（fail-closed：fork 后新分支不是 `'main'`，默认值会静默读到错分支）。配 T1 钉子 `TestVecBranchIsolation`（6 例）。⚠️ 附带发现：`k` 是 vec0 在过滤**之前**的取回上限 → 分支过滤会使候选少于 `top_k`（多分支下语料按分叉数复制，最近邻易被他分支占满 → **候选饥饿**），故加 `RECALL_OVERFETCH_FACTOR=4` 过取后裁到 `top_k`（钉子 `test_branch_filter_does_not_starve_local_candidates` 实测：系数改 1 即红）。F>4 时仍会饿 → **per-branch 向量分区**（vec metadata partition / 按分支建表）列为后续件 |
 | **C6** | **分支身份先于一切**：任何 fold 前先确认目标 `branch_id` 存在且 `status='active'` | 🟡 `event-sourcing.md` §2.2 步骤 2 写了「branch_id 存在且 status=active」，但 `store.append` **未实现**该校验 | fork 后旧分支仍可能收到 append（driver 漏闸）→ 建议在 `append` 入口加 fail-closed 校验（待裁点 5） |
 
 ---
@@ -467,33 +480,35 @@ agent_override = {
 **建议**：定义一个 `COMPARABLE_FIELDS` 显式集合 + 「排除项必须有名字」的断言纪律，
 让 T2 假红时能立刻分辨「真不一致」还是「比较了不可比字段」。
 
-### 6.5 建议测试落点（裁决后施工，**本单零测试**）
+### 6.5 测试落点
 
-| 文件 | 用例数（预估） | 覆盖 |
+| 文件 | 用例数 | 状态 |
 |---|---|---|
-| `sim/tests/test_t1_m5_history_preserved.py` | 4–6 | 案 C 口径的 C6 断言（`(branch,seq)` 对集合包含）+ 删父补子必红（**可证伪性守卫**） |
-| `sim/tests/test_t5_m5_fork_replay.py` | 6–8 | R2 的 A/B/C + 断言 D（seed 连续）+ 可比字段集守卫 |
-| `sim/tests/test_m5_fork_clone.py` | 6–8 | 克隆完整性（12 表覆盖）+ 截断判据 + id 重映射指针自洽 + vec 行重键 + 冲突态 fail-closed + 事务回滚无半写 |
-| `sim/tests/test_t1_m3_vec_governance.py`（**改**） | +2 | F3 分支隔离（跨分支同 npc_id 不互召回） |
+| `sim/tests/test_t1_m5_history_preserved.py` | **6** | ✅ **已落（M5-D2）**：C6 断言（`(branch,seq)` 对集合）+ **可证伪性二阶守卫**（删父补子必红、旧口径必绿）+ abandoned 不删行 + append 不改历史行 + 跨分支 seq 重叠不撞主键 |
+| `sim/tests/test_t1_m5_fork_replay.py` | 6–8 | ⏳ 未落：R2 的 A/B/C + 断言 D（seed 连续）+ 可比字段集守卫（随 fork 事务件） |
+| `sim/tests/test_m5_fork_clone.py` | 6–8 | ⏳ 未落：克隆完整性（12 表覆盖）+ 截断判据 + id 重映射指针自洽 + vec 行重键 + 冲突态 fail-closed + 事务回滚无半写（随 fork 事务件） |
+| `sim/tests/test_t1_m3_vec_governance.py`（改） | **+6** | ✅ **已落（M5-D2）**：`TestVecBranchIsolation`（跨分支不召回 / 父分支不可见 / 未知分支空候选 / 不过取不饿死 / 谓词在召回句内 / 签名 fail-closed）；既有 4 条治理钉子零回归 |
 
 ---
 
-## 7. Q6｜与 pi M5-P1 的交叉对账（留空位等回填）
+## 7. Q6｜与 pi M5-P1 的交叉对账 —— ✅ **已回填（pi M5-P1 交付，2026-09-27）**
 
-> pi 侧同单：M5 perf 预研「时间刻度 + 双轨存档」（`docs/perf/`，在途）。
-> 对账模式沿用 M4：你出**存储形态与公式**，他出**实测常数与红线**。
+> pi 侧同单：M5 perf 预研「时间刻度 + 双轨存档」= `docs/perf/m5-time-scale-fork-budget.md`。
+> 对账模式沿用 M4：他出**实测常数与红线**，我出**存储形态与公式**。下表第三列已由
+> pi 回填（其 §4.6），第四列是我对回填的**复核与一处口径修正**。
 
-| # | 对账点 | 我的口径（存储侧公式/判据） | pi 回填（实测常数 / 红线） |
-|---|---|---|---|
-| 1 | **单次 fork 的克隆行数** | 6 张有界表 = O(实体数)：`npc_profiles`(50) + `npc_health`(≈5×50) + `relationships`(≤50×49) + `matter_state`(M) + `structures`(S) + `material_balances`(refs×materials)；2 张语料表 = `memories`(P×D) + `knowledge`(K×D)，D = 分叉时的游戏日数 | ⟨待填：各表实测行数 @ 10 游戏日⟩ |
-| 2 | **语料体积（真正的杀手）** | 每次读档复制一份 `memories+knowledge+vec`。bytes ≈ 行数 × (行宽 + **384×4 = 1536B/行的向量**)。体积 ∝ **分叉次数 F** | ⟨待填：单分支语料实测 MB；F 的体积上限⟩ |
-| 3 | **快照侧是否破 §12 的 2GB** | 我的算术：治理后 9 份/分支 × ≤5MB ≈ **45MB/分支**（§12 的 430MB/日是**不治理**原量）→ 快照侧 F=20 才 ~900MB，**不是瓶颈** | ⟨待填：实测单份快照 gzip 后大小，验证 5MB 假设⟩ |
-| 4 | **fold 成本：克隆 vs 前缀重放** | 有 fold 器的 4 张表：重放代价 = O(父分支事件数)，克隆代价 = O(投影行数)。二者谁小取决于「事件数 vs 行数」比 → 需实测比值 | ⟨待填：events 行数 / 投影行数 @ 10 游戏日⟩ |
-| 5 | **F3 加分支过滤的检索成本** | `vec_candidate_ids` 加 `AND m.branch_id = ?` 是**同句 push-down**（不是 Python 侧后过滤，R2 纪律），预期开销≈0；但会改动 M3-A4 收口的 SQL | ⟨待填：重跑 `RETRIEVAL_*` 四红线，给 before/after⟩ |
-| 6 | **读档端到端墙钟** | 步骤 = 强制 flush → 克隆事务 → 首次物化。**建议进 `PI_BENCH_ADVISORY` 口径**（不设硬红线，与 M4-P1 摊还先例同款） | ⟨待填：读档端到端 median/P95，advisory 常量提案⟩ |
-| 7 | **快进档 × 读档的交互**（pi 时间刻度域） | 分叉点可能很旧（快进 300× 后读档）→ 克隆规模 ∝ 该分支累计语料，与 tick 数成正比 → **峰值 IO 与快进档叠加**。存储侧诉求：clone 事务内**不逐行 Python 循环**（须 `INSERT…SELECT` 批量） | ⟨待填：60×/300× 档下的读档墙钟与 IO⟩ |
-| 8 | **多分支同时物化的驻留** | 若前端要「档预览」（每个 anchor 显示当时世界什么样）→ 需**同时物化 N 个分支** → 驻留 = N × 单分支物化态 | ⟨待填：单分支物化态内存实测；可接受 N 上限⟩ |
-| 9 | **M5-P1 的 摊还/降级 结论对本稿的影响** | 若 pi 裁定「快进档 fold 降级/批量化」→ 需确认降级**不改变折叠规则**（否则破 C2 与 R2-B） | ⟨待填：降级策略是否语义等价⟩ |
+| # | 对账点 | 我的口径（存储侧公式/判据） | pi 回填（实测常数，本机暖态中位） | 复核 / 我要补的 |
+|---|---|---|---|---|
+| 1 | **单次 fork 的克隆行数** | 6 张有界表 = O(实体数)；2 张语料表 = O(P×D)，D = 分叉时游戏日数 | 克隆 **0.608µs/行**（纯文本）/ **5.090µs/行**（含 1536B 向量 blob）；有界表不随 D 增长 | ✅ 一致。`T_clone ≈ 文本行×0.61µs + 向量行×5.09µs` 直接可用 |
+| 2 | **语料体积（真正的杀手）** | bytes ≈ 行数 × (行宽 + 1536B 向量)，∝ 分叉次数 F | 单记忆行 json ≈ **2535B**（向量占 1536B）；向量化后每行 ~4–8x 纯文本行 | ✅ 一致。**F 的体积上限仍待真语料量级**（10 游戏日 × 50 NPC 的实际行数未实测） |
+| 3 | **快照侧是否破 §12 的 2GB** | 治理后 9 份/分支 × ≤5MB ≈ 45MB/分支 → 快照侧非瓶颈 | 本机 pos-only 快照 gzip **447B**（50 实体）；全量含属性**未实测**；快照摊销 0.00045ms/tick | ✅ 双方同结论（快照侧非瓶颈）。**遗留**：DESIGN §12 的「≤5MB/份」至今无人实测，建议 M5 真快照落地时补测（否则体积预算无依据） |
+| 4 | **fold 成本：克隆 vs 前缀重放** | 4 张有 fold 器的表：重放 O(事件数) vs 克隆 O(投影行数) | 重放 **0.74µs/事件**、克隆 **5.09µs/行**；**交叉判据 r = 0.145**（行数/事件数 < 0.145 时克隆更便宜） | ⚠️ **口径修正**：`r=0.145` **只适用于 4 张有 fold 器的表**。语料三表**无重放路径**（F2：无事件源），克隆 5.09µs/行是唯一形态，不参与该交叉。pi 该行已注明 F2，此处把适用边界写死，免得后人对语料表说「重放更便宜」 |
+| 5 | **F3 加分支过滤的检索成本** | 同句 push-down（非 Python 侧后过滤），预期≈0 | ⏳ 待实测（他明确写「本件无法在 D1 未收编前测其 SQL」） | ✅ **本单（M5-D2）F3 已落地 → 现在可跑 before/after**。另请 pi 顺带实测 **over-fetch**：`k` 由 `top_k` 变为 `top_k × RECALL_OVERFETCH_FACTOR(4)` 的距离计算增量 |
+| 6 | **读档端到端墙钟** | 建议进 `PI_BENCH_ADVISORY` 口径 | 同意 advisory；分解 = flush + 克隆 + 首次物化；读档应后台不阻塞 tick | ✅ 一致（与 M4-P1 摊还先例同款） |
+| 7 | **快进档 × 读档交互** | clone 事务内不逐行 Python（须 `INSERT…SELECT` 批量） | 强支持：`append` **78.7µs/事件**；60× 档 1.57ms/tick ≫ 0.277ms 预算 → 必批量 flush；读档期间快进挂起 | ✅ 一致，且与我 §3.7「clone 走 async 引擎直写」同诉求（批量事务摊销） |
+| 8 | **多分支同时物化的驻留** | 驻留 = N × 单分支物化态 | 单分支轻量 profile dict **11.5KB**（50 NPC 骨架）；上限按 `SOAK_RSS_GROWTH_LIMIT_MB=128` 精神反推 N | ✅ 一致。「档预览是否要同时物化 N 分支」是**前端域待裁**，未定前不做驻留优化 |
+| 9 | **摊还/降级对本稿的影响** | 降级**不得改变折叠规则**（否则破 C2 / R2-B） | 一致：「降级只改节拍、不改规则」，批处理窗口 fold 必须调同一批 `fold_*` | ✅ 闭环，无待办 |
+
 
 ---
 
@@ -502,7 +517,7 @@ agent_override = {
 | # | 待裁 | 我的建议 | 裁谁 | 关联 |
 |---|---|---|---|---|
 | 1 | `npc_profiles` PK 改复合（**F1**） | 必落 0008-a，照 0006 模板 | Claude（+ 我施工） | §2.6 |
-| 2 | `global_seq` 加不加 | M5 不落则**不加**；先落零迁移的案 C 断言口径 | Claude | §2.5 |
+| 2 | `global_seq` 加不加 | M5 不落则**不加**；先落零迁移的案 C 断言口径 | ✅ **已裁 = 不加**（`m5-rulings.md` §B 裁 2），案 C 口径 ✅ 已落 | §2.5 |
 | 3 | 跨分支 `parent_seq` 悬空怎么解 | 加 `parent_branch_id` 列 / 定义谱系解析 / 置 NULL（后者否决） | Claude | §2.1③ |
 | 4 | `knowledge.evidence_seq` 跨分支悬空（C4） | 加 `evidence_branch_id`（0008-d） | Claude | §5-C4 |
 | 5 | `append` 是否校验 `status='active'`（C6） | 落 fail-closed 校验，防 fork 后误写父分支 | Claude | §5-C6 |
@@ -511,19 +526,20 @@ agent_override = {
 | 8 | `agent_override` 要不要变成事件 | M5 不做（保持玩家档不产事件） | Claude | §4.5 |
 | 9 | `player_anchors.protected` 并入 0008 | 采（与 kilo K7 合并，同表一支迁移） | Claude + kilo | §4.3 |
 | 10 | 语料 `entry_id` 克隆策略 | 采 (i) 重映射（零 schema）；(ii) 留待裁 | Claude（(ii) 需 codex） | §6.1 |
-| 11 | **F3 向量召回分支隔离** | **M5 硬前置**，fork 存在之前必须补 + 钉子 | Claude（我域施工）+ codex 复核（R2 红线） | §5-C5 |
+| 11 | **F3 向量召回分支隔离** | **M5 硬前置**，fork 存在之前必须补 + 钉子 | ✅ **已裁并已落**（`m5-rulings.md` §B 裁 11 = 采；M5-D2 实施 + 6 钉子） | §5-C5 |
 | 12 | anchor 热钉 vs 分支冷归档（A6） | 采「anchor 引用即热钉」 | Claude | §3.8 / §4.1 |
 
 ---
 
-## 9. 建议实施顺序（裁决后）
+## 9. 建议实施顺序（裁决后）—— 进度
 
-1. **零迁移先行**（今天就能落，不等裁）：T1 断言 5 的口径修正 + 可证伪性守卫（§2.3 案 C / §6.5 第 1 行）。
-2. **F3 前置**（fork 存在之前）：向量召回分支隔离 + T1 钉子（等裁 11）。
-3. **0008-a（F1）**：主键改复合 + 全量单键查找清点与改双键（等裁 1）。
-4. **fork 事务 + 克隆**：P1 前置条件 → 6 张有界表克隆 → 语料表截断克隆 + id 重映射 + vec 行重键 → 原子性（等裁 6/10）。
-5. **R2 三断言 + seed 连续（断言 D）** + 可比字段集（等裁 8/9 无关，可并行）。
-6. **可选尾巴**：`global_seq`（裁 2）、`evidence_branch_id`（裁 4）、`protected`（裁 9）。
+1. ✅ **零迁移先行**（**M5-D2 已落**）：T1 断言 5 口径改 `(branch_id, seq)` 对集合 + 可证伪性守卫（§2.4 案 C / §6.5 第 1 行，6 钉子）。
+2. ✅ **F3 前置**（**M5-D2 已落**，裁 11）：向量召回分支隔离 + T1 钉子（+6 例）。附带 `RECALL_OVERFETCH_FACTOR`（候选饥饿防御，见 §5-C5）。
+3. ⏳ **0008-a（F1）**：主键改复合 + 全量单键查找清点与改双键（等裁 1）。
+4. ⏳ **fork 事务 + 克隆**：P1 前置条件 → 6 张有界表克隆 → 语料表截断克隆 + id 重映射 + vec 行重键 → 原子性（等裁 6/10）。
+5. ⏳ **R2 三断言 + seed 连续（断言 D）** + 可比字段集（可与 3/4 并行）。
+6. ⏳ **可选尾巴**：`parent_branch_id`（裁 3）、`evidence_branch_id`（裁 4）、`protected`（裁 9）。`global_seq` **已裁不落**（裁 2）。
+7. ⏳ **后续件（施工中发现，非本轮裁）**：per-branch 向量分区（F>4 时向量召回候选饥饿的正解）→ 需提案。
 
 ## 10. 本文边界与门禁
 
