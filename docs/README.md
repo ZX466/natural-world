@@ -50,6 +50,7 @@
 | `docs/data/vec-preplan.md` | 数据/数据库（opencode） | ✅ main | M3 记忆向量检索预研：sqlite-vec vs numpy 余弦、5 万条量级估算（非瓶颈）、`LlmClient.embed` 缝、V1-V7 待裁决清单 |
 | `docs/data/matter-register-proposal.md` | 数据/数据库（opencode） | ✅ 已裁并实施 | §19.4 注册持久化：`register` 返回 `MATTER_BUILD` 立账事件（零 schema），structures M3 不建；4 点裁决 + 9 用例实施记录 |
 | `docs/data/build-domain-preplan.md` | 数据/数据库（opencode） | ✅ main `a725a65` | M4-D1 建造数据面：structures 拓扑投影、建造事件族、checkpoint 推进、承重图、材料守恒；**裁 14 采信主干 7 点全裁**（细则见 `docs/arch/m4-plan.md` §6 第 2 条） |
+| `docs/data/m5-fork-archive-preplan.md` | 数据/数据库（opencode） | ⏳ 待收编 | M5-D1 双轨存档存储面（读档=分叉）：branch_id 全局化取舍（同表加列 vs 分文件，0008 只预估）、分叉物理形态（克隆 vs 重放 vs 谱系回退读）、玩家档游标表 schema 草案、fold 跨分支 C1-C6、T2 分叉重放 R1-R3 口径、与 pi M5-P1 九点交叉对账；三条硬发现（`npc_profiles` 主键单列 / 语料三表无事件源 / 向量召回零分支隔离）+ 12 待裁点 |
 | `docs/api/ws-protocol.md` | 接口/兼容性（kilo） | ✅ main | WS 消息协议：消息类型清单与字段 schema、出戏边界（哪些字段绝不外发） |
 | `docs/api/openapi.md` | 接口/兼容性（kilo） | ✅ main | HTTP 端点设计：设置页 / Profile 管理 / 存档 anchor CRUD；api_key 只在后端流转 |
 | `docs/api/codegen.md` | 接口/兼容性（kilo） | ✅ main | OpenAPI → `shared/protocol.ts` 生成管线（openapi-typescript + banner + prettier）；CI 三道守卫（漂移检测已接 ci.yml / banner / 禁手写） |
