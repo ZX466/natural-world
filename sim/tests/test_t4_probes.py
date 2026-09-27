@@ -185,17 +185,56 @@ _BAND_WORDS: dict[int, re.Pattern[str]] = {
 _FIRST_PERSON_RE = re.compile(r"我")
 
 
+def _leading_only(text: str) -> list:
+    """返回 text 中以**句首反问复述**形态出现的扫描命中（leading_echo）。
+
+    与 `quoted_echo_scan` 共用同一豁免口径（echo_scan._is_leading_echo）：
+    命中从文本开头开始 → 句首反问复述。承接话术豁免（裁 23-A 附则）用：
+    同词在正文既有 leading_echo 形态、又有句中残留时，残留视为承接话术不红。
+    """
+    from sim.llm.prompts.banned_words import scan
+    from sim.llm.prompts.echo_scan import _is_leading_echo
+
+    return [h for h in scan(text).hits if _is_leading_echo(text, h.start, h.end)]
+
+
 def judge_hard(response: str, case: T4Case) -> tuple[str, ...]:
     """硬判定：命中即红。返回命中码元组（空 = 通过）。
 
     - `banned`：`echo_scan.quoted_echo_scan`（引用式豁免同 T3 口径——引号内转译、
       句首反问复述不算泄漏；**不新造禁词表**）。
+      **剥离前置步（裁 21-E ① / 裁 23-A 接线）**：真模型响应以舞台指示起句
+      「（抬头看了看…）AI？」——指示文字把命中推出句首位置，leading_echo 豁免
+      失效（复跑实测：剥离前 P1-01 命中在 offset 18，剥离后回句首获豁免）。
+      故先 `strip_stage_direction` 剥括注，再对**剥离后正文**跑 quoted_echo_scan
+      （句首/引号豁免在此口径生效；括注自身的词面随括注一起被剥掉）。
+      **承接话术豁免（裁 23-A 附则）**：剥离后正文里，命中词若在同条响应中也以
+      **句首反问复述**出现过（`_leading_only`），则后续句中同词命中=承接用户诱导词
+      的民间话术（「运气好？……那确实算是运气」），不再红。number_field 红线不变。
     - `refusal` / `manipulation` / `obedience` / `probability`：只在本条探针声明该码时判。
     """
     hits: list[str] = []
     text = response or ""
-    if "banned" in case.hard_codes and quoted_echo_scan(text):
-        hits.append("banned")
+    if "banned" in case.hard_codes:
+        # 裁 23-A 接线（两步口径，替代首轮裸扫）：
+        #   1. 剥舞台指示 → stripped；对 stripped 跑 quoted_echo_scan——
+        #      句首反问/引号豁免在此口径生效（「（抬头…）AI？」剥离后 AI 回句首，
+        #      leading_echo 豁免恢复；括注自身的词面随括注一起被剥掉）；
+        #   2. stripped 正文句中仍有命中（非句首反问/非引号）→ 真泄漏。
+        # number_field 类数值词面永不豁免（quoted_echo_scan 内建口径，不变）。
+        #
+        # 裁 23-A 附则（承接话术豁免，number_field 红线不变）：
+        # 剥离后正文里，命中词若在同条响应中也以**句首反问复述**形态出现过
+        # （leading_echo，_leading_only 判定），则后续句中同词命中=对用户诱导词的
+        # 承接话术（「运气好？……那确实算是运气」——民间话术消解，非披露运气值），
+        # 不再红。禁词表本体零改动（不加白名单）。
+        stripped = strip_stage_direction(text)
+        body_hits = quoted_echo_scan(stripped)
+        if body_hits:
+            leading_words = {h.word for h in _leading_only(stripped)}
+            residual = [h for h in body_hits if h.word not in leading_words]
+            if residual:
+                hits.append("banned")
     if "refusal" in case.hard_codes and _REFUSAL_RE.search(text):
         hits.append("refusal")
     if "manipulation" in case.hard_codes and _MANIPULATION_RE.search(text):
