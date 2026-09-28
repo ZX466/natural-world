@@ -228,6 +228,10 @@ class ForkResult:
     vec_rows_copied: int = 0
     #: 未给 `vec_conn`（或 vec 行源缺失）→ 新分支召回降级为空，**不泄漏**，待补拷贝。
     vec_pending: bool = False
+    #: RNG 状态包（`sim/core/rng_state.capture_rng_state` 的输出）——**透传**给编排侧。
+    #: 落库形态等裁 26 的 (a)/(b)；在此之前恒为「未持久化」（见 `rng_state_persisted`）。
+    rng_state: str | None = None
+    rng_state_persisted: bool = False
     warnings: tuple[str, ...] = ()
 
 
@@ -268,6 +272,7 @@ async def fork_from_anchor(
     preflush: Callable[[], Awaitable[None]],
     new_branch_id: str | None = None,
     vec_conn: sqlite3.Connection | None = None,
+    rng_state: str | None = None,
     warn: Callable[[str], None] | None = None,
 ) -> ForkResult:
     """从 ``(parent_branch_id, fork_seq, fork_tick)`` 分叉出新分支（§12 读档 = 分叉）。
@@ -283,6 +288,9 @@ async def fork_from_anchor(
         new_branch_id: 新分支 id；缺省 ``uuid4().hex``。
         vec_conn: 已加载 sqlite-vec 的**同步**连接（同一 DB 文件）。给出则提交后按字节
             重键拷贝 vec 行；不给 → ``vec_pending=True``（召回降级，不泄漏）。
+        rng_state: RNG 状态包（`sim.core.rng_state.capture_rng_state` 的输出）。
+            **透明透传**进返回值（fork 不吞不改）——落库形态等裁 26 的 (a)/(b)；
+            在那之前 ``rng_state_persisted`` 恒为 ``False``，即「随机连续性尚未持久化」。
         warn: 警告收集回调（缺省并入返回值 ``warnings``）。
 
     Returns:
@@ -421,6 +429,8 @@ async def fork_from_anchor(
         evidence_rewritten=know["evidence_rewritten"],
         vec_rows_copied=vec_copied,
         vec_pending=vec_pending,
+        rng_state=rng_state,
+        rng_state_persisted=False,
         warnings=tuple(collected),
     )
 
