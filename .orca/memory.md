@@ -463,7 +463,14 @@ uv run pyright sim/
 - (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)
 
 ## ⑤ pi（性能域）
-- 【2026-09-27 第十八轮快照｜M5-P2 fast_forward 预算提案 + RETRIEVAL_* before 存照（零代码，未提交待收编）】产出 `docs/perf/m5-fast-forward-budget.md`（新，纯文档）+ `budget.md §4` 补一行「fast_forward 承接已裁 D-2」。承接裁 21-A D-2（不扩 speed 枚举、新 action `fast_forward` 长跨度推进/批处理语义）。
+- 【2026-09-28 第十九轮快照｜RETRIEVAL_* after 实测 + 对账点 5 关闭（催办单，零代码，未提交待收编）】F3（`vec_candidate_ids` 补 `branch_id`）已落 main（`5bd8d1f`/`1ac97f3`，M5-D2 裁 11）；本单跑 after 收口 D1 §7 对账点 5。产出：`docs/perf/m5-fast-forward-budget.md` §6.2 追加 after 实测 + §6.2.1 独立探针 + §6.2.2 收口；`docs/data/m5-fork-archive-preplan.md` §7 对账点 5 回填关闭。
+  - **先决口径（重要）**：`test_bench_retrieval.py` 四红线用**独立参考实现**（`_VecBenchWorld` numpy 余弦+IN-JOIN，`48db6cf` 起**未改动**），**不 import** `vector.py` 的 `vec_candidate_ids` → **F3 改 SQL 不直接进这四条 bench**。四红线 after 的意义 = 确认 F3 未波及打分链/候选形状（vec-preplan §18 硬边界）。F3 SQL 增量由**独立探针**（真 sqlite-vec）实测。
+  - **四红线 after（vs before）**：①候选 0.198（=）/②打分 0.062（−1.6%）/③哨兵 1.12（−2.2%）/④tick 总量 3.05（+4.1%）——**均 <5% 抖动，无 advisory 破线**。反模式探测量 after 16.1ms（与 M3-P2 记 16.8 一致；before 的 106.9ms 是多 agent 并发离群，无硬断言不进对账）。
+  - **F3 SQL 独立探针（真 sqlite-vec，N=600/top_k=20/forks=4/dim=384）**：分叉谓词 **Δ=−0.021ms（≈0）**（+3 参 push-down 同句内，符 R2 纪律）/ **over-fetch k=20→80 Δ=+0.057ms**（vec0 扫描 4x 但 ANN 亚线性，仅 +14%）/ **F3 全量 vs pre-F3 +0.037ms（1.07x）≪ 0.30 红线（余量 8x）**。dim=4 bench 档同趋势（谓词≈0 / over-fetch +0.049ms）。
+  - **对账点 5 关闭**：`pi ↔ opencode` 交叉对账（D1 §7 全 9 点）**全部收口**。D1 表格该行置于 pi 回填列（沿用 M5-P1 已确立的交叉回填角色）。
+  - **baseline 建议（登记，未动）**：`docs/perf/baseline.json` 21 项为 2026-09-23 旧集，缺 M3-P2/M4 新增 bench（retrieval/structure/willingness）——应随下次 nightly 重生成补入；属 CI 域。
+  - **纪律**：零代码（不碰 sim/、thresholds.py、迁移）；不干扰 kilo 树。
+- 【2026-09-27 第十八轮快照｜M5-P2 fast_forward 预算提案 + RETRIEVAL_* before 存照（零代码，已进 main `973ef02`）】产出 `docs/perf/m5-fast-forward-budget.md`（新，纯文档）+ `budget.md §4` 补一行「fast_forward 承接已裁 D-2」。承接裁 21-A D-2（不扩 speed 枚举、新 action `fast_forward` 长跨度推进/批处理语义）。
   - **fast_forward 形态定位**：离散长任务≠稳态倍率 → **不套 `16.6/R` 派生红线**，改给「单帧 tick 上限 + 批量 fold 摊还」两红线。单帧墙钟 = `FAST_FORWARD_TICKS_PER_FRAME`(草案 240) × mean_tick：实测 @10 实体 **14.2ms/帧**（<16.6 ✅）/ @50 实体 **431ms/帧**（**26x 破**）→ 50 实体必降采样。整段推进净成本 = N×mean_tick（日 86400tick @10=5.1s / @50=155s）；**落库叠加超 10 实体计算**：日推进 20ev/tick × 78.7µs = 136s（@10 计算仅 5.1s）→ 必批量事务 flush。
   - **批量 fold 摊还**（对齐 collapse 先例）：**禁每 tick 全量重放**（日推进 1.728M 事件×0.74µs=1.28s/帧级→破线 23x）；窗口 fold 封顶（`_FOLD_WINDOW_EVENTS` 草案 100，同 `CASCADE_EVENT_BUDGET_PER_FRAME`）。
   - **降采样节拍常量（代码契约常量，非 bench 红线）**：`FAST_FORWARD_TICKS_PER_FRAME`(240) / `_FOLD_WINDOW_TICKS` / `_FOLD_WINDOW_EVENTS`(100) / `_PERCEPTION_STRIDE_FAST`（沿用 `_PERCEPTION_EVERY_N_TICKS` 先例）。
