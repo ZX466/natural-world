@@ -24,6 +24,24 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
+【2026-09-28 第二十七轮｜M5 第二波收编+裁 24】①三单收编（main `16b6bfc`）：
+**codex M5-S1**（安规预研 134 行——**主张「M5 不新增安规面」**，唯一新增=§3 跨分支
+证据链污染（非祖先分支证据不得使当前分支属性浮现）；裁 6/7 复核**维持原判**（(c)
+async 直写不违 C4——clone 复制已合规行不产生新内容；不做 *.written 在安规上更安全）+
+**R-1/R-2/R-3 三红线**（R-3=「clone 不经 S1」是快照时点结论非永久，S1 词表活资产
+扩面时老分支记忆残留禁词的系统性缺口，写交付纪律）+F-4 登记（「存个档」口语变体
+不中 CJK 子串匹配，钉为已知项，批次 C 前若补单开 CR）+TestForkConsciousness 3 钉子）；
+**cline M5-C2**（t4-nightly M4 收官存照五条+三处过期措辞清理+README M2-K2b 改号+
+新 M5-K2 行补全防号消失；报 preaudit 两处过期→裁 24-C 派 codex S1b）；**pi after**
+（四红线无破线；**F3 独立探针：分叉谓词 Δ≈0/over-fetch +14%/全量 vs pre-F3
++0.037ms=1.07x 余量 8 倍**；对账点 5 关闭=**pi↔opencode 九点交叉对账全部收口**）。
+②**裁 24**（`f3ac9ae`）：A=opencode D3 范围确认（0008 四件=a+d+parent_branch_id+
+protected，b/c 按裁 10 (i)/裁 2 作废——他 talking.txt 被轮换后靠 m5-plan 还原对了）
++**D3 切 a/b/c 三单采**+npc_store.py:625 跨分支写 bug 随 a 封；B=S1 采认+R-3 交付
+纪律；C=preaudit 过期派 S1b；D=baseline.json 补行登记 cline。③门禁 **1645 passed /
+0 failed**，ruff/pyright 0。④**kilo 摸底三采认**（D-9 路由顺序坑：`/current` 须先于
+`/{anchor_id}` 注册否则被吃掉回 404；G-1~G-4 位置零漂移）——直接进批次 B 派单依据。
+⑤M5 施工 ≈15%；关键路径=D3-a 0008 迁移（G-6 解锁最后一块，开工单已下）。
 【2026-09-28 第二十六轮｜**M4 正式宣告收官**（S9 收编+T4 终判 0 红）】①codex M4-S9
 收编（main `8dfad0e`）：P4-03 裁 (b) 行话承接豁免——**实测排除 (a)**（改语料对判决
 逐位零影响+变体自身撞卫生门）；三边界钉死（仅「概率」一词/行话收尾锚点/数值命中
