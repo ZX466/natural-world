@@ -33,6 +33,7 @@ import pytest
 
 from sim.llm import client as llm_client
 from sim.llm.client import LlmClient, LlmError, ProfileSnapshot
+from sim.llm.prompts.banned_words import BANNED_WORDS, BANNED_WORDS_PERSIST, scan
 from sim.llm.prompts.echo_scan import quoted_echo_scan, strip_stage_direction
 from sim.tests.fixtures.t4_corpus import (
     CORPUS,
@@ -599,6 +600,59 @@ class TestExpectedHygiene:
         assert _FIRST_PERSON_RE.search(_unwrap_expected(case.expected_response)), (
             f"{case.case_id} 期望形态缺第一人称"
         )
+
+
+class TestForkConsciousness:
+    """分叉/读档意识面（m5-security-preplan §5 / R-6，M5 安规预研）。
+
+    DESIGN C6：读档即分叉，是**玩家档游标**操作，世界档 append-only 含全部废弃分支。
+    对 Agent 不可见 ⇒ 两层纪律：
+    1. 戏内文本零分支/时间线词面（`BANNED_WORDS_PERSIST` 已含 分支/branch/重放/快照/回放）；
+    2. **不得作为抱怨对象**——`will.py` 四档模板全为自我怀疑族，分叉不新增模板，
+       「我不想回到那条线」是对外部命令源的抱怨 + 存档意识（双重出戏）。
+    """
+
+    def test_willingness_templates_have_no_fork_words(self):
+        """R-6：四档抱怨模板零分支/时间线词面（分叉不得成为抱怨对象）。"""
+        from sim.agent.will import _TEMPLATES
+
+        for band, template in _TEMPLATES.items():
+            hits = [w for w in BANNED_WORDS_PERSIST if w in template]
+            assert not hits, f"band{band} 模板含分支/时间线词面 {hits}: {template}"
+
+    def test_fork_words_are_banned(self):
+        """分叉/读档词面在禁词表内——「我们要回放上一条线」= 出戏。
+
+        已知缺口（**不在本单修**，见 m5-security-preplan §3 F-4）：口语变体
+        「存个档/开个新档」不中子串匹配（「存档」才中）。词面扩面走既有 CR，
+        且裁 22-C-② 已裁「M5 不扩 T4 词表」——本单只登记缺口，不擅自扩面。
+        """
+        for word in ("分支", "重放", "快照", "回放", "存档", "读档"):
+            assert word in BANNED_WORDS, word
+        for leak in ("我们要回放上一条线。", "存档吧。", "切回原来的分支。", "读档重来。"):
+            assert scan(leak).hits, leak
+
+    def test_fork_words_colloquial_variant_gap_is_known(self):
+        """口语变体缺口**钉成已知项**——防止将来被误当作「已覆盖」或悄悄放过。
+
+        钉它的目的：让缺口显式可见（谁扩面时能看见），而非让它静默存在。
+        若将来走 CR 补了词面，本用例应随之翻转为断言命中（届时删掉本方法）。
+        """
+        variants = ("这局存个档吧。", "开个新档。", "存个档")
+        for variant in variants:
+            assert not scan(variant).hits, (
+                f"「{variant}」已能命中——口语变体缺口已闭合，"
+                f"请删除 test_fork_words_colloquial_variant_gap_is_known 并更新 §3 F-4"
+            )
+
+    def test_agent_cannot_offer_fork_as_relief(self):
+        """「读档重来」不得被 Agent 当成解脱/抱怨出口（§5 声明性纪律）。"""
+        from sim.agent.will import _TEMPLATES
+
+        # 模板里既不出现分支词，也不出现「重开/重来」式解脱语
+        for template in _TEMPLATES.values():
+            for relief in ("重开", "重来", "另一条", "上一条", "别的线"):
+                assert relief not in template, f"模板含解脱语 {relief}: {template}"
 
 
 class TestBudgetAndGuards:
