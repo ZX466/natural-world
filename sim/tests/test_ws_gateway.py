@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 
 from sim.api.ws import (
+    ControlState,
     _rtoken,
     delta_payload,
     handle_client_message,
@@ -20,6 +21,24 @@ from sim.core.tick import TickLoop
 from sim.core.world import WorldState, build_default_bus
 from sim.world.map import CHUNK_SIZE, Chunk, TileMap
 from sim.world.pathfinding import Pathfinder
+
+
+def _reply(
+    raw: dict, loop: TickLoop, pf: Pathfinder, control: ControlState | None = None
+) -> dict:
+    """handle_client_message 的单帧窄化包装（M5-K3 返回类型放宽为 dict|list|None）。
+
+    既有测试只消费单帧场景——统一窄化取首帧（单帧路径与原函数行为一致）；
+    **两帧场景（load_anchor 成功）必须直用 handle_client_message + frames_of**，
+    窄化会把列表截成首帧（实测：test_success_returns_full_snapshot 曾因此红）。
+    pyright 对 union 直接下标报错——本包装只为既有测试的类型窄化，非放宽断言。
+    """
+    from typing import Any, cast
+
+    result = handle_client_message(raw, loop, pf, control)
+    if isinstance(result, list):
+        return result[0] if result else cast("dict[str, Any]", None)
+    return result or cast("dict[str, Any]", None)
 
 
 @pytest.fixture()
@@ -57,13 +76,17 @@ def pf(tile_map: TileMap) -> Pathfinder:
 
 @pytest.fixture(autouse=True)
 def _reset_gateway_state():
-    """网关模块级会话态（暂停前倍率栈 / anchor 登记）逐用例隔离，防跨用例污染。"""
+    """网关模块级兜底控制态（D-3 幂等单值）+ anchor 登记逐用例隔离，防跨用例污染。
+
+    M5-K3 起暂停态是 `ControlState`（连接级），本树控制面测试统一走 3 参调用
+    （未传 control）——该路径共用模块级兜底态，故仍需逐用例重置。
+    """
     from sim.api import ws as ws_mod
 
-    ws_mod.reset_pre_pause_speed()
+    ws_mod.reset_legacy_control()
     ws_mod.reset_anchor_registry()
     yield
-    ws_mod.reset_pre_pause_speed()
+    ws_mod.reset_legacy_control()
     ws_mod.reset_anchor_registry()
 
 
@@ -79,7 +102,7 @@ class TestRtoken:
 
 class TestMoveRequest:
     def test_move_request_issues_move(self, loop: TickLoop, pf: Pathfinder):
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "move_request", "channel": "render", "target_x": 8, "target_y": 4},
             loop,
             pf,
@@ -106,7 +129,7 @@ class TestMoveRequest:
     def test_move_request_non_int_target_bad_target(self, loop: TickLoop, pf: Pathfinder):
         """8.6 / §4：非法类型目标升级为 error{code:"bad_target"}（不再静默）。"""
         for tx, ty in (("8", 4), (8, None), (True, 4), (8.5, 4)):
-            reply = handle_client_message(
+            reply = _reply(
                 {"type": "move_request", "channel": "render", "target_x": tx, "target_y": ty},
                 loop,
                 pf,
@@ -118,7 +141,7 @@ class TestMoveRequest:
 
     def test_move_request_unreachable_stays_silent(self, loop: TickLoop, pf: Pathfinder):
         """§4 权衡：不可达保留静默（客户端预测已覆盖，避免高频噪声）。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "move_request", "channel": "render", "target_x": 999, "target_y": 999},
             loop,
             pf,
@@ -128,7 +151,7 @@ class TestMoveRequest:
     def test_move_request_no_protagonist_silent(self, loop: TickLoop, pf: Pathfinder):
         """主角不存在仍是世界态问题（非客户端输入缺陷）——保留静默。"""
         empty = TickLoop(clock=loop.clock, bus=loop.bus, state=WorldState(world_seed=7))
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "move_request", "channel": "render", "target_x": 4, "target_y": 4},
             empty,
             pf,
@@ -138,20 +161,20 @@ class TestMoveRequest:
 
 class TestUntrustedInput:
     def test_unknown_type_rejected(self, loop: TickLoop, pf: Pathfinder):
-        reply = handle_client_message({"type": "give_me_seed", "channel": "render"}, loop, pf)
+        reply = _reply({"type": "give_me_seed", "channel": "render"}, loop, pf)
         assert reply is not None and reply["type"] == "error"
 
     def test_error_carries_ref_of_rejected_type(self, loop: TickLoop, pf: Pathfinder):
         """K3 附注 2 + ws-protocol §4.5：error.ref = 被拒消息 type（schema required 锚）。"""
-        reply = handle_client_message({"type": "give_me_seed", "channel": "render"}, loop, pf)
+        reply = _reply({"type": "give_me_seed", "channel": "render"}, loop, pf)
         assert reply is not None
         assert reply["ref"] == "give_me_seed"
-        reply2 = handle_client_message({"type": "move_request", "channel": "control"}, loop, pf)
+        reply2 = _reply({"type": "move_request", "channel": "control"}, loop, pf)
         assert reply2 is not None
         assert reply2["ref"] == "move_request"
 
     def test_channel_mismatch_rejected(self, loop: TickLoop, pf: Pathfinder):
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "move_request", "channel": "control"},
             loop,
             pf,
@@ -164,7 +187,7 @@ class TestSyncRequest:
     旧实现错回 control_ack（与 set_control 确认语义冲突，客户端无法据此重建世界）。"""
 
     def test_sync_request_returns_full_snapshot(self, loop: TickLoop, pf: Pathfinder):
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "sync_request", "channel": "session", "reason": "reconnect"},
             loop,
             pf,
@@ -175,7 +198,7 @@ class TestSyncRequest:
 
     def test_sync_request_not_control_ack(self, loop: TickLoop, pf: Pathfinder):
         """回归钉（回错型）：不得退回 set_control 的确认帧型。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "sync_request", "channel": "session", "reason": "gap_detected"},
             loop,
             pf,
@@ -188,7 +211,7 @@ class TestSyncRequest:
         self, loop: TickLoop, pf: Pathfinder, tile_map: TileMap
     ):
         """回帧与连接即发的全量快照同形（ws-protocol.md §4.4：full_snapshot 响应见 §4.1）。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "sync_request", "channel": "session"},
             loop,
             pf,
@@ -199,7 +222,7 @@ class TestSyncRequest:
     def test_sync_request_snapshot_clean(self, loop: TickLoop, pf: Pathfinder):
         import json
 
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "sync_request", "channel": "session", "reason": "after_load"},
             loop,
             pf,
@@ -212,7 +235,7 @@ class TestSyncRequest:
 
     def test_sync_request_wrong_channel_rejected(self, loop: TickLoop, pf: Pathfinder):
         """session 通道约束仍在（channel 校验前置于分发块）。"""
-        reply = handle_client_message({"type": "sync_request", "channel": "control"}, loop, pf)
+        reply = _reply({"type": "sync_request", "channel": "control"}, loop, pf)
         assert reply is not None and reply["type"] == "error"
         assert reply["code"] == "bad_channel"
 
@@ -290,7 +313,7 @@ class TestSetControl:
 
     def test_set_speed_applies(self, loop: TickLoop, pf: Pathfinder):
         """§7 #1：set_speed → control_ack（applied 恒 true，8.1）+ clock 生效。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "set_control", "channel": "control", "action": "set_speed", "speed": 4},
             loop,
             pf,
@@ -306,7 +329,7 @@ class TestSetControl:
     def test_pause_then_resume_restores_previous_speed(self, loop: TickLoop, pf: Pathfinder):
         """§7 #2：pause → speed=0 并存暂停前倍率；resume → 恢复该值。"""
         loop.clock.set_speed(4.0)
-        paused = handle_client_message(
+        paused = _reply(
             {"type": "set_control", "channel": "control", "action": "pause"}, loop, pf
         )
         assert paused is not None
@@ -315,7 +338,7 @@ class TestSetControl:
         assert "speed" not in paused  # pause 的 ack 不带 speed（schema speed 无 0）
         assert loop.clock.speed == 0.0
 
-        resumed = handle_client_message(
+        resumed = _reply(
             {"type": "set_control", "channel": "control", "action": "resume"}, loop, pf
         )
         assert resumed is not None
@@ -329,7 +352,7 @@ class TestSetControl:
         handle_client_message(
             {"type": "set_control", "channel": "control", "action": "pause"}, loop, pf
         )
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "set_control", "channel": "control", "action": "resume"}, loop, pf
         )
         assert reply is not None
@@ -338,7 +361,7 @@ class TestSetControl:
 
     def test_speed_bool_rejected(self, loop: TickLoop, pf: Pathfinder):
         """§7 #3 bool 陷阱：JSON true 是 int 子类且 true ∈ {1,4,16}——必须排除。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "set_control", "channel": "control", "action": "set_speed", "speed": True},
             loop,
             pf,
@@ -352,7 +375,7 @@ class TestSetControl:
     def test_speed_out_of_enum_rejected(self, loop: TickLoop, pf: Pathfinder):
         """§7 #4：speed=8 不在 {1,4,16} → bad_speed，clock 不变。"""
         for bad in (8, 0, 2, 32):
-            reply = handle_client_message(
+            reply = _reply(
                 {"type": "set_control", "channel": "control", "action": "set_speed", "speed": bad},
                 loop,
                 pf,
@@ -363,7 +386,7 @@ class TestSetControl:
     def test_speed_missing_or_non_int_rejected(self, loop: TickLoop, pf: Pathfinder):
         """§1.4：set_speed 缺 speed / 字符串 / null 均回 bad_speed。"""
         for payload in ({}, {"speed": "4"}, {"speed": None}, {"speed": 4.5}):
-            reply = handle_client_message(
+            reply = _reply(
                 {"type": "set_control", "channel": "control", "action": "set_speed", **payload},
                 loop,
                 pf,
@@ -372,7 +395,7 @@ class TestSetControl:
 
     def test_unknown_action_rejected(self, loop: TickLoop, pf: Pathfinder):
         """§7 #5：action 非三值 → bad_action。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "set_control", "channel": "control", "action": "nope"}, loop, pf
         )
         assert reply is not None
@@ -382,7 +405,7 @@ class TestSetControl:
 
     def test_missing_action_rejected(self, loop: TickLoop, pf: Pathfinder):
         """action 缺失同属 bad_action。"""
-        reply = handle_client_message({"type": "set_control", "channel": "control"}, loop, pf)
+        reply = _reply({"type": "set_control", "channel": "control"}, loop, pf)
         assert reply is not None and reply["code"] == "bad_action"
 
     def test_no_silent_drop_on_illegal(self, loop: TickLoop, pf: Pathfinder):
@@ -395,7 +418,7 @@ class TestSetControl:
             {},
         ]
         for extra in cases:
-            reply = handle_client_message(
+            reply = _reply(
                 {"type": "set_control", "channel": "control", **extra}, loop, pf
             )
             assert reply is not None, f"set_control{extra} 不得静默"
@@ -403,13 +426,13 @@ class TestSetControl:
     def test_extra_speed_on_pause_tolerated(self, loop: TickLoop, pf: Pathfinder):
         """8.2：pause/resume 携带 speed 容忍忽略（不报错），与 move_request 宽容风格一致。"""
         loop.clock.set_speed(16.0)
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "set_control", "channel": "control", "action": "pause", "speed": 4}, loop, pf
         )
         assert reply is not None
         assert reply["type"] == "control_ack"
         assert loop.clock.speed == 0.0
-        reply2 = handle_client_message(
+        reply2 = _reply(
             {"type": "set_control", "channel": "control", "action": "resume", "speed": 1}, loop, pf
         )
         assert reply2 is not None and reply2["type"] == "control_ack"
@@ -434,7 +457,7 @@ class TestPlayerImpulse:
 
     def test_registered_returns_feedback(self, loop: TickLoop, pf: Pathfinder):
         """§7 #7：一帧内回 optimistic impulse_feedback（不 await LLM）。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "player_impulse", "channel": "control", "text": "去赚钱"},
             loop,
             pf,
@@ -449,7 +472,7 @@ class TestPlayerImpulse:
 
     def test_no_longer_unknown_type(self, loop: TickLoop, pf: Pathfinder):
         """§7 #10 回归：注册后不得再回 unknown_type。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "player_impulse", "channel": "control", "text": "今天不去上工"},
             loop,
             pf,
@@ -459,7 +482,7 @@ class TestPlayerImpulse:
 
     def test_too_long_rejected(self, loop: TickLoop, pf: Pathfinder):
         """§7 #8：text > 64 字 → impulse_too_long，message 为戏内文风。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "player_impulse", "channel": "control", "text": "啊" * 65},
             loop,
             pf,
@@ -472,7 +495,7 @@ class TestPlayerImpulse:
 
     def test_max_length_text_accepted(self, loop: TickLoop, pf: Pathfinder):
         """64 字整是 schema maxLength 边界，应通过。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "player_impulse", "channel": "control", "text": "甲" * 64},
             loop,
             pf,
@@ -482,7 +505,7 @@ class TestPlayerImpulse:
     def test_blank_text_rejected(self, loop: TickLoop, pf: Pathfinder):
         """§7 #9：空串/全空白 → bad_impulse（空念头无语义）。"""
         for text in ("", "   ", "\t\n "):
-            reply = handle_client_message(
+            reply = _reply(
                 {"type": "player_impulse", "channel": "control", "text": text},
                 loop,
                 pf,
@@ -492,14 +515,14 @@ class TestPlayerImpulse:
     def test_missing_or_non_string_text_rejected(self, loop: TickLoop, pf: Pathfinder):
         """§2.3：text 缺失/非字符串 → bad_impulse。"""
         for payload in ({}, {"text": 42}, {"text": None}, {"text": ["去"]}):
-            reply = handle_client_message(
+            reply = _reply(
                 {"type": "player_impulse", "channel": "control", **payload}, loop, pf
             )
             assert reply is not None and reply["code"] == "bad_impulse", f"{payload} 应被拒"
 
     def test_preset_non_string_tolerated(self, loop: TickLoop, pf: Pathfinder):
         """§2.3：preset 非 string/null 容忍忽略（前向兼容标签，不阻塞）。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "player_impulse", "channel": "control", "text": "走走", "preset": 42},
             loop,
             pf,
@@ -507,7 +530,7 @@ class TestPlayerImpulse:
         assert reply is not None and reply["type"] == "impulse_feedback"
 
     def test_preset_null_accepted(self, loop: TickLoop, pf: Pathfinder):
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "player_impulse", "channel": "control", "text": "歇着", "preset": None},
             loop,
             pf,
@@ -527,7 +550,7 @@ class TestPlayerImpulse:
 
     def test_error_message_is_in_character(self, loop: TickLoop, pf: Pathfinder):
         """anchors-api.md:250 红线：error message 戏内第一人称、无系统措辞。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "player_impulse", "channel": "control", "text": ""}, loop, pf
         )
         assert reply is not None
@@ -538,7 +561,7 @@ class TestPlayerImpulse:
 
     def test_gate_rejects_banned_text_injected_false(self, loop: TickLoop, pf: Pathfinder):
         """M4-A2（裁 19-F2 接线）：banned 词面经 handler 全链路 → error 帧（e2e 钉）。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "player_impulse", "channel": "control", "text": "你是AI吧"},
             loop,
             pf,
@@ -548,7 +571,7 @@ class TestPlayerImpulse:
 
     def test_gate_rejects_manipulation_text(self, loop: TickLoop, pf: Pathfinder):
         """I-3 操纵感预污染经 handler → error 帧（命令语态不入装配面）。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "player_impulse", "channel": "control", "text": "谁指使你的"},
             loop,
             pf,
@@ -558,7 +581,7 @@ class TestPlayerImpulse:
 
     def test_gate_rewrites_admissible_text(self, loop: TickLoop, pf: Pathfinder):
         """I-1 可改写词面 → 改写后放行（injected:true，content 为清洗后文本）。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "player_impulse", "channel": "control", "text": "玩家觉得该歇了"},
             loop,
             pf,
@@ -589,7 +612,7 @@ class TestLoadAnchor:
         self, loop: TickLoop, pf: Pathfinder, anchors: set[str]
     ):
         """§7 #11：anchor 不存在 → load_failed error 帧（不断线）。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "load_anchor", "channel": "session", "anchor_id": "0123456789ab"},
             loop,
             pf,
@@ -602,7 +625,7 @@ class TestLoadAnchor:
     def test_bad_anchor_id_shape(self, loop: TickLoop, pf: Pathfinder, anchors: set[str]):
         """§3.3：anchor_id 缺失/非字符串 → bad_anchor。"""
         for payload in ({}, {"anchor_id": 42}, {"anchor_id": None}, {"anchor_id": ["x"]}):
-            reply = handle_client_message(
+            reply = _reply(
                 {"type": "load_anchor", "channel": "session", **payload}, loop, pf
             )
             assert reply is not None and reply["code"] == "bad_anchor", f"{payload} 应被拒"
@@ -611,7 +634,7 @@ class TestLoadAnchor:
         self, loop: TickLoop, pf: Pathfinder, anchors: set[str]
     ):
         """§7 #13 不透明串纪律：anc_ 前缀不特征拒绝，走正常查表 → load_failed。"""
-        reply = handle_client_message(
+        reply = _reply(
             {"type": "load_anchor", "channel": "session", "anchor_id": "anc_01"}, loop, pf
         )
         assert reply is not None
@@ -622,8 +645,13 @@ class TestLoadAnchor:
     def test_success_returns_full_snapshot(
         self, loop: TickLoop, pf: Pathfinder, anchors: set[str], tile_map: TileMap
     ):
-        """§7 #12 + 8.4 定案：短期同步路径复用 snapshot_payload。"""
+        """§7 #12 + 8.4 定案：短期同步路径复用 snapshot_payload。
+
+        M5-K3（D-6）增补：读档成功回**两帧**——`session_state`（分叉告知）
+        + `full_snapshot`；快照帧形状与连接即发的那一帧逐键相同。
+        """
         from sim.api import ws as ws_mod
+        from sim.api.ws import frames_of
 
         ws_mod._ANCHOR_LOAD_HOOK = lambda _anchor_id: True
         try:
@@ -634,9 +662,9 @@ class TestLoadAnchor:
             )
         finally:
             ws_mod._ANCHOR_LOAD_HOOK = None
-        assert reply is not None
-        assert reply["type"] == "full_snapshot"
-        assert set(reply.keys()) == set(snapshot_payload(loop, tile_map).keys())
+        frames = frames_of(reply)
+        assert [f["type"] for f in frames] == ["session_state", "full_snapshot"]
+        assert set(frames[1].keys()) == set(snapshot_payload(loop, tile_map).keys())
 
     def test_hook_failure_returns_load_failed(
         self, loop: TickLoop, pf: Pathfinder, anchors: set[str]
@@ -649,7 +677,7 @@ class TestLoadAnchor:
 
         ws_mod._ANCHOR_LOAD_HOOK = boom
         try:
-            reply = handle_client_message(
+            reply = _reply(
                 {"type": "load_anchor", "channel": "session", "anchor_id": "9f3c1a7b2e04"},
                 loop,
                 pf,
@@ -664,13 +692,13 @@ class TestLoadAnchor:
         self, loop: TickLoop, pf: Pathfinder, anchors: set[str]
     ):
         """§3.3 硬约束：失败后连接可继续收发（不断线）——handler 不抛异常。"""
-        first = handle_client_message(
+        first = _reply(
             {"type": "load_anchor", "channel": "session", "anchor_id": "ffffffffffff"},
             loop,
             pf,
         )
         assert first is not None and first["type"] == "error"
-        second = handle_client_message(
+        second = _reply(
             {"type": "player_impulse", "channel": "control", "text": "还在吗"}, loop, pf
         )
         assert second is not None and second["type"] == "impulse_feedback"
@@ -680,6 +708,7 @@ class TestLoadAnchor:
     ):
         """§6.5：anchor_id 是不透明串——合法集里的项不得因形状被拒。"""
         from sim.api import ws as ws_mod
+        from sim.api.ws import frames_of
 
         ws_mod._ANCHOR_LOAD_HOOK = lambda _anchor_id: True
         try:
@@ -687,11 +716,15 @@ class TestLoadAnchor:
                 reply = handle_client_message(
                     {"type": "load_anchor", "channel": "session", "anchor_id": odd}, loop, pf
                 )
-                assert reply is not None
+                frames = frames_of(reply)
+                assert frames
                 if odd == "":
-                    assert reply["code"] == "bad_anchor"  # 空串归 bad_anchor（缺失同义）
+                    assert frames[0]["code"] == "bad_anchor"  # 空串归 bad_anchor（缺失同义）
                     continue
-                assert reply["type"] == "full_snapshot", f"{odd!r} 不得因形状被拒"
+                assert [f["type"] for f in frames] == [
+                    "session_state",
+                    "full_snapshot",
+                ], f"{odd!r} 不得因形状被拒"
         finally:
             ws_mod._ANCHOR_LOAD_HOOK = None
 
@@ -704,7 +737,7 @@ class TestLoadAnchor:
 class TestErrorCodeVocabulary:
     """§5.1 / 8.8：code 一律小写 snake，且 ∈ 词表。"""
 
-    #: 提案 §5.1 全量词表（10 项）
+    #: 提案 §5.1 全量词表（K6 10 项 + M5-K3 D-2 新增 bad_advance = 11 项）
     VOCABULARY: frozenset[str] = frozenset(
         {
             "unknown_type",
@@ -717,6 +750,7 @@ class TestErrorCodeVocabulary:
             "bad_anchor",
             "load_failed",
             "bad_target",
+            "bad_advance",
         }
     )
 
@@ -754,7 +788,7 @@ class TestErrorCodeVocabulary:
             {"type": "move_request", "channel": "render", "target_x": "8", "target_y": 4},
         ]
         for raw in triggers:
-            reply = handle_client_message(raw, loop, pf)
+            reply = _reply(raw, loop, pf)
             assert reply is not None, f"{raw['type']} 不得静默"
             assert reply["type"] == "error", f"{raw} 应回 error（得 {reply.get('type')}）"
             assert reply["code"] in self.VOCABULARY, f"{raw} code={reply['code']} 越界"

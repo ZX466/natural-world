@@ -58,7 +58,8 @@ sim/api/ws  (FastAPI WebSocket 网关)
 | `impulse_feedback` | control | 念头注入即时反馈（意愿冲突表现，M4） | M4 |
 | `combat_event` | render | 战斗交换单元结算表现（弹幕/翻滚/受击） | M4 |
 | `timescale` | control | 战斗时间尺自动切换通知（§9，sim 驱动） | M4 |
-| `control_ack` | control | set_control 确认（含战斗期被钳制提示） | M0 |
+| `control_ack` | control | set_control 确认（含快进完成与暂停态） | M0 |
+| `session_state` | session | 连接期初值（刻度/暂停态/游标指针）+ 分叉告知（§4.6，裁 21-A D-5+D-6） | M5-K3 |
 | `error` | error | 结构化错误（非法输入/锚点缺失等，不静默丢弃） | M0 |
 
 ## 4. 字段 schema
@@ -189,20 +190,37 @@ sim/api/ws  (FastAPI WebSocket 网关)
 #### set_control.data（C→S）
 
 ```jsonc
-{ "action": "set_speed", "speed": 16 }   // action: pause|resume|set_speed
+{ "action": "set_speed", "speed": 16 }                        // action: pause|resume|set_speed|fast_forward
+{ "action": "fast_forward", "advance_hours": 24 }             // 长跨度推进（M5-K3 / 裁 21-A D-2）
 ```
 
 - 战斗时间尺（§9）由 sim 自动切换，**不允许客户端直接设战斗慢镜**。`timescale`（S→C）告知进入/脱离。
-- **分发块契约见 `ws-dispatch-proposal.md` §1**（M5-K4）：`action`/`speed` 校验规则、`applied` 语义、`timescale` 联动、拒绝面 error 帧（`bad_action`/`bad_speed`）。**M5-K6 已落地分发块** `_handle_set_control`：`applied` 恒 `true`（8.1 占位）、`pause`/`resume` 经连接级 `_PRE_PAUSE_SPEED` 记忆暂停前倍率、`speed` 校验排除 bool（提案 §1.4）。`applied:false` 无当前触发场景——钳制语义出现前字段保持占位。
+- **分发块契约见 `ws-dispatch-proposal.md` §1**（M5-K4）：`action`/`speed` 校验规则、`applied` 语义、`timescale` 联动、拒绝面 error 帧（`bad_action`/`bad_speed`）。**M5-K6 已落地分发块** `_handle_set_control`；**M5-K3 升级为 D-3 幂等单值**（下段）。`applied:false` 无当前触发场景——钳制语义出现前字段保持占位。
+- **`speed` 枚举不扩**（M5-K3 / D-2）：DESIGN §10 明文锁 `{1,4,16}`，扩枚举会连带 `clock.ALLOWED_SPEEDS` 与前端三处。快进因此走**新 action**。
+- **`fast_forward`（长跨度推进，批处理语义）**：
+  - 参数 `advance_hours`：**游戏小时**整数 1..168（叙事化时长单位，**不是 tick**；换算在服务端做，tick 零出网关）。非法/缺失/bool/超界 → `error{code:"bad_advance"}`。
+  - **受理静默**（请求不立即回帧）：`control_ack` 是「完成」信号，不是「受理」信号——不得借 `applied` 占位撒谎。等待期客户端显示"片刻后……"叙事化过渡（同读档口径）。
+  - 推进由驱动侧**每帧限预算摊还**（`FAST_FORWARD_TICKS_PER_FRAME`，与内核单帧封顶同值），跨连接共享预算；快进期间**抑制逐帧 `state_delta`**（长跨度逐帧增量会打乱前端插值），事件照常同帧落库。
+  - 完成时定向回**两帧**：`control_ack{action:"fast_forward", …}` + **全量 `full_snapshot`**（D-7 一律全量）。
+  - 互斥规则：暂停中不接受快进（`bad_advance`）；同连接已有在途快进不接受第二次（`bad_advance`）；`pause` 会**取消在途快进**（世界要停，跳转就停；此时只回 pause ack，不回完成帧）。
+  - serverToClient **零新增消息**（D-4：进度不做帧，`rate_change` 只登记预留名，等真出现"服务端单方面改速"再定义 schema）。
+- **D-3 幂等单值**（M5-K3；替 K6 §1.2 的栈方案，**清 G-1~G-4**）：
+  - `pause` **幂等**：已暂停再按不重压记忆倍率（K6 的栈会把 `0.0` 压进去，`resume` 时实发 `control_ack{speed:0}`，**破 schema 枚举 [1,4,16]**＝G-1 协议违约）。
+  - `resume` 无暂停 → `error{code:"bad_action"}`（K6 实现曾静默把倍率改回 1x 并回 `applied:true`，是未声明的状态变更＝G-2）。
+  - 暂停中 `set_speed` **只改记忆倍率**、不解除暂停（K6 实现里暂停 ≡ `speed=0`，任何 `set_speed` 都能单方面解除＝G-3），ack 带 `paused:true`。
+  - 会话态是**连接级** `ControlState`（挂 `ConnectionManager`，每连接一份，断线即丢）——K6 的模块级 `_PRE_PAUSE_SPEED` 全局会让多连接互窃倍率（＝G-4）。
 
 #### control_ack.data / timescale.data（S→C）
 
 ```jsonc
-{ "action": "set_speed", "speed": 4, "applied": true }            // control_ack
+{ "action": "set_speed", "speed": 4, "applied": true, "paused": false }   // control_ack（M5-K3 增 paused）
+{ "action": "pause", "applied": true, "paused": true }                     // pause 不带 speed（枚举无 0）
+{ "action": "fast_forward", "speed": 4, "applied": true, "paused": false } // 快进完成（随后全量快照）
 { "mode": "combat", "active": true, "note": null }               // timescale（note 戏外调试用）
 ```
 
 - **`control_ack.speed` = 用户设定的倍率**，不是当前有效 tick 率；战斗期有效率 = `1 × speed`（`clock.py` 的 `ticks_per_real_second = base × speed`）。前端不得拿此值直算帧率。
+- **`control_ack.paused`（M5-K3 增，可选）**：省略 = 未表达（老客户端兼容）；给出则前端可直接渲染暂停态而不必推断。**暂停时 `speed` 是恢复后倍率**（枚举无 0，`pause` ack 一律不带 `speed`）。
 - `timescale` **只由战斗事件驱动**（`issue_combat_scale`→广播），与 `set_control` 无因果链。详见 `ws-dispatch-proposal.md` §1.5。
 
 ### 4.4 session 通道
@@ -217,6 +235,7 @@ sim/api/ws  (FastAPI WebSocket 网关)
 - 重放毫秒级，期间客户端显示"片刻后……"叙事化过渡，绝不显示"重放中/tick"。
 - `anchor_id` 是**不透明字符串**（12 位 hex，`uuid4().hex[:12]`）——**不得**用 `startsWith('anc_')` 之类前缀特征做校验（`anchors-api.md` §6.5：`anc_` 前缀惯例不存在）。
 - **分发契约见 `ws-dispatch-proposal.md` §3**（M5-K4）：注册、入站校验、失败走 WS error 帧（`code:"load_failed"`）**且不断线**、成功发 `full_snapshot`。**M5-K6 已注册**（白名单 + `_CHANNEL_FOR: session` 成对）；`anchor_id` 缺失/空/非串 → `bad_anchor`，其余形状一律按不透明串走查表（§6.5 禁前缀特征），载入失败/异常 → `load_failed` 且**不断线**。成功走短期同步路径（提案 §8.4）：回 `full_snapshot`；「定位→快照→重放」driver 化后由广播接替（提案 §3.4 长期方案）。
+- **M5-K3 增：读档成功回两帧**（`session_state` 告知帧 + `full_snapshot`）——这是 K4 §0.1「单回复通道」的唯一增补例外（分叉这件事必须**被告知**，不能只把画面换掉）。失败路径仍单帧 error（不断线）。处置用 `ws.py::frames_of()` 摊平。
 
 #### sync_request.data（C→S） / full_snapshot 响应见 §4.1
 
@@ -227,6 +246,22 @@ sim/api/ws  (FastAPI WebSocket 网关)
 - **响应恒为 `full_snapshot`**（与连接即发的全量快照同形：`type:"full_snapshot"`、`channel:"render"`、键集合一致）。
 - `reason` **不入响应帧**——`FullSnapshotMessage` 是封闭 schema（`additionalProperties:false`），透传 `reason` 会破坏契约并使前端类型断言变红；仅在 `SyncRequestMessage` 内作为自由字符串。
 - **M5-K5 首修**（K4 提案 §5/§8.7）：旧实现误回 `control_ack{action:"resume",speed:1}`（那是 `set_control` 的确认帧型，与 sync 语义冲突，客户端无法据此重建世界）。已返修为 `snapshot_payload(loop, pf.tile_map)`；回归钉见 `sim/tests/test_ws_gateway.py::TestSyncRequest`（5 例，含「不得退回 control_ack」）。
+
+### 4.6 session_state（S→C，M5-K3 / 裁 21-A D-5+D-6）
+
+```jsonc
+// 连接即发（重连后前端据此恢复「世界此刻的样子」）
+{ "type": "session_state", "channel": "session", "speed": 4, "paused": false,
+  "anchor": { "name": "初到临河", "story_label": "第二日 · 清晨" }, "notice": null }
+// 读档分叉成功后（同一帧型，notice 承载叙事化告知）
+{ "speed": 1, "paused": false, "anchor": { "name": "初到临河", "story_label": "第二日 · 清晨" },
+  "notice": "你回到了「初到临河」那段日子" }
+```
+
+- **一帧承载两件事**：连接期初值（`speed` / `paused` / `anchor` 游标指针）与分叉告知（`notice`）。D-5 的"重连后前端不知世界是暂停还是 16x"与 D-6 的"世界已分叉怎么告知"是同一类缺口，故合并为一条消息（旧 client 静默忽略未知 type，versioning §3 铁律）。
+- **零原始数值**：`speed` 只在 `{1,4,16}`（**暂停时 = 恢复后倍率**，不是 0）；`anchor` 只带 `name` + `story_label`（组件 `SessionAnchor`，`additionalProperties:false`）；`notice` 是戏内口语行。**`branch_id` / `seq` / 世界 tick 一律不出现**——分叉只能被"叙事化告知"，不能被"标识符告知"。
+- 游标指针对齐戏外只读面 `GET /api/anchors/current`（D-9）同一行数据；WS 侧**只随事件发**（接入/读档），不做查询面——同一事实两个真相源会漂。
+- 出入站：仅 S→C。`anchor`/`notice` 为 `null` 是合法形状（无档 / 非读档场景），不是缺字段。
 
 ### 4.5 error 通道
 

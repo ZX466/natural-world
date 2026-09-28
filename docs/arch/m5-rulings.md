@@ -105,3 +105,41 @@ nightly 重生成时随带，不单独开单。
 - codex S1b（preaudit 两行收口）维持待领——不阻塞任何件。
 - 本轮 warnings 30（+4）：D3-a 新增文件撞 GBK 控制台编码的既有模式，非回归，
   登 opencode 域观察项。
+
+---
+
+# 裁决 26（2026-09-28，Claude 主导）——D3-b/K3 收编+偏离点裁定+批次 B 合流
+
+## A. opencode D3-b 采认（fork 事务+克隆，22 钉子）
+
+裁 6 (c) async 直写+裁 10 (i) 重映射落地；R-1（content 逐字节不变）/R-2
+（superseded_by 零跨分支悬空）断言随附；R-3 交付纪律留痕。**编排缝接口清单**
+在 D3-c 收编轮消费（我域 driver 编排+store rebind）。
+
+## B. kilo K3 采认（批次 B 四面，71 钉子，门禁 1724+client 21）
+
+G-1~G-4 逐条核销（含白盒钉）采认；fast_forward 受理静默+叙事化时长
+（advance_hours 1..168）+抑制逐帧 delta+终态全量快照（D-7）设计全采；
+session_state 零原始数值+notice 戏内口语行采认；D-9 路由顺序坑已防。
+
+## C. 偏离点裁定
+
+1. **kilo 动 main.py 8 行：采**（ws_endpoint 发 session_state 首帧/ControlState/
+   frames_of——施工面延伸非越界；原语义零改动）。
+2. **两处既有约束收窄：采**（返回 dict|list|None 仅读档两帧；K4 §1.2 栈方案被
+   D-3 幂等单值取代——四宗缺陷留档，日期化增补合规）。
+3. **既有钉子 6 处随契约更新：采**（协议真变非放宽；WS 鉴权两帧位移是必然）。
+4. **protected 无写入方暂不切列：采**——POST/CRUD（Claude 域）落地单再切，
+   登记批次 C 检查单。
+5. **收编缝（Claude 域即做，`321eaea`）**：返回类型放宽后既有测试 153 处 pyright
+   错——test_ws_gateway `_reply` 单帧窄化包装（48 点）+两帧场景直用原函数
+   （窄化截首帧实测 2 例红，教训入坑单）；**WorldEvent.parent_branch_id 生产侧
+   接线**（裁 25-B②兑现：字段+to_store_dict 透传+工厂不收参防误用+4 钉子）。
+
+## D. 派发连锁
+
+- **opencode D3-c 即派**：R2 三断言+断言 D seed 连续+可比字段集白名单；
+  branches.seed (a)/(b) 随卡裁。
+- **我域批次 B 行为面续件**：driver fork 编排（等 D3-c 收编）+ protected 切列
+  （CRUD 单）+ P5 措辞已落（7dac4e7）。
+- pi：K3 已注明「可跑红线验证」——fast_forward 红线落 thresholds 提案可启动。

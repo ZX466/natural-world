@@ -1,8 +1,10 @@
-"""玩家档（anchor）HTTP API — M5-K7 最小实现（anchors-api.md §4）。
+"""玩家档（anchor）HTTP API — M5-K7 最小实现（anchors-api.md §4）+ M5-K3 D-9 当前指针。
 
 **本批次范围（K7 部署债 #1）**：只做读路径，替 ws.py `_ANCHOR_IDS` 内存替身
-换成落库供数——`GET /api/anchors` 列表 + `GET /api/anchors/{anchor_id}` 按 id 查，
-每条落库项调 `register_anchor_id()` 注进 WS 分发块的同步查表集。
+换成落库供数——`GET /api/anchors` 列表 + `GET /api/anchors/current` 当前游标
+（M5-K3 / 裁 21-A D-9，**必须注册在路径参数路由之前**）+ `GET /api/anchors/{anchor_id}`
+按 id 查，每条落库项调 `register_anchor_id()` 注进 WS 分发块的同步查表集
+（连带登记 name/story_label 叙事标签，供 D-6 分叉告知帧组游标指针）。
 
 **不在本批次（§5 清单余项，Claude 域）**：
 - POST/PATCH/DELETE 三路由（含 `AnchorCreate`/`AnchorRename` 请求模型与 name 校验）；
@@ -98,6 +100,29 @@ class AnchorStore:
             for row in rows
         ]
 
+    def current_item(self) -> AnchorListItem | None:
+        """M5-K3 / 裁 21-A D-9：当前游标（末梢=updated_at 最大者）。
+
+        同 `updated_at` 时按 `id` 降序兜底排序，保证多档同刻的返回**确定**（测试
+        可复现）。`protected=True` 恒成立——它按定义就是末梢。
+        """
+        with self._session_local() as s:
+            row: PlayerAnchor | None = (
+                s.query(PlayerAnchor)
+                .order_by(PlayerAnchor.updated_at.desc(), PlayerAnchor.id.desc())
+                .first()
+            )
+            if row is None:
+                return None
+            s.expunge(row)
+            return AnchorListItem(
+                id=row.id,
+                name=row.name,
+                story_label="",
+                created_at=_iso(row.created_at),
+                protected=True,
+            )
+
     def get_item(self, anchor_id: str) -> AnchorListItem | None:
         with self._session_local() as s:
             row: PlayerAnchor | None = s.get(PlayerAnchor, anchor_id)
@@ -130,8 +155,12 @@ def get_anchor_store() -> AnchorStore:
 
 
 def _item_payload(item: AnchorListItem) -> dict[str, Any]:
-    """注册 + 序列化（路由共用的落库→WS 查表集供数点）。"""
-    register_anchor_id(item.id)
+    """注册 + 序列化（路由共用的落库→WS 查表集供数点）。
+
+    M5-K3：`register_anchor_id` 连带登记**叙事标签**（name + story_label）——
+    `load_anchor` 成功路径的 D-6 分叉告知帧靠它组游标指针（零原始数值）。
+    """
+    register_anchor_id(item.id, item.name, item.story_label)
     return item.model_dump()
 
 
@@ -143,6 +172,23 @@ async def list_anchors() -> list[dict[str, Any]]:
     存在性判定由此供数，不再靠进程内 `_ANCHOR_IDS` 手填。
     """
     return [_item_payload(item) for item in get_anchor_store().list_items()]
+
+
+@router.get("/current", response_model=AnchorListItem)
+async def current_anchor() -> dict[str, Any]:
+    """M5-K3 / 裁 21-A D-9：当前所在游标（戏外 meta shell 只读面，零原始数值）。
+
+    **声明顺序铁律**（本路由唯一高风险点）：必须注册在 `/{anchor_id}` **之前**——
+    FastAPI 按声明顺序匹配，路径参数路由若在前会把 `"current"` 当 anchor_id 吃掉
+    并回 404。钉子：`TestCurrentAnchorRoute`（实跑 200 + 白盒顺序双钉）。
+
+    空库 → 404（"还没有存过档"）：与列表路由的 200+[] 是两回事——列表问"有什么"，
+    当前指针问"你在哪"，没有档就是没有答案。字段同 `AnchorListItem` 五键。
+    """
+    item = get_anchor_store().current_item()
+    if item is None:
+        raise HTTPException(status_code=404, detail="还没有存过档") from None
+    return _item_payload(item)
 
 
 @router.get("/{anchor_id}", response_model=AnchorListItem)

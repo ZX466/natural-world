@@ -206,24 +206,78 @@ class TestLoadAnchorUsesRegistry:
         return loop, Pathfinder(TileMap(width=32, height=32, chunks=chunks))
 
     def test_registered_id_returns_snapshot(self, client: TestClient) -> None:
-        from sim.api.ws import _handle_load_anchor
+        from sim.api.ws import _handle_load_anchor, frames_of
 
         _seed(anchors_mod.get_anchor_store(), 1)
         client.get("/api/anchors")
 
         loop, pf = self._loop_and_pf()
-        reply = _handle_load_anchor({"anchor_id": "anchor000"}, loop, pf)
-        assert reply is not None
-        assert reply["type"] == "full_snapshot"
+        frames = frames_of(_handle_load_anchor({"anchor_id": "anchor000"}, loop, pf))
+        # M5-K3（D-6）：读档成功 = 「分叉告知 session_state」+「全量快照」两帧
+        assert [f["type"] for f in frames] == ["session_state", "full_snapshot"]
 
     def test_unregistered_id_load_failed(self, client: TestClient) -> None:
+        from typing import cast
+
         from sim.api.ws import _handle_load_anchor
 
         loop, pf = self._loop_and_pf()
         reply = _handle_load_anchor({"anchor_id": "ghost"}, loop, pf)
         assert reply is not None
+        reply = cast("dict", reply)
         assert reply["type"] == "error"
         assert reply["code"] == "load_failed"
+
+
+class TestCurrentAnchorRoute:
+    """M5-K3 / 裁 21-A D-9：当前游标只读面（戏外 HTTP，WS 不承载）。
+
+    **路由顺序坑（本批次唯一高风险项）**：`/{anchor_id}` 是路径参数路由，FastAPI
+    **按声明顺序匹配**——若 `/current` 声明在它之后，`"current"` 会被当 anchor_id
+    吃掉并回 404。故既有「实跑 200」钉子，也留一道白盒顺序钉子防未来重排。
+    """
+
+    def test_seeded_returns_200_and_not_404_branch(self, client: TestClient) -> None:
+        ids = _seed(anchors_mod.get_anchor_store(), 2)
+        resp = client.get("/api/anchors/current")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert set(body) == {"id", "name", "story_label", "created_at", "protected"}
+        # 末梢游标 = updated_at 最大者
+        assert body["id"] == ids[-1]
+        assert body["protected"] is True
+        assert "detail" not in body  # 未落进 404 分支
+
+    def test_empty_table_returns_404(self, client: TestClient) -> None:
+        resp = client.get("/api/anchors/current")
+        assert resp.status_code == 404
+        assert "detail" in resp.json()
+
+    def test_route_declared_before_anchor_id_route(self) -> None:
+        """白盒：路径参数路由必须排在其后（顺序即匹配）。"""
+        paths = [
+            getattr(r, "path", "")
+            for r in anchors_mod.router.routes
+            if getattr(r, "path", "").startswith("/api/anchors")
+        ]
+        assert paths.index("/api/anchors/current") < paths.index("/api/anchors/{anchor_id}")
+
+    def test_live_spec_has_current_path(self, client: TestClient) -> None:
+        paths = client.get("/openapi.json").json()["paths"]
+        assert "get" in paths["/api/anchors/current"]
+
+    def test_response_excludes_internal_fields(self, client: TestClient) -> None:
+        """出戏边界：禁 tick/seq/branch_id/agent_override（anchors-api §0 保守口径）。"""
+        _seed(anchors_mod.get_anchor_store(), 1)
+        raw = client.get("/api/anchors/current").text
+        for banned in ("tick", "seq", "branch_id", "agent_override", "updated_at"):
+            assert banned not in raw
+
+    def test_registers_id_into_ws_registry(self, client: TestClient) -> None:
+        """与另两条 GET 路由同款：落库 → WS 查表集供数。"""
+        _seed(anchors_mod.get_anchor_store(), 1)
+        client.get("/api/anchors/current")
+        assert "anchor000" in _ANCHOR_IDS
 
 
 def test_anchor_store_uses_player_anchors_table() -> None:

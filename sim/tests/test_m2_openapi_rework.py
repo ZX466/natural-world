@@ -217,13 +217,19 @@ class TestWsMemberFieldDiffs:
         assert set(ts["required"]) == {"v", "ws_seq", "channel", "type", "mode", "active"}
 
     def test_control_ack_action_applied_speed(self, schemas: dict) -> None:
-        """§1.5：ack_of/ok 删；action/applied/speed 补（ws.py 实发形状）。"""
+        """§1.5：ack_of/ok 删；action/applied/speed 补（ws.py 实发形状）。
+
+        M5-K3 增补：action 枚举加 `fast_forward`（D-2 快进完成帧），另加可选
+        `paused`（D-3 暂停态直读）；`speed` 枚举**仍无 0**（G-1 防线）。
+        """
         ack = schemas["ControlAckMessage"]
         props = ack["properties"]
         assert "ack_of" not in props and "ok" not in props
-        assert props["action"]["enum"] == ["pause", "resume", "set_speed"]
+        assert props["action"]["enum"] == ["pause", "resume", "set_speed", "fast_forward"]
         assert props["applied"] == {"type": "boolean"}
         assert props["speed"]["enum"] == [1, 4, 16]
+        assert props["paused"]["type"] == "boolean"
+        assert "paused" not in ack["required"]
         assert set(ack["required"]) == {"v", "ws_seq", "channel", "type", "action", "applied"}
 
     def test_sync_request_reason_required(self, schemas: dict) -> None:
@@ -320,9 +326,10 @@ class TestRegression:
     """既有锚不回退（test_openapi_ext.py 8 用例的承重断言子集）。"""
 
     def test_ws_union_14_members_intact(self, schemas: dict) -> None:
+        """WS 联合体成员数（M5-K3 增 `session_state` 后为 15：裁 21-A D-5+D-6）。"""
         union = schemas["WsMessage"]
-        assert len(union["oneOf"]) == 14
-        assert len(union["discriminator"]["mapping"]) == 14
+        assert len(union["oneOf"]) == 15
+        assert len(union["discriminator"]["mapping"]) == 15
 
     def test_snapshot_required_now_matches_k3(self, schemas: dict) -> None:
         """旧锚（combat 在 required）被 K3 推翻：required 不再含 combat。"""

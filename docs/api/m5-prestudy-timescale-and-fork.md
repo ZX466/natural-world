@@ -66,13 +66,13 @@
 
 | # | 缺口 | 证据 | 严重度 |
 |---|---|---|---|
-| G-1 | `pause→pause→resume` 实发 `control_ack{action:"resume", speed:0}`，**违反** `ControlAckMessage.speed` 枚举 `[1,4,16]` | 本机实测：`ws.py:429` `int(restored)`，restored=`0.0`；schema `openapi_ext.py:393` | **HIGH（协议违约，前端类型断言红）**｜✅ 裁 21-A D-3 采①，**施工时清** |
-| G-2 | 无暂停时 `resume` 静默把倍率改回 1x 并回 `applied:true` | 本机实测（栈空 → 回落 1.0）；`ws.py:429` | MEDIUM｜✅ 裁 21-A D-3，施工时清 |
-| G-3 | 暂停期间 `set_speed` **立即解除暂停**（暂停无独立表示，等价于 speed=0）；随后 `resume` 又按栈弹回旧值 | 本机实测序列 `pause→set_speed 16→resume`：clock `0.0→16.0→1.0`，末态既非 16x 也非暂停 | MEDIUM（刻度面板上线后成可见 bug）｜✅ 裁 21-A D-3，施工时清 |
-| G-4 | `_PRE_PAUSE_SPEED` 模块级全局，多连接互窃倍率 | `ws.py:452`（K9 已记） | MEDIUM｜✅ 裁 21-A D-3 附带清（连接级化） |
+| G-1 | `pause→pause→resume` 实发 `control_ack{action:"resume", speed:0}`，**违反** `ControlAckMessage.speed` 枚举 `[1,4,16]` | 本机实测：`ws.py:429` `int(restored)`，restored=`0.0`；schema `openapi_ext.py:393` | **HIGH（协议违约，前端类型断言红）**｜✅ 裁 21-A D-3 采①，**M5-K3 已清** |
+| G-2 | 无暂停时 `resume` 静默把倍率改回 1x 并回 `applied:true` | 本机实测（栈空 → 回落 1.0）；`ws.py:429` | MEDIUM｜✅ 裁 21-A D-3，**M5-K3 已清** |
+| G-3 | 暂停期间 `set_speed` **立即解除暂停**（暂停无独立表示，等价于 speed=0）；随后 `resume` 又按栈弹回旧值 | 本机实测序列 `pause→set_speed 16→resume`：clock `0.0→16.0→1.0`，末态既非 16x 也非暂停 | MEDIUM（刻度面板上线后成可见 bug）｜✅ 裁 21-A D-3，**M5-K3 已清** |
+| G-4 | `_PRE_PAUSE_SPEED` 模块级全局，多连接互窃倍率 | `ws.py:452`（K9 已记） | MEDIUM｜✅ 裁 21-A D-3 附带清，**M5-K3 已清**（连接级 ControlState） |
 | G-5 | `timescale` 帧零广播实现 | `rg timescale sim/api/` 仅命中 `openapi_ext.py` | MEDIUM（未裁，施工时随战斗慢镜面接） |
 | G-6 | 分叉零写入方（见 §1.3 末行） | 全仓 grep | **阻塞 M5**（非接口域） |
-| G-7 | 无「连接期刻度/游标初值」下发面 | `ws.py:340-349` 连接首帧只回 `hello_ack`，此后 `full_snapshot` | MEDIUM｜✅ 裁 21-A D-5+D-6（合并一帧新 session 帧），**施工时清** |
+| G-7 | 无「连接期刻度/游标初值」下发面 | `ws.py:340-349` 连接首帧只回 `hello_ack`，此后 `full_snapshot` | MEDIUM｜✅ 裁 21-A D-5+D-6，**M5-K3 已清**（session_state 首帧） |
 | G-8 | `versioning.md` §8-1「rtoken 连接生命周期内有效、重连重分配」与实现（稳定派生）相悖 | `ws.py:122-130` vs `versioning.md:69` | **✅ 已关闭**（裁 21-A 采①，M5-K2 落地：文档四处 + `RToken.description` 经管线同步 + 口径钉子） |
 
 > G-1/G-2/G-3 为本轮**新发现**（既有测试只覆盖单次 pause/resume：`test_ws_gateway.py:306/327/403`），零代码门禁下**只记录不修**；**裁 21-A D-3 = ①幂等单值**已把这三宗 + G-4 纳入同一施工批（详见 `docs/arch/m5-rulings.md` §A）。
@@ -347,7 +347,13 @@ uv run pytest sim/tests/test_ws_gateway.py sim/tests/test_m5_plan_delta.py
 | D-8 | rtoken 口径 | ①文档订正、实现不动 ②改实现 | ① | **✅ 采①，已施工（`b188ba0`）** | 已清零 |
 | D-9 | 「当前游标」只读面 | ①新增 HTTP 路由 ②WS 承载 ③不做 | ① | **✅ 采①** | `anchors-api.md` 增路由 |
 
-**裁决后待派施工面（我域）**：`fast_forward` 新 action（D-2）→ 合并后的新 session 首帧（D-5+D-6）→ `GET /api/anchors/current` 只读路由（D-9）→ D-3 暂停语义批（连带清 G-1~G-4）。**协议面一律走 §4.1 五步管线：先钉子、后 `openapi_ext`、再快照、最后 `gen-protocol`（禁手写 `protocol.ts`）。**
+**裁决后施工面（我域，✅ M5-K3 四面已全部落地）**：`fast_forward` 新 action（D-2）→ 合并后的 `session_state` 首帧（D-5+D-6）→ `GET /api/anchors/current` 只读路由（D-9）→ D-3 暂停语义批（连带清 G-1~G-4）。**协议面一律走 §4.1 五步管线：先钉子、后 `openapi_ext`、再快照、最后 `gen-protocol`（禁手写 `protocol.ts`）。**
+
+**M5-K3 落地补记（2026-09-28）**：
+- **D-2**：`fast_forward{advance_hours}`（游戏小时 1..168，**不是 tick**）；**受理静默**（ack 是完成信号），驱动侧按 `FAST_FORWARD_TICKS_PER_FRAME` 限预算摊还 + 跨连接共享预算 + 快进期抑制逐帧 delta；终态回 `control_ack{action:"fast_forward"}` + 全量快照；新错误码 `bad_advance`（词表 10 → 11）；**serverToClient 零新增消息**（D-4 守住）。
+- **D-3**：`ControlState` 连接级（挂 `ConnectionManager`）+ 幂等单值；**G-1~G-4 四宗全清**（记忆值恒在 {1,4,16}，结构上排除 `speed:0`）。
+- **D-5+D-6**：新 `session_state` 消息（+ `SessionAnchor` 组件）；读档成功两帧（告知 + 全量），处置用 `frames_of()`——K4 §0.1「单回复通道」的唯一增补例外。
+- **D-9**：`/current` 注册在 `/{anchor_id}` **之前**（路由坑，双钉）；空库 404（与列表 200+[] 语义分工）。
 
 ---
 

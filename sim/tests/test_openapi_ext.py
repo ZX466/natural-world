@@ -30,6 +30,7 @@ EXPECTED_MEMBERS: dict[str, str] = {
     "combat_event": "CombatEventMessage",
     "timescale": "TimescaleMessage",
     "control_ack": "ControlAckMessage",
+    "session_state": "SessionStateMessage",
     "error": "WsErrorMessage",
 }
 
