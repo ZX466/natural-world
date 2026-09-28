@@ -17,6 +17,16 @@ from sim.api.main import app
 from sim.api.ws import reset_ws_auth_token, ws_auth_token
 
 
+def _greet(ws) -> None:
+    """接入问候两帧：全量快照 + session_state 初值帧（M5-K3 / 裁 21-A D-5+D-6）。
+
+    鉴权门管的是**命令**消息，接入问候不入门（只读）。本组用例断言的是命令回复，
+    故先把两帧问候消费掉。
+    """
+    assert ws.receive_json()["type"] == "full_snapshot"
+    assert ws.receive_json()["type"] == "session_state"
+
+
 @pytest.fixture()
 def client():
     reset_ws_auth_token()
@@ -29,8 +39,7 @@ class TestW6Auth:
     def test_no_token_rejected(self, client: TestClient):
         """无 token 的 hello → auth_error。"""
         with client.websocket_connect("/ws") as ws:
-            greeting = ws.receive_json()
-            assert greeting["type"] == "full_snapshot"  # 快照仍下发（只读）
+            _greet(ws)  # 快照仍下发（只读）
             ws.send_json({"type": "hello", "channel": "session"})
             reply = ws.receive_json()
             assert reply["type"] == "error" and reply["code"] == "auth_error"
@@ -38,7 +47,7 @@ class TestW6Auth:
     def test_wrong_token_rejected(self, client: TestClient):
         """错 token → auth_error（不透露原因细节）。"""
         with client.websocket_connect("/ws") as ws:
-            ws.receive_json()
+            _greet(ws)
             ws.send_json({"type": "hello", "channel": "session", "token": "fake-token"})
             reply = ws.receive_json()
             assert reply["code"] == "auth_error"
@@ -47,7 +56,7 @@ class TestW6Auth:
         """合法 token → hello_ack。"""
         token = ws_auth_token()
         with client.websocket_connect("/ws") as ws:
-            ws.receive_json()
+            _greet(ws)
             ws.send_json({"type": "hello", "channel": "session", "token": token})
             reply = ws.receive_json()
             assert reply["type"] == "hello_ack"
@@ -55,7 +64,7 @@ class TestW6Auth:
     def test_non_browser_connection_allowed(self, client: TestClient):
         """无 Origin 头（同机直连 / 测试客户端）→ 放行。"""
         with client.websocket_connect("/ws") as ws:
-            assert ws.receive_json()["type"] == "full_snapshot"
+            _greet(ws)
 
     def test_spoofed_origin_rejected(self):
         """伪 Origin（恶意网页）→ 揥手层 close 4003。"""
@@ -75,7 +84,7 @@ class TestW6Auth:
             TestClient(app) as c,
             c.websocket_connect("/ws", headers={"origin": "http://localhost:5173"}) as ws,
         ):
-            assert ws.receive_json()["type"] == "full_snapshot"
+            _greet(ws)
         reset_ws_auth_token()
 
     def test_token_stable_within_process(self, client: TestClient):
@@ -88,7 +97,7 @@ class TestW6Auth:
         """鉴权通过后仍受消息门禁（鉴权不提权）。"""
         token = ws_auth_token()
         with client.websocket_connect("/ws") as ws:
-            ws.receive_json()
+            _greet(ws)
             ws.send_json({"type": "hello", "channel": "session", "token": token})
             assert ws.receive_json()["type"] == "hello_ack"
             ws.send_json({"type": "evil_action", "channel": "render"})

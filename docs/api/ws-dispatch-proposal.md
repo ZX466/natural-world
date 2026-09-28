@@ -37,6 +37,10 @@ if reply is not None:
 
 **推论**：三处修复的动作面全部可落在单回复内（`set_control`→`control_ack`、`player_impulse`→`impulse_feedback`、`load_anchor`→`full_snapshot` **或** `error`），无需改 `main.py` 的收发结构。这是本提案坚持「契约修法而非架构改造」的核心理由。
 
+> **✅ M5-K3 增补**（2026-09-28，裁 21-A D-6/D-7）：单回复通道**为读档成功路径放宽为「至多两帧」**——`load_anchor` 成功回 `session_state`（分叉告知）+ `full_snapshot` 两帧。理由：**分叉必须被告知**，只把画面换掉等于让玩家无声跳进另一条时间线；而告知帧与全量快照是一个原子事实，拆到 driver 侧反而会插进中间态（客户端可能先收快照、后收告知，或反之）。
+> 形态：`handle_client_message` 返回类型放宽为 `dict | list[dict] | None`（**仅读档成功**返回列表），网关侧用 `ws.py::frames_of()` 摊平后逐帧 `send_json`；其余分发块仍单帧/无帧。第四参 `control`（连接级会话态，D-3/G-4）可选，不传时回落模块级兜底态（兼容旧调用点与既有测试）。
+> 另一处双帧出口在 **driver**（快进完成：ack + 全量），那条本来就属于 driver 侧，与本约束不冲突。「定位→快照→重放」driver 化落地后，读档两帧可回收为单帧（届时 `frames_of` 退化为恒等）。
+
 ## 1. `set_control` 分发块契约
 
 ### 1.1 现状缺口
@@ -62,6 +66,9 @@ if reply is not None:
 
 **`_pre_pause_speed` 存哪**：它是**连接级会话状态**（非世界状态、非时钟状态）。建议挂在 `ConnectionManager` 的每连接记录上，或 `ws_endpoint` 的局部变量透传。**不写进 `GameClock`**（时钟只答「现在该走几个 tick」，`_pre_pause_speed` 是 UI 会话记忆，属网关职责）。M0 单连接形态可先用模块级 dict（`id(ws) → speed`），M2 多连接前改为连接对象字段。
 
+> **✅ M5-K3 定案（D-3 幂等单值，替本节栈方案）**：本节的「栈 + 存 `_pre_pause_speed`」在落地后暴露出四宗缺陷——①**G-1 协议违约**：栈是模块级 list，`pause→pause→resume` 会把 `0.0` 弹出并 `int()` 成 `speed:0`，**破 `ControlAckMessage.speed` 枚举 [1,4,16]**；②G-2：无暂停 `resume` 静默把倍率改回 1x 且回 `applied:true`；③G-3：暂停无独立表示（≡ `speed=0`），任何 `set_speed` 都能单方面解除暂停；④G-4：模块级全局让多连接互窃倍率。
+> **现役契约**（`sim/api/ws.py::_handle_set_control` + `ControlState`）：**幂等单值**——`pause` 幂等不重压记忆值；`resume` 无暂停回 `bad_action`；暂停中 `set_speed` 只改记忆倍率并回 `paused:true`（不解除暂停）；`pause` 顺带取消在途 `fast_forward`。记忆值恒为 `{1,4,16}` 之一（`_rememberable_speed` 兜底，结构上排除 G-1）。状态载体 = `ConnectionManager` 每连接一份 `ControlState`，断线即丢。ack 增**可选** `paused` 字段。
+
 ### 1.3 `applied` 语义（必须定义，否则前端无法分支）
 
 `applied` **不是**「请求被接受」（那是 error 帧的职责），而是「**本帧生效后世界时间尺的净效果是否等于客户端请求**」。两种 `applied:false` 场景：
@@ -77,9 +84,12 @@ if reply is not None:
 
 | 场景 | 出站 | `code` |
 |---|---|---|
-| `action` 缺失/非三值 | `error{ref:"set_control"}` | `bad_action` |
+| `action` 缺失/非四值（`pause\|resume\|set_speed\|fast_forward`） | `error{ref:"set_control"}` | `bad_action` |
 | `action=="set_speed"` 但 `speed ∉ {1,4,16}`（含缺失/字符串/`true`） | `error{ref:"set_control"}` | `bad_speed` |
 | `action=="pause"/"resume"` 却携带 `speed` | **建议容忍**（忽略该字段，不报错）——与 `move_request` 的宽容风格一致 | — |
+| `action=="resume"` 但当前未暂停（D-3 幂等单值） | `error{ref:"set_control"}` | `bad_action` |
+| `action=="fast_forward"` 但 `advance_hours ∉ [1,168]`（含缺失/bool/字符串） | `error{ref:"set_control"}` | `bad_advance`（M5-K3） |
+| `action=="fast_forward"` 而当前暂停 / 同连接已有在途快进 | `error{ref:"set_control"}` | `bad_advance`（M5-K3） |
 
 **`speed` 的 bool 陷阱**：与 `move_request` 的 `tx/ty` 同类（`ws.py:223-229`：`isinstance(x,int) and not isinstance(x,bool)`）——`set_speed` 的 `speed` 校验**必须**排除 `bool`（JSON `true` 是 `int` 子类，`true ∈ {1,4,16}` 会误判为合法）。这是本契约**最易漏的一条**，已在 §7 立测试钉子。
 
@@ -203,13 +213,17 @@ if reply is not None:
 | `unknown_type` | 类型不在白名单 | 现有 `ws.py:204` |
 | `bad_channel` | channel 与类型不符 | 现有 `ws.py:214` |
 | `auth_error` | hello token 错/缺 | 现有 `ws.py:253` |
-| `bad_action` | set_control action 非法 | §1.4 新增 |
+| `bad_action` | set_control action 非法 / `resume` 无暂停 | §1.4 新增（M5-K3 复用） |
 | `bad_speed` | set_control set_speed 的 speed 非法 | §1.4 新增 |
+| `bad_advance` | set_control fast_forward 的 `advance_hours` 缺失/越界/暂停中/已在途 | **M5-K3 新增**（D-2） |
 | `bad_impulse` | player_impulse text 缺失/空/非串 | §2.3 新增 |
 | `impulse_too_long` | player_impulse text > 64 | §2.3 新增（对齐 §4.5 样例） |
 | `bad_anchor` | load_anchor anchor_id 缺失/非串 | §3.3 新增 |
 | `load_failed` | load_anchor 载入执行失败 | §3.3 新增（`anchors-api.md:258` 已定） |
 | `unreachable` / `bad_target` | move_request（可选，§4） | §4 待裁 |
+
+> **M5-K3 增补**（2026-09-28，词表 10 → **11** 项）：`bad_advance` 语义既非 speed 也非 action——复用 `bad_speed`/`bad_target` 会让前端的可重试判断失真。仍为小写 snake；`TestErrorCodeVocabulary.VOCABULARY` 已同步。
+
 
 ## 6. 实现清单（Claude 域，提案态）
 

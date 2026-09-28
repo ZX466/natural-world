@@ -17,7 +17,9 @@ export type WsMessage = Schemas['WsMessage'];
 /** 念头注入（玩家唯一主动动作，M4）。注：DESIGN.md 里 Intent 是 LLM 内部输出（§6），
  *  非客户端消息；玩家只发念头。任务文档中的 "move_intent" 即此消息的别名。 */
 export type PlayerImpulseMessage = Schemas['PlayerImpulseMessage'];
-/** 暂停/倍速（1x/4x/16x）；战斗时间尺由 sim 自动切，不可客户端设。 */
+/** 暂停/倍速（1x/4x/16x）；战斗时间尺由 sim 自动切，不可客户端设。
+ *  M5-K3（D-2）增 action `fast_forward`（长跨度推进，配 `advance_hours`；受理静默、
+ *  终态回 `control_ack{action:"fast_forward"}` + 全量快照）。 */
 export type SetControlMessage = Schemas['SetControlMessage'];
 export type LoadAnchorMessage = Schemas['LoadAnchorMessage'];
 /** 玩家点击寻路：客户端只发目标格坐标，sim 寻路并驱动主角；无 rtoken。 */
@@ -33,6 +35,9 @@ export type ImpulseFeedbackMessage = Schemas['ImpulseFeedbackMessage'];
 export type CombatEventMessage = Schemas['CombatEventMessage'];
 export type TimescaleMessage = Schemas['TimescaleMessage'];
 export type ControlAckMessage = Schemas['ControlAckMessage'];
+/** 连接期初值 + 分叉告知（M5-K3 / 裁 21-A D-5+D-6 合并一帧）：刻度、暂停态、
+ *  游标指针（name + story_label，零原始数值）、叙事化 notice。重连与读档后必收。 */
+export type SessionStateMessage = Schemas['SessionStateMessage'];
 export type WsErrorMessage = Schemas['WsErrorMessage'];
 
 // ── render 子结构（含 rtoken 不透明替身）──────────────────────
@@ -59,3 +64,5 @@ export type HealthStatus = Schemas['HealthStatus'];
 
 // ── M1 叙事/控制子结构 ─────────────────────────────────────────
 export type MonologueReaction = Schemas['MonologueReaction'];
+/** 玩家档游标指针（M5-K3）：WS 侧只带叙事化两项，禁 tick/seq/branch_id。 */
+export type SessionAnchor = Schemas['SessionAnchor'];

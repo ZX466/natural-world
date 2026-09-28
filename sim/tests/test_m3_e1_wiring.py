@@ -273,11 +273,21 @@ class TestDaySwitchHook:
             async def broadcast_json(self, payload: dict) -> None:
                 del payload
 
+            # M5-K3：驱动侧快进摊还/完成帧的钩子（无在途快进时均空转）
+            def any_fast_forward_active(self) -> bool:
+                return False
+
+            def controls(self) -> list:
+                return []
+
+            def fast_forward_completions(self) -> list:
+                return []
+
         async def _run() -> None:
             task = asyncio.create_task(
                 run_world_driver(
                     loop,
-                    _Mgr(),  # type: ignore[arg-type]  # 鸭子替身（count/broadcast_json 足形）
+                    _Mgr(),  # type: ignore[arg-type]  # 鸭子替身（count/broadcast_json/快进钩子 足形）
                     None,  # type: ignore[arg-type]  # tile_map 本组未消费
                     on_flush=on_flush,
                     on_day_switch=days_seen.append,
