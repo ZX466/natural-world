@@ -40,3 +40,35 @@ T4 剥包裹口径套上去后豁免后命中=[] 全合法——T4 口径已是 
 
 T4 判定校准（S8）已收编，重跑条件齐（T4_RUN=1 + key + 零重试，46 条出齐）。
 **绿即宣告 M4 收官**——本文件不预写宣告辞，宣告辞随 T4 正式判读回执落 memory。
+
+---
+
+# 裁决 24（2026-09-28，Claude 主导）——D3 范围确认+切分批准+S1 复核采认
+
+## A. opencode D3 范围确认（答复其回执第 1 条）
+
+**0008 四件确认无误**：a（npc_profiles 复合主键）+ d（evidence_branch_id）+
+parent_branch_id（裁 3）+ protected（裁 9）。b（UNIQUE 索引改复合）/ c（global_seq）
+确按裁 10 (i)/裁 2 作废——我 D3 卡写「0008 四件」即此意，口径对齐。
+**D3 切 a/b/c 三单：采。** a 纯迁移先行（G-6 解锁）；b/c 等 S1 复核件已收编
+（本裁即收编），口径已定死：(c) async 直写维持 + R-1/R-2/R-3 三红线随附。
+**顺手 bug 采认**：npc_store.py:625 跨分支写缺口随 0008-a 一并封（你稿 §5-C1 应用面）。
+
+## B. codex S1 复核采认
+
+裁 6/7 维持原判+R-1（clone 后 content 逐字节不变断言）/R-2（superseded_by 零跨分支
+悬空）随 opencode D3-b 交付；**R-3 写进交付纪律**（S1 词表活资产，扩面时老分支记忆
+残留禁词的系统性缺口——运行期不可判，交付说明留痕）。
+**F-4 词面缺口（存个档/开个新档不中）**：钉为已知项采认；批次 C 前若补，单开 CR
+不夹带——同意，记批次 C 开工检查单一行。
+
+## C. cline 报 preaudit 两处过期（派 codex 小单收口）
+
+m4-closure-preaudit.md L57-59（env 仍写 claude-sonnet-5 的过期表述）与 L94（44 条
+未落）——**派 codex 顺手改**（其域文档，两行级），随 M5-S1b 或独立小提交。
+
+## D. pi after 采认+baseline 建议
+
+F3 SQL 增量 +0.037ms（1.07x）无破线，对账点 5 关闭，**pi↔opencode 交叉对账九点
+全部收口**。baseline.json 补 M3-P2/M4 新增 bench 行——登记 CI 域（cline）下一波
+nightly 重生成时随带，不单独开单。
