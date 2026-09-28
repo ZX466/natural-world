@@ -201,6 +201,23 @@
         }
       }
     },
+    "/api/anchors/current": {
+      "get": {
+        "operationId": "getCurrentAnchor",
+        "summary": "当前所在游标（末梢，零原始数值）",
+        "responses": {
+          "200": {
+            "description": "current anchor",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AnchorListItem" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
     "/api/anchors/{anchor_id}": {
       "parameters": [
         {
@@ -432,6 +449,18 @@
         },
         "additionalProperties": false
       },
+      "SessionAnchor": {
+        "type": "object",
+        "required": ["name", "story_label"],
+        "properties": {
+          "name": { "type": "string", "description": "档名（玩家自取）" },
+          "story_label": {
+            "type": "string",
+            "description": "叙事化时间标签（非 tick 数值；未就绪时空串）"
+          }
+        },
+        "additionalProperties": false
+      },
       "WsEnvelope": {
         "type": "object",
         "description": "通用信封；具体消息见各 *Message schema 的 oneOf WsMessage",
@@ -466,8 +495,17 @@
           "ws_seq": { "type": "integer", "minimum": 0 },
           "channel": { "type": "string", "enum": ["control"] },
           "type": { "type": "string", "enum": ["set_control"] },
-          "action": { "type": "string", "enum": ["pause", "resume", "set_speed"] },
-          "speed": { "type": "integer", "enum": [1, 4, 16] }
+          "action": {
+            "type": "string",
+            "enum": ["pause", "resume", "set_speed", "fast_forward"]
+          },
+          "speed": { "type": "integer", "enum": [1, 4, 16] },
+          "advance_hours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 168,
+            "description": "快进目标时长（游戏小时，叙事化单位；服务端换算 tick，tick 零出网关）。仅 action=fast_forward 时有效"
+          }
         },
         "additionalProperties": false
       },
@@ -624,9 +662,47 @@
           "ws_seq": { "type": "integer", "minimum": 0 },
           "channel": { "type": "string", "enum": ["control"] },
           "type": { "type": "string", "enum": ["control_ack"] },
-          "action": { "type": "string", "enum": ["pause", "resume", "set_speed"] },
+          "action": {
+            "type": "string",
+            "enum": ["pause", "resume", "set_speed", "fast_forward"]
+          },
           "speed": { "type": "integer", "enum": [1, 4, 16] },
+          "paused": {
+            "type": "boolean",
+            "description": "暂停态（D-3 幂等单值）：省略=未表达；true=仍暂停，此时 speed 是恢复后倍率而非当前生效倍率"
+          },
           "applied": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "SessionStateMessage": {
+        "type": "object",
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "speed",
+          "paused",
+          "anchor",
+          "notice"
+        ],
+        "properties": {
+          "v": { "type": "string" },
+          "ws_seq": { "type": "integer", "minimum": 0 },
+          "channel": { "type": "string", "enum": ["session"] },
+          "type": { "type": "string", "enum": ["session_state"] },
+          "speed": { "type": "integer", "enum": [1, 4, 16] },
+          "paused": { "type": "boolean" },
+          "anchor": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/SessionAnchor" },
+              { "type": "null" }
+            ]
+          },
+          "notice": {
+            "oneOf": [{ "type": "string" }, { "type": "null" }]
+          }
         },
         "additionalProperties": false
       },
@@ -659,6 +735,7 @@
           { "$ref": "#/components/schemas/CombatEventMessage" },
           { "$ref": "#/components/schemas/TimescaleMessage" },
           { "$ref": "#/components/schemas/ControlAckMessage" },
+          { "$ref": "#/components/schemas/SessionStateMessage" },
           { "$ref": "#/components/schemas/WsErrorMessage" }
         ],
         "discriminator": {
@@ -677,6 +754,7 @@
             "combat_event": "#/components/schemas/CombatEventMessage",
             "timescale": "#/components/schemas/TimescaleMessage",
             "control_ack": "#/components/schemas/ControlAckMessage",
+            "session_state": "#/components/schemas/SessionStateMessage",
             "error": "#/components/schemas/WsErrorMessage"
           }
         }

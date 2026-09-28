@@ -57,13 +57,17 @@ def pf(tile_map: TileMap) -> Pathfinder:
 
 @pytest.fixture(autouse=True)
 def _reset_gateway_state():
-    """网关模块级会话态（暂停前倍率栈 / anchor 登记）逐用例隔离，防跨用例污染。"""
+    """网关模块级兜底控制态（D-3 幂等单值）+ anchor 登记逐用例隔离，防跨用例污染。
+
+    M5-K3 起暂停态是 `ControlState`（连接级），本树控制面测试统一走 3 参调用
+    （未传 control）——该路径共用模块级兜底态，故仍需逐用例重置。
+    """
     from sim.api import ws as ws_mod
 
-    ws_mod.reset_pre_pause_speed()
+    ws_mod.reset_legacy_control()
     ws_mod.reset_anchor_registry()
     yield
-    ws_mod.reset_pre_pause_speed()
+    ws_mod.reset_legacy_control()
     ws_mod.reset_anchor_registry()
 
 
@@ -622,8 +626,13 @@ class TestLoadAnchor:
     def test_success_returns_full_snapshot(
         self, loop: TickLoop, pf: Pathfinder, anchors: set[str], tile_map: TileMap
     ):
-        """§7 #12 + 8.4 定案：短期同步路径复用 snapshot_payload。"""
+        """§7 #12 + 8.4 定案：短期同步路径复用 snapshot_payload。
+
+        M5-K3（D-6）增补：读档成功回**两帧**——`session_state`（分叉告知）
+        + `full_snapshot`；快照帧形状与连接即发的那一帧逐键相同。
+        """
         from sim.api import ws as ws_mod
+        from sim.api.ws import frames_of
 
         ws_mod._ANCHOR_LOAD_HOOK = lambda _anchor_id: True
         try:
@@ -634,9 +643,9 @@ class TestLoadAnchor:
             )
         finally:
             ws_mod._ANCHOR_LOAD_HOOK = None
-        assert reply is not None
-        assert reply["type"] == "full_snapshot"
-        assert set(reply.keys()) == set(snapshot_payload(loop, tile_map).keys())
+        frames = frames_of(reply)
+        assert [f["type"] for f in frames] == ["session_state", "full_snapshot"]
+        assert set(frames[1].keys()) == set(snapshot_payload(loop, tile_map).keys())
 
     def test_hook_failure_returns_load_failed(
         self, loop: TickLoop, pf: Pathfinder, anchors: set[str]
@@ -680,6 +689,7 @@ class TestLoadAnchor:
     ):
         """§6.5：anchor_id 是不透明串——合法集里的项不得因形状被拒。"""
         from sim.api import ws as ws_mod
+        from sim.api.ws import frames_of
 
         ws_mod._ANCHOR_LOAD_HOOK = lambda _anchor_id: True
         try:
@@ -687,11 +697,15 @@ class TestLoadAnchor:
                 reply = handle_client_message(
                     {"type": "load_anchor", "channel": "session", "anchor_id": odd}, loop, pf
                 )
-                assert reply is not None
+                frames = frames_of(reply)
+                assert frames
                 if odd == "":
-                    assert reply["code"] == "bad_anchor"  # 空串归 bad_anchor（缺失同义）
+                    assert frames[0]["code"] == "bad_anchor"  # 空串归 bad_anchor（缺失同义）
                     continue
-                assert reply["type"] == "full_snapshot", f"{odd!r} 不得因形状被拒"
+                assert [f["type"] for f in frames] == [
+                    "session_state",
+                    "full_snapshot",
+                ], f"{odd!r} 不得因形状被拒"
         finally:
             ws_mod._ANCHOR_LOAD_HOOK = None
 
@@ -704,7 +718,7 @@ class TestLoadAnchor:
 class TestErrorCodeVocabulary:
     """§5.1 / 8.8：code 一律小写 snake，且 ∈ 词表。"""
 
-    #: 提案 §5.1 全量词表（10 项）
+    #: 提案 §5.1 全量词表（K6 10 项 + M5-K3 D-2 新增 bad_advance = 11 项）
     VOCABULARY: frozenset[str] = frozenset(
         {
             "unknown_type",
@@ -717,6 +731,7 @@ class TestErrorCodeVocabulary:
             "bad_anchor",
             "load_failed",
             "bad_target",
+            "bad_advance",
         }
     )
 

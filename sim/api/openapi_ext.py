@@ -230,6 +230,20 @@ _SUB_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         "additionalProperties": False,
     },
+    # M5-K3：玩家档游标指针（零原始数值——禁 tick/seq/branch_id/agent_override）。
+    # 与 `AnchorListItem`（戏外 HTTP 面）同构但更窄：WS 侧只需叙事化标签两项。
+    "SessionAnchor": {
+        "type": "object",
+        "required": ["name", "story_label"],
+        "properties": {
+            "name": {"type": "string", "description": "档名（玩家自取）"},
+            "story_label": {
+                "type": "string",
+                "description": "叙事化时间标签（非 tick 数值；未就绪时空串）",
+            },
+        },
+        "additionalProperties": False,
+    },
 }
 
 #: oneOf-null 通用形（§3.2：禁 nullable——openapi-typescript 不产 | null）。
@@ -252,12 +266,26 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         ["text"],
     ),
+    # M5-K3 / 裁 21-A D-2：action 增 `fast_forward`（长跨度推进，**speed 枚举不扩**——
+    # DESIGN §10 明文锁 {1,4,16}，扩枚举会连带内核 ALLOWED_SPEEDS 与前端三处）。
+    # 推进目标用**叙事化时长**（游戏小时）而非 tick：tick 是禁出网关的世界机器节拍
+    # （ws-protocol §5），换算在服务端做。
     "SetControlMessage": _envelope(
         "control",
         "set_control",
         {
-            "action": {"type": "string", "enum": ["pause", "resume", "set_speed"]},
+            "action": {
+                "type": "string",
+                "enum": ["pause", "resume", "set_speed", "fast_forward"],
+            },
             "speed": {"type": "integer", "enum": [1, 4, 16]},
+            "advance_hours": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 168,
+                "description": "快进目标时长（游戏小时，叙事化单位；服务端换算 tick，"
+                "tick 零出网关）。仅 action=fast_forward 时有效",
+            },
         },
         ["action"],
     ),
@@ -392,15 +420,40 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         ["mode", "active"],
     ),
+    # M5-K3 / D-3：新增可选 `paused`（暂停态直读，省前端推断；省略=未表达），
+    # action 增 `fast_forward`（快进完成的终态 ack；D-2）。`speed` 枚举仍无 0——
+    # 这是 G-1（`pause→pause→resume` 实发 speed:0 破 schema）的 schema 侧防线。
     "ControlAckMessage": _envelope(
         "control",
         "control_ack",
         {
-            "action": {"type": "string", "enum": ["pause", "resume", "set_speed"]},
+            "action": {
+                "type": "string",
+                "enum": ["pause", "resume", "set_speed", "fast_forward"],
+            },
             "speed": {"type": "integer", "enum": [1, 4, 16]},
+            "paused": {
+                "type": "boolean",
+                "description": "暂停态（D-3 幂等单值）：省略=未表达；true=仍暂停，"
+                "此时 speed 是恢复后倍率而非当前生效倍率",
+            },
             "applied": {"type": "boolean"},
         },
         ["action", "applied"],
+    ),
+    # M5-K3 / 裁 21-A D-5+D-6 合并一帧：连接期初值（刻度/暂停态/游标指针）
+    # + 分叉告知（叙事化一行）。零原始数值：speed 只在 {1,4,16}（暂停时=恢复后
+    # 倍率）、anchor 只带 name+story_label、notice 是戏内口语行。
+    "SessionStateMessage": _envelope(
+        "session",
+        "session_state",
+        {
+            "speed": {"type": "integer", "enum": [1, 4, 16]},
+            "paused": {"type": "boolean"},
+            "anchor": _oneof_null({"$ref": "#/components/schemas/SessionAnchor"}),
+            "notice": _oneof_null({"type": "string"}),
+        },
+        ["speed", "paused", "anchor", "notice"],
     ),
     # ref 字段本身保留（ws-protocol.md §4.5）；「无 ref」指不用 $ref 引外部 schema
     "WsErrorMessage": _envelope(
@@ -430,6 +483,7 @@ _TYPE_OF: dict[str, str] = {
     "CombatEventMessage": "combat_event",
     "TimescaleMessage": "timescale",
     "ControlAckMessage": "control_ack",
+    "SessionStateMessage": "session_state",
     "WsErrorMessage": "error",
 }
 

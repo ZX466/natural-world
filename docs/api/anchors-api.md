@@ -18,9 +18,21 @@
 
 > 保守口径依据 `openapi.md` §1：即便 §11 仅禁止戏内出现 tick/seq，戏外也取零原始世界数值。
 
-## 1. 三路由契约
+## 1. 路由契约
 
 BASE = `/api/anchors`。所有路由 `tags: ["anchors"]`，与 `settings.py` 同模块模式。
+
+### 1.0 `GET /api/anchors/current` — 当前游标（**M5-K3 / 裁 21-A D-9，kilo 已施工**）
+
+| 项 | 值 |
+|---|---|
+| 请求 | 无参数 |
+| 200 | `AnchorListItem`（**单对象**，五键与列表项同构，**零原始数值**） |
+| 404 | 空库（还没有任何玩家档）时——与列表的「200 + `[]`」是两回事：列表问"有什么"，当前指针问"你在哪" |
+
+- **判据**：末梢游标 = `updated_at` 最大者（与 §1.4 的 `protected` 派生同源，故本路由返回的 `protected` 恒为 `true`）；同刻多档按 `id` 降序兜底，保证返回**确定**。
+- **⚠ 声明顺序铁律（本路由唯一高风险项）**：必须注册在 `/{anchor_id}` **之前**——FastAPI 按声明顺序匹配，路径参数路由若在前会把 `"current"` 当 anchor_id 吃掉并回 404。钉子见 `sim/tests/test_m5_api_anchors.py::TestCurrentAnchorRoute`（实跑 200 且不落 404 分支 + 白盒顺序双钉）。
+- 与 WS 侧的关系：`session_state.anchor`（`ws-protocol.md` §4.6）取同一行数据，**只随事件发**（接入/读档），不做 WS 查询面——同一事实两个真相源会漂。
 
 ### 1.1 `GET /api/anchors` — 列表
 

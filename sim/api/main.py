@@ -18,9 +18,11 @@ from sim.api.settings import router as settings_router
 from sim.api.ws import (
     ConnectionManager,
     check_origin,
+    frames_of,
     handle_client_message,
     map_static_payload,
     run_world_driver,
+    session_state_payload,
     snapshot_payload,
 )
 from sim.core.events import world_create_event
@@ -184,18 +186,48 @@ async def ws_endpoint(ws: WebSocket) -> None:
 
     manager.register(ws, subscriber_id=subscriber_for_protagonist(app.state.loop))
     pf = _pathfinder()
+    # M5-K3 / 裁 21-A D-3：会话态**连接级**——由 ConnectionManager 每连接一份
+    control = manager.control_of(ws)
     try:
         # 接入即发全量快照（kilo ws-protocol：sync 的答案）
         await ws.send_json(snapshot_payload(app.state.loop, app.state.tile_map))
+        # M5-K3 / D-5+D-6：连接期初值一帧（刻度/暂停态/游标指针 + notice=null）。
+        # 重连后前端据此恢复「世界此刻的样子」，不必靠推断。
+        await ws.send_json(
+            session_state_payload(
+                speed=control.effective_speed(),
+                paused=control.paused,
+                anchor=_current_anchor_pointer(),
+            )
+        )
         while True:
             raw = await ws.receive_json()
-            reply = handle_client_message(raw, app.state.loop, pf)
-            if reply is not None:
-                await ws.send_json(reply)
+            reply = handle_client_message(raw, app.state.loop, pf, control)
+            # M5-K3：读档成功回两帧（分叉告知 + 全量），其余仍单帧/无帧
+            for frame in frames_of(reply):
+                await ws.send_json(frame)
     except WebSocketDisconnect:
         pass
     finally:
         manager.unregister(ws)
+
+
+def _current_anchor_pointer() -> dict[str, str] | None:
+    """当前游标指针（D-9 同源数据面：HTTP 只读面 `/api/anchors/current` 的同一行）。
+
+    只取 `name` + `story_label`（零原始数值）。取不到（空库/落库未就绪）回 None
+    ——首帧不能因读档数据面故障而失败，故 fail-soft。
+    """
+    from sim.api.anchors import get_anchor_store
+
+    try:
+        item = get_anchor_store().current_item()
+    except Exception:
+        # 读档数据面故障不得拖垮 WS 连接（首帧是「尽力而为」的初值）
+        return None
+    if item is None:
+        return None
+    return {"name": item.name, "story_label": item.story_label}
 
 
 def _pathfinder():

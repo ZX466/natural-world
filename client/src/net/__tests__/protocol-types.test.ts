@@ -34,6 +34,7 @@ import type {
   CombatEventMessage,
   TimescaleMessage,
   ControlAckMessage,
+  SessionStateMessage,
   WsErrorMessage,
   Actor,
   ActorDelta,
@@ -41,6 +42,7 @@ import type {
   PlanDelta,
   Projectile,
   Hit,
+  SessionAnchor,
   AnchorListItem,
   ProfileListItem,
   ProfileCreate,
@@ -74,7 +76,9 @@ describe('ws-protocol 类型与出戏边界', () => {
     expectTypeOf<PlayerImpulseMessage['type']>().toEqualTypeOf<'player_impulse'>();
     expectTypeOf<PlayerImpulseMessage>().toHaveProperty('text');
     expectTypeOf<SetControlMessage['type']>().toEqualTypeOf<'set_control'>();
-    expectTypeOf<SetControlMessage['action']>().toEqualTypeOf<'pause' | 'resume' | 'set_speed'>();
+    expectTypeOf<SetControlMessage['action']>().toEqualTypeOf<
+      'pause' | 'resume' | 'set_speed' | 'fast_forward'
+    >();
     expectTypeOf<SetControlMessage>().not.toHaveProperty('tick');
   });
 
@@ -267,14 +271,14 @@ describe('ws-protocol 类型与出戏边界', () => {
   });
 
   // ── K04：WsMessage 判别联合（gen-protocol 全量生成后）──────────────────
-  it('K04 #1 WsMessage 判别联合：type 枚举 = ws-protocol.md §3 清单（C→S 5 + S→C 9）', () => {
+  it('K04 #1 WsMessage 判别联合：type 枚举 = ws-protocol.md §3 清单（C→S 5 + S→C 10）', () => {
     // §3.1 client → sim（5 条：含玩家点击寻路 move_request）
     expectTypeOf<PlayerImpulseMessage['type']>().toEqualTypeOf<'player_impulse'>();
     expectTypeOf<SetControlMessage['type']>().toEqualTypeOf<'set_control'>();
     expectTypeOf<LoadAnchorMessage['type']>().toEqualTypeOf<'load_anchor'>();
     expectTypeOf<MoveRequestMessage['type']>().toEqualTypeOf<'move_request'>();
     expectTypeOf<SyncRequestMessage['type']>().toEqualTypeOf<'sync_request'>();
-    // §3.2 sim → client（9 条）
+    // §3.2 sim → client（10 条：M5-K3 增 session_state）
     expectTypeOf<FullSnapshotMessage['type']>().toEqualTypeOf<'full_snapshot'>();
     expectTypeOf<StateDeltaMessage['type']>().toEqualTypeOf<'state_delta'>();
     expectTypeOf<PerceptionMessage['type']>().toEqualTypeOf<'perception'>();
@@ -283,8 +287,9 @@ describe('ws-protocol 类型与出戏边界', () => {
     expectTypeOf<CombatEventMessage['type']>().toEqualTypeOf<'combat_event'>();
     expectTypeOf<TimescaleMessage['type']>().toEqualTypeOf<'timescale'>();
     expectTypeOf<ControlAckMessage['type']>().toEqualTypeOf<'control_ack'>();
+    expectTypeOf<SessionStateMessage['type']>().toEqualTypeOf<'session_state'>();
     expectTypeOf<WsErrorMessage['type']>().toEqualTypeOf<'error'>();
-    // 联合判别键：WsMessage['type'] 恰为上述 14 个枚举值（缺一即漏消息，多一即野消息）
+    // 联合判别键：WsMessage['type'] 恰为上述 15 个枚举值（缺一即漏消息，多一即野消息）
     expectTypeOf<WsMessage['type']>().toEqualTypeOf<
       | 'player_impulse'
       | 'set_control'
@@ -299,6 +304,7 @@ describe('ws-protocol 类型与出戏边界', () => {
       | 'combat_event'
       | 'timescale'
       | 'control_ack'
+      | 'session_state'
       | 'error'
     >();
     // 判别键存在且为 string 字面量联合（openapi-typescript discriminator 生成前提）
@@ -350,6 +356,7 @@ describe('ws-protocol 类型与出戏边界', () => {
     expectTypeOf<ControlAckMessage['channel']>().toEqualTypeOf<'control'>();
     expectTypeOf<LoadAnchorMessage['channel']>().toEqualTypeOf<'session'>();
     expectTypeOf<SyncRequestMessage['channel']>().toEqualTypeOf<'session'>();
+    expectTypeOf<SessionStateMessage['channel']>().toEqualTypeOf<'session'>();
     expectTypeOf<WsErrorMessage['channel']>().toEqualTypeOf<'error'>();
     // 出戏边界：任何 WS 载荷都不含世界真相 id/tick/seed
     expectTypeOf<WsMessage>().not.toHaveProperty('tick');
@@ -369,5 +376,45 @@ describe('ws-protocol 类型与出戏边界', () => {
     expectTypeOf<PlanDelta>().not.toHaveProperty('entity_id');
     expectTypeOf<PlanDelta>().not.toHaveProperty('plan_id');
     expectTypeOf<PlanDelta>().not.toHaveProperty('tick');
+  });
+
+  // ── M5-K3（裁 21-A 批次 B）：快进 / 暂停态 / session 首帧 / 当前游标 ────────
+  it('M5-K3 #1 fast_forward 新 action：speed 枚举不扩，推进参数是叙事化时长', () => {
+    expectTypeOf<SetControlMessage['action']>().toEqualTypeOf<
+      'pause' | 'resume' | 'set_speed' | 'fast_forward'
+    >();
+    // 既有倍率枚举**不动**（DESIGN §10 锁 {1,4,16}）——G-1 的 schema 侧防线
+    expectTypeOf<SetControlMessage['speed']>().toEqualTypeOf<1 | 4 | 16 | undefined>();
+    // 推进参数：可选整数（游戏小时），线格式永不带 tick
+    expectTypeOf<SetControlMessage['advance_hours']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<SetControlMessage>().not.toHaveProperty('ticks');
+    expectTypeOf<SetControlMessage>().not.toHaveProperty('target_tick');
+  });
+
+  it('M5-K3 #2 control_ack：增 fast_forward 与可选 paused，speed 枚举仍无 0', () => {
+    expectTypeOf<ControlAckMessage['action']>().toEqualTypeOf<
+      'pause' | 'resume' | 'set_speed' | 'fast_forward'
+    >();
+    expectTypeOf<ControlAckMessage['speed']>().toEqualTypeOf<1 | 4 | 16 | undefined>();
+    expectTypeOf<ControlAckMessage['paused']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<ControlAckMessage['applied']>().toEqualTypeOf<boolean>();
+  });
+
+  it('M5-K3 #3 session_state 首帧：刻度/暂停/游标指针/叙事化告知，零原始数值', () => {
+    expectTypeOf<SessionStateMessage['speed']>().toEqualTypeOf<1 | 4 | 16>();
+    expectTypeOf<SessionStateMessage['paused']>().toEqualTypeOf<boolean>();
+    expectTypeOf<SessionStateMessage['anchor']>().toEqualTypeOf<SessionAnchor | null>();
+    expectTypeOf<SessionStateMessage['notice']>().toEqualTypeOf<string | null>();
+    // 游标指针只带叙事化两项
+    expectTypeOf<SessionAnchor['name']>().toEqualTypeOf<string>();
+    expectTypeOf<SessionAnchor['story_label']>().toEqualTypeOf<string>();
+    expectTypeOf<SessionAnchor>().not.toHaveProperty('tick');
+    expectTypeOf<SessionAnchor>().not.toHaveProperty('branch_id');
+    expectTypeOf<SessionAnchor>().not.toHaveProperty('seq');
+    expectTypeOf<SessionStateMessage>().not.toHaveProperty('branch_id');
+  });
+
+  it('M5-K3 #4 当前游标只读面：/api/anchors/current 在生成物里可达', () => {
+    expectTypeOf<paths['/api/anchors/current']['get']>().not.toBeNever();
   });
 });

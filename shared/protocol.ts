@@ -39,6 +39,23 @@ export type paths = {
     readonly patch: operations['renameAnchor'];
     readonly trace?: never;
   };
+  readonly '/api/anchors/current': {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    /** 当前所在游标（末梢，零原始数值） */
+    readonly get: operations['getCurrentAnchor'];
+    readonly put?: never;
+    readonly post?: never;
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
   readonly '/api/health': {
     readonly parameters: {
       readonly query?: never;
@@ -193,10 +210,12 @@ export type components = {
     };
     readonly ControlAckMessage: {
       /** @enum {string} */
-      readonly action: 'pause' | 'resume' | 'set_speed';
+      readonly action: 'pause' | 'resume' | 'set_speed' | 'fast_forward';
       readonly applied: boolean;
       /** @enum {string} */
       readonly channel: 'control';
+      /** @description 暂停态（D-3 幂等单值）：省略=未表达；true=仍暂停，此时 speed 是恢复后倍率而非当前生效倍率 */
+      readonly paused?: boolean;
       /** @enum {integer} */
       readonly speed?: 1 | 4 | 16;
       /**
@@ -414,9 +433,33 @@ export type components = {
     };
     /** @description 不透明渲染替身：仅用于精灵跟踪，与内部 entity_id 解耦、不可反查游戏状态；由 sim 稳定派生（同一实体恒得同一 rtoken，跨连接与跨分支均不变），rtoken 不等于身份标识、不等于跨分支连续性，重连与读档分叉后一律以 full_snapshot 全量重建前端状态（ws-protocol.md §5 / 裁 21-A） */
     readonly RToken: string;
+    readonly SessionAnchor: {
+      /** @description 档名（玩家自取） */
+      readonly name: string;
+      /** @description 叙事化时间标签（非 tick 数值；未就绪时空串） */
+      readonly story_label: string;
+    };
+    readonly SessionStateMessage: {
+      readonly anchor: components['schemas']['SessionAnchor'] | null;
+      /** @enum {string} */
+      readonly channel: 'session';
+      readonly notice: string | null;
+      readonly paused: boolean;
+      /** @enum {integer} */
+      readonly speed: 1 | 4 | 16;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      readonly type: 'session_state';
+      readonly v: string;
+      readonly ws_seq: number;
+    };
     readonly SetControlMessage: {
       /** @enum {string} */
-      readonly action: 'pause' | 'resume' | 'set_speed';
+      readonly action: 'pause' | 'resume' | 'set_speed' | 'fast_forward';
+      /** @description 快进目标时长（游戏小时，叙事化单位；服务端换算 tick，tick 零出网关）。仅 action=fast_forward 时有效 */
+      readonly advance_hours?: number;
       /** @enum {string} */
       readonly channel: 'control';
       /** @enum {integer} */
@@ -541,6 +584,7 @@ export type components = {
       | components['schemas']['CombatEventMessage']
       | components['schemas']['TimescaleMessage']
       | components['schemas']['ControlAckMessage']
+      | components['schemas']['SessionStateMessage']
       | components['schemas']['WsErrorMessage'];
   };
   responses: {
@@ -643,6 +687,27 @@ export interface operations {
     };
     readonly responses: {
       /** @description renamed */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly 'application/json': components['schemas']['AnchorListItem'];
+        };
+      };
+      readonly 404: components['responses']['Problem'];
+    };
+  };
+  readonly getCurrentAnchor: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly requestBody?: never;
+    readonly responses: {
+      /** @description current anchor */
       readonly 200: {
         headers: {
           readonly [name: string]: unknown;
