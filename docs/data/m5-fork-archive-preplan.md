@@ -86,7 +86,7 @@
 |---|---|---|
 | 缝 1 | 伪码只重建**内存** `MaterializedWorld`；真实世界的当前态在**投影表**里（`npc_profiles` / `matter_state` / `structures` / `knowledge` / `npc_memories` / `relationships`）。伪码**没有投影表克隆步骤** | 新分支的投影表全空 → 读档后世界「失忆」。**这是 §3 的核心缺口** |
 | 缝 2 | 所有 store 实例**构造时绑死 `branch_id`**（`NpcStore._branch_id` / `KnowledgeStore._branch_id` / `SqlMemoryStore._branch_id` / `MemoryWritePipeline`），无 `rebind()` | 分叉后须**重建全部 store 实例**或新增 rebind API（架构域裁决） |
-| 缝 3 | `SqlEventStore`（async aiosqlite）与 `SqlMemoryStore`（**同步 sqlite3**）是**两条独立连接** | fork 需要「建分支 + 克隆投影 + 标 abandoned」的**原子性**，跨连接做不到（§3.7） |
+| 缝 3 | `SqlEventStore`（async aiosqlite）与 `SqlMemoryStore`（**同步 sqlite3**）是**两条独立连接** | fork 需要「建分支 + 克隆投影 + 标 abandoned」的**原子性**，跨连接做不到（§3.8） |
 
 ### 1.4 T1 断言 5（历史不可销毁）现状
 
@@ -254,7 +254,12 @@ assert before <= after            # 集合包含，且 now 可证伪
   3. `npc_memory_vec` 无 branch 列（F3），谱系读下向量召回面无从加过滤；
   4. 每次读跨分支 = 每次读跨表 JOIN，pi 侧成本不可控。
 
-### 3.3 克隆正确性的前置条件（P1，**必答**）
+### 3.3 克隆正确性的前置条件（P1，**必答**）—— ✅ 已落（D3-b：做成动作）
+
+> **实施形态**：`fork_from_anchor(..., preflush=<必填钩子>)`，第一步 `await preflush()`
+> ——投影追平由调用方**执行**，不是数据层断言（数据层看不到 driver 的 in-flight 批次）。
+> 漏传钩子 = 不可分叉（签名必填）。钉子 `test_preflush_runs_before_clone`（钩子先跑，
+> 且克隆看见冲完后的投影）。
 
 案 A 的正确性依赖一条未被任何文档写明的不变式：
 
@@ -283,24 +288,34 @@ assert before <= after            # 集合包含，且 now 可证伪
 | `npc_memory_vec` | rowid 必须重键到新的 `npc_memories.id` | 从 **vec 表自身**读向量字节 `INSERT … SELECT`（V4 裁决：vec 表为准）→ **零 LLM 调用**。⚠️ 若走重新 embed，单次 fork 就是上万次 LLM 调用——**红线禁止** |
 | `relationships` / `npc_profiles` / `npc_health` | 无内部指针 | 直接改 `branch_id` 列值即可（前提 0008-a 已把 `npc_profiles` 主键改复合） |
 
-### 3.5 建议形态（A4）
+### 3.5 建议形态（A4）—— ✅ 已落（D3-b，`sim/core/persistence/fork.py`）
 
 ```
-fork(anchor) 事务（单事务，async 引擎）：
-  1. [P1] 强制 flush 父分支未投影批次（或断言已追平）
+fork(anchor) 事务（单事务，async 引擎直写 = 裁 6 (c)）：
+  1. [P1] await preflush()            # 必填钩子：把「投影追平」做成动作
   2. INSERT branches(新分支, forked_from_branch, forked_from_seq=anchor.seq, status='active')
-  3. 有界表克隆（行数 O(实体数)，语句 ≤ 7 条 INSERT…SELECT）
+  3. 有界表克隆（语句 ≤ 6 条 INSERT…SELECT）
        npc_profiles / npc_health / relationships / matter_state / structures / material_balances
-  4. 语料表克隆（按分叉点截断，见 §3.6；id 重映射 + 指针重写 + vec 行重键）
+  4. 语料表克隆（按分叉点截断，见 §3.6；自增 id 显式分配 + entry_id 重映射
+       + 治理指针重写 + 证据分支改写）
        npc_memories / knowledge
-  5. UPDATE branches SET status='abandoned', abandoned_at=? WHERE id=父分支
+  5. UPDATE branches SET status='abandoned', abandoned_at=? WHERE id=父分支 AND status='active'
   6. COMMIT
+  7. [提交后·跨引擎] clone_branch_vectors(vec_conn, rowid_map)   # 字节拷贝，零 LLM
 ```
 
-- 步骤 3 的 6 张表全部是「改一列 `branch_id` 的值」或「PK 已是复合 → 直接换 `branch_id` 值」，
-  **零 id 重映射**（`matter_state` / `structures` / `material_balances` 的主键含 `branch_id`，
-  换值不撞；`npc_profiles` 需 0008-a；`npc_health` 是 autoinc，克隆得新 id 但无指针）。
+- 步骤 3 的 6 张表全部是「换一列 `branch_id` 的值」，**零 id 重映射**
+  （`npc_profiles` 的复合主键由 0008-a 提供；`npc_health` 是 autoinc，克隆得新 id 但无指针）。
 - 步骤 4 是全部成本所在 → 与 pi 对账（§7）。
+- **实施增补（原稿未预见）**：
+  - 语料表的**自增 id 也显式分配**（`MAX(id)+1+i`）并落进事务内临时映射表
+    （`fork_mem` / `fork_know`）——否则 told 链（`source_knowledge_id` 指 int id）
+    与 vec rowid 无从重映射（`INSERT…SELECT` 拿不到新 id）。映射表事务末 DROP。
+  - `entry_id` 重映射用 **`uuid5(命名空间, "子分支:父 entry_id")`** 而非随机 uuid4：
+    T2 要「同一 anchor 重算可复现」，随机 id 会让两次分叉的 `entry_id` 不同。
+  - 分支 id **不可复用**（子分支已存在 → `ForkError`），否则「重算同一分支」无从谈起。
+  - 写侧闸门（**裁 5**）：`SqlEventStore.append` 校验分支——不存在则**按需开线**，
+    存在但非 `active` → 抛 `InactiveBranchError`（闸门在 seq 分配前，被拒不吃 seq 号）。
 
 ### 3.6 截断判据：分叉点之后的语料**不得**进入新时间线
 
@@ -319,7 +334,35 @@ fork(anchor) 事务（单事务，async 引擎）：
   并作为一条 T1 钉子（诊断用）。
 - 在 P1 成立的前提下，两个谓词都等价于「全量」——截断是**纵深防御**，防的是「fork 落在两批之间」的历史实现。
 
-### 3.7 fork 的原子性：两套连接（缝 3）
+### 3.7 分叉点的可用范围（**D3-b 施工中暴露的重大缺口**）
+
+**投影表的当前值 == 分叉点状态，仅当父分支在分叉点之后没有再推进。** 反过来说：
+
+| 分叉点 | 正确性 | 本轮处置 |
+|---|---|---|
+| **父分支头部**（`fork_seq == max(events.seq)`） | ✅ 八张表全对（有界表靠 P1 + 同事务封存；语料靠两道截断判据） | ✅ **D3-b 已落**（22 钉） |
+| **历史点**（回昨天的存档：anchor 指的 seq 早于父分支头部） | ❌ 语料/关系的**历史状态不可重建** | 🚫 **fail-closed**（`ForkError`，含缺口说明） |
+
+为什么历史点做不到（**F2 的直接后果**）：父分支在分叉点之后的「未来」已经改写了
+①`npc_memories` / `knowledge` 的**治理列**（`invalidated` / `invalid_reason` / `superseded_by`）——
+这些列**不记时间**，无法回答「这条知识在分叉点时失效了吗」；②`relationships` 的
+**累计值**（trust/affection/debt 原地演进，无版本）。三张表都**没有事件源**
+（19 个 `EventKind` 里没有任何「记忆/知识/关系被写入」事件），所以「重放到分叉点」
+这条路对它们**结构上不成立**。
+
+三条候选修法（**需 Claude 裁决，不在 M5 范围**）：
+
+| 案 | 做法 | 代价 | 评价 |
+|---|---|---|---|
+| (a) | 落裁 7 的 `memory.written` / `knowledge.written` / `relationship.changed` 事件 | 触冻结事件基线 + S1/X7 写入门，须 codex 复核 | 最正统，最贵 |
+| (b) | 治理列加**变更时的 seq**（如 `invalidated_at_seq` / `superseded_at_seq`，一支 0009） | 小迁移；但 `relationships` 的累计值仍无解 | 只解一半 |
+| (c) | **anchor 世界态物化**（存玩家档时把世界态快照绑在 anchor 上，读档 = 恢复该快照） | 体积 ×anchor 数；与 §12「每 1000 tick 一份快照」同源 | 绕开事件源，且正是 §12 读档流程的字面形态 |
+
+⚠️ **产品影响**：「回退到旧存档」是玩家档的核心玩法（§12「自由创建、命名、回退」），
+而**历史点分叉本轮不覆盖**——D3-b 只让「读最新位置的档」与测试/演练路径可用。
+若 M5 要覆盖回退玩法，(c) 最贴近 §12 原文，建议优先评估。
+
+### 3.8 fork 的原子性：两套连接（缝 3）
 
 | 面 | 连接 | 能否并入 fork 单事务 |
 |---|---|---|
@@ -335,8 +378,13 @@ fork(anchor) 事务（单事务，async 引擎）：
 | **(c) 推荐** | **clone 走 async 引擎直写 `npc_memories` 表**（`INSERT … SELECT` 批处理），不经 store 类 | fork 是**冷路径批处理**不是热路径；绕过 store 类可接受（store 类的存在理由是「唯一写入口 + S1 纪律」，而克隆是**字节复制既有合规行**，不产生新内容、不经 LLM、不经扫描面）。崩溃语义 = 单事务回滚，无 journal |
 
 **建议 (c)**；若 codex 判定「npc_memories 的任何写入都必须经 store 类」→ 退 (a) 并接受 journal。
+**D3-b 实施结论 = (c)**（裁 24-B 采认「codex 复核件维持原判」）：`npc_memories` /
+`knowledge` 由 **async 引擎直写**（`fork.py` 的 `INSERT … SELECT` + 事务内临时映射表），
+不经 `SqlMemoryStore` / `KnowledgeStore`；崩溃语义 = 单事务回滚，**无 journal**。
+理由落地为注释与钉子：克隆是**字节复制既有合规行**（R-1），不产生新内容、不经 LLM、
+不经 S1 扫描面——S1 的「唯一写入门」约束的是**新内容进入记忆库**，克隆不构成旁路。
 
-### 3.8 与 §12 体积治理的相容性（先算清，别误报）
+### 3.9 与 §12 体积治理的相容性（先算清，别误报）
 
 | 项 | 单分支 | 分叉 F 个 | 备注 |
 |---|---|---|---|
@@ -546,13 +594,13 @@ agent_override = {
 | 3 | 跨分支 `parent_seq` 悬空怎么解 | 加 `parent_branch_id` 列 / 定义谱系解析 / 置 NULL（后者否决） | ✅ **已裁 = 加列**（裁 3；M5-D3-a 已落，谱系解析在查询层） | §2.1③ |
 | 4 | `knowledge.evidence_seq` 跨分支悬空（C4） | 加 `evidence_branch_id`（0008-d） | ✅ **已裁并已落**（裁 4；M5-D3-a） | §5-C4 |
 | 5 | `append` 是否校验 `status='active'`（C6） | 落 fail-closed 校验，防 fork 后误写父分支 | Claude | §5-C6 |
-| 6 | fork 原子性方案 | 采 (c) clone 走 async 引擎直写；若 codex 判「必须经 store 类」→ 退 (a)+journal | Claude + **codex** | §3.7 |
+| 6 | fork 原子性方案 | 采 (c) clone 走 async 引擎直写；若 codex 判「必须经 store 类」→ 退 (a)+journal | Claude + **codex** | §3.8 |
 | 7 | 是否给 memories/knowledge 补 `*.written` 事件（解 F2） | **M5 不做**（改冻结事件基线 + 触 S1/X7）；列为中长期，先记提案 | Claude + **codex** | §3.2 |
 | 8 | `agent_override` 要不要变成事件 | M5 不做（保持玩家档不产事件） | Claude | §4.5 |
 | 9 | `player_anchors.protected` 并入 0008 | 采（与 kilo K7 合并，同表一支迁移） | ✅ **已裁并已落**（裁 9；M5-D3-a 列已落，路由面待 kilo） | §4.3 |
 | 10 | 语料 `entry_id` 克隆策略 | 采 (i) 重映射（零 schema）；(ii) 留待裁 | Claude（(ii) 需 codex） | §6.1 |
 | 11 | **F3 向量召回分支隔离** | **M5 硬前置**，fork 存在之前必须补 + 钉子 | ✅ **已裁并已落**（`m5-rulings.md` §B 裁 11 = 采；M5-D2 实施 + 6 钉子） | §5-C5 |
-| 12 | anchor 热钉 vs 分支冷归档（A6） | 采「anchor 引用即热钉」 | Claude | §3.8 / §4.1 |
+| 12 | anchor 热钉 vs 分支冷归档（A6） | 采「anchor 引用即热钉」 | Claude | §3.9 / §4.1 |
 
 ---
 
@@ -561,10 +609,10 @@ agent_override = {
 1. ✅ **零迁移先行**（**M5-D2 已落**）：T1 断言 5 口径改 `(branch_id, seq)` 对集合 + 可证伪性守卫（§2.4 案 C / §6.5 第 1 行，6 钉子）。
 2. ✅ **F3 前置**（**M5-D2 已落**，裁 11）：向量召回分支隔离 + T1 钉子（+6 例）。附带 `RECALL_OVERFETCH_FACTOR`（候选饥饿防御，见 §5-C5）。
 3. ✅ **0008-a（F1）**：主键改复合 + 全量单键查找清点与改双键（**M5-D3-a 已落**：生产 1 处 + 测试 3 处，见 §2.6）。
-4. ⏳ **fork 事务 + 克隆**：P1 前置条件 → 6 张有界表克隆 → 语料表截断克隆 + id 重映射 + vec 行重键 → 原子性（等裁 6/10）。
-5. ⏳ **R2 三断言 + seed 连续（断言 D）** + 可比字段集（可与 3/4 并行）。
+4. ✅ **fork 事务 + 克隆**（**M5-D3-b 已落**，`sim/core/persistence/fork.py`，22 钉）：P1 做成动作（`preflush` 必填钩子）→ 6 张有界表克隆 → 语料表截断克隆 + 自增 id 显式分配 + `entry_id` uuid5 重映射 + 治理指针重写（R-2）→ 证据分支改写（0008-d 兑现）→ 父分支封存 → 提交后 vec 行字节拷贝；裁 5 写侧分支闸门。**⚠️ 遗留缺口：历史点分叉 fail-closed**（§3.7，产品影响=回退旧存档玩法未覆盖，待裁）。
+5. ⏳ **R2 三断言 + seed 连续（断言 D）** + 可比字段集（可与 4 并行；D3-c 派单中）。
 6. ✅ **可选尾巴**：`parent_branch_id`（裁 3）、`evidence_branch_id`（裁 4）、`protected`（裁 9）——**均随 0008 落**（M5-D3-a）。`global_seq` **已裁不落**（裁 2）。
-7. ⏳ **后续件（施工中发现，非本轮裁）**：per-branch 向量分区（F>4 时向量召回候选饥饿的正解）→ 需提案。
+7. ⏳ **后续件（施工中发现，非本轮裁）**：①per-branch 向量分区（F>4 时向量召回候选饥饿的正解）→ 需提案；②**历史点分叉**（§3.7 三条候选修法，建议先评估 (c) anchor 世界态物化）。
 
 ## 10. 本文边界与门禁
 

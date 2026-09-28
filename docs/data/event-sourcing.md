@@ -43,7 +43,9 @@ Intent 通过闸门校验
    apply(event)
         │
         ├── 1. 校验 event_type 在白名单内
-        ├── 2. 校验 branch_id 存在且 status = 'active'
+        ├── 2. 校验/开线分支：分支行不存在 → 按需开线（status='active'）；
+        │       存在但 status ≠ 'active' → **fail-closed**（裁 5：读档=分叉后父分支
+        │       封存，追加即污染被弃时间线，世界档 append-only 事后删不掉）
         ├── 3. 生成 seq = MAX(seq) + 1（分支内单调递增）
         ├── 4. INSERT INTO events (branch_id, seq, tick, ...)
         ├── 5. 若有 entropy_ref → INSERT INTO entropy_log
@@ -211,6 +213,13 @@ async def load_anchor(
 - **读档不删除/回退**原世界线的 events（§19 禁止事项）
 - **读档创建新分支**，旧分支标记 abandoned（§12）
 - **新分支的 NPC 对旧分支一无所知**（§12 分叉可见性，M5 前不启用既视感）
+
+> **实现现状（M5-D3-b）**：本节伪码的数据面已落地为
+> `sim/core/persistence/fork.py::fork_from_anchor`（一次事务：开线校验 → 建子分支 →
+> 六张有界表换 `branch_id` 克隆 → 两张语料表按分叉点截断克隆 + `entry_id` 重映射 +
+> 治理指针重写 → 父分支封存），**分叉点只支持父分支头部**（历史点 fail-closed，
+> 原因见 `docs/data/m5-fork-archive-preplan.md` §3.9）。读档**编排**（何时读、
+> store 实例 rebind、WS 回流）属架构域。
 
 ---
 

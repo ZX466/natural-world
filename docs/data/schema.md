@@ -739,7 +739,44 @@ async def materialize_matter(
 
 ---
 
-## 索引策略总结
+## 20. 读档 = 分叉的数据面事务（M5-D3-b）
+
+契约实现：`sim/core/persistence/fork.py::fork_from_anchor`（裁 6 (c) = async 引擎直写，
+冷路径字节复制，不过 store 类、不触 S1）。**一次事务**内：
+
+| 步 | 动作 | 表 | 手法 |
+|---|---|---|---|
+| 0 | `preflush()`（**必填**钩子） | — | P1 前置条件**做成动作**：父分支 in-flight 批次未冲掉就没资格分叉（数据层看不到 driver 缓冲） |
+| 1 | 分支行存在/active 校验 | `branches` | 父分支不存在 → `ForkError`；子分支 id 已存在 → `ForkError`（分支 id 不可复用） |
+| 2 | 建子分支 | `branches` | `forked_from_branch` / `forked_from_seq` / `status='active'` |
+| 3 | 有界表克隆 | `npc_profiles` `npc_health` `relationships` `matter_state` `structures` `material_balances` | `INSERT … SELECT` 换 `branch_id` 值（零 id 重映射） |
+| 4 | 语料克隆（**截断**） | `npc_memories` `knowledge` | 两道截断判据：`(event_seq IS NULL OR <= fork_seq) AND created_at_tick <= fork_tick`（knowledge 用 `evidence_seq` + `learned_at`） |
+| 5 | id 重映射 | 同上 | 自增 id **显式分配**（`MAX(id)+1+i`）；`entry_id` = `uuid5(ns, "子分支:父 entry_id")`（裁 10 (i)，**确定性**——T2 逐位一致需要） |
+| 6 | 治理指针重写 | 同上 | `superseded_by` → 子 `entry_id`；替换者未克隆（写在分叉点之后）则**置 NULL**（R-2：绝不悬空）；`source_knowledge_id` / `source_memory` 重映射，**悬空即 `ForkError` 整批回滚** |
+| 7 | 证据引用改写 | `knowledge` | `evidence_branch_id` 由 NULL（本分支）→ 父分支（事件不克隆；0008-d 裁 4 封 C4） |
+| 8 | 父分支封存 | `branches` | 仅当仍 `active`（已弃分支可再分叉，不重复盖时间戳） |
+| 9 | vec 行字节拷贝（提交后） | `npc_memory_vec` | `clone_branch_vectors`：按 rowid 映射**字节**拷贝，**零 LLM 调用**（V4；重新 embed 是红线禁）。未给 `vec_conn` → 结果 `vec_pending=True`（召回降级为空，**不泄漏**） |
+
+**不碰的表**：`events` / `entropy_log` / `snapshots` —— 读档只增不减（C6，§19 禁止事项）。
+
+**分叉点只支持父分支头部**（fail-closed）：投影表的当前值 == 分叉点状态，**仅当父分支
+在分叉点之后没有再推进**。历史点分叉（回昨天的存档）时 `npc_memories`/`knowledge` 的
+**治理列**与 `relationships` 的**累计值**已被父分支的「未来」改写，而这三张表**没有
+事件源**（F2）⇒ 历史状态不可重建。修法需裁 7 的 `*.written` 事件或 anchor 世界态
+物化/快照展开（M5 均未落）——**不用「近似重置治理列」糊过去**。详见
+`m5-fork-archive-preplan.md` §3.9。
+
+**写侧分支闸门（裁 5）**：`SqlEventStore.append` 写入前校验分支——不存在则**按需开线**
+（世界从第一条事件长出来），存在但 `status != 'active'` → 抛 `InactiveBranchError`。
+闸门在 seq 分配**之前**，故被拒的 append 不吃 seq 号、事件表零写。
+
+**已知缺口（R-3 留痕，codex S1 复核）**：S1 禁词表是**活资产**。分叉按 R-1 **逐字节**
+克隆记忆（不做任何重扫/清洗），因此**词表日后扩面时，历史分支（含已弃父分支）里
+已落库的记忆会保留当时未禁的词面**。这是运行期不可判的系统性缺口：要么接受
+（历史即历史），要么在扩面时对历史分支重扫（另开单，不夹带）。
+
+---
+
 
 | 表 | 索引 | 用途 |
 |----|------|------|

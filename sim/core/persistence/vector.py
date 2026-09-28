@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Final, Protocol, runtime_checkable
 
 from sim.llm.memory_scan import MemoryEntry, make_entry
@@ -212,6 +212,43 @@ class NumpyCosineIndex:
         # 距离升序、同距按 rowid 稳定（确定性 C5）。
         sims.sort(key=lambda h: (h[1], h[0]))
         return sims[:top_k]
+
+
+def clone_branch_vectors(
+    conn: sqlite3.Connection,
+    rowid_map: Mapping[int, int],
+    *,
+    chunk: int = 500,
+) -> int:
+    """按 rowid 映射**字节**拷贝 vec 行（读档 = 分叉的向量面，M5-D3-b / R-1）。
+
+    V4 裁决：vec 表为准 → 拷贝的是**已有向量字节**，**零 LLM 调用**；重新 embed
+    单次分叉就是上万次调用，属红线禁。父行在 vec 表里缺失（未 embed / 已删）时
+    跳过——返回实拷条数，由调用方与 ``len(rowid_map)`` 比对决定是否报「待补齐」
+    （召回降级为空，**不泄漏**：F3 的分支谓词把别的分支挡在外面）。
+
+    分块（``chunk``）只为把 Python 侧内存压住：384 维 × 4B = 1536B/行，
+    10k 行一批是 15MB 量级；``fetchall`` + ``executemany`` 每块两次往返。
+    """
+    pairs = list(rowid_map.items())
+    copied = 0
+    for start in range(0, len(pairs), max(chunk, 1)):
+        batch = pairs[start : start + max(chunk, 1)]
+        src_ids = [src for src, _dst in batch]
+        placeholders = ",".join("?" * len(src_ids))
+        rows = conn.execute(
+            f"SELECT rowid, embedding FROM {VEC_TABLE} WHERE rowid IN ({placeholders})",
+            src_ids,
+        ).fetchall()
+        if not rows:
+            continue
+        conn.executemany(
+            f"INSERT INTO {VEC_TABLE}(rowid, embedding) VALUES (?, ?)",
+            [(int(rowid_map[int(r[0])]), r[1]) for r in rows],
+        )
+        copied += len(rows)
+    conn.commit()
+    return copied
 
 
 def vec_candidate_ids(

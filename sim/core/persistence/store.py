@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sim.core.persistence.event_validation import validate_store_row
-from sim.core.persistence.models import EntropyLog, Event, Snapshot
+from sim.core.persistence.models import Branch, EntropyLog, Event, Snapshot
 
 # 快照 payload 结构版本（codex 建议项：schema_version，M5 前必须）
 SNAPSHOT_SCHEMA_VERSION = 1
@@ -44,6 +44,15 @@ class SnapshotData:
     schema_version: int = 1
 
 
+class InactiveBranchError(RuntimeError):
+    """向非 active 分支写事件被拒（裁 5：分叉后父分支封存，禁误写）。
+
+    读档 = 分叉会把父分支标 ``abandoned``（DESIGN §12）。若无此闸，driver 在分叉
+    瞬间仍往旧分支 append，就会**往被弃时间线里追加本不该发生的事件**——世界档
+    append-only 删不掉（§19），这类污染不可事后修复。故 fail-closed。
+    """
+
+
 @runtime_checkable
 class EventStore(Protocol):
     """持久化接口 — m0-core.md §8。"""
@@ -63,6 +72,8 @@ class EventStore(Protocol):
         entropy_rows（codex 必须项 #2 预留）：可选的熵日志行，与事件在同一事务内
         原子写入；None 时仅写 events（当前内核把熵材料存于 event payload，无需双写）。
         validate：默认 True，落库前行级 schema/白名单校验（M2-D3）。
+        **分支闸门（裁 5）**：实现须拒向非 active 分支写入（读档 = 分叉后父分支封存，
+        禁误写被弃时间线）；分支行不存在时按需开线。
         """
         ...
 
@@ -103,6 +114,21 @@ class SqlEventStore:
         """暴露 session 工厂（M2-D2：NpcStore 批量物化需只读查询）。"""
         return self._session_factory
 
+    async def _assert_branch_writable(self, session: AsyncSession, branch_id: str) -> None:
+        """裁 5 分支闸门：不存在则开线；非 active 则 fail-closed（见 append docstring）。"""
+        status = (
+            await session.execute(select(Branch.status).where(Branch.id == branch_id))
+        ).scalar_one_or_none()
+        if status is None:
+            session.add(Branch(id=branch_id, status="active"))
+            await session.flush()
+            return
+        if status != "active":
+            raise InactiveBranchError(
+                f"分支 {branch_id!r} 状态为 {status!r}，不可写入（读档 = 分叉后父分支封存，"
+                "追加即污染被弃时间线）"
+            )
+
     async def append(
         self,
         branch_id: str,
@@ -130,6 +156,13 @@ class SqlEventStore:
         `event_validation.validate_store_row`（payload 过 `extra="forbid"` 模型、
         NPC_ACT 动作/参数白名单、witnesses 必须 list[str]），拒绝夹带/伪造。
         仅低层存储机制测试可用 ``validate=False`` 传合成 payload（**生产勿用**）。
+
+        分支闸门（裁 5，M5-D3-b）：写入前校验分支 —— 分支行**不存在**则按需开线
+        （世界从第一条事件长出来，``event-sourcing.md`` §2.2 的「校验存在」由
+        「不存在即开线」实现，避免每个测试/驱动都手工建线）；分支行存在但
+        ``status != 'active'`` → 抛 :class:`InactiveBranchError`（读档 = 分叉把父
+        分支标 abandoned 后，禁再往被弃时间线追加；世界档 append-only，事后删不掉）。
+        闸门在 seq 分配**之前**，故被拒的 append 不吃 seq 号。
         """
         if not events and not entropy_rows:
             return
@@ -139,6 +172,8 @@ class SqlEventStore:
                 validate_store_row(event)
 
         async with self._session_factory() as session:
+            await self._assert_branch_writable(session, branch_id)
+
             # 获取当前最大 seq
             result = await session.execute(
                 select(func.coalesce(func.max(Event.seq), 0)).where(Event.branch_id == branch_id)
