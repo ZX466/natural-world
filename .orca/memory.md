@@ -24,6 +24,20 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
+【2026-09-28 第二十八轮｜D3-a 收编+裁 25+批次 B 派发（G-6 解锁）】①**opencode D3-a
+收编**（main `aee98c7`）：0008 四件迁移（npc_profiles 复合主键/parent_branch_id/
+evidence_branch_id/protected，~120 行 batch_alter_table）+16 钉子+**跨分支写 bug 封口**
+（npc_store.py:630 单键取行不看分支——分叉后子分支 LOD 会写父分支行，支支正确版+钉子）
++引用面 1 生产+3 测试全清点（232 在自定义 projection 回调里，**只 rg 生产代码会漏**
+——教训）；主树独立复核 0008 往返通过。**G-6 解锁最后一前置关闭。**
+②**裁 25**（`38f7734`）：B=两设计决定全采（成对 CHECK 单向——等值会把存量行打非法；
+parent_branch_id 生产侧留缝不破冻结事件基线，WorldEvent 接线归我域随 D3-b 收编轮）；
+C=**kilo K3 批次 B 大单派发**（fast_forward/session 首帧/anchors current/D-3 批清
+G-1~G-4，摸底三条作施工依据）+**opencode D3-b 派发**（fork 事务+克隆+R-1/R-2+
+编排缝接口清单请求）；D=S1b 催办+warnings +4 登观察项。③门禁 **1661 passed / 0 failed**，
+ruff/pyright 0。④SQLite 坑留档：CHECK 约束必须 batch_alter_table（直接调
+NotImplementedError）；batch 在 SQLite=整表重建（dev 无碍，大库别跑）。
+⑤M5 施工 ≈20%；双线并行：K3（协议面）‖D3-b（数据面）。
 【2026-09-28 第二十七轮｜M5 第二波收编+裁 24】①三单收编（main `16b6bfc`）：
 **codex M5-S1**（安规预研 134 行——**主张「M5 不新增安规面」**，唯一新增=§3 跨分支
 证据链污染（非祖先分支证据不得使当前分支属性浮现）；裁 6/7 复核**维持原判**（(c)
