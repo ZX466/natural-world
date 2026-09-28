@@ -29,6 +29,18 @@ _REQUIREMENTS_TEXT = (
     "这么做，用你自己的话，第一人称）。不要输出 JSON 以外的任何文字。"
 )
 
+#: [要求] 段因果未知措辞（§14 未知四轴 M4 行 / 裁 14-5：只给「应该能行，不好说」，
+#: 不给概率）。世界内语言——NPC 不知道「为什么」，只知道手艺和火候；说不出数
+#: 是行家本分，不是知识缺陷。固定文本（非模板插值）= 前缀缓存契约不动
+#: （messages[0] 锚恒定；本段在 messages[1] 尾部，逐决策变化面不受影响）。
+#: 注意：措辞自身必须过 banned 终扫（含「运气」会命中 meta 词面）——
+#: 提及禁词即出戏，用「手艺火候」正面表述，不点名。
+_CAUSAL_UNKNOWN_TEXT = (
+    "事情成不成的缘由，连老师傅也说不好——火候到了就成了，火候差一点就废。"
+    "要说「为什么」，你只能说说你的手艺和眼下的情形，说不出个准数，"
+    "也别学镇上闲汉把成败推给说不清的由头。"
+)
+
 
 class PromptAssemblyError(Exception):
     """装配产物命中禁词——拒绝出站（底线：残缺比出戏安全）。"""
@@ -157,6 +169,8 @@ def assemble_prompt(
         sections.append("\n".join(input_parts))
 
     sections.append(_REQUIREMENTS_TEXT)
+    # 因果未知措辞（M4 批次 A 补件，preaudit §2 缺口关闭）：固定尾段，勿动段序。
+    sections.append(_CAUSAL_UNKNOWN_TEXT)
 
     body = "\n\n".join(sections)
     messages = (

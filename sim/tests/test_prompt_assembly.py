@@ -66,6 +66,33 @@ class TestSixSectionOrder:
         assert "只输出一个 JSON" in prompt.messages[1]["content"]
         assert "还记得的事" not in prompt.messages[1]["content"]
 
+    def test_causal_unknown_tail_fixed(self, anchor: IdentityAnchor):
+        """因果未知措辞（§14 M4 行 / P5 前提关闭）：[要求] 后固定尾段。
+
+        - 文本是常量（_CAUSAL_UNKNOWN_TEXT），每次装配恒在且逐字节同——
+          前缀缓存契约：messages[1] 尾部固定段不破坏 messages[0] 分界；
+        - 断言「火候/手艺/说不好」世界内措辞在场；
+        - 措辞自身过 banned 终扫（含禁词的「解释性文本」本身就是出戏源）。
+        """
+        from sim.llm.prompts import assembler as asm
+
+        prompt = assemble_prompt(
+            anchor, MemorySlice(), SituationSlice(), PlanSlice(), InputSlice(), "c3"
+        )
+        body = prompt.messages[1]["content"]
+        pos_req = body.index("只输出一个 JSON")
+        pos_tail = body.index("连老师傅也说不好")
+        assert pos_req < pos_tail  # 固定尾段在 [要求] 之后
+        assert "手艺" in body and "火候" in body and "说不好" in body
+        # 常量身份：两次装配逐字节一致（尾段恒定）
+        b2 = assemble_prompt(
+            anchor, MemorySlice(), SituationSlice(), PlanSlice(), InputSlice(), "c4"
+        ).messages[1]["content"]
+        assert b2.endswith("也别学镇上闲汉把成败推给说不清的由头。")
+        from sim.llm.prompts.banned_words import scan
+
+        assert scan(asm._CAUSAL_UNKNOWN_TEXT).hits == ()
+
     def test_fingerprint_stable(self, anchor: IdentityAnchor):
         p1 = assemble_prompt(
             anchor, MemorySlice(), SituationSlice(), PlanSlice(), InputSlice(), "c3"
