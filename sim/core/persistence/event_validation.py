@@ -11,7 +11,7 @@
 - `NPC_ACT` 追加**动作白名单 + payload 键白名单**校验（`sim/npc/actions.py`）——
   堵住「白名单动作夹带非法 params」的缝。
 - `witnesses` 必须是 ``list[str]``（非 str 元素 / 非 list → 拒绝）。
-- `actor_id`/`target_id`/`entropy_ref` 类型校验。
+- `actor_id`/`target_id`/`entropy_ref`/`parent_branch_id` 类型校验。
 
 不改变 `WorldEvent` 工厂（架构域）：工厂仍经模型构造；本模块只守 SQL 入口。
 """
@@ -103,7 +103,7 @@ def validate_store_row(row: dict[str, Any]) -> None:
         _validate_npc_act(validated)
 
     _validate_witnesses(row.get("witnesses"))
-    for field_name in ("actor_id", "target_id", "entropy_ref"):
+    for field_name in ("actor_id", "target_id", "entropy_ref", "parent_branch_id"):
         _validate_optional_str(row.get(field_name), field_name)
 
 

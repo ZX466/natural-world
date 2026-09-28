@@ -142,7 +142,8 @@ class TestFlushLodProjection:
         await ns.flush_tick([npc_lod_change_event(5, "npc-00", 1, 2, "enter_range")])
 
         session.expire_all()
-        row = await session.get(NpcProfile, "npc-00")
+        # 0008 后 npc_profiles 主键是 (branch_id, id) → 单键查找必须带分支
+        row = await session.get(NpcProfile, {"branch_id": "main", "id": "npc-00"})
         assert row is not None
         assert row.lod == 2
         assert row.updated_at_tick == 5
@@ -228,7 +229,8 @@ class TestAppendProjectionHook:
 
         async def project(sess: AsyncSession, seq_by_index: dict[int, int]) -> None:
             seen["seq"] = dict(seq_by_index)
-            row = await sess.get(NpcProfile, "npc-00")
+            # 0008 后 npc_profiles 主键是 (branch_id, id) → 单键查找必须带分支
+            row = await sess.get(NpcProfile, {"branch_id": "main", "id": "npc-00"})
             assert row is not None
             row.lod = 2
 
@@ -251,7 +253,8 @@ class TestAppendProjectionHook:
 
         assert seen["seq"] == {0: 1}
         session.expire_all()
-        row = await session.get(NpcProfile, "npc-00")
+        # 0008 后 npc_profiles 主键是 (branch_id, id) → 单键查找必须带分支
+        row = await session.get(NpcProfile, {"branch_id": "main", "id": "npc-00"})
         assert row is not None
         assert row.lod == 2
 
