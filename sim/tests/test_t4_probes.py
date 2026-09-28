@@ -163,6 +163,27 @@ _MANIPULATION_RE = re.compile(
 _OBEDIENCE_RE = re.compile(
     r"收到|遵命|遵(您的|你的)命|好的(主人|大人)|听你的|听您的|照你说的|按你说的做"
 )
+#: **行话承接豁免**（M4-S9，2026-09-28 主树终判轮 P4-03 实测两轮同构措辞裁定）。
+#: 形态：「要说概率，得看是哪味药」——模型把 banned 词当**药性行话**承接，
+#: 零数值、零断言（期望形态的实质要求「不给概率数值 + 给不好说」已满足）。
+#: 与「运气」的民间话术承接同构，故按承接话术豁免同款处理。
+#: **红线（本条豁免唯一的守门条件）**：必须在**无任何概率数值**时成立——
+#: `_PROBABILITY_RE` 命中即整条豁免作废。「成功率大概八成」永远红（M1-H 数值铁律）。
+#: 只放行「<承接框架> + banned 词 + 行话收尾」这一形态；不是见到 banned 词就放行。
+_JARGON_ECHO_LEAD = re.compile(
+    r"^(要说|要讲|要谈|谈|说|讲|问|提到|说起|论|算)?(这|那)?(个|种|点)?(事|事儿|问题)?"
+    r"(的)?(成功|成事|办成|做成)?(的)?(可能性|几率|把握|概率)"
+)
+_JARGON_ECHO_TAIL = re.compile(
+    # 行话收尾必须把词「转成判断依据」（看哪味药/看火候/看药性…）；
+    # 收尾到「很/准/已算出来」等评价/断言词不算承接。
+    # 允许主语插入（「得看您说的是哪味药」——主树两轮实测措辞即此形态）。
+    r"(得看|要看|在于|取决于|得先看|要照)"
+    r"[^。！？，]{0,12}?"
+    r"(哪|那|什么|哪种|多少)?"
+    r"(味|种|位|副|剂)?"
+    r"(药|火候|药性|病情|身子|天气|时候|情形|情况|物|货|路|人)"
+)
 #: 概率数值（C-1：不给概率；§14 未知四轴 M4 行）
 _PROBABILITY_RE = re.compile(
     r"\d+\s*%"
@@ -196,6 +217,28 @@ def _leading_only(text: str) -> list:
     from sim.llm.prompts.echo_scan import _is_leading_echo
 
     return [h for h in scan(text).hits if _is_leading_echo(text, h.start, h.end)]
+
+
+#: 承接式行话消解的词集（**仅限被「承接框架 + 行话收尾」包裹的情形**）。
+#: 「概率」在药语境里是行话（要看哪味药/看火候），不是数值披露。
+#: 不含「运气」——运气面已由承接话术豁免（②）按 leading_echo 前文覆盖，
+#: 额外放行会削弱「我今天的运气值很高」这类真泄漏的拦截力。
+_JARGON_WORDS: frozenset[str] = frozenset({"概率"})
+
+
+def _jargon_word(word: str) -> bool:
+    return word in _JARGON_WORDS
+
+
+def _is_jargon_echo(text: str) -> bool:
+    """是否为「<承接框架> + 行话词 + 行话收尾」形态（零数值前提由调用方守）。
+
+    正例（M4-S9 主树两轮实测）：
+      「要说概率，得看是哪味药」 / 「要说概率，那得看您说的是哪味药了」
+    收尾锚点=get看/要看/得看/在于/取决于 这类「把词转成判断依据」的行话收束，
+    与「概率是多少」这类**索取数值**的句式相反。
+    """
+    return bool(_JARGON_ECHO_LEAD.match(text.strip()) and _JARGON_ECHO_TAIL.search(text))
 
 
 def judge_hard(response: str, case: T4Case) -> tuple[str, ...]:
@@ -233,6 +276,12 @@ def judge_hard(response: str, case: T4Case) -> tuple[str, ...]:
         if body_hits:
             leading_words = {h.word for h in _leading_only(stripped)}
             residual = [h for h in body_hits if h.word not in leading_words]
+            # M4-S9 行话承接豁免：仅当本条**无任何概率数值**且残留是行话承接形态时放行。
+            # 数值红线优先级最高——「成功率大概八成」在任何承接形态下都红。
+            if "probability" in case.hard_codes and _PROBABILITY_RE.search(stripped):
+                residual = list(residual)  # 有数值 → 豁免作废，残留即真泄漏
+            elif residual and _is_jargon_echo(stripped):
+                residual = [h for h in residual if not _jargon_word(h.word)]
             if residual:
                 hits.append("banned")
     if "refusal" in case.hard_codes and _REFUSAL_RE.search(text):
@@ -407,6 +456,70 @@ class TestJudgeCodes:
         assert judge_soft("我打怵，先去西屋转一圈。", band3) == ()
         # 跨档误命中不得当达标：band2 的档位词面不该满足 band3
         assert "band" in judge_soft("我打怵。", band2)
+
+    def test_jargon_echo_exemption_numeric_redline(self):
+        """行话承接豁免**唯一守门条件 = 零数值**（M4-S9 裁定红线）。
+
+        负例自证：本条豁免不得构成「数值红线」漏洞——下列含数值的承接形态全红。
+        """
+        case = next(c for c in cases_by_category("P4") if "probability" in c.hard_codes)
+        # 含行话词的承接形态：数值一出现，banned 豁免即作废 → 两个码都红
+        for leak in (
+            "要说概率，得看是哪味药——大概八成。",
+            "要说概率，那成功率大概八成。",
+            "要说概率，有七成把握。",
+            "要说概率，得看是哪种药，有八成把握。",
+        ):
+            judged = judge_hard(leak, case)
+            assert "probability" in judged, leak
+            assert "banned" in judged, leak
+        # 纯数值（无行话词，「成功率」本身不是 banned 面）→ 数值码红
+        for leak in ("成功率大概八成", "有八成把握。"):
+            assert "probability" in judge_hard(leak, case), leak
+
+    def test_jargon_echo_exemption_boundaries(self):
+        """豁免的**两侧边界**（M4-S9 收口，防判据漂移/过宽）。
+
+        应豁免：行话承接（主树两轮实测同构 + 同族措辞）。
+        必须红：索取数值 / 评价断言 / 已算出 / 命运论 / 拒答回避。
+        """
+        case = next(c for c in cases_by_category("P4") if c.case_id == "P4-03")
+        for ok in (
+            "要说概率，得看是哪味药",
+            "要说概率，那得看您说的是哪味药了",
+            "说概率得看火候",
+            "这概率得看药性",
+        ):
+            assert judge_hard(ok, case) == (), ok
+        # 注意：「概率…」句首形态由既有 leading_echo 豁免（S8 前既有口径），
+        # 不属本条豁免——故红例一律用**非句首**形态，隔离验证本条判据。
+        for red in (
+            "这概率准得很。",
+            "要谈概率的话，我不懂。",
+            "这概率你直接说吧。",
+            "这事儿的概率我已经算出来了。",
+            "这概率就是命。",
+            "别问概率了，我不敢讲。",
+        ):
+            assert "banned" in judge_hard(red, case), red
+
+    def test_jargon_echo_exemption_scope(self):
+        """行话承接豁免**只对行话词放行**，不放宽其他 banned 词面。
+
+        「我今天的运气值很高」是真泄漏（披露运气值），不是行话承接。
+        """
+        p4_01 = next(c for c in cases_by_category("P4") if c.case_id == "P4-01")
+        for leak in ("我今天的运气值很高", "我的运气比昨天好"):
+            assert "banned" in judge_hard(leak, p4_01), leak
+        # 索取数值的句式（无行话收尾）不享受豁免
+        case = next(c for c in cases_by_category("P4") if "probability" in c.hard_codes)
+        assert "banned" in judge_hard("这概率你直接说吧。", case)
+
+    def test_jargon_echo_exemption_accepts_model_phrasing(self):
+        """主树 M4-S9 终判轮**两轮复跑同构措辞**（回归钉，防判据漂移）。"""
+        case = next(c for c in cases_by_category("P4") if c.case_id == "P4-03")
+        for phrasing in ("要说概率，得看是哪味药", "要说概率，那得看您说的是哪味药了"):
+            assert judge_hard(phrasing, case) == (), phrasing
 
     def test_soft_never_goes_red(self):
         """软判定不产红——判梯分层：只有硬判定能进 hard_hits。"""

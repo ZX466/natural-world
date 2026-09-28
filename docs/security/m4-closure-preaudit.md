@@ -103,6 +103,22 @@ dispatch（pi/cline 域），**与安规口径无关**（不是断言红）。�
 4. `uv run pyright`（0）+ `uv run ruff check`（clean）；
 5. F-1/F-2 补落后的**增量复验**（词面 CR + ws 集成钉）。
 
-## 7. 动态复验结果（待填）
+## 7. 动态复验结果（T4 终判轮 · 2026-09-27→28 回填）
 
-（等 T5 首跑绿 + F-2 接线收口后由 codex 执行 §6 并回填 §7。）
+**T4 终判轮（主树接线后实跑，裁 23-A）**：`17 passed / 1 failed / 23 抖动 skip / 6 xfail`。
+唯一红 **P4-03**，两轮复跑**同构措辞**（「要说概率，得看是哪味药」/「要说概率，那得看您说的是哪味药了」）
+——系统性偏差非抖动，归 codex 域语料/判定裁定。
+
+**裁定与收口（M4-S9，2026-09-28）**：先以实测排除 (a) 语料微调——`judge_hard` 判**响应**而非
+`expected_response`，改期望形态对模型实际输出的判决**逐位不变**，且该变体自身撞 S8 卫生门禁。
+选 (b) **行话承接豁免**（详见 `t4-corpus.md` §2.6）：只放行「承接框架 + `概率` 行话收尾」
+且**零数值**；`_PROBABILITY_RE` 命中即豁免作废。**禁词表本体零改动**。
+负例自证 4 组钉进 `TestJudgeCodes`（数值双红 / 作用域 / 两侧边界 / 主树措辞回归）。
+
+**本树门禁数字（无 key 环境，M4-S9 收口时）**：
+- T4 语料门禁：`sim/tests/test_t4_probes.py` = **172 passed / 47 skipped**（+5 豁免边界钉）；
+- 全量 not-bench：**1640 passed / 0 failed / 113 skipped / 67 deselected**（26 warnings 为既有基线，非本单引入）；
+- ruff 0 / pyright 0 errors；T3 门禁（共享资产 `strip_stage_direction` 同口径消费）零回归。
+
+**T4 重跑待办**：由主树带 `T4_RUN=1` + key + 零重试重跑全量 46 条出正式判读，绿即宣告 M4 收官。
+（剩余非本树项：T4 nightly 接线仍归 cline 域；P5 因果未知**措辞生成**仍归 Claude 域。）
