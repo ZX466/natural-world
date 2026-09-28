@@ -72,3 +72,36 @@ m4-closure-preaudit.md L57-59（env 仍写 claude-sonnet-5 的过期表述）与
 F3 SQL 增量 +0.037ms（1.07x）无破线，对账点 5 关闭，**pi↔opencode 交叉对账九点
 全部收口**。baseline.json 补 M3-P2/M4 新增 bench 行——登记 CI 域（cline）下一波
 nightly 重生成时随带，不单独开单。
+
+---
+
+# 裁决 25（2026-09-28，Claude 主导）——D3-a 收编+两设计决定裁定+批次 B 派发
+
+## A. D3-a 采认（main `aee98c7`，1661 passed）
+
+主树独立复核：0008 往返（upgrade→downgrade→upgrade）scratch DB 实跑通过，
+与其门禁一致。16 钉子+跨分支写封口全采认。**G-6 解锁最后一前置就此关闭。**
+
+## B. 两个设计决定裁定
+
+1. **成对 CHECK 写单向**：采。`(NULL, seq)` 是既有行常态，等值会把存量行打成非法——
+   与 0005 等值先例的区分理由（天生成对 vs 引用可空）成立。
+2. **parent_branch_id 生产侧不在本刀**：采。不破冻结事件基线（裁 7/8 精神）；
+   架构域接线（WorldEvent 加字段+工厂填值+感知层透传）**归 Claude 域，随 D3-b
+   收编轮同轮落**——存储层已打通（append 读 event 键+validate 校验+钉子），接线面
+   只剩事件模型，正好与 fork 编排一次做完。
+
+## C. 派发连锁
+
+- **kilo 批次 B 大单（M5-K3）即刻派**：fast_forward 新 action（D-2）+ session 首帧
+  （D-5+D-6 合并）+ GET /api/anchors/current（D-9）+ D-3 暂停批（幂等单值，连带清
+  G-1~G-4）——摸底三条（路由顺序坑/纯新增确认/G-1~G-4 位置零漂移）已作施工依据。
+- **opencode D3-b 随即派**：fork 事务+克隆（裁 6 (c)+裁 10 (i)）+ R-1/R-2 断言+
+  P1 强制 flush+裁 5 append 校验。
+- D3-c（R2 三断言+seed 连续）在 b 收编后派；裁 6.3 branches.seed (a)/(b) 随 D3-c 派单裁。
+
+## D. 小项
+
+- codex S1b（preaudit 两行收口）维持待领——不阻塞任何件。
+- 本轮 warnings 30（+4）：D3-a 新增文件撞 GBK 控制台编码的既有模式，非回归，
+  登 opencode 域观察项。

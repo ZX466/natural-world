@@ -18,6 +18,7 @@
 | `actor_id` | TEXT | NOT NULL | 事件发起者 entity_id | §6 WorldEvent.actor_id |
 | `target_id` | TEXT | NULL | 事件目标 entity_id | §6 WorldEvent.target_id |
 | `parent_seq` | INTEGER | NULL | 父事件 seq（因果链） | §6 WorldEvent.parent_seq |
+| `parent_branch_id` | TEXT | NULL | **父事件所在分支**（0008，裁 3）：`NULL` = 父事件在本分支；非 NULL 时 `parent_seq` 在该分支内解释 | §12 读档=分叉 |
 | `payload` | TEXT | NOT NULL | JSON 序列化的事件参数 | §6 WorldEvent.payload |
 | `witnesses` | TEXT | NOT NULL | JSON 数组：见证者 entity_id 列表 | §6 WorldEvent.witnesses |
 | `entropy_ref` | TEXT | NULL | 熵注入记录引用（inject 时写入） | §11 混合熵 |
@@ -29,11 +30,19 @@
 - `idx_events_branch_tick` ON `(branch_id, tick)` — 按 tick 范围查询（快照后重放）
 - `idx_events_actor` ON `(branch_id, actor_id)` — 按角色查询事件
 - `idx_events_type` ON `(branch_id, event_type)` — 按类型筛选
+- `idx_events_parent_branch` ON `(parent_branch_id, parent_seq)` — 0008：谱系解析（查得到即可，**不做第三套折叠规则**）
 
 **约束**：
 - `seq` 在分支内单调递增（应用层保证，SQLite 无 rowid 冲突）
 - `payload` 必须为合法 JSON（CHECK 约束或应用层校验）
 - 禁止 UPDATE/DELETE（ORM 层不暴露更新接口，只 append）
+- `ck_events_parent_branch_pair`（0008）：`parent_branch_id IS NULL OR parent_seq IS NOT NULL`
+  ——指名父分支必给 seq；**单向**（`(NULL, seq)` = 父事件在本分支，既有行全是这种）
+- 谱系引用**在查询层解析**（裁 3）：`parent_branch_id` 只让「父事件住在哪个分支」可查，
+  重放/折叠仍走各表既有的 `fold_*`（见 `m5-fork-archive-preplan.md` §5-C2）
+- **生产侧填充不在本表**：`WorldEvent`（`sim/core/events.py`，冻结基线）尚无
+  `parent_branch_id` 字段；`SqlEventStore.append` 已按 `parent_seq` 同款透传
+  （行 dict 带该键即落库），生产侧接线随读档编排（架构域）落地
 
 ---
 
@@ -104,6 +113,7 @@
 | `tick` | INTEGER | NOT NULL | 游标 tick | §6 PlayerAnchor.tick |
 | `seq` | INTEGER | NOT NULL | 游标 seq | §6 PlayerAnchor.seq |
 | `agent_override` | TEXT | NOT NULL DEFAULT '{}' | JSON：Agent 身体/物品/位置覆盖 | §6 PlayerAnchor.agent_override |
+| `protected` | BOOLEAN | NOT NULL DEFAULT 0 | **0008，裁 9**：该档受保护，DELETE 返回 409（kilo `anchors-api.md` §5 契约）。与 C6 无关——表达「不许删这个档」，不是「不许改历史」 | anchors-api §5 |
 | `created_at` | REAL | NOT NULL DEFAULT (unixepoch('now','subsec')) | — | — |
 | `updated_at` | REAL | NOT NULL DEFAULT (unixepoch('now','subsec')) | — | — |
 
@@ -218,15 +228,19 @@ vec0 在过滤**之前**的取回上限，召回按 `RECALL_OVERFETCH_FACTOR` �
 | `subject_npc_id` | TEXT | NULL | 他人属性知识的主体 npc_id；自身事实知识为 NULL | evidence-chain §5 |
 | `subject_attr_id` | TEXT | NULL | 属性主键（戏外）；自身事实知识为 NULL | evidence-chain §5 |
 | `evidence_seq` | INTEGER | NULL | witnessed：锚定的 `npc.hidden_emerge` 事件 seq（持久层分配后经 `seq_by_index` 投影缝回填） | evidence-chain §5 |
+| `evidence_branch_id` | TEXT | NULL | **0008，裁 4**：证据事件所在分支。`NULL` = 在本分支；非 NULL 时 `evidence_seq` 在该分支内解释（读档=分叉克隆语料后，子分支继承知识但**事件不克隆** → 靠本列解析证据） | m5-fork-archive §5-C4 |
 | `source_knowledge_id` | INTEGER | NULL | told：teller 的 knowledge 行 id（told 链回溯键 = 级联递归索引起点） | evidence-chain §5 |
 | `source_memory` | TEXT | NULL | 派生源记忆 `npc_memories.entry_id`（R1 级联起点） | m3-preplan §1 R1 |
-| `invalidated` | BOOLEAN | NOT NULL DEFAULT 0 | 失效位（0=有效）；**独立位而非 `superseded_by`**——knowledge 无「替代行」语义 | evidence-chain §6 |
+| `invalidated` | BOOLEAN | NOT NULL DEFAULT 0 | 失效位（0=有效）；**独立列而非 `superseded_by`**——knowledge 无「替代行」语义 | evidence-chain §6 |
 | `invalid_reason` | TEXT | NULL | 失效原因（结构化串，不含 LLM 原文/词面） | 同 `npc_memories` |
 
-**约束**（CHECK，`0005_m3_knowledge_governance`）：
+**约束**（CHECK，`0005_m3_knowledge_governance` + `0008_m5_fork_identity`）：
 - `ck_knowledge_source`：`source` IN ('witnessed', 'told', 'inferred')
 - `ck_knowledge_confidence`：`confidence` 范围 0.0–1.0
 - `ck_knowledge_subject_pair`：`(subject_npc_id IS NULL) = (subject_attr_id IS NULL)`（成对）
+- `ck_knowledge_evidence_pair`（0008）：`evidence_branch_id IS NULL OR evidence_seq IS NOT NULL`
+  ——**单向**成对：`(NULL, seq)`（本分支目击，既有行的常态）合法；只有「指名证据分支
+  却没给 seq」的残缺引用被拒。写成等值会把既有行全打成非法。
 
 **应用层形态约束**（proposal §2.2「软约束」，由 `KnowledgeStore.write_fact` 把关，DB CHECK 表达力不及）：
 - `witnessed` ⇒ `evidence_seq IS NOT NULL` 且 `subject_npc_id IS NOT NULL`；
@@ -238,6 +252,7 @@ vec0 在过滤**之前**的取回上限，召回按 `RECALL_OVERFETCH_FACTOR` �
 - `idx_knowledge_source` ON `(branch_id, source)` — 按来源筛选
 - `idx_knowledge_source_memory` ON `(branch_id, source_memory)` — 源记忆 supersede → 反查派生知识（R1 级联起点）
 - `idx_knowledge_source_kid` ON `(branch_id, source_knowledge_id)` — told 链向下递归（级联传播）
+- `idx_knowledge_evidence` ON `(branch_id, evidence_branch_id, evidence_seq)` — 0008：证据引用解析（谱系查得到即可，**不做第三套折叠规则**）
 - `idx_knowledge_subject` ON `(branch_id, subject_npc_id, subject_attr_id)` — 按主体+属性查有效知识（evidence 判定 teller 行一致性）
 
 **治理语义**（evidence-chain §6 终裁）：**继承失效、不继承替代**——源记忆 supersede → 派生 knowledge 行置 `invalidated=1` + `invalid_reason`，沿 `source_knowledge_id` 递归向下，无替代行（codex 预审①）。接口见 `sim/core/persistence/knowledge_store.py`：`invalidate_by_source(entry_id)` / `invalidate_by_row(row_id)`，分支隔离（R4）+ 幂等 + 可与源记忆 supersede 同事务。
@@ -359,8 +374,8 @@ relationships / npc_memories / knowledge。迁移：`0004_m2_npc_attributes`。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
-| `id` | TEXT | PRIMARY KEY | NPC entity_id（稳定戏外主键） |
-| `branch_id` | TEXT | NOT NULL | 所属分支 |
+| `branch_id` | TEXT | NOT NULL | 所属分支（**主键第一列**，0008） |
+| `id` | TEXT | NOT NULL | NPC entity_id（**分支内唯一**，主键第二列） |
 | `name` | TEXT | NOT NULL | 姓名 |
 | `species` | TEXT | NOT NULL DEFAULT 'human' | human/cat/dog/raven（§7 物种级 profile） |
 | `gender` | TEXT | NOT NULL DEFAULT 'unknown' | — |
@@ -386,6 +401,13 @@ relationships / npc_memories / knowledge。迁移：`0004_m2_npc_attributes`。
 | `updated_at_tick` | INTEGER | NOT NULL DEFAULT 0 | 最后更新 tick |
 | `created_at` | REAL | NOT NULL | 客观时间戳 |
 
+**主键**：`(branch_id, id)`（`0008_m5_fork_identity`，裁 1 = F1 硬前置）。
+本表曾是 13 张表里**唯一**主键不带 `branch_id` 的例外（`id` 单列 PK），
+于是同 npc_id 在两个分支**物理不可能共存**——读档 = 分叉克隆整表时必撞主键。
+改复合主键后：克隆只需 `INSERT … SELECT` 换 `branch_id` 值（零 id 重映射）；
+**单键查找必须带分支**（`npc_store._project_lod_change` 已改双键，顺带封掉一处
+「按 id 取行不看分支」的跨分支写）。
+
 **索引**：
 - `idx_profiles_branch` ON `(branch_id)` — 按分支取全部 NPC
 - `idx_profiles_branch_lod` ON `(branch_id, lod)` — L1 全量自转（50 NPC）按 LOD 取
@@ -393,6 +415,8 @@ relationships / npc_memories / knowledge。迁移：`0004_m2_npc_attributes`。
 **约束**：
 - OCEAN 各维 0–100、PAD 各维 −1..1（应用层校验）
 - JSON 列必须为合法 JSON（应用层校验，同 payload §1 纪律）
+- 无外键声明：`npc_health.npc_id` / `relationships.owner_id` / `npc_memories.npc_id`
+  对本表的引用**靠应用层纪律**维持（改主键不触发级联，但引用面须同步核对）
 
 ---
 
@@ -722,6 +746,7 @@ async def materialize_matter(
 | events | (branch_id, tick) | 快照后重放定位 |
 | events | (branch_id, actor_id) | 角色事件查询 |
 | events | (branch_id, event_type) | 类型筛选 |
+| events | (parent_branch_id, parent_seq) | 谱系解析（0008，裁 3；跨分支父事件定位） |
 | branches | (status) | 活跃分支查询 |
 | snapshots | (branch_id, tick) | 读档定位最近快照 |
 | snapshots | (is_cold) | 冷归档管理 |
@@ -729,8 +754,10 @@ async def materialize_matter(
 | npc_memories | (npc_id, importance DESC) | 重要性检索 |
 | relationships | (branch_id, owner_id) | 关系查询 |
 | knowledge | (branch_id, holder_id) | 知识查询 |
+| knowledge | (branch_id, evidence_branch_id, evidence_seq) | 证据引用解析（0008，裁 4） |
 | structures | (branch_id) | 分支结构物查询 |
 | npc_profiles | (branch_id, lod) | L1 全量自转（50 NPC）按 LOD 取 |
+| npc_profiles | 主键 (branch_id, id) | 0008 复合身份：同 id 跨分支共存（读档=分叉克隆前提） |
 | npc_health | (branch_id, hidden) | 常显/隐藏健康档过滤（自我未知） |
 | matter_state | (branch_id, subject_kind) | 物质熵增状态按类别查询 |
 

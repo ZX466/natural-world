@@ -158,6 +158,7 @@ class SqlEventStore:
                     actor_id=event.get("actor_id", ""),
                     target_id=event.get("target_id"),
                     parent_seq=event.get("parent_seq"),
+                    parent_branch_id=event.get("parent_branch_id"),
                     payload=json.dumps(event.get("payload", {}), ensure_ascii=False),
                     witnesses=json.dumps(event.get("witnesses", []), ensure_ascii=False),
                     entropy_ref=event.get("entropy_ref"),

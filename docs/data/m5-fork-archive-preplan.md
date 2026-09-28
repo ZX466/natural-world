@@ -172,26 +172,51 @@ assert before <= after            # 集合包含，且 now 可证伪
 
 若 M5 不落 1/2/3 → **不加**。M5 若落 → 走 §2.6 草案。
 
-### 2.6 0008 迁移预估（**只预估，不动手**）
+### 2.6 0008 迁移 —— ✅ **已落（M5-D3-a），实际范围四件**
 
-**触发条件**（三条独立，建议合成一支迁移，也可拆 0008/0009）：
+> 迁移：`sim/core/persistence/alembic/versions/0008_m5_fork_identity.py`
+> 钉子：`sim/tests/test_m5_fork_identity_schema.py`（16 例）
+> 门禁：scratch DB + **全 revision id**（`downgrade 0007_m4_material_balances`）→
+> 逐级降到 `0006_m4_structures` → 回 `upgrade head` → `revision --autogenerate`
+> **期望 `upgrade()` 只剩 `pass`**（实测零漂移）。**本树根 `world.db` 是脏库，绝不用。**
 
-| 编号 | 变更 | 必要性 | 手法 | 预估行数 |
+| 编号 | 变更 | 裁决后 | 实际手法 | 实际行数 |
 |---|---|---|---|---|
-| 0008-a | `npc_profiles` PK `(id)` → **`(branch_id, id)`**（**F1，必须**） | 分叉克隆的前提 | `op.batch_alter_table(..., naming_convention=…)` + `drop_constraint` + `create_primary_key`（**0006 对 `matter_state` 的同款手法，`0006_m4_structures.py:34-36` 有可直接复制的模板**） | ~40 行（含 downgrade） |
-| 0008-b | `npc_memories` `UNIQUE(entry_id)` → **`UNIQUE(branch_id, entry_id)`**（仅当 §6.1 采「保留 entry_id」案时） | 可选，与 6.1 绑定 | drop + create index | ~15 行 |
-| 0008-c | `events` 加 `global_seq` + 唯一索引 + `counters` 单行表（仅当 §2.5 判据命中时） | 可选 | `add_column`（先 NULL）+ `create_index` + 回填脚本 | ~90 行（含回填） |
-| 0008-d | `knowledge` 加 `evidence_branch_id`（§5.4 C4） | 可选 | `add_column` + index | ~15 行 |
+| 0008-a | `npc_profiles` PK `(id)` → **`(branch_id, id)`**（**F1**） | 裁 1 = 必落 ✅ | `batch_alter_table` + `naming_convention`（0006 对 `matter_state` 同款模板） | ~10 |
+| 0008-b | `npc_memories` `UNIQUE(entry_id)` → `(branch_id, entry_id)` | ❌ **作废**（裁 10 采 (i) 重映射 → (ii) 不启动） | — | 0 |
+| 0008-c | `events` 加 `global_seq` + `counters` | ❌ **作废**（裁 2 = 不加） | — | 0 |
+| 0008-d | `knowledge` 加 `evidence_branch_id`（C4） | 裁 4 = 采 ✅ | batch（CHECK 表级约束）+ index | ~10 |
+| — | `events` 加 `parent_branch_id`（谱系引用） | 裁 3 = 采 ✅ | batch + CHECK + index | ~10 |
+| — | `player_anchors` 加 `protected` | 裁 9 = 采 ✅ | 纯 `add_column`（`server_default` 0） | ~4 |
+| — | 迁移文件合计（含 downgrade 与长 docstring） | — | — | **~120** |
 
-**预估汇总**：必落 ~40 行 + 测试 6–8 例；全量落 ~160 行 + 测试 14–20 例。量级与 0006/0007 同档。
-**风险**：
+**清点结果（施工首步，兑现本节「需在施工前清点」）**：
 
-- 0008-a 会改 `npc_profiles` 的身份 → 所有 `session.get(NpcProfile, id)` 式**单键查找**必须同步改双键。
-  先例：M4-D2a 改 `matter_state` 主键时同步改了 `_project_matter` 与 **10 处测试**的 `session.get`。
-  `rg "session.get\(NpcProfile|session.get\(Event" sim/` 的命中数需在施工前清点（本文未清点，列为施工首步）。
-- 0008-c 的回填必须**确定性排序**（建议 `(created_at, branch_id, seq)` 升序），否则审计序不可复现 → 与 T2 逐位一致的精神一致。
-- `npc_profiles` 无外键声明（`models.py` 无 `ForeignKey`），故改主键不触发级联；但 `npc_health.npc_id`、
-  `relationships.owner_id/other_id`、`npc_memories.npc_id` 语义上引用它——**引用面靠应用层纪律维持**，改主键时须同步核对。
+- 生产代码单键 `session.get(NpcProfile, …)` **全仓仅 1 处**：`npc_store.py::_project_lod_change`，
+  且 `branch_id` 就在该函数参数里 → 改双键一行。**对比** M4-D2a 改 `matter_state` 时
+  连带改 `_project_matter` + **10 处**测试 `session.get`。
+- 测试单键 3 处（全在 `test_m2_runtime_store.py`）。`select(NpcProfile)` 无 id 谓词的
+  查询 4 处，**不受 PK 形态影响**。
+- **顺带封掉一个真 bug**：`_project_lod_change` 原先按 `npc_id` 单键取行、**不看分支**
+  ——单世界线无碍，分叉后会写到父分支那一行（跨分支写）。属 §5-C1「fold/投影必须分支
+  参数化」的应用面缺口，0008-a 顺手封掉（钉子 `test_lod_projection_is_branch_scoped`）。
+- `npc_profiles` 无外键声明（`models.py` 无 `ForeignKey`），改主键不触发级联；
+  `npc_health.npc_id` / `relationships.owner_id` / `npc_memories.npc_id` 语义上引用它
+  ——**引用面靠应用层纪律维持**，已同步核对（无需改）。
+
+**两条设计决定（值得留档）**：
+
+1. **成对 CHECK 是单向的**：`parent_branch_id IS NULL OR parent_seq IS NOT NULL`
+   （knowledge 同理）。`(NULL, seq)` = 引用在本分支，合法且是既有行的常态；
+   写成等值会把**全部既有行**打成非法。第一版我曾想用等值，被这个理由否掉。
+2. **零回填**：`NULL` 的语义就是「本分支」，既有行天然正确，不需要回填脚本
+   （原预估里 0008-c 的「确定性排序回填」随该件作废而消失）。
+3. **downgrade 前置条件**：还原单列主键要求库内**无同 id 跨分支共存行**；0008 之后
+   产生的分叉数据不可降到 0007（downgrade 只服务往返验证，正常路径不回退）。
+4. **`parent_branch_id` 的生产侧不在本刀**：`WorldEvent`（`sim/core/events.py`，冻结
+   基线）尚无该字段，裁 7/8 的精神是「不破冻结基线」；持久层已按 `parent_seq` 同款
+   透传（行 dict 带该键即落库，`validate_store_row` 一并做类型校验），
+   **生产侧接线随读档编排（架构域）落地**。
 
 ---
 
@@ -407,10 +432,10 @@ agent_override = {
 
 | 编号 | 条件 | 现状 | 落地形态 |
 |---|---|---|---|
-| **C1** | **fold 器/级联必须分支参数化，只读本分支** | ✅ 大部分已满足：`materialize_matter_replay` / `materialize_structures_replay` 走 `read_range(self._branch_id, …)`；`KnowledgeStore._cascade` 每条查询都带 `branch_id`（D4 R4） | 补钉子：同 id 跨分支各重建（`test_replay_branch_isolated` 已是此形，扩到语料三表） |
+| **C1** | **fold 器/级联必须分支参数化，只读本分支** | ✅ 大部分已满足：`materialize_matter_replay` / `materialize_structures_replay` 走 `read_range(self._branch_id, …)`；`KnowledgeStore._cascade` 每条查询都带 `branch_id`（D4 R4）。**0008-a 补上最后一个漏网**：`_project_lod_change` 原按 `npc_id` 单键取行不看分支（分叉后写父分支行），已改双键并钉子 | 补钉子：同 id 跨分支各重建（`test_replay_branch_isolated` 已是此形，扩到语料三表） |
 | **C2** | **折叠规则单一来源——分叉不许引入第三套语义** | ✅ `fold_matter_snapshot` / `fold_structure_snapshot` / `fold_material_balance` 三处都被快照路径与重放路径共用（M3-C2 逐位相等的纪律） | 分叉重放**必须**调同一批 fold 函数；新增「分叉专用折叠」= 违规，CR 拦 |
 | **C3** | **治理态随克隆集整体继承；级联绝不跨分支** | ✅ `_cascade` 带 `branch_id`；克隆把治理列一起带走（`invalidated` / `invalid_reason` / `superseded_by` / `source_knowledge_id` / `source_memory`） | 钉子：子分支里某条 knowledge 已失效 → 重级联不重复计数、不改 `invalid_reason`；父分支后续治理动作**不影响**子分支（父已 abandoned，本就无新写入） |
-| **C4** | **证据链跨分支会悬空**：`knowledge.evidence_seq` 锚定的是**父分支**的事件（事件不克隆） | ❌ 现无解析规则 | 三选一（待裁点 4）：①加 `evidence_branch_id` 列（0008-d，引用变二元组，最干净）；②定义谱系解析（沿 `forked_from_branch` 上溯）；③置 NULL（**否决**：信息销毁，违 §19） |
+| **C4** | **证据链跨分支会悬空**：`knowledge.evidence_seq` 锚定的是**父分支**的事件（事件不克隆） | ✅ **已落（M5-D3-a / 裁 4）**：`knowledge.evidence_branch_id` + `ck_knowledge_evidence_pair`（单向：指名证据分支必给 seq）+ `idx_knowledge_evidence`；语义 `(NULL, seq)` = 证据在本分支，零回填 | ✅ 封口（③置 NULL 已否决：信息销毁违 §19） |
 | **C5** | **向量候选集必须分支内** | ✅ **已落（M5-D2 / 裁 11）**——见下 | **M5 硬前置**：`vec_candidate_ids` 召回 SQL 加 `AND m.branch_id = ?`（同句 push-down，不是 Python 侧后过滤，R2 纪律）；`branch_id` **必填 + keyword-only + 无默认**（fail-closed：fork 后新分支不是 `'main'`，默认值会静默读到错分支）。配 T1 钉子 `TestVecBranchIsolation`（6 例）。⚠️ 附带发现：`k` 是 vec0 在过滤**之前**的取回上限 → 分支过滤会使候选少于 `top_k`（多分支下语料按分叉数复制，最近邻易被他分支占满 → **候选饥饿**），故加 `RECALL_OVERFETCH_FACTOR=4` 过取后裁到 `top_k`（钉子 `test_branch_filter_does_not_starve_local_candidates` 实测：系数改 1 即红）。F>4 时仍会饿 → **per-branch 向量分区**（vec metadata partition / 按分支建表）列为后续件 |
 | **C6** | **分支身份先于一切**：任何 fold 前先确认目标 `branch_id` 存在且 `status='active'` | 🟡 `event-sourcing.md` §2.2 步骤 2 写了「branch_id 存在且 status=active」，但 `store.append` **未实现**该校验 | fork 后旧分支仍可能收到 append（driver 漏闸）→ 建议在 `append` 入口加 fail-closed 校验（待裁点 5） |
 
@@ -516,15 +541,15 @@ agent_override = {
 
 | # | 待裁 | 我的建议 | 裁谁 | 关联 |
 |---|---|---|---|---|
-| 1 | `npc_profiles` PK 改复合（**F1**） | 必落 0008-a，照 0006 模板 | Claude（+ 我施工） | §2.6 |
+| 1 | `npc_profiles` PK 改复合（**F1**） | 必落 0008-a，照 0006 模板 | ✅ **已裁并已落**（裁 1；M5-D3-a） | §2.6 |
 | 2 | `global_seq` 加不加 | M5 不落则**不加**；先落零迁移的案 C 断言口径 | ✅ **已裁 = 不加**（`m5-rulings.md` §B 裁 2），案 C 口径 ✅ 已落 | §2.5 |
-| 3 | 跨分支 `parent_seq` 悬空怎么解 | 加 `parent_branch_id` 列 / 定义谱系解析 / 置 NULL（后者否决） | Claude | §2.1③ |
-| 4 | `knowledge.evidence_seq` 跨分支悬空（C4） | 加 `evidence_branch_id`（0008-d） | Claude | §5-C4 |
+| 3 | 跨分支 `parent_seq` 悬空怎么解 | 加 `parent_branch_id` 列 / 定义谱系解析 / 置 NULL（后者否决） | ✅ **已裁 = 加列**（裁 3；M5-D3-a 已落，谱系解析在查询层） | §2.1③ |
+| 4 | `knowledge.evidence_seq` 跨分支悬空（C4） | 加 `evidence_branch_id`（0008-d） | ✅ **已裁并已落**（裁 4；M5-D3-a） | §5-C4 |
 | 5 | `append` 是否校验 `status='active'`（C6） | 落 fail-closed 校验，防 fork 后误写父分支 | Claude | §5-C6 |
 | 6 | fork 原子性方案 | 采 (c) clone 走 async 引擎直写；若 codex 判「必须经 store 类」→ 退 (a)+journal | Claude + **codex** | §3.7 |
 | 7 | 是否给 memories/knowledge 补 `*.written` 事件（解 F2） | **M5 不做**（改冻结事件基线 + 触 S1/X7）；列为中长期，先记提案 | Claude + **codex** | §3.2 |
 | 8 | `agent_override` 要不要变成事件 | M5 不做（保持玩家档不产事件） | Claude | §4.5 |
-| 9 | `player_anchors.protected` 并入 0008 | 采（与 kilo K7 合并，同表一支迁移） | Claude + kilo | §4.3 |
+| 9 | `player_anchors.protected` 并入 0008 | 采（与 kilo K7 合并，同表一支迁移） | ✅ **已裁并已落**（裁 9；M5-D3-a 列已落，路由面待 kilo） | §4.3 |
 | 10 | 语料 `entry_id` 克隆策略 | 采 (i) 重映射（零 schema）；(ii) 留待裁 | Claude（(ii) 需 codex） | §6.1 |
 | 11 | **F3 向量召回分支隔离** | **M5 硬前置**，fork 存在之前必须补 + 钉子 | ✅ **已裁并已落**（`m5-rulings.md` §B 裁 11 = 采；M5-D2 实施 + 6 钉子） | §5-C5 |
 | 12 | anchor 热钉 vs 分支冷归档（A6） | 采「anchor 引用即热钉」 | Claude | §3.8 / §4.1 |
@@ -535,16 +560,17 @@ agent_override = {
 
 1. ✅ **零迁移先行**（**M5-D2 已落**）：T1 断言 5 口径改 `(branch_id, seq)` 对集合 + 可证伪性守卫（§2.4 案 C / §6.5 第 1 行，6 钉子）。
 2. ✅ **F3 前置**（**M5-D2 已落**，裁 11）：向量召回分支隔离 + T1 钉子（+6 例）。附带 `RECALL_OVERFETCH_FACTOR`（候选饥饿防御，见 §5-C5）。
-3. ⏳ **0008-a（F1）**：主键改复合 + 全量单键查找清点与改双键（等裁 1）。
+3. ✅ **0008-a（F1）**：主键改复合 + 全量单键查找清点与改双键（**M5-D3-a 已落**：生产 1 处 + 测试 3 处，见 §2.6）。
 4. ⏳ **fork 事务 + 克隆**：P1 前置条件 → 6 张有界表克隆 → 语料表截断克隆 + id 重映射 + vec 行重键 → 原子性（等裁 6/10）。
 5. ⏳ **R2 三断言 + seed 连续（断言 D）** + 可比字段集（可与 3/4 并行）。
-6. ⏳ **可选尾巴**：`parent_branch_id`（裁 3）、`evidence_branch_id`（裁 4）、`protected`（裁 9）。`global_seq` **已裁不落**（裁 2）。
+6. ✅ **可选尾巴**：`parent_branch_id`（裁 3）、`evidence_branch_id`（裁 4）、`protected`（裁 9）——**均随 0008 落**（M5-D3-a）。`global_seq` **已裁不落**（裁 2）。
 7. ⏳ **后续件（施工中发现，非本轮裁）**：per-branch 向量分区（F>4 时向量召回候选饥饿的正解）→ 需提案。
 
 ## 10. 本文边界与门禁
 
-- 零代码、零 schema、零迁移、零测试；不改任何既有文档（`schema.md` / `event-sourcing.md` 的回写
-  随裁决落地一并做，避免本稿与实现漂移）。
+- 本稿写于 M5-D1（零代码）；其后 §2.4 案 C、§5-C5、§2.6 四件 0008 已由 **M5-D2 /
+  M5-D3-a** 落地并回写本文（进度见 §9）——读本文时**以 §9 进度表与「已落」标记为准**，
+  勿把未落提案当现状。
 - 本文所有「实测」结论均给出仓内位置（文件:行号 / 表名），可复核；
   所有「预估」均标注为公式或算例，**不含任何未实测的性能数字**。
 - 跨域只登记不施工：driver 的 fork 编排与 store 实例 rebind（架构域）、`player_anchors.protected`

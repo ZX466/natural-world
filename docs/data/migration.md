@@ -584,6 +584,35 @@ def downgrade() -> None:
 
 ---
 
+### 6.4 0008_m5_fork_identity.py（M5-D3-a 已落地，裁 1 / 3 / 4 / 9）
+
+实际迁移：`sim/core/persistence/alembic/versions/0008_m5_fork_identity.py`
+（revision id = `0008_m5_fork_identity`）。读档 = 分叉（DESIGN §12）的身份前置，四件：
+
+| 件 | 表 | 变更 | 手法 |
+|---|---|---|---|
+| a（裁 1） | `npc_profiles` | 主键 `id` → **`(branch_id, id)`** | `batch_alter_table` + `naming_convention` 规范旧 PK 名（0006 同款） |
+| 3 | `events` | 加 `parent_branch_id` + `ck_events_parent_branch_pair` | batch（CHECK 是表级约束，`ADD COLUMN` 表达不了，0005 同款） |
+| 4 | `knowledge` | 加 `evidence_branch_id` + `ck_knowledge_evidence_pair` | batch |
+| 9 | `player_anchors` | 加 `protected`（NOT NULL DEFAULT 0） | 纯 `add_column`（带 `server_default`） |
+
+- **两条成对 CHECK 是单向的**：`parent_branch_id IS NULL OR parent_seq IS NOT NULL`
+  （knowledge 同理）。`(NULL, seq)` = 引用在本分支，合法且是既有行的常态；只有
+  「指名分支却没给 seq」的残缺引用才拒。写成等值会把既有行全打成非法。
+- **零回填**：`parent_branch_id` / `evidence_branch_id` 的 `NULL` 语义就是「本分支」，
+  既有行天然正确。
+- **downgrade 前置条件**：还原 `npc_profiles` 单列主键要求库内**不存在同 id 跨分支
+  共存行**（否则重建表主键冲突）。0008 之后产生的分叉数据不可降到 0007
+  （downgrade 只服务迁移往返验证，正常路径不回退）。
+- **往返零漂移验证**（本仓纪律）：scratch DB + **全 revision id**
+  （`alembic downgrade 0007_m4_material_balances`，不写 `0007` 前缀——alembic 接受
+  唯一前缀，同前缀 revision 将来会静默命中错支）→ `upgrade head` →
+  `revision --autogenerate` 期望 `upgrade()` 只剩 `pass` → 删临时迁移。
+  **本树根目录 `world.db` 是脏库**（`alembic_version` 缺失但表已存在 →
+  `upgrade head` 撞 `branches` exists），必须用 `WORLD_DB_URL` 指向临时库。
+
+---
+
 ## 7. 迁移执行命令
 
 ```bash
