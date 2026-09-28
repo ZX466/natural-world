@@ -24,6 +24,19 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
+【2026-09-28 第二十六轮｜**M4 正式宣告收官**（S9 收编+T4 终判 0 红）】①codex M4-S9
+收编（main `8dfad0e`）：P4-03 裁 (b) 行话承接豁免——**实测排除 (a)**（改语料对判决
+逐位零影响+变体自身撞卫生门）；三边界钉死（仅「概率」一词/行话收尾锚点/数值命中
+整条豁免作废）；自查收紧两处过宽（裸分数/可靠性断言）+5 负例钉子。
+②门禁 **1640 passed / 0 failed**（soak 本轮自愈过线），ruff 0 / pyright 0。
+③**T4 终判（Deepseek 第四跑）：18 passed / 0 failed / 23 抖动 skip / 6 xfail（全软判定），
+exit 0**——P4-03 转绿，T4 面 ✅ 关闭。④**M4 宣告收官**（2026-09-28）：M0+M1+M2+M3+M4
+全成，**全项目 ≈85%**。⑤M4 收尾挂账（不阻塞，M5 期间清）：T4 nightly 接线
+（cline 域，改约后 workflow 已存照）/ P5 措辞生成侧（我域，preaudit §2 在案）/
+软判定 6 条人工复核（band×3+hedge×3）。⑥用户待办：**轮换 Deepseek key**（会话已暴露）。
+⑦M5 下一波派单序：opencode D3（0008 四件+fork 事务+R2 断言）→ cline 小单（README
+M2-K2b 改号）→ codex S 系安规预研 → kilo 批次 B 施工面 → pi RETRIEVAL after（已通知）。
+
 【2026-09-27 第二十五轮｜M5 施工第一波收编+裁 22+裁 23-A T4 judge 接线】①五单收编
 （main `973ef02`，README 一处冲突按各树终态合）：**opencode M5-D2**（12 钉子——T1 断言 5
 改 (branch_id,seq) 对集合二阶守卫【裸 seq 对照组故意留测试】+F3 branch 过滤进签名
