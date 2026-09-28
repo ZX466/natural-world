@@ -112,14 +112,42 @@
 | `test_retrieval_tick_total_decision_driven`（④） | `RETRIEVAL_TICK_LIMIT_MS=12.0` | **2.93ms**（决策驱动 10 次） | 4.1x | M3-P2 记 2.9 |
 | `test_retrieval_broadcast_anti_pattern_probe`（反模式） | **无硬断言**（探测量） | 106.9ms（50 NPC 广播） | — | M3-P2 记 16.8ms（本机档位/参考实现差异，仍 6x 破 tick 预算） |
 > **①/③ 偏紧记录**：候选 0.198/0.30=**1.52x**、哨兵 1.145/2.00=**1.75x**——与 M3-P2「偏紧」结论一致
-> （① M3-P2 1.29x）。F3 加 `branch_id` 过滤后须重点看 ①（召回 SQL 改动面的直接受害者）。
+> （① M3-P2 1.29x）。after 实测见 §6.2：① 未漂移（F3 未直接进参考实现 bench，见 §6.2 先决口径）。
 > **反模式 106.9ms vs M3-P2 16.8ms 的差**：本机档位 + 参考实现（80 参 IN-JOIN vs 4 倍过取）差异；
 > 该用例**无硬断言**，仅作防呆论据，不影响 before/after 对账口径。
-### 6.2 after 待办（opencode F3 交付后）
-- 复跑 `uv run pytest sim/tests/bench/test_bench_retrieval.py -m bench`，对比上表；
-- 漂移 > `PI_BENCH_ADVISORY` 门（越线只记录）则报数，重点看 ①候选（F3 直接改动面）；
-- 落点：本文件 §6 追加 after 列 + memory ⑤节。
-- **before 存照已落 memory ⑤节**（本单门禁：不用单独交付）。
+### 6.2 after 实测（F3 已落 main `5bd8d1f`；本机暖态中位，2026-09-28，多跑取代表值）
+**先决口径（重要）**：`test_bench_retrieval.py` 的四红线用例用**独立参考实现**（`_VecBenchWorld`
+的 numpy 余弦 + IN-JOIN，`48db6cf` 起**未改动**），**不 import** `vector.py` 的 `vec_candidate_ids`——
+故 F3 改 SQL **不直接进这四条 bench**。四红线 after 的意义是「**确认 F3 未波及打分链/候选形状**
+（vec-preplan §18 硬边界）」；F3 的 SQL 增量由**独立探针**（真 sqlite-vec）实测（见下）。
+| 用例 | 红线 | before（M5-P2） | **after（F3 后）** | 漂移 | 判定 |
+|---|---|---|---|---|---|
+| ① `test_vec_candidate_generation_per_npc` | 0.30 | 0.198ms | **0.198ms** | ~0% | ✅ 无漂移 |
+| ② `test_retrieval_scoring_20_candidates` | 0.30 | 0.063ms | **0.062ms** | −1.6% | ✅ 无漂移 |
+| ③ `test_retrieval_full_scan_degraded_sentinel` | 2.00 | 1.145ms | **1.12ms** | −2.2% | ✅ 无漂移 |
+| ④ `test_retrieval_tick_total_decision_driven` | 12.0 | 2.93ms | **3.05ms** | +4.1% | ✅ 无漂移（<advisory） |
+| 反模式 `test_retrieval_broadcast_anti_pattern_probe` | 无硬断言 | 106.9ms* | **16.1ms** | — | 与 M3-P2 记 16.8 一致 |
+> *before 的 106.9ms 是**系统负载下的离群**（当时多 agent 并行）；无硬断言、不进对账口径。
+> 结论：**四红线 after ≈ before（均 <5% 抖动，无 advisory 破线）**——F3 未触及打分链/候选形状（预期内）。
+
+#### 6.2.1 F3 SQL 增量（独立探针：真 sqlite-vec `vec_candidate_ids`，N=600、top_k=20、forks=4、dim=384）
+> opencode 明确请测「**over-fetch** 的距离计算增量」（`k` 由 `top_k` → `top_k × RECALL_OVERFETCH_FACTOR(4)`）。
+> 探针建 4 分叉语料（本分支占 1/4），直调 `vec_candidate_ids`，暖态中位 300 iter × 9 round。
+| 形态 | dim=384（真实） | dim=4（bench 档） |
+|---|---|---|
+| pre-F3：无分支谓词、k=top_k | 0.495ms | 0.036ms |
+| F3：`branch_id` 谓词、k=top_k | **0.474ms**（Δ=**−0.021ms**，≈0） | 0.027ms（Δ≈0） |
+| F3：`branch_id` + over-fetch k=top_k×4 | **0.532ms**（Δ_overfetch=**+0.057ms**） | 0.076ms（Δ=+0.049ms） |
+| **F3 全量 vs pre-F3** | **+0.037ms（1.07x）** | +0.040ms（2.09x，基数极小） |
+- **分支谓词本身 ≈ 0**（+3 参 push-down，同句内，与 R2 纪律一致）——与 opencode「预期≈0」相符。
+- **over-fetch 的增量 +0.057ms**（k 20→80）：vec0 扫描 4x 候选但 ANN 亚线性，只 +14%；仍是**真 SQL 增量主项**。
+- **F3 全量 +0.037ms（1.07x）≪ 0.30ms 红线**（余量 8x）→ **不破线、无需放宽**；探针验证「过滤进召回句、禁 Python 侧后过滤」的性能代价可忽略。
+- 破例前置：若 `RECALL_OVERFETCH_FACTOR` 再上抬（F>4 需 per-branch 向量分区，D1 §5-C5 已列后续件）→ 该增量会随系数线性放大，须届时复测。
+
+#### 6.2.2 对账点 5 收口
+- D1 §7 对账点 5「F3 加分支过滤的检索成本」→ **关闭**：分叉谓词 ≈0 + over-fetch +0.057ms，全量 1.07x，不破线；
+- `pi ↔ opencode` 交叉对账（D1 §7 全 9 点）至此**全部收口**（5 由本单关闭，1–4/6–9 M5-P1 已回填）。
+- **baseline 建议**：`docs/perf/baseline.json` 应随下次 nightly 重生成时补入 retrieval/structure/willingness 行（现 21 项为 2026-09-23 旧集，缺 M3-P2/M4 新增 bench）——属 CI 域，本单只登记。
 
 ## 7. 边界与门禁
 - **零代码**：不动 `sim/`、`thresholds.py`、迁移；只新增本文件 + memory ⑤节。
