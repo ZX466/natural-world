@@ -47,7 +47,22 @@ class Branch(TimestampMixin, Base):
 
 
 class Event(TimestampMixin, Base):
-    """事件日志 — append-only 世界档。§6 WorldEvent + §4 C4。"""
+    """事件日志 — append-only 世界档。§6 WorldEvent + §4 C4。
+
+    **parent_branch_id（M5-D3-a / 0008，裁 3）**：`parent_seq` 是**分支内**引用，
+    读档 = 分叉（§12）后新分支的事件若指向父分支的事件，光有 `parent_seq` 解析不出
+    「那个 seq 住在哪个分支」→ 谱系引用悬空。本列补上这一半：
+    - `NULL` = 父事件就在**本分支**（既有行全是这种，零回填）；
+    - 非 `NULL` = 父事件住在该分支，`parent_seq` 在该分支内解释。
+
+    **谱系解析在查询层做**（裁 3 原文），不做第三套折叠规则：本列只是让「查得到」，
+    折叠/重放仍走各表既有的 `fold_*`（`m5-fork-archive-preplan.md` §5-C2）。
+    DB CHECK `ck_events_parent_branch_pair` 保证「指名父分支必给 seq」。
+
+    **生产侧填充不在本列**：事件模型 `WorldEvent`（`sim/core/events.py`，冻结基线）
+    尚无该字段，`SqlEventStore.append` 已按 `parent_seq` 同款透传
+    （行 dict 带 `parent_branch_id` 即落库），生产侧接线随读档编排（架构域）落地。
+    """
 
     __tablename__ = "events"
 
@@ -58,15 +73,21 @@ class Event(TimestampMixin, Base):
     actor_id: Mapped[str] = mapped_column(String, nullable=False)
     target_id: Mapped[str | None] = mapped_column(String, nullable=True)
     parent_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    parent_branch_id: Mapped[str | None] = mapped_column(String, nullable=True)
     payload: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     witnesses: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     entropy_ref: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
         PrimaryKeyConstraint("branch_id", "seq"),
+        CheckConstraint(
+            "parent_branch_id IS NULL OR parent_seq IS NOT NULL",
+            name="ck_events_parent_branch_pair",
+        ),
         Index("idx_events_branch_tick", "branch_id", "tick"),
         Index("idx_events_actor", "branch_id", "actor_id"),
         Index("idx_events_type", "branch_id", "event_type"),
+        Index("idx_events_parent_branch", "parent_branch_id", "parent_seq"),
     )
 
 
@@ -95,7 +116,12 @@ class Snapshot(TimestampMixin, Base):
 
 
 class PlayerAnchor(TimestampMixin, Base):
-    """玩家档 — 游标 + agent_override。§6 PlayerAnchor。"""
+    """玩家档 — 游标 + agent_override。§6 PlayerAnchor。
+
+    **protected（M5-D3-a / 0008，裁 9）**：与 kilo 的锚点 CRUD 面合并（`docs/api/
+    anchors-api.md` §5 契约「DELETE protected 档 → 409」）。玩家档**不是**世界档，
+    故此列与 C6 无关——它表达的是「这个档不许删」，不是「不许改历史」。
+    """
 
     __tablename__ = "player_anchors"
 
@@ -105,6 +131,7 @@ class PlayerAnchor(TimestampMixin, Base):
     tick: Mapped[int] = mapped_column(Integer, nullable=False)
     seq: Mapped[int] = mapped_column(Integer, nullable=False)
     agent_override: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    protected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     updated_at: Mapped[float] = mapped_column(Float, nullable=False, default=lambda: time.time())
 
     __table_args__ = (Index("idx_anchors_branch", "branch_id"),)
@@ -225,6 +252,15 @@ class Knowledge(TimestampMixin, Base):
     - **治理列**（§6 终裁「继承失效、不继承替代」）：`source_memory`（派生源
       记忆 entry_id）/ `invalidated`（独立失效位——knowledge 无「替代行」语义，
       故不复用 ``superseded_by``）/ `invalid_reason`（结构化原因串，不含 LLM 原文）。
+
+    **evidence_branch_id（M5-D3-a / 0008，裁 4 = 封 C4 跨分支悬空）**：
+    `evidence_seq` 锚定 `npc.hidden_emerge` 事件，而事件是**分支内** seq。读档 =
+    分叉克隆语料时，子分支继承了这条知识，但被引用的**事件不克隆**（事件不复制，
+    只追加）→ 证据在子分支内悬空。本列补上引用的另一半：
+    - `NULL` = 证据事件就在**本分支**（既有行全是这种，零回填）；
+    - 非 `NULL` = 证据事件住在该分支，`evidence_seq` 在该分支内解释。
+    DB CHECK `ck_knowledge_evidence_pair` 保证「指名证据分支必给 seq」；**单向**
+    （`(NULL, seq)` 合法——本分支目击是既有行的常态，只有残缺引用才拒）。
     """
 
     __tablename__ = "knowledge"
@@ -240,6 +276,7 @@ class Knowledge(TimestampMixin, Base):
     subject_npc_id: Mapped[str | None] = mapped_column(String, nullable=True)
     subject_attr_id: Mapped[str | None] = mapped_column(String, nullable=True)
     evidence_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    evidence_branch_id: Mapped[str | None] = mapped_column(String, nullable=True)  # 0008
     source_knowledge_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # ---- 治理列（R1/S5：继承失效、不继承替代）----
     source_memory: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -253,11 +290,21 @@ class Knowledge(TimestampMixin, Base):
             "(subject_npc_id IS NULL) = (subject_attr_id IS NULL)",
             name="ck_knowledge_subject_pair",
         ),
+        CheckConstraint(
+            "evidence_branch_id IS NULL OR evidence_seq IS NOT NULL",
+            name="ck_knowledge_evidence_pair",
+        ),
         Index("idx_knowledge_holder", "branch_id", "holder_id"),
         Index("idx_knowledge_source", "branch_id", "source"),
         Index("idx_knowledge_source_memory", "branch_id", "source_memory"),
         Index("idx_knowledge_source_kid", "branch_id", "source_knowledge_id"),
         Index("idx_knowledge_subject", "branch_id", "subject_npc_id", "subject_attr_id"),
+        Index(
+            "idx_knowledge_evidence",
+            "branch_id",
+            "evidence_branch_id",
+            "evidence_seq",
+        ),
     )
 
 
@@ -279,6 +326,13 @@ class Knowledge(TimestampMixin, Base):
 class NpcProfile(TimestampMixin, Base):
     """NPC 完整属性宽表（DESIGN §13；M2）。健康档见 NpcHealth。
 
+    **分支身份 = `(branch_id, id)`（M5-D3-a / 0008，裁 1 = F1 硬前置）**：本表曾是
+    13 张表里**唯一**主键不带 `branch_id` 的例外（`id` 单列 PK），于是同 npc_id 在两个
+    分支**物理不可能共存**——读档 = 分叉要克隆整张表时必撞主键。改复合主键后：
+    - 克隆只需 `INSERT … SELECT` 换 `branch_id` 列值（零 id 重映射）；
+    - 单键查找必须带分支（`_project_lod_change` 已改双键，见 `npc_store.py`）；
+    - 读侧 `materialize` 本就 `WHERE branch_id = ?`，语义不变。
+
     OCEAN 人格与 PAD 情绪为数值列（对齐 §6 契约 + prompt 装配需要）；
     需求/技能/目标/物品/知识边界是低频变动集合，JSON 文本承载避免表爆炸。
 
@@ -289,7 +343,7 @@ class NpcProfile(TimestampMixin, Base):
 
     __tablename__ = "npc_profiles"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True)  # NPC entity_id
+    id: Mapped[str] = mapped_column(String)  # NPC entity_id（分支内唯一）
     branch_id: Mapped[str] = mapped_column(String, nullable=False)
 
     # ---- 身份（DESIGN §13 身份）----
@@ -327,6 +381,7 @@ class NpcProfile(TimestampMixin, Base):
     updated_at_tick: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     __table_args__ = (
+        PrimaryKeyConstraint("branch_id", "id"),
         Index("idx_profiles_branch", "branch_id"),
         Index("idx_profiles_branch_lod", "branch_id", "lod"),
     )

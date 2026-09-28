@@ -616,13 +616,18 @@ async def _project_events(
 
 
 async def _project_lod_change(session: AsyncSession, branch_id: str, event: WorldEvent) -> None:
-    """NPC_LOD_CHANGE → npc_profiles.lod（C4：LOD 只走事件，不直改列）。"""
+    """NPC_LOD_CHANGE → npc_profiles.lod（C4：LOD 只走事件，不直改列）。
+
+    **双键取行**（0008 后 `npc_profiles` 主键是 `(branch_id, id)`，M5-D3-a / 裁 1）：
+    原先按 `npc_id` 单键取行**不看分支**——单世界线无碍，读档 = 分叉后会写到父分支
+    那一行去（跨分支写）。此处 `branch_id` 本就在参数里，带上即可。
+    """
     payload = event.payload
     npc_id = str(payload.get("npc_id", ""))
     to_lod = int(payload.get("to_lod", -1))  # type: ignore[arg-type]
     if not npc_id or to_lod not in (LOD_STATISTICAL, LOD_UTILITY, LOD_LLM):
         raise NpcStoreError(f"NPC_LOD_CHANGE payload 非法: {payload!r}")
-    row = await session.get(NpcProfile, npc_id)
+    row = await session.get(NpcProfile, {"branch_id": branch_id, "id": npc_id})
     if row is None:
         raise NpcStoreError(f"NPC_LOD_CHANGE 指向未知 NPC: {npc_id}")
     row.lod = to_lod
