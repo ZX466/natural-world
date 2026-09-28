@@ -14,6 +14,22 @@ name: T4 Nightly（真模型出戏探针）
 # `workflow_dispatch` **保留**——将来若恢复 secret 与自动跑，取消 schedule 注释即可。
 # env 里的 T4_MODEL / T4_MODEL_BASE_URL 与本地跑法**同值**（锁版本口径不许两处漂移）；
 # **api_key 绝不进本文件**（下方 env 与 steps 中均无 key，只有可选的本地注入点说明）。
+#
+# ===== 2026-09-28 M4 收官存照：T4 面 ✅ 关闭 + 挂账清点 =====
+# ① **探针集已落地**：codex M4-S7 `sim/tests/test_t4_probes.py`（46 条，`bda2aa3`）——
+#    下方「探针步骤」段的标题与措辞已按现状更新（不再是「待 S7 交付」）。
+# ② **判定层已校准**：codex M4-S8（裁 21-E：舞台指示改**配对括注删除**法 + 句首反问豁免对齐
+#    S4b + t4-corpus P4-05 期望响应改写去词面）；codex M4-S9（P4-03 裁定行话承接豁免，
+#    零数值守门——仅「概率」一词/行话收尾锚点/数值命中整条豁免作废）。
+# ③ **T4 终判（Deepseek 第四跑，2026-09-28）：18 passed / 0 failed / 23 抖动 skip /
+#    6 xfail（全为软判定），exit 0 ⇒ T4 面关闭**（判读口径见 `docs/dev-workflow.md` §3）。
+# ④ **M4 已宣告收官**（2026-09-28，main `7fab507`）。M4 收尾三项挂账的终态：
+#    · **T4 nightly 接线（cline 域）＝ 本存照本身**：改约后本文件长期作「配置存照 + 端点
+#      就绪检查」，`schedule` 保持注释；**验收口径不变＝本地跑一轮（等效验收）**；
+#    · **P5 因果未知措辞生成（主树域）＝ 已落 main `7dac4e7`**（`m4-closure-preaudit` §2 缺口关闭）；
+#    · **软判定 6 条人工复核（band×3 + hedge×3）＝ 留主树域**，不在本文件范围。
+#    ⇒ 与本文件相关的挂账**到此清空**（存照本身即最后一件）。
+# ⑤ 用户待办（安全，非本文件可执行）：**轮换 Deepseek key**（该 key 曾在本会话暴露）。
 
 on:
   # schedule:
@@ -74,23 +90,26 @@ jobs:
           echo "### T4 Nightly（2026-09-27 改约：本地真模型探针一轮）" >> "$GITHUB_STEP_SUMMARY"
           echo "- 本工作流**不注入 api_key**（不建 GitHub secret；key 只经本地环境变量）" >> "$GITHUB_STEP_SUMMARY"
           echo "- 当前验收口径＝**本地跑一轮** \`pytest -m t4\`（见 docs/dev-workflow.md §3）" >> "$GITHUB_STEP_SUMMARY"
-          echo "- 探针集待 codex M4-S7 落 \`sim/tests/test_t4_probes.py\`（下方探针步骤仍为注释态）" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 探针集**已落地**：\`sim/tests/test_t4_probes.py\`（codex M4-S7，46 条）；**T4 终判 0 红（exit 0）⇒ T4 面已关闭**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 下方探针步骤**仍保持注释态**（改约后验收口径＝本地跑一轮，见 docs/dev-workflow.md §3）" >> "$GITHUB_STEP_SUMMARY"
 
-      # ===== TODO(codex M4-S7 交付后接)：T4 探针步骤 =====
-      # 探针集：codex M4-S7 `sim/tests/test_t4_probes.py`（**改约后本地跑法为主路径**，见
-      # `docs/dev-workflow.md` §3「T4 本地探针一轮」：三件套 env + `pytest -m t4`）。
-      # 本 step 保持注释态——**不执行任何真模型调用**（零烧钱）。何时接入由 Claude 裁：
-      #   若维持「本地跑一轮」验收口径，本 step 可长期注释（workflow 只作配置存照 + 端点检查）；
-      #   若将来恢复 secret + 每夜自动跑，再取消注释并把 key 改回 `${{ secrets.T4_MODEL_API_KEY }}`。
-      # 接线约定不变（探针落地后照此替换本段）：
-      #   1. `pytest.ini` 已有 `t4` marker（--strict-markers 要求先注册，见本轮 cline 提交）；
+      # ===== 探针步骤（**保持注释态**：改约后验收口径＝本地跑一轮；M4-S7 探针集已落地）=====
+      # 探针集：codex M4-S7 `sim/tests/test_t4_probes.py`（**已落地 `bda2aa3`，46 条**）；
+      # **改约后本地跑法为主路径**（见 `docs/dev-workflow.md` §3「T4 本地探针一轮」：
+      # 三件套 env + `pytest -m t4`）。
+      # 本 step 保持注释态——**不执行任何真模型调用**（零烧钱）。是否接入已裁：
+      #   现行验收口径＝「本地跑一轮」（等效验收），故本 step **长期保持注释**
+      #   （workflow 只作配置存照 + 端点就绪检查）；若将来恢复 secret + 每夜自动跑，
+      #   再取消注释并把 key 改回 `${{ secrets.T4_MODEL_API_KEY }}`。
+      # 接线约定（探针集已落地，将来若启用照此替换本段）：
+      #   1. `pytest.ini` 已有 `t4` marker（--strict-markers 要求先注册）；
       #   2. 探针文件落 `sim/tests/test_t4_*.py`（**文件路径 + marker 双纪律**，不靠 -m 单门禁）；
       #   3. 命令形：`uv run pytest -m t4 --junitxml=t4-results/t4.xml`（结果随下方 artifact 归档）；
       #   4. 探针必须断言「零直陈出戏命中」——命中即红（§16 T4 内容 + §19 抱怨不指向外部命令源）；
       #      **inconclusive 留人工复核**，不得当绿（判读表见 docs/dev-workflow.md §3）；
       #   5. 模型/温度/词面扫描全部读 `T4_MODEL` / `T4_MODEL_BASE_URL` 等 env，
       #      **不得在测试里硬编码模型 id**。
-      # 本 step 在探针交付前保持注释态——不执行任何真模型调用（零烧钱）。
+      # 本 step 在本文件存续期内保持注释态——不执行任何真模型调用（零烧钱）。
 
       - name: "归档结果（model-lock + 探针 junit；`if: always()` 保证红灯也留证据）"
         if: always()
