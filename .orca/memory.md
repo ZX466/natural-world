@@ -889,6 +889,13 @@ uv run pyright sim/
   - 坑：`BANNED_WORDS_PERSIST` CJK **子串**匹配，「存档」中但「存个档/开个新档」**不中**
     （口语变体缺口，裁 22-C-② 已裁 M5 不扩词表 ⇒ 登记不修，钉为已知项用例）。
 
+- **M5-S1b（preaudit 过期收口）✅ `4ed0302`**（2026-09-28，已双推并随 `95acb4f` 入主树）
+  卡上 2 处 + 自查 2 处 = 4 处过期项全部先验证再改：nightly env（`d1940e4` 已 Deepseek）、
+  探针集 44→46 已落关闭、**P5「前提未解除」与表行自相矛盾**（表更了结论段漏更）、
+  用例数 167→**176**。刻意保留 `1f55579` 日期化基线引用（历史事实非过期断言）。
+  坑：**收编后 merge 带回的 worktree 版本可能回滚 docs**——勾台账前先
+  `git merge-base --is-ancestor <commit> HEAD` 验证，别凭记忆当「已含」。
+
 ## 下一步 / 待派（不在本单范围）
 - **T4 nightly 接线未闭合 → 需派 cline**：`.github/workflows/t4-nightly.yml` 探针 step
   仍是 TODO 注释态 + env 仍写 claude-sonnet-5；须接到
