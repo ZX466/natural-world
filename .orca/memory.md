@@ -24,6 +24,26 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
+【2026-09-28 第二十九轮｜批次 B 合流（D3-b+K3 收编+裁 26）+我域接线】①两单收编：
+**opencode D3-b**（`fdebff5`——fork.py 668 行：fork 事务+克隆+裁 6 (c) async 直写+
+裁 10 (i) entry_id 重映射+R-1 content 逐位不变/R-2 superseded_by 零跨分支悬空
+断言，22 钉子）；**kilo K3**（`9f0852f`——批次 B 四面：fast_forward
+【advance_hours 叙事化时长 1..168/受理静默/抑制逐帧 delta/终态全量快照/240 帧预算
+与内核同值】+session_state 首帧【零原始数值+notice 戏内口语行】+anchors current
+【路由顺序坑已防+白盒顺序钉】+D-3 暂停批【**G-1~G-4 逐条核销**含
+`assert not hasattr(ws_mod,"_PRE_PAUSE_SPEED")` 白盒钉】，71 钉子；门禁
+not-bench 1724+client 21+build ✓）。②**裁 26**（`4ec3724`）：五偏离点全裁
+（main.py 8 行=施工面延伸采/两处约束收窄采【K4 §1.2 栈方案被幂等单值取代四宗
+缺陷留档】/既有钉子 6 处随契约更新采/protected 无写入方暂不切列→CRUD 单/
+收编缝归我）。③**我域收编缝+接线即做**（`321eaea`）：返回放宽 dict|list|None
+后既有测试 **153 处 pyright 错**——test_ws_gateway `_reply` 单帧窄化包装
+（48 调用点换装；**两帧场景窄化会截首帧**——test_success_returns_full_snapshot
+等 2 例实测红后改直用原函数+frames_of，教训：包装层语义≠原函数语义，窄化
+包装要标注哪些场景禁用）；**WorldEvent.parent_branch_id 生产侧接线**（裁 25-B②
+兑现：字段+to_store_dict 透传 None 也带键+工厂不收参防误用+4 钉子）。
+④门禁 **1750 passed / 0 failed**，ruff 0 / pyright 0，client 21+build ✓。
+⑤D3-c 已派（R2 三断言+seed 连续+branches.seed 建议随裁）；pi 红线启动卡已下；
+M5 施工 ≈30%。
 【2026-09-28 第二十八轮｜D3-a 收编+裁 25+批次 B 派发（G-6 解锁）】①**opencode D3-a
 收编**（main `aee98c7`）：0008 四件迁移（npc_profiles 复合主键/parent_branch_id/
 evidence_branch_id/protected，~120 行 batch_alter_table）+16 钉子+**跨分支写 bug 封口**
