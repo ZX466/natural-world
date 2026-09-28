@@ -926,6 +926,19 @@ uv run pyright sim/
   坑：**收编后 merge 带回的 worktree 版本可能回滚 docs**——勾台账前先
   `git merge-base --is-ancestor <commit> HEAD` 验证，别凭记忆当「已含」。
 
+- **M5-S2（安规预研 B 波）✅ `0284be6`**（2026-09-28，双推）新文件
+  `docs/security/m5-fork-evidence-preplan.md`。四个要点：
+  - **修正 S1 §3**：浮现状态按 tick 纯函数重算、无持久化载体——「已浮现表被跨分支
+    污染」不存在；真正的面 = knowledge 证据指针与消费方（R-E1..E6）。
+  - **R-E3 是关键钉**：子分支 witnessed 知识证据不可解析必须 deny——实测现状
+    fail-closed 但**全仓 evidence_branch_id 零读侧消费**（fork/迁移/模型/测试四类
+    触点，无运行时读）——「恰好」非「设计」，钉死防未来跨分支事件合并时放宽。
+  - **notice 定性 C3 面**（玩家观察视图渲染，不回流 prompt）→ 必须过现行 scan，
+    与裁 22-C⑤ 不扩词表不冲突；**F-6 新缝**：fork_notice 内插玩家档名，而
+    player_anchors.name 无扫描入口 → 档名含禁词直接出站（实测全中）。
+  - 坑：先 merge origin/main 才拿到 `fork_orchestration.py`（`5755a62` 在 main，
+    我树 merge `53afac6` 早于它）——复核别人的新文件前先确认它在树里。
+
 ## 下一步 / 待派（不在本单范围）
 - **T4 nightly 接线未闭合 → 需派 cline**：`.github/workflows/t4-nightly.yml` 探针 step
   仍是 TODO 注释态 + env 仍写 claude-sonnet-5；须接到
