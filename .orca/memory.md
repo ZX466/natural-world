@@ -24,6 +24,28 @@
 - 待办：收编 opencode C3（chunk 失效+§19.4 提案，任务单在其树 talking.txt）；codex 可选跟进 D3 真实 LLM 探针（T5 每日档，非阻塞）；kilo 提醒 M5 施工时订正 openapi_ext.py:17 与 ADDED_SCHEMAS 两处 M2-K3 遗留注释。
 - 规则速记：#4 除 .orca 外点文件夹不入 git（.orca 下新增文件 git add -f）；#7 各树 memory.md 各存各的记忆（tracked，收编分节融合，各树本地版权威）；talking.txt gitignore 各树本地；npm/venv 删除先问用户；Python 必用 uv；playwright 只用 D:\develop\hermes\chrome；GitHub 走代理 127.0.0.1:7897；提交尾 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`。
 
+【2026-09-28 第三十轮｜批次 B 收官（四单收编+裁 27）】①四单收编：**opencode D3-c**
+（`650b703`——R2 三断言【B 组口径修正：子分支事件流必然少一半，改「父前缀折叠∘
+子自身折叠」沿链回放复用同批 fold_* 守 C2 单一来源】+C 照妖镜验牙【注入单分支
+回归→精确一红】+断言 D PCG64 状态承接 fail-closed+可比字段集归一化
+【evidence_ref=(分支,seq) 二元组防 NULL 假红】，19 钉）；**codex S2**（S1 §3 自我
+修正采认【浮现状态纯函数重算无运行时载体】+R-E1~E5+**R-E3「fail-closed 是恰好
+非设计」**【evidence_branch_id 全仓零读侧消费=未受保护——4 条 RED 钉随批次 A
+施工】+F-6 档名扫描缝【anchors POST 注册即扫 fail-closed 随 CRUD 落地】）；
+**kilo K4**（批次 C 预研五铁律+CRUD 契约 v2+D-14 /current 保底不 404+
+D-15 DELETE 摘除 _ANCHOR_IDS 两缺口）；**pi P3**（FAST_FORWARD_FRAME_LIMIT_MS
+=0.90 实测余量 1.7x+42.0s 派生量契约守卫+口径声明【当前快进帧非满 L1 负载，
+满载上界 ~2.9ms 不覆盖另裁】+ff bench 5 例）。
+②**裁 27**（`0096096`）：A=批次 B 收官宣告（F3→零迁移→0008→fork 事务→R2→协议
+四面→编排件→RNG 全链闭环）；B=branches.seed 裁 **(b2)**（`branches.rng_state`
+0009 随批次 A 落；(a) registry 无 PCG64 抽签进度单独承接必跳变实测否）；
+C=**D-10 权力完全不可见**（纯 Agent 内部零协议面，§18 可砍序第 5 无沉没成本）
+→D-11~D-16 自动闭合；D=F-6 注册侧 fail-closed 采+R-E3 并批次 A；E=P3 采+
+**soak 第 3 轮红触发裁 21-D 定标机**（M5-P4 已派：CI 档绿本机红=口径/真回归二选一）；
+F=历史点分叉挂批次 E 评估（opencode 建议 (c) anchor 物化记档）。
+③门禁 **1777 passed / 0 failed**（唯一红=soak 第 3 红），ruff 0 / pyright 0。
+④**M5 施工 ≈38%**：批次 B ✅，批次 A（时间刻度+混沌）开工单下轮——我域 driver
+生产挂载+0009+R-E3 钉分派。
 【2026-09-28 第二十九轮｜批次 B 合流（D3-b+K3 收编+裁 26）+我域接线】①两单收编：
 **opencode D3-b**（`fdebff5`——fork.py 668 行：fork 事务+克隆+裁 6 (c) async 直写+
 裁 10 (i) entry_id 重映射+R-1 content 逐位不变/R-2 superseded_by 零跨分支悬空
