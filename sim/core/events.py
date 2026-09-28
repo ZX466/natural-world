@@ -361,6 +361,9 @@ class WorldEvent(BaseModel):
     actor_id: str = ""  # 系统/世界事件为空串
     target_id: str | None = None
     parent_seq: int | None = None  # 派生事件指向触发事件（持久层分配后回填）
+    #: 事件指向的父分支（M5-D3-a 0008 裁 3：parent_branch_id 的生产侧接线，裁 25-B②）。
+    #: 语义对齐持久层 CHECK（单向）：本分支内引用=None；跨分支谱系引用=父分支 id。
+    parent_branch_id: str | None = None
     payload: dict[str, object] = Field(default_factory=dict)
     witnesses: list[str] = Field(default_factory=list)  # 目击者 id（M1 感知用）
     entropy_ref: str | None = None  # 指向 entropy_log 的引用（C5）
@@ -373,6 +376,7 @@ class WorldEvent(BaseModel):
             "actor_id": self.actor_id,
             "target_id": self.target_id,
             "parent_seq": self.parent_seq,
+            "parent_branch_id": self.parent_branch_id,
             "payload": self.payload,
             "witnesses": self.witnesses,
             "entropy_ref": self.entropy_ref,

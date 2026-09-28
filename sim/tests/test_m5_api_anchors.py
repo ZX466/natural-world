@@ -217,11 +217,14 @@ class TestLoadAnchorUsesRegistry:
         assert [f["type"] for f in frames] == ["session_state", "full_snapshot"]
 
     def test_unregistered_id_load_failed(self, client: TestClient) -> None:
+        from typing import cast
+
         from sim.api.ws import _handle_load_anchor
 
         loop, pf = self._loop_and_pf()
         reply = _handle_load_anchor({"anchor_id": "ghost"}, loop, pf)
         assert reply is not None
+        reply = cast("dict", reply)
         assert reply["type"] == "error"
         assert reply["code"] == "load_failed"
 
