@@ -193,3 +193,30 @@ COLLAPSE_FRAME_LIMIT_MS = 0.85
 #   破限先查：独白事件是否表现面才产（band≥1）而非每 tick 全量；
 #   再查独白事件构造是否退化。
 WILLINGNESS_TICK_LIMIT_MS = 0.35
+
+# --- M5-P3：fast_forward 帧预算（2026-09-28 pi 定标提案；# 提案待裁）---
+# 依据 docs/perf/m5-fast-forward-budget.md（M5-P2 提案）+ 本文件红线表；
+# 实现 = M5-K3（main `848ee18` 起：sim/api/ws.py::step_fast_forward 按 240 tick/帧摊还，
+# run_world_driver 每帧调并**抑制逐帧 state_delta 广播**）。代码契约基线
+# （`FAST_FORWARD_TICKS_PER_FRAME=240` ≤ 内核 `tick._MAX_TICKS_PER_FRAME` / 跨连接共享预算）
+# 已由 `test_m5_batch_b_control.py::TestFastForwardDriverStep` 钉成 T1。口径与既有红线同源：
+# 定标机暖态中位（warmup_rounds=1 + median）。
+# **观察态起步**：bench 侧用 `_record_proposal` 只记录「实测中位 vs 建议阈值」，**不断言**
+# （硬断言待 nightly 数据后另裁，与 M3-P3 / M4-P2 / M4-P3 收口一致）。
+#
+# ① `FAST_FORWARD_FRAME_LIMIT_MS` —— 单帧快进 tick 预算（240 tick）的墙钟上限 = 0.90ms。
+#    实测（本机暖态中位，生产口径 step+drain，无 L1 feeder）：0 实体 **0.30ms** /
+#    10 实体 **0.35ms** / 50 实体 **0.53ms**。0.53 × 1.7 ≈ 0.90（裁 13 的 1.7x 慢机余量先例）。
+#    口径 = 一帧推进 240 tick 的 step+drain 成本；破限先查内核单 tick 成本（`test_bench_clock`），
+#    不是放宽本行（单帧快进挤掉同帧正常 tick/广播预算）。
+#    ⚠️ 上界参考（未来负载）：若快进帧**也跑** mock feeder 满负载，plain-50 单帧 ~2.9ms、
+#    含感知 perc-50 单帧 ~1.5s——那是「L1/感知已接进 tick 固定序」后的未来形态，非当前生产口径；
+#    接后再按新负载另裁（本行不覆盖）。
+FAST_FORWARD_FRAME_LIMIT_MS = 0.90
+# ② `FAST_FORWARD_REQUEST_DURATION_LIMIT_S` —— 单次请求上限时长（墙钟秒）= 42.0。
+#    **派生量**（非独立测得）：满上限请求 `FAST_FORWARD_MAX_HOURS=168` 游戏小时 = 604 800 tick，
+#    按 240 tick/帧 = 2520 帧；驱动 `FRAME_BUDGET_SECONDS=1/60` ⇒ 2520/60 = **42.0 s**。
+#    破限 = 帧预算/tick 预算/驱动帧率被判改（非本表能放宽）；本值由 `ws.py` 三常量推导，
+#    改其一则 `test_fast_forward_request_duration_is_derived` 红（契约守卫）。
+#    实测纯计算墙钟（不 sleep）plain-50 满请求 ~1.6 s ≪ 42 s（等待位才是主项）。
+FAST_FORWARD_REQUEST_DURATION_LIMIT_S = 42.0

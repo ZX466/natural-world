@@ -149,8 +149,40 @@
 - `pi ↔ opencode` 交叉对账（D1 §7 全 9 点）至此**全部收口**（5 由本单关闭，1–4/6–9 M5-P1 已回填）。
 - **baseline 建议**：`docs/perf/baseline.json` 应随下次 nightly 重生成时补入 retrieval/structure/willingness 行（现 21 项为 2026-09-23 旧集，缺 M3-P2/M4 新增 bench）——属 CI 域，本单只登记。
 
-## 7. 边界与门禁
-- **零代码**：不动 `sim/`、`thresholds.py`、迁移；只新增本文件 + memory ⑤节。
-- **红线只是提案**：fast_forward 两红线（单帧 tick 上限 / 批量 fold 摊还）与四个常量命名待 Claude 裁后施工。
+## 7. M5-P3：红线落 thresholds（提案已落码，**实现观测态起步**）
+> 依据 M5-P2 §2/§4（本件）+ M5-K3 实现（`sim/api/ws.py::step_fast_forward`，main `848ee18` 起）。
+> 裁 21-A D-2 接线已落：`TestFastForwardDriverStep`（`test_m5_batch_b_control.py`）把「恒 ≤ 240 tick
+> 预算 / 跨连接共享预算」钉成代码契约基线（T1）。本单把 M5-P2 两红线**落 `thresholds.py` + 配套 bench**
+> （与 M3-P3/M4-P2/M4-P3 同款「观察态起步」，`_record_proposal` 只记录不断言；硬断言待 nightly 数据后另裁）。
+### 7.1 新增两行（`sim/tests/bench/thresholds.py`）
+| 常量 | 值 | 形态 | 配套用例 |
+|---|---|---|---|
+| `FAST_FORWARD_FRAME_LIMIT_MS` | **0.90ms** | 数值红线 | `test_bench_fast_forward.py::test_fast_forward_frame_cost[0/10/50npc]` |
+| `FAST_FORWARD_REQUEST_DURATION_LIMIT_S` | **42.0s** | **派生量**（非独立测得） | `test_bench_fast_forward.py::test_fast_forward_request_duration_is_derived`（契约守卫） |
+### 7.2 实测（本机暖态中位，2026-09-28；**生产口径 step+drain，无 L1 feeder**）
+| 用例 | 实体数 | 实测中位 | 红线 | 余量 |
+|---|---|---|---|---|
+| 单帧 240 tick | 0 | **0.29ms** | 0.90 | 3.1x |
+| 单帧 240 tick | 10 | **0.35ms** | 0.90 | 2.6x |
+| 单帧 240 tick | 50 | **0.53ms** | 0.90 | 1.7x |
+> 0.90 = 实测 0.53 × 1.7（裁 13 慢机余量先例）。
+> **上限时长为何不跑 bench（② 为契约守卫而非数值行）**：42.0s 是**派生量**（由
+> `test_fast_forward_request_duration_is_derived` 契约钉住）——其中绝大部分是
+> `asyncio.sleep(FRAME_BUDGET_SECONDS)` **等待位**，非计算；且 2520 帧长跑会被本机热/功耗
+> 降频污染（实测同进程重负载后纯 CPU 自旋 **6.7x** 变慢，**非代码**）。故②只用契约守。
+> **派生量核对**：2520 帧 / 60 fps = **42.0s**（`ws.py` 三常量推导：`MAX_HOURS=168`、`TICKS_PER_FRAME=240`、`FRAME_BUDGET_SECONDS=1/60`）。
+> **口径声明（重要）**：当前 `NPC_ACT` 无内核 handler、`NpcRuntime` 未接进 `tick._tick_once`——
+> 快进帧的真实负载 = 既有路径推进，**非满 L1/感知**。若未来快进帧也跑 mock feeder 满负载，
+> plain-50 单帧升至 ~2.9ms、含感知 perc-50 单帧 ~1.5s（未来上界参考，**本行不覆盖**）；
+> 接后再按新负载另裁。这与 §2.2「50 实体 431ms/帧（driver mean 口径 1.796ms/tick）」不矛盾：
+> 那是**满负载 L1 feeder** 口径，本节是**当前生产口径**（内核无 L1 挂载）。
+### 7.3 不新增行（并入既有）
+- 「上限时长」是 42.0s 的**派生量**——与 M5-P2 §2.3「`max_tick_ms(R)=16.6/R` 不设独立常量」同精神；
+  本行保留为**契约**（改任一 `ws.py` 常量则 `test_fast_forward_request_duration_is_derived` 红）。
+- 单帧 240 tick 的成本本质 = 240 × 内核单 tick 成本——破限先查 `test_bench_clock`（内核单 tick），
+  本行只将「单帧快进挤占同帧正常 tick/广播预算」的后果量化。
+
+## 8. 边界与门禁
+- **零代码（本件）**：本文件是纯文档；红线落地见 §7（`thresholds.py` + bench 单为 M5-P3 交付）。
 - **越界声明**：`run_world_driver` 分帧编排 / 单帧超时 k 倍判据 → 架构域；`SetControlMessage.action` 枚举面 → kilo；F3 SQL → opencode。
 - **验证**：纯文档 + 本机实测存照；内容可追到代码行号/实测（每表标注来源）。

@@ -195,6 +195,9 @@
 ## 5. 红线草案（**全 advisory 口径**；M5 实现后按 §1 框架实测定标）
 > 纪律：本件零代码，**不动 `thresholds.py`**。下表是 M5 实现后写 `thresholds.py` 的框架，
 > 且 nightly 走 `PI_BENCH_ADVISORY=1`（越线只记录），与 M4-P1/M3-P3 收口一致。
+> **状态更新（M5-P3，2026-09-28）**：fast_forward 两红线已落 `thresholds.py`（`FAST_FORWARD_FRAME_LIMIT_MS=0.90` /
+> `FAST_FORWARD_REQUEST_DURATION_LIMIT_S=42.0`）+ 配套 `test_bench_fast_forward.py`（观察态起步）
+> ——见 `docs/perf/m5-fast-forward-budget.md` §7。本表余下行的定标仍待 M5 实现。
 ### 5.1 建议新增行
 | 项 | 草案形态 | 依据 | 口径 |
 |---|---|---|---|
