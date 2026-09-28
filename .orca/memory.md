@@ -527,7 +527,17 @@ uv run pyright sim/
 - (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)
 
 ## ⑤ pi（性能域）
-- 【2026-09-28 第十九轮快照｜RETRIEVAL_* after 实测 + 对账点 5 关闭（催办单，零代码，未提交待收编）】F3（`vec_candidate_ids` 补 `branch_id`）已落 main（`5bd8d1f`/`1ac97f3`，M5-D2 裁 11）；本单跑 after 收口 D1 §7 对账点 5。产出：`docs/perf/m5-fast-forward-budget.md` §6.2 追加 after 实测 + §6.2.1 独立探针 + §6.2.2 收口；`docs/data/m5-fork-archive-preplan.md` §7 对账点 5 回填关闭。
+- 【2026-09-28 第二十轮快照｜M5-P3 fast_forward 红线落 thresholds + soak 第 2 红观察项（未提交待收编）】两件：①soak 观察项更新（裁 21-D）；②M5-P2 提案落码。产出：`sim/tests/bench/thresholds.py`（+2 行）+ 新 `sim/tests/bench/test_bench_fast_forward.py`（4 bench + 2 契约）+ `docs/perf/m5-fast-forward-budget.md` §7 回填 + `m5-time-scale-fork-budget.md` §5 状态更新 + memory ⑤节。
+  - **【1｜soak 观察项】** 裁 21-D「连续 3 轮全量门禁 soak 红→定标机复测」：本轮全量门禁 soak **第 2 红**（均值漂移口径，已单独复跑确认为本机抖动非代码回归）——**还差 1 轮**，下一轮全量门禁若再红即启动定标机复测。本轮**不动作**，仅记观察项。
+  - **【2｜red line 落 thresholds】** 裁 21-A D-2 已落码（main `848ee18` 起）：`sim/api/ws.py::step_fast_forward` 按 `FAST_FORWARD_TICKS_PER_FRAME=240` 预算摊还（跨连接共享），`run_world_driver` 每帧调并抑制逐帧 state_delta 广播；`TestFastForwardDriverStep` 已把「恒 ≤ 240 预算 / 跨连接共享」钉成 T1 代码契约基线。本单补性能侧数值：
+    - ①`FAST_FORWARD_FRAME_LIMIT_MS=0.90`（单帧快进 tick 预算的墙钟上限；= 实测 0.53 × 1.7 慢机余量）。
+    - ②`FAST_FORWARD_REQUEST_DURATION_LIMIT_S=42.0`（单次请求上限时长，**派生量**：2520 帧 / 60fps = 42.0s；改任一 `ws.py` 常量则 `test_fast_forward_request_duration_is_derived` 红）。
+  - **实测（本机暖态中位，生产口径 step+drain，无 L1 feeder）**：单帧 240 tick：0 实体 **0.29ms** / 10 实体 **0.35ms** / 50 实体 **0.53ms**（红线 0.90，余量 3.1/2.6/1.7x）。②上限时长是**派生量**（2520 帧 / 60fps = 42.0s），**不跑 bench 数值行**（42s 里绝大部分是 asyncio.sleep 等待位，且长跑被本机降频污染——实测重负载后纯 CPU 自旋 6.7x 变慢，非代码），只用契约守卫。
+  - **口径声明（关键）**：当前 `NPC_ACT` 无内核 handler、`NpcRuntime` 未接进 `tick._tick_once` → 快进帧真实负载 = 既有路径推进，**非满 L1/感知**。未来若快进帧也跑满负载：plain-50 单帧升至 ~2.9ms、含感知 perc-50 单帧 ~1.5s（**未来上界参考，本行不覆盖**，接后再按新负载另裁）。与 M5-P2 §2.2「50 实体 431ms/帧」不矛盾（那是满 L1 feeder 口径）。
+  - **观察态起步**：`_record_proposal` 只记录不断言（同 M3-P3/M4-P2/M4-P3 先例，硬断言待 nightly 数据后另裁）。
+  - **门禁**：新文件 4 bench + 2 契约全绿（`-m bench` 59s / `-m not bench` 2 passed）；`test_m5_batch_b_control.py` 46 passed 零回归；ruff 全仓 ok；pyright 0；PI_BENCH_ADVISORY=1 跑亦绿。
+  - **纪律**：只碰本域 `sim/tests/bench/`（阈值唯一真相源）+ `docs/perf/`；未动 `sim/api/ws.py`、未动代码契约常量（240 保持）；未干扰 kilo 树。
+- 【2026-09-28 第十九轮快照｜RETRIEVAL_* after 实测 + 对账点 5 关闭（催办单，零代码，已进 main）】F3（`vec_candidate_ids` 补 `branch_id`）已落 main（`5bd8d1f`/`1ac97f3`，M5-D2 裁 11）；本单跑 after 收口 D1 §7 对账点 5。产出：`docs/perf/m5-fast-forward-budget.md` §6.2 追加 after 实测 + §6.2.1 独立探针 + §6.2.2 收口；`docs/data/m5-fork-archive-preplan.md` §7 对账点 5 回填关闭。
   - **先决口径（重要）**：`test_bench_retrieval.py` 四红线用**独立参考实现**（`_VecBenchWorld` numpy 余弦+IN-JOIN，`48db6cf` 起**未改动**），**不 import** `vector.py` 的 `vec_candidate_ids` → **F3 改 SQL 不直接进这四条 bench**。四红线 after 的意义 = 确认 F3 未波及打分链/候选形状（vec-preplan §18 硬边界）。F3 SQL 增量由**独立探针**（真 sqlite-vec）实测。
   - **四红线 after（vs before）**：①候选 0.198（=）/②打分 0.062（−1.6%）/③哨兵 1.12（−2.2%）/④tick 总量 3.05（+4.1%）——**均 <5% 抖动，无 advisory 破线**。反模式探测量 after 16.1ms（与 M3-P2 记 16.8 一致；before 的 106.9ms 是多 agent 并发离群，无硬断言不进对账）。
   - **F3 SQL 独立探针（真 sqlite-vec，N=600/top_k=20/forks=4/dim=384）**：分叉谓词 **Δ=−0.021ms（≈0）**（+3 参 push-down 同句内，符 R2 纪律）/ **over-fetch k=20→80 Δ=+0.057ms**（vec0 扫描 4x 但 ANN 亚线性，仅 +14%）/ **F3 全量 vs pre-F3 +0.037ms（1.07x）≪ 0.30 红线（余量 8x）**。dim=4 bench 档同趋势（谓词≈0 / over-fetch +0.049ms）。
