@@ -770,6 +770,23 @@ async def materialize_matter(
 （世界从第一条事件长出来），存在但 `status != 'active'` → 抛 `InactiveBranchError`。
 闸门在 seq 分配**之前**，故被拒的 append 不吃 seq 号、事件表零写。
 
+**随机连续性（RNG）**：分叉点两侧的随机流必须**承接抽签进度**，否则接缝跳变（T2 破）。
+`RngRegistry` 只记 `world_seed` + 熵材料，**抽签进度在调用方持有的 PCG64 生成器里**
+（`sim/core/rng.py`）⇒ 只存 seed **不足**（实测必跳变）。承接机制已落
+`sim/core/rng_state.py`（`capture_rng_state` / `restore_rng_state`：JSON 状态包 ≈**198 B/流**，
+带版本 + 材料指纹校验，未知版本/指纹不匹配 fail-closed）。`fork_from_anchor(rng_state=...)`
+透明透传；**落库形态待裁**（建议 `branches.rng_state` 一支 0009，fork 事务内原子落；
+`ForkResult.rng_state_persisted` 恒 `False` 直至裁决）。详见
+`m5-fork-archive-preplan.md` §6.3。
+
+**R2 重放口径（分叉下的「逐位一致」）**：子分支的 `events` 只含自己的事件（事件不克隆），
+而它**继承**的投影行的事件住在父分支 ⇒ R2 = **父分支前缀折叠 ∘ 子分支自身事件折叠**
+（沿 branch 链回放），**不是**「单独重放子分支事件流」（那必然少一半继承行）。断言见
+`sim/tests/test_m5_fork_replay.py`：A 接缝一致 / B 段内一致 / C 前缀无关（跨分支泄漏
+照妖镜）/ D RNG 承接。逐位比较必须过**可比字段集**（`fork_replay.COMPARABLE_*` +
+`EXCLUDED_FIELDS`：自增 id、分支身份、落库时钟、向量、读侧副作用等**逐位不可比**，排除项
+必须有名字）。
+
 **已知缺口（R-3 留痕，codex S1 复核）**：S1 禁词表是**活资产**。分叉按 R-1 **逐字节**
 克隆记忆（不做任何重扫/清洗），因此**词表日后扩面时，历史分支（含已弃父分支）里
 已落库的记忆会保留当时未禁的词面**。这是运行期不可判的系统性缺口：要么接受
