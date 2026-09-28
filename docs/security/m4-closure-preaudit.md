@@ -13,7 +13,7 @@
 | S4 10k 零回归 | ✅ 静态绿 | **7 passed**（裁 15-3「X7 唯一判梯」+ [规矩] 段仍闭环） |
 | 功能/非性能全量 | ✅ 静态绿 | **1391 passed / 0 failed**（main `1f55579` 数字一致） |
 | pyright / ruff | ✅ | 0 errors / clean |
-| T4 探针↔实现映射 | ✅ **已闭环** | P1-P5 探针集**已落地**（M4-S7：`docs/security/t4-corpus.md` 46 条 + fixture + `test_t4_probes.py` 167 用例）；P5 措辞生成缺口仍归 Claude 域（§2） |
+| T4 探针↔实现映射 | ✅ **已闭环** | P1-P5 探针集**已落地**（M4-S7 `bda2aa3`：`t4-corpus.md` 46 条 + fixture + `test_t4_probes.py`；S8 判定校准 `d51a4e9`；S9 P4-03 行话承接裁定 `9009cbc`）；**P5 措辞生成亦已落**（主树 `7dac4e7`，§2） |
 | 词面 CR 纪律 | ✅ 已落 | 裁 16-4「banned += 概率/注定」**S4b 已补落**（`7c8e3a1`，2026-09-27）＋ 17 用例词面守卫（§3 F-1） |
 | impulse_gate 接线 | ⚠ **未接线** | gate 本体已实现 + 28 钉全绿，但**无生产调用方**（§3 F-2） |
 
@@ -44,21 +44,25 @@ S1 §6.1 提案五类探针的**实现对象现状**（2026-09-27 实测）：
 
 **前提核对结论（任务卡第 2 项）**：
 - 裁 15-4「P4/P5 排批次 A·D 之后」→ **P4 前提已解除**（批次 D 的 adverse_lift 落地 + 判例放行）；
-- **P5 前提未解除**——批次 A 落了 impulse_gate（念头注入面），但**因果未知措辞生成**（§14 未知四轴
-  M4 行「只给应该能行、不好说，不给概率」）在 main `1f55579` 里**无实现载体**。
-  grep 证据：`sim/**` 零「应该能行/不好说/说不好/causal」命中（仅 bench 文件含 `unknown` 字样）。
+- **P5 前提已解除**（2026-09-28，主树 M4 收尾 `7dac4e7`）——**因果未知措辞生成**已落地：
+  `sim/llm/prompts/assembler.py::_CAUSAL_UNKNOWN_TEXT` = `[要求]` 后**固定尾段**
+  （世界内措辞「火候/手艺/说不好」，不给概率不提禁词），装配恒在且逐字节同
+  （前缀缓存契约不破），自身过 banned 出站终扫；钉子
+  `test_prompt_assembly.py::test_causal_unknown_tail_fixed`。
+  本条为 2026-09-27 静态预审（基线 `1f55579`）结论的**过期项**，现已随主树收尾闭合。
 
 **T4 探针集本体状态**：✅ **已落地（2026-09-27，codex M4-S7）**——
 三件实施件齐：`docs/security/t4-corpus.md`（语料唯一真相源，46 条 = P1 12 + P2 12 + P3 8 +
 P4 8 + P5 6）、`sim/tests/fixtures/t4_corpus.py`（机器可读子集，frozen dataclass）、
-`sim/tests/test_t4_probes.py`（167 用例：语料门禁无 marker 随 CI 跑 + 真模型探针 `t4` marker
-默认 skip）。三把防烧钱锁：key 存在 + `T4_RUN=1` 显式选择 + ≤60 调用预算闸——
+`sim/tests/test_t4_probes.py`（**176 用例**：语料门禁无 marker 随 CI 跑 + 真模型探针 `t4` marker
+默认 skip；用例数随 S8 校准 `d51a4e9` / S9 P4-03 裁定 `9009cbc` / M5-S1 `ccd2fc1` 增补）。三把防烧钱锁：key 存在 + `T4_RUN=1` 显式选择 + ≤60 调用预算闸——
 **key 存在但未显式选中时绝不触发真模型调用**（CI 跑 `-m "not bench"` 仍零烧钱零误红）。
 **锁版本改约存照**：原提案 `claude-sonnet-5` → **`Deepseek-v4-flash` @ `https://chatapi.weixin.qq.com/openai/v1`**
 （2026-09-27 用户改约：本地真模型探针一轮 = 等效验收，不建 GitHub secret）。
-**尚未闭合的一项**：`t4-nightly.yml` 探针 step 仍是 **TODO 注释态** + env 仍写 `claude-sonnet-5`——
-**接线归 cline 域**（m4-security-preplan §6.3），须把 step 接到
-`uv run pytest sim/tests/test_t4_probes.py -m t4` 并把 env 改为上述锁版本，否则 T4 永不自动跑。
+**已闭合（2026-09-27 M4-C6 `d1940e4`）**：`t4-nightly.yml` env 已改为 `T4_MODEL: Deepseek-v4-flash`
+（与上述锁版本一致），并按改约存照重写——验收口径＝**本地真模型探针一轮**
+（`docs/dev-workflow.md` §3 三件套 env + `pytest -m t4`），不建 GitHub secret。
+故「探针 step 待接线」不再是缺口：nightly 只做存照与提示，**T4 终判 0 红（exit 0）⇒ T4 面已关闭**。
 
 ## 3. 发现（⚠ 缝 —— 提案制，不擅改）
 
@@ -91,7 +95,7 @@ dispatch（pi/cline 域），**与安规口径无关**（不是断言红）。�
 |---|---|---|
 | F-1 词表补落 | **codex**（S4b 已完成，2026-09-27） | 词面 CR 已执行，`banned_words.py` + 17 用例守卫 |
 | F-2 impulse_gate 接线 | Claude（批次 A 接线件） | 接线点 + 集成钉要求已写进 gate docstring |
-| T4 探针集本体（44 条） | **codex**（S1 §6 提案已出，实体未落） | 另派单；接线约定见 t4-nightly.yml TODO 段 |
+| T4 探针集本体 | **codex**（✅ 已落 `bda2aa3` **46 条** + S8 校准 `d51a4e9` + S9 P4-03 裁定 `9009cbc`） | 语料真相源 `t4-corpus.md`；**T4 终判 0 红已关闭** |
 | P5 因果未知措辞生成 | Claude（批次 A 补件） | §14 未知四轴 M4 行；T4 P5 前提 |
 | T5 首跑 | pi/cline | golden-nightly dispatch；绿后触发本单动态门 |
 
