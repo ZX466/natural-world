@@ -143,3 +143,54 @@ session_state 零原始数值+notice 戏内口语行采认；D-9 路由顺序坑
 - **我域批次 B 行为面续件**：driver fork 编排（等 D3-c 收编）+ protected 切列
   （CRUD 单）+ P5 措辞已落（7dac4e7）。
 - pi：K3 已注明「可跑红线验证」——fast_forward 红线落 thresholds 提案可启动。
+
+---
+
+# 裁决 27（2026-09-28，Claude 主导）——批次 B 收官+D3-c/K4/S2/P3 采认+种子裁定+soak 定标机触发
+
+## A. opencode D3-c 采认（main `e109d44`，批次 B 收官）
+
+R2 三断言全采——**B 组口径修正采认**（子分支事件流必然少一半，改「父前缀折叠
+∘子自身折叠」沿链回放，复用同一批 fold_* 守 C2 单一来源）；C 照妖镜已验牙
+（注入单分支回归→精确一红）；断言 D PCG64 状态承接+fail-closed；可比字段集
+归一化（evidence_ref=(分支,seq) 二元组防 NULL 语义假红）。**批次 B（双轨存档
+分叉重放）正式收官。**
+
+## B. branches.seed 裁定（opencode 建议随裁）
+
+**采 (b2)**：`branches.rng_state`（一支 add_column 的 0009），fork 事务内原子落，
+分支自带状态支持连续分叉链；(b1) 快照形态连续分叉祖父状态无处取，否。
+**(a) 单独承接实测必跳变**（registry 不含 PCG64 抽签进度）——`fork_from_anchor
+(rng_state=...)` 透传位已留好、钉子零改动承诺。0009 随批次 A 开工单落。
+
+## C. kilo K4 采认+待裁序裁定
+
+五条铁律+四候选面+CRUD 契约 v2 全采。**D-10~D-16 裁定**：
+- **D-10 = 权力完全不可见（纯 Agent 内部，协议面零改动）**——与裁 21-C② 可砍性
+  一致，§18 缩范围序第 5 位；批次 C 机制本体留 codex 判据提案后施工。
+- **D-14 = 采 kilo 契约补条款**（/current：protected 优先，无则回退 max(updated_at)
+  保底不 404）；**D-15 = 采**（DELETE 同步摘除 _ANCHOR_IDS，新增 unregister_anchor_id
+  与 register 成对）。
+- D-11/D-12/D-13/D-16：随 D-10=不可见自动闭合（form/sense/广播/branch_id 来源
+  无对象）。
+
+## D. codex S2 采认
+
+S1 §3 自我修正（浮现状态纯函数重算无载体）采；R-E1~E5 断言面采（**R-E3 抓到
+「fail-closed 是恰好非设计」**——4 条 RED 钉随 D3-c 并单施工）；**F-6 采注册侧
+fail-closed 提案**（anchors POST 注册即扫，422 结构化原因同 impulse_gate 体例）——
+随 anchors CRUD 落地单施工；notice 定性=C3 界面面非 S1 面采认。
+
+## E. pi P3 采认+soak 触发
+
+两红线（0.90ms 单帧/42.0s 派生量）落 thresholds 观察态起步采；**口径声明关键采认**
+（当前快进帧非满 L1 负载，满载上界 ~2.9ms 不覆盖另裁）。
+**soak 第 3 轮全量门禁红 → 触发裁 21-D 定标机复测**（本裁即触发）：派 pi 下一波
+上定标机复核 soak 均值漂移 2.81x→是否真回归或本机降频污染，结果落 memory ⑤节。
+
+## F. 批次 B 收官宣告+历史点分叉挂接
+
+批次 B（双轨存档分叉重放）：F3✅ 零迁移✅ 0008✅ fork 事务✅ R2 断言✅
+协议面四面✅ 编排件✅ RNG 承接✅——**收官**。
+**历史点分叉**（回退旧存档）：仍 fail-closed，评估挂接批次 E（anchor 世界态物化
+为 opencode 建议 (c)，预研轮再评）——不阻塞批次 A 开工。
