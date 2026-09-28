@@ -142,7 +142,7 @@ M4 收官资产（建造破坏/坍塌 + 事件流 + 巧合连锁运气面 + gold
 | 依赖 | 批次 B（离线推进必须落世界档 append-only，读档=分叉）+ 批次 A（时间刻度决定「离线多久」如何叙事化） |
 | 验收口径 | **离线再回来世界已变**（§17 原文）——须落成**可执行判据**（建议形态：断线 N tick → 重连 → 断言世界状态与断线前不同，且**玩家档游标未动**、世界档事件数只增不减＝C6）；**C6 测试绿**（T1 历史不可销毁，见批次 B） |
 | **裁决指针** | 裁 21-C③（**不新造 T6**：「离线归来」验收 ＝ **既有级补断言 ＋ 演练级 nightly 挂 T5 体系**＝golden 断言组扩展，DESIGN 冻结基线不动）＋ 裁 21-A **D-5 / D-6**（分叉告知走新 session 首帧、**只能叙事化**、`branch_id` 禁出网关）/ **D-7**（重同步一律全量 `full_snapshot`）/ **D-9**（戏外 HTTP 只读路由）＋ 裁 21-D（pi soak 继续 advisory；**追加观察项：soak 连续 3 轮全量门禁红 ⇒ 强制定标机复测**，防真回归被 advisory 掩盖） |
-| **已派任务** | 预研已收编：pi **M5-P1** `docs/perf/m5-time-scale-fork-budget.md` ＋ kilo **M5-K1** `docs/api/m5-prestudy-timescale-and-fork.md`；kilo **M5-K2**（D-8 rtoken 口径文档订正：`ws-protocol` §5 ＋ `versioning` §8-1）已交待收编。⚠ **号段冲突待 Claude 定号**：README §5.4 旧台账「M5-K2 ＝ anchors 路径参数归一（main `5cf58c9`）」与本单 D-8 订正同号（本文按主树派单原文记 M5-K2 ＝ D-8） |
+| **已派任务** | 预研已收编：pi **M5-P1** `docs/perf/m5-time-scale-fork-budget.md` ＋ kilo **M5-K1** `docs/api/m5-prestudy-timescale-and-fork.md`；kilo **M5-K2**（D-8 rtoken 口径文档订正：`ws-protocol` §5 ＋ `versioning` §8-1）已交待收编。**号段冲突已由裁 22 §A-2 裁定**：D-8 保留 `M5-K2`，旧条（anchors 路径参数归一，main `5cf58c9`）改记 **`M2-K2b`**（归档改号、不追改 git 历史；README §5.4 台账已随之改号并补新 M5-K2 行） |
 
 ## 4. 门禁归属速查（**裁 21-C③ 已定口径：不新造 T6，M5 预期新增的 nightly 面只有「演练级」一条**）
 
