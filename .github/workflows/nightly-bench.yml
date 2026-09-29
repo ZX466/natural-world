@@ -113,6 +113,14 @@ jobs:
         # （35918283944 @2026-09-23，EPYC 7763/nproc4/py3.12.3，bench-plan §4.1 八步）入库。
         # 25% = 覆盖 CI/本机档位比（~1.14-1.71 实测分布）+ 调度抖动；**不是新阈值**，勿抄进 thresholds。
         # 失败处置：先看是不是单轮被抢断（mean/median >2x → 重跑），再看是否定标机也越硬线（真回归）。
+        # ⚠ 2026-09-28 实测发现（M5-C3 报 CI 域；**本单只记不改**，待 Claude/pi 裁）：本 step **未带**
+        # `env: PI_BENCH_ADVISORY: "1"`（「跑基准」step 有），于是定标机绝对阈值在共享 runner 上重新变成硬断言
+        # ——run `36494001567` 的 4 条 AssertionError（apply_move_per_event / apply_50_events_batch /
+        # perception_sound_50npc / rng_1m_draws_per_call）即由此而来，**与 median:25% 相对漂移无关**
+        # （09-23→09-28 逐行 median 漂移实测最大仅 ±3.6%）。后果：本 step 长期红 ⇒ bench-plan §4.1
+        # 触发前提 2「首个全绿 run」永不满足 ⇒ 基线无法按规范整体重生成（详见 docs/perf/baseline.json
+        # 的 `machine_info.baseline_meta.open_items`②）。一行修法：**给本 step 加
+        # `env: PI_BENCH_ADVISORY: "1"`**（属性能域语义，本单门禁「只动 CI 注释」故未改）。
         run: |
           uv run pytest -q -m bench \
             --benchmark-compare=docs/perf/baseline.json \
