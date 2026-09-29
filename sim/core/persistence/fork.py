@@ -228,9 +228,11 @@ class ForkResult:
     vec_rows_copied: int = 0
     #: 未给 `vec_conn`（或 vec 行源缺失）→ 新分支召回降级为空，**不泄漏**，待补拷贝。
     vec_pending: bool = False
-    #: RNG 状态包（`sim/core/rng_state.capture_rng_state` 的输出）——**透传**给编排侧。
-    #: 落库形态等裁 26 的 (a)/(b)；在此之前恒为「未持久化」（见 `rng_state_persisted`）。
+    #: RNG 状态包（`sim/core/rng_state.capture_rng_state` 的输出）——**原样落进子分支
+    #: 行** `branches.rng_state`（0009，裁 27-B b2），与克隆同事务。
     rng_state: str | None = None
+    #: 状态是否真落库了。`rng_state is None` ⇒ 该分支 `NULL`（未承接）+ warning，
+    #: 此时为 ``False``（**不是**「已持久化」——避免把「没传」误读成「传了空的」）。
     rng_state_persisted: bool = False
     warnings: tuple[str, ...] = ()
 
@@ -289,8 +291,9 @@ async def fork_from_anchor(
         vec_conn: 已加载 sqlite-vec 的**同步**连接（同一 DB 文件）。给出则提交后按字节
             重键拷贝 vec 行；不给 → ``vec_pending=True``（召回降级，不泄漏）。
         rng_state: RNG 状态包（`sim.core.rng_state.capture_rng_state` 的输出）。
-            **透明透传**进返回值（fork 不吞不改）——落库形态等裁 26 的 (a)/(b)；
-            在那之前 ``rng_state_persisted`` 恒为 ``False``，即「随机连续性尚未持久化」。
+            **原样落进子分支行** `branches.rng_state`（0009，裁 27-B b2），与克隆
+            **同事务** ⇒ 分支自带状态、可连续分叉。缺省 ``None`` ⇒ 该列留 NULL +
+            发 warning（漏传 = 读档接缝跳变风险）。
         warn: 警告收集回调（缺省并入返回值 ``warnings``）。
 
     Returns:
@@ -355,11 +358,23 @@ async def fork_from_anchor(
         await session.execute(
             text(
                 "INSERT INTO branches"
-                " (id, forked_from_branch, forked_from_seq, status, created_at)"
-                " VALUES (:cid, :pid, :fseq, 'active', :now)"
+                " (id, forked_from_branch, forked_from_seq, status, rng_state, created_at)"
+                " VALUES (:cid, :pid, :fseq, 'active', :rng, :now)"
             ),
-            {"cid": child_id, "pid": parent_branch_id, "fseq": fork_seq, "now": time.time()},
+            {
+                "cid": child_id,
+                "pid": parent_branch_id,
+                "fseq": fork_seq,
+                "rng": rng_state,
+                "now": time.time(),
+            },
         )
+        if rng_state is None:
+            _warn(
+                f"未提供 rng_state：新分支 {child_id!r} 的随机流将从头开始"
+                "（读档接缝跳变风险；预研稿 §6.3）。落库形态 = branches.rng_state"
+                "（0009，裁 27-B b2），状态包由 sim/core/rng_state.py 生成。"
+            )
 
         cloned: dict[str, int] = {}
         for table, columns in _BOUNDED_TABLES:
@@ -430,7 +445,7 @@ async def fork_from_anchor(
         vec_rows_copied=vec_copied,
         vec_pending=vec_pending,
         rng_state=rng_state,
-        rng_state_persisted=False,
+        rng_state_persisted=rng_state is not None,
         warnings=tuple(collected),
     )
 

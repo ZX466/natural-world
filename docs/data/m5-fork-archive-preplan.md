@@ -568,9 +568,12 @@ R2(子分支, t) = fold(events[父], 1..F)  ∘  fold(events[子], 1..M(t))
 | b1 | 状态包写进**子分支的第一份快照**（`snapshots.snapshot_data`，无新列） | 零 schema，但状态只存在于「fork 后立刻写的那份快照」；连续分叉时祖父分支状态无处可取；快照内容契约加键（老读者要容忍缺失） |
 | **b2 建议** | 新列 **`branches.rng_state`**（一支 add_column 的 0009），在 **fork 事务内**原子落库 | 分支自带状态 ⇒ **可连续分叉链**（child→grandchild 各有各的）；不依赖事后补快照；体积 ~4KB/分支（20 流）可忽略 |
 
-**D3-c 已落的部分（不预设裁决）**：`fork_from_anchor(rng_state=...)` **透明透传**进
-`ForkResult`（不吞不改），`ForkResult.rng_state_persisted` **恒为 False**（落库形态等
-裁）。裁决一到，b2 只需「把该串写进 `branches.rng_state` + flag 翻 True」，钉子不用改。
+**D3-c 已落的部分 + 裁 27-B 落地（0009）**：`fork_from_anchor(rng_state=...)` 把状态包
+**原样落进子分支行 `branches.rng_state`**（一支 add_column 的 0009，**与克隆同事务**），
+`ForkResult.rng_state_persisted` 如实反映「是否真落库」（未提供时该列留 NULL + **warning**
+——漏传 = 接缝跳变风险，属调用方 bug）。分支自带状态 ⇒ **可连续分叉**（child 的状态即
+grandchild 的输入）。钉子 `sim/tests/test_m5_branches_rng_state.py`（8 例：落库/父行不变/
+未传告警/回滚无半写/连续分叉链/**端到端接缝抽签逐位一致**/0008↔0009 往返/零漂移）。
 
 - 铁律对齐：seed / 状态包**不出现任何戏内接口**（§11）——本节全部讨论纯属存储面。
 
@@ -653,7 +656,7 @@ comparator；钉子 `TestComparableFieldSet`（4 例：排除项必须是真实�
 2. ✅ **F3 前置**（**M5-D2 已落**，裁 11）：向量召回分支隔离 + T1 钉子（+6 例）。附带 `RECALL_OVERFETCH_FACTOR`（候选饥饿防御，见 §5-C5）。
 3. ✅ **0008-a（F1）**：主键改复合 + 全量单键查找清点与改双键（**M5-D3-a 已落**：生产 1 处 + 测试 3 处，见 §2.6）。
 4. ✅ **fork 事务 + 克隆**（**M5-D3-b 已落**，`sim/core/persistence/fork.py`，22 钉）：P1 做成动作（`preflush` 必填钩子）→ 6 张有界表克隆 → 语料表截断克隆 + 自增 id 显式分配 + `entry_id` uuid5 重映射 + 治理指针重写（R-2）→ 证据分支改写（0008-d 兑现）→ 父分支封存 → 提交后 vec 行字节拷贝；裁 5 写侧分支闸门。**⚠️ 遗留缺口：历史点分叉 fail-closed**（§3.7，产品影响=回退旧存档玩法未覆盖，待裁）。
-5. ✅ **R2 三断言 + 断言 D（seed 连续）** + 可比字段集（**M5-D3-c 已落**，19 钉）：A/B/C 三断言 + `rng_state` 承接机制（建议 (b) / 否 (a)，见 §6.3）；**⚠️ 遗留**：`rng_state` 尚未落库（`ForkResult.rng_state_persisted` 恒 False），等裁 26 的 (a)/(b)。
+5. ✅ **R2 三断言 + 断言 D（seed 连续）** + 可比字段集（**M5-D3-c 已落**，19 钉）：A/B/C 三断言 + `rng_state` 承接机制（**裁 27-B 采 b2，0009 已落**：状态进 `branches.rng_state`、fork 事务内原子写、可连续分叉；见 §6.3）。
 6. ✅ **可选尾巴**：`parent_branch_id`（裁 3）、`evidence_branch_id`（裁 4）、`protected`（裁 9）——**均随 0008 落**（M5-D3-a）。`global_seq` **已裁不落**（裁 2）。
 7. ⏳ **后续件（施工中发现，非本轮裁）**：①per-branch 向量分区（F>4 时向量召回候选饥饿的正解）→ 需提案；②**历史点分叉**（§3.7 三条候选修法，建议先评估 (c) anchor 世界态物化）。
 

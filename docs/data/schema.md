@@ -56,6 +56,7 @@
 | `status` | TEXT | NOT NULL DEFAULT 'active' | active / abandoned | §6 Branch.status |
 | `created_at` | REAL | NOT NULL DEFAULT (unixepoch('now','subsec')) | 创建时间 | — |
 | `abandoned_at` | REAL | NULL | 废弃时间（status=abandoned 时填充） | §12 双轨存档 |
+| `rng_state` | TEXT | NULL | **0009，裁 27-B b2**：本分支承接的**随机流状态包**（`sim/core/rng_state.capture_rng_state` 的 JSON，≈198 B/流：`RngRegistry` 快照 + 每流 PCG64 抽签进度）。读档 = 分叉时在 **fork 事务内**原子落库 ⇒ 分支自带状态、**可连续分叉**。`NULL` = 未承接过（根分支 / 调用方未提供 ⇒ 随机流从头开始，fork 会发 warning） | m5-fork-archive §6.3 |
 
 **索引**：
 - `idx_branches_status` ON `(status)` — 查询活跃分支
@@ -772,11 +773,11 @@ async def materialize_matter(
 
 **随机连续性（RNG）**：分叉点两侧的随机流必须**承接抽签进度**，否则接缝跳变（T2 破）。
 `RngRegistry` 只记 `world_seed` + 熵材料，**抽签进度在调用方持有的 PCG64 生成器里**
-（`sim/core/rng.py`）⇒ 只存 seed **不足**（实测必跳变）。承接机制已落
-`sim/core/rng_state.py`（`capture_rng_state` / `restore_rng_state`：JSON 状态包 ≈**198 B/流**，
-带版本 + 材料指纹校验，未知版本/指纹不匹配 fail-closed）。`fork_from_anchor(rng_state=...)`
-透明透传；**落库形态待裁**（建议 `branches.rng_state` 一支 0009，fork 事务内原子落；
-`ForkResult.rng_state_persisted` 恒 `False` 直至裁决）。详见
+（`sim/core/rng.py`）⇒ 只存 seed **不足**（实测必跳变）。承接机制已落 `sim/core/rng_state.py`（`capture_rng_state` / `restore_rng_state`：JSON 状态包 ≈**198 B/流**，
+带版本 + 材料指纹校验，未知版本/指纹不匹配 fail-closed）。**落库形态 = 裁 27-B b2**：
+`branches.rng_state`（0009），由 `fork_from_anchor(rng_state=...)` 在 **fork 事务内**原子写入 ⇒
+分支自带状态、可连续分叉（child 的状态即 grandchild 的输入）；未提供时该列留 NULL + warning
+（漏传 = 接缝跳变风险，是调用方的 bug）。`ForkResult.rng_state_persisted` 如实反映「是否真落库」。详见
 `m5-fork-archive-preplan.md` §6.3。
 
 **R2 重放口径（分叉下的「逐位一致」）**：子分支的 `events` 只含自己的事件（事件不克隆），
