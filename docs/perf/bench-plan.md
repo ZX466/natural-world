@@ -78,6 +78,14 @@
 > nightly「基线对比」step 已切 `--benchmark-compare=docs/perf/baseline.json --benchmark-compare-fail=median:25%`。
 > 目的：CI 档位（EPYC 9V74 / 4 核，档位比见 `docs/perf/ci-calibration-m2p6.md`）的回归检出
 > 走**相对基线漂移**，不动 thresholds 定标机口径。
+>
+> **2026-09-28 增量补行（M5-C3，CI 域 cline）**：产物补入 **38 条 M3–M5 段 bench 行**（retrieval / structure /
+> willingness / chunk_invalidation / fast_forward / tick_baseline / tick_overhead），**数据源＝nightly-bench run
+> `36494001567`（main `78ccdf1`）的 `bench-result` artifact 实测**，机型与本文件同档（AMD EPYC 7763 / nproc 4 /
+> py3.12.3）。**未覆盖** 2026-09-23 那 21 条原值——重定基线属性能域裁决，故当前产物是**两 run 混合基线**
+> （逐 run 登记见 `baseline.json` 的 `machine_info.baseline_meta.rows_provenance`）。
+> **规范路径仍是下方八步的「首个全绿 run 整体重生成」**，本轮触发前提 2 未满足，已登记为 `baseline_meta.open_items`
+> （含一项机型口径待订正：runner.txt 实录 **7763**，而本节 step 3 与 `ci-calibration-m2p6.md` §0 表写 **9V74**）。
 
 **触发前提（三条同时满足）**：
 1. M2-P6 advisory 门已收编进 main 且 nightly「跑基准」step 带 `PI_BENCH_ADVISORY= "1"`；
