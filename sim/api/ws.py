@@ -800,9 +800,30 @@ def register_anchor_id(anchor_id: str, name: str = "", story_label: str = "") ->
     两个用途：①`load_anchor` 的存在性判定（WS 分发块同步查表集）；②D-6 分叉告知
     帧的游标指针（零原始数值：只有 name + story_label）。name/story_label 省略时
     退化为空串——旧注册点（只给 id）仍可用，只是告知文案不带档名。
+
+    **必须成对**：删档路径调 `unregister_anchor_id`（M5-K6 / 裁 27-C D-15 / 28-C S-7）
+    ——本表是**只增不减**的进程内缓存，不摘除就会让已删档在 WS 侧继续「存在」。
     """
+
     _ANCHOR_IDS.add(anchor_id)
     _ANCHOR_LABELS[anchor_id] = {"name": name, "story_label": story_label}
+
+
+def unregister_anchor_id(anchor_id: str) -> None:
+    """从同步查表集与标签表**摘除**一个 anchor id（`register_anchor_id` 的成对面）。
+
+    用途（M5-K6 / 裁 27-C D-15 采）：`DELETE /api/anchors/{id}` 成功后由调用方
+    （CRUD 单，Claude 域施工）调用，否则已删档在 WS 侧仍然「存在」——
+    `load_anchor` 查表命中会回**假成功**（无 hook 时甚至直接给一份全量快照）。
+
+    摘除后的错误映射（K5 C-3 口径，**不新增 error code**）：`load_anchor` 查表未命中
+    → `load_failed`（「存在过但已删」归载入失败成立；`bad_anchor` 的语义是「形状
+    非法/缺失」）。分叉告知帧的游标指针同步退化为 `anchor=null`。
+
+    幂等：未注册的 id 摘除是 no-op（`discard`/`pop(None)` 语义）。
+    """
+    _ANCHOR_IDS.discard(anchor_id)
+    _ANCHOR_LABELS.pop(anchor_id, None)
 
 
 def anchor_pointer(anchor_id: str) -> dict[str, str] | None:

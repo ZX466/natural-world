@@ -62,6 +62,8 @@ sim/api/ws  (FastAPI WebSocket 网关)
 | `session_state` | session | 连接期初值（刻度/暂停态/游标指针）+ 分叉告知（§4.6，裁 21-A D-5+D-6） | M5-K3 |
 | `error` | error | 结构化错误（非法输入/锚点缺失等，不静默丢弃） | M0 |
 
+> **`perception` 不经 WS 出站**（M5-K6 / 裁 28-C GAP-F 登记）：感知帧只进 **Agent 侧**（`loop.perception_frames` + `main.py` 的 `attach_perception` → prompt 装配），玩家侧看到的是 `monologue`。它在 `WsMessage` 联合中**保留成员是为了冻结形状**（前端类型里有它，将来若接 WS 出站不用改契约），**不是漏接线的缺口**。本行由审计登记，避免后人当成待接线项或当成 `timescale` 那类「有 schema 无发射」的真缺口（后者见 §4.3 注）。
+
 ## 4. 字段 schema
 
 > 字段命名与 §6 数据契约同源；凡是 §6 中标注「禁止进入 prompt / 仅内部关联」的字段，一律不出现在下方任何载荷（见 §5）。
