@@ -550,6 +550,15 @@ uv run pyright sim/
 - (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)
 
 ## ⑤ pi（性能域）
+- 【2026-09-28 第二十一轮快照｜M5-P4 soak 定标机复测：本机口径（非真回归）——2.81x 假红，连续红计数清零】裁 27-E 触发（soak 连续 3 轮全量门禁红）→ 上定标机跑干净 soak 复核「均值漂移 2.81x」。产出 `docs/perf/m5-p4-soak-calibration.md`（唯一新文件）+ 本⑤节。**结论：本机口径（advisory），非真回归 → 不 BLOCK；连续红计数清零**。
+  - **定标机（EPYC 7763 / nproc4 / py3.12.3）两形态全绿**：①golden-nightly run `36503174990`（gh dispatch，main）**10/10 绿**——10 种子×864k tick，**逐日漂移 0.982–1.008**、mean_tick_ms 0.118–0.2335（与 M5-P1 首跑 0.125–0.232 同区间）；②nightly-bench run `36543451845` **soak 两形态绿**（`-m bench` 69 passed/1 skipped/291s；M2 604,800 tick 完整跑 **1 passed / 39:14**）。
+  - **本机干净进程**：全量门禁 `-m "not bench"` **连续 3 次 1778 passed / 0 failed**（含 `test_soak_ci_smoke_stability`）；CI 形态冒烟 **60 次 0 红**（漂移 min0.83/median0.98/P95 1.12/max1.14，单窗均值 CV **8.5%**）；**200k tick × 20 窗漂移 0.998x、无单调上升**（末窗 2.58 vs 首窗 2.58；前 6 窗 2.5–2.8 反最高）→ **排除 O(n) 累积的决定性证据**。
+  - **2.81x 归因（口径脆弱，非累积）**：判据 `SOAK_MEAN_DRIFT_RATIO_LIMIT` 是「末窗/首稳态窗」**比值**；CI 形态只 **3 窗×400 tick** ⇒ base/last 各是单次采样，CV 8.5% 下两次独立抽样之比的**右尾**可命中 2x+。**负载对照（决定性）**：8/20 路 CPU 争用下**漂移比不抬（0.87–1.05x）但绝对均值抬到 3.4–8.9ms** → 2.81x 必是「末窗偶抽慢采样/首窗偶抽快采样」单次离群，非单调退化。
+  - **CI 档越线项全为绝对阈值**（advisory 只记录，与 soak 无关）：apply 单事件 0.051>0.040、apply 50 批 2.477>2.000、感知听觉 5.449>3.600、RNG 1M 394.8>330。
+  - **P3 口径重申（裁 27-E 要求）**：两红线为**实现观测态**（`_record_proposal` 不断言）；CI 档 `test_fast_forward_frame_cost[50npc]` 实测 **0.9131ms 恰在线 0.90 上**（CI/本机≈1.72x）→ **转硬断言前须按档位重定线或声明「硬断言只留定标机」**（M2-P6 裁 1）。
+  - **建议（登记，待裁，本单未执行）**：①CI 形态 3 窗×400 tick 样本量不足 → `test_soak_ci_smoke_stability` 只作框架冒烟、漂移判定留给 nightly 30k/里程碑 604k（属 test_bench_soak.py 改动，另单）；②给 soak 加窗口级 artifact（否则 CI 侧漂移只能取绿/红二值）；③`baseline.json` 补 4 项（retrieval/structure/willingness/fast_forward，CI 域，随下次全绿 nightly 重生成）。
+  - **门禁**：只动 `docs/perf/`（新文件）+ memory⑤；**未改 thresholds.py / soak.py / test_bench_soak.py / 生产代码**；**未重生成 baseline.json**（守「不得凭本机数造 baseline」）。两 CI run 均 gh dispatch+artifact 取数；本机数不用于定 baseline。
+  - **未决风险**：①CI soak 窗口级数字无 artifact（缺口）；②CI 形态样本量不足以判漂移比；③baseline.json 缺 4 项；④fast_forward 0.90 线 CI 贴线。
 - 【2026-09-28 第二十轮快照｜M5-P3 fast_forward 红线落 thresholds + soak 第 2 红观察项（未提交待收编）】两件：①soak 观察项更新（裁 21-D）；②M5-P2 提案落码。产出：`sim/tests/bench/thresholds.py`（+2 行）+ 新 `sim/tests/bench/test_bench_fast_forward.py`（4 bench + 2 契约）+ `docs/perf/m5-fast-forward-budget.md` §7 回填 + `m5-time-scale-fork-budget.md` §5 状态更新 + memory ⑤节。
   - **【1｜soak 观察项】** 裁 21-D「连续 3 轮全量门禁 soak 红→定标机复测」：本轮全量门禁 soak **第 2 红**（均值漂移口径，已单独复跑确认为本机抖动非代码回归）——**还差 1 轮**，下一轮全量门禁若再红即启动定标机复测。本轮**不动作**，仅记观察项。
   - **【2｜red line 落 thresholds】** 裁 21-A D-2 已落码（main `848ee18` 起）：`sim/api/ws.py::step_fast_forward` 按 `FAST_FORWARD_TICKS_PER_FRAME=240` 预算摊还（跨连接共享），`run_world_driver` 每帧调并抑制逐帧 state_delta 广播；`TestFastForwardDriverStep` 已把「恒 ≤ 240 预算 / 跨连接共享」钉成 T1 代码契约基线。本单补性能侧数值：
