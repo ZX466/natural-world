@@ -977,6 +977,16 @@ uv run pyright sim/
   - 坑：先 merge origin/main 才拿到 `fork_orchestration.py`（`5755a62` 在 main，
     我树 merge `53afac6` 早于它）——复核别人的新文件前先确认它在树里。
 
+- **M5-S2b（RED 钉+F-6 契约+P6 草案）✅ `1253998`**（2026-09-29，双推）
+  `test_m5_fork_evidence.py`（R-E2 三段链祖父指针保留 / R-E3+E5 可见可证分离双面 /
+  R-E6 构造载体白盒 + 纯函数侧证）+ `test_m5_notice_outbound.py`（出站锁绿 +
+  **RED 指纹**：禁词档名现状原样出站 + CRUD 落地自动启用的契约钉）+
+  P6 分叉意识 6 条题面草案（判定预演+卫生全过，未进 CORPUS，随下次语料 CR）。
+  - 方法论坑：**「恰好对」的实现必须钉死**——R-E3 的 fail-closed 实测成立但
+    evidence_branch_id 全仓零读侧消费，无断言即未受保护状态。
+  - 坑：R-E6 扫「已浮现」会误中 docstring——白盒钉用结构化正则（类/列/表名），
+    不裸匹配关键词。
+
 ## 下一步 / 待派（不在本单范围）
 - **T4 nightly 接线未闭合 → 需派 cline**：`.github/workflows/t4-nightly.yml` 探针 step
   仍是 TODO 注释态 + env 仍写 claude-sonnet-5；须接到

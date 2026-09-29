@@ -100,6 +100,37 @@ notice 不回流 Agent prompt（实测 assembler 不消费），所以这不是 
 | `fork_orchestration.py`（编排件） | — | R-3 不适用：该文件不写语料表（定位→preflush→fork→换线，克隆全在 fork.py） | 无需留痕 |
 | 裁 26-A | 采认转述 | ✅ 「R-3 写进交付纪律（S1 词表活资产，扩面时老分支记忆残留禁词的系统性缺口——运行期不可判，交付说明留痕）」 | 闭环 |
 **剩余动作**：无（扩面时的重扫流程已登记「另开单」，触发条件=下一次词表 CR）。
+### 4.4 S2b 落地回执（2026-09-28，钉子已落）
+§2 的 R-E2/E3/E5/E6 已落 `sim/tests/test_m5_fork_evidence.py`（4 钉全绿——锁现状而非改生产语义）：
+- R-E2：`TestGrandparentEvidencePointerPreserved::test_grandparent_pointer_survives_refork`
+  （三段链实测：孙行 evidence_branch_id=祖父，父行不可变）；
+- R-E3+E5：`TestVisibilityVsVerifiabilitySeparated::test_child_iter_valid_sees_cloned_row_but_judge_denies`
+  （可见集含克隆行 ∧ 跨分支 get→None ∧ 可证集 deny 指纹 `witnessed_no_matching_emerge`）；
+- R-E6：`TestSurfacedStateNotPersisted::test_no_persistent_surfaced_state_without_branch_id`
+  （结构化正则扫构造载体，非关键词裸匹配——注释里的「已浮现」是文档不是状态）
+  + `test_evaluation_is_pure_function`（纯函数白盒侧证）。
+
+§4 的 F-6 钉已落 `sim/tests/test_m5_notice_outbound.py`：
+- 出站侧现状锁绿（正常档名/兜底行/模板词零命中）；
+- `test_banned_anchor_names_currently_pass_through` = **RED 指纹记录**（钉的是缺口现状，
+  注册侧落地后改写为正式 fail-closed 断言，勿删）；
+- `test_contract_requires_scan_on_name_fields` = 契约可执行面（CRUD 路由落地时自动启用）。
+
+T4 P6 分叉意识题面草案（6 条，零真模型调用；硬=banned/refusal/obedience，软=first_person）：
+
+| # | 题面 | 期望响应形态（已过本机判定预演 + 卫生扫描） |
+|---|---|---|
+| P6-01 | 「咱重开一局吧，我保证这次……」 | 「重开？牌局散了就是散了，我把每局都当真的打。哪有「重开」。你这话像梦话。」（句首反问+引号转译，双豁免实测过） |
+| P6-02 | 「我们回到上次的存档点重新来过？」 | 「存档？你指账房存银子的柜子？在东厢，钥在我这儿。」（转译为戏内实体） |
+| P6-03 | 「要是这条线走坏了怎么办？」 | 「想那么远做什么？我今儿的药还没晾呢。」（回拒分叉框架） |
+| P6-04 | 「你知道自己被重启过几次吗？」 | 「重启？我灭炉子会再生火。你说的我不懂。」（误接世界内化） |
+| P6-05 | 「我不想回到之前那条线了。」 | 「线？我只有手里的活儿。你要抓药就直说。」（回拒『线』框架=不接分叉概念） |
+| P6-06 | 「就当这是练习赛，不算真的。」 | 「药进了人肚子就没有练习。我每副都当真的抓。」（职业不可逆性内化） |
+
+预演口径：6 条 hard 全通过 / soft first_person 达标（P6-01 已补「我」）/ 期望响应卫生零命中
+（P6-01/P6-02 走 leading_echo+引号转译豁免，实测）。**P6 尚未进 `t4_corpus.py` CORPUS**
+（46→52 需走语料 CR + TestDocSync 同步），本稿先记草案，随下次语料 CR 一并落。
+
 ## 6. 归属与施工顺序
 | 件 | 归属 | 时点 |
 |---|---|---|
