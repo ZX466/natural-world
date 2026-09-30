@@ -62,10 +62,10 @@ BASE = `/api/anchors`。所有路由 `tags: ["anchors"]`，与 `settings.py` 同
 
 | 项 | 值 |
 |---|---|
-| 请求 | `AnchorCreate` = **仅 `name`** |
+| 请求 | `AnchorCreate` = **仅 `name`**（1..64，与 `ProfileCreate` 同口径） |
 | 201 | `AnchorListItem`（含服务端生成的 `id`） |
-| 400 | 当前世界未就绪（无 loop / 无活跃分支）→ 无法取游标 |
-| 422 | pydantic 校验失败（`name` 缺失 / 超长 / 空） |
+| 400 | 当前世界未就绪（无 loop / 无活跃分支）→ 无法取游标（**先于** 422 判定，R-9） |
+| 422 | pydantic 校验失败（`name` 缺失 / 超长 / 空）**或** 档名命中禁词（见下） |
 
 ```jsonc
 // POST /api/anchors
@@ -90,6 +90,20 @@ name: str = Field(min_length=1, max_length=64)
 - `min_length=1` 拒绝空串与纯缺省；`max_length=64` 与 Profile name 一致（同一设置面板组件复用）。
 - **`name` 唯一性：不设唯一约束**。玩家可重名（"第 2 周" 存两次很正常）；去重职责归客户端按 `id` 引用，不归服务端。
 - **`additionalProperties: false`（`extra="forbid"`）**：拒绝 `{"name": "...", "tick": 100}` 这类越权字段。客户端若想指定游标位置，那是**另一个接口**（本契约不给，见 §5）。
+
+**档名禁词（F-6 / 裁 28-G S-6 落地 + 裁 29-A ③② 契约化，2026-09-30）**：
+
+| 项 | 值 |
+|---|---|
+| 判定 | `name` 过 **`sim.llm.prompts.banned_words.scan()`**（Agent 面向词表：`BANNED_WORDS_META` ∪ `BANNED_WORDS_PERSIST`，**不扩词表**） |
+| 命中 | `422`，`type: "/errors/anchor-name-rejected"`，`title: "档名含不可用词汇"`，`detail` 含命中词与人读上下文 |
+| 覆盖 | **POST 与 PATCH 双写路径**（改名同样受检） |
+| 顺序 | **世界未就绪（400）先判，词表（422）后判**（R-9；与 §1.2 状态码表同序） |
+
+- **为什么 fail-closed 是对的**（裁 29-A ③）：档名**会进 D-6 分叉告知帧的游标指针**（`SessionAnchor.name`）与 `story_label` 面 ⇒ 存在回灌路径 ⇒ 沿用 Agent 面向的 fail-closed 闸门，不另造口径。
+- **玩家可感知的代价**（已登记，见 §6.7 已定型决策备忘）：Agent 词表含 `存档`/`读档`/`游戏`/`玩家`/`分支`/`快照`/`重放`，故「存档：第二日」「读档前」「分支甲」等**戏外语义合法**的名字会被 422 挡下（K7 复验实测 10 个样本 7 拒 3 放）。这是**已知取舍**，不是缺陷——若将来要放开，走下面的钩子。
+- **「戏外词表」钩子（裁 29-A ②，结构已留、集合待定）**：档名扫描的判定式预留为「**Agent 词表 ∪ 豁免表**」两段结构，**本版豁免表为空** ⇒ 行为等价于现状（纯 Agent 词表）。集合由 **codex 下波 CR** 定义（词表是活资产，扩面按 CR 走）。豁免表落地后**不改** HTTP 契约（仍 422 同一 code），只改判定输入。
+- **前端提示口径**：`title` 是人读短标题（戏外工程措辞，§2）；玩家看到的应是「档名含不可用词汇」而非内部词表名——`detail` 里的命中词仅供调试，别直接上屏。
 
 **服务端游标来源**（构造规则，客户端不参与）：
 `branch_id` = 当前活跃分支 id、`tick`/`seq` = 世界当前游标、`agent_override` = 当前主角 agent 状态快照（`models.py` §6 PlayerAnchor 的内部结构，不经 HTTP 回传）。
@@ -495,6 +509,9 @@ K1 版 §1.2 曾写「`id` 由 sim 生成（建议 `anc_` 前缀 + 短随机，�
 |---|---|---|
 | `story_label` 构造期空串 | 已定型 | calendar 未就绪时返回 `""`（字段非 null），前端显「未标注」。若 calendar 给出结构化时间，具体格式需与 narrative 域对齐，本文只定非空性 |
 | `agent_override` 不回传 | 已定型 | §0 出戏边界。§12 读档需要它，但载入走 WS `load_anchor`（服务端从库自取），**不经 HTTP**，客户端无需该字段 |
+| 档名禁词（Agent 词表） | **已定型（裁 29-A ③）** | 档名过 `scan()`，命中 422 `/errors/anchor-name-rejected`（§1.2 档名禁词小节）。**取舍已知**：戏外语义合法的「存档/读档/分支」类名字会被挡；放开走**戏外豁免表**钩子（裁 29-A ②，集合由 codex 下波 CR 定义，当前为空表 ⇒ 行为等价现状） |
+| 列表排序 `updated_at` 降序 | **已定型（裁 29-A R-6「契约为准改实现」）** | K7 实现曾是升序，main `a50f903` 已改；钉子 `test_m5_api_anchors.py::TestSchemaMatchesSnapshot::test_list_is_newest_first` 防回退 |
+| 游标 `branch_id` 取当前活跃分支 | ⏳ **联合单在途**（R-4，opencode 出真源 + kilo 条款 + Claude 取值） | 现实现硬编码 `'main'`（`anchors.py`），分叉后会指错世界线；本节 §1.2 的「服务端游标来源」条款是目标口径，待联合单落地后回填真源定义 |
 | 无「删全部 / 批量」端点 | 已定型 | 玩家档数量级十位数（§6.2 同论证），不需要批量操作；也无 list 删除语义 |
 | `updated_at` 时间源 | 已定型 | `time.time()`（同 `PlayerAnchor.updated_at`，`models.py:107`）；只写一次（§1.4），不随改名推进 |
 

@@ -28,7 +28,12 @@
 
 1. 实例化真实构造器（`snapshot_payload` / `delta_payload` / `monologue_events_to_frames` / `_control_ack` / `session_state_payload` / `fast_forward_done_frames` / `_error_frame`），逐帧对拍：键集 ⊆ schema 属性、`type`/`channel` ∈ 枚举、`required` 齐全；
 2. 递归扫描禁键（`tick`/`seq`/`branch_id`/`entity_id`/`source_id`/`seed`/`rng_state`/`agent_override`/`updated_at`…）与禁值词；
-3. 用 `TestClient`（`SIM_DB_PATH` 指临时目录，**不落仓库**）实打 6 个 HTTP 端点做同样两查；
+3. 用 `TestClient` 实打 6 个 HTTP 端点做同样两查（anchors/settings 两 store 由探针脚本显式重定向到临时 sqlite，不落仓库）。
+   **⚠ 口径更正（M5-K8 轮）**：本节初稿写的是「`SIM_DB_PATH` 指临时目录」，**该说法不准确**——
+   `SIM_DB_PATH` 在全仓**没有任何代码引用**（`sim/api/main.py:65` 的 async store 路径是硬编码
+   `sqlite+aiosqlite:///world.db`），app 的事件库无法被环境变量重定向。本节结论不受影响
+   （被测的 anchors/settings 路由读的是探针显式重定向过的 store），但**别把 `SIM_DB_PATH`
+   当成可用的测试隔离手段**——详见 `docs/api/m5-crud-review-k7.md` 与后续环境缝登记。
 4. 统计快照/生成物中 `rng_state`/`branch_id`/`seed` 等词的出现次数与**原文语境**（区分「数据字段」与「描述散文」）；
 5. 另跑一次 **type 发射点普查**（`sim/api/*.py` 内各 WS type 字面量出现处），补上第 1 步的盲区。
 

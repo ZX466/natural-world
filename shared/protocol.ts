@@ -28,7 +28,8 @@ export type paths = {
       };
       readonly cookie?: never;
     };
-    readonly get?: never;
+    /** 按 id 查单档（不回传原始 tick/seq/branch_id） */
+    readonly get: operations['getAnchor'];
     readonly put?: never;
     readonly post?: never;
     /** 删除游标（不动世界档，C6） */
@@ -647,6 +648,29 @@ export interface operations {
           readonly 'application/json': components['schemas']['AnchorListItem'];
         };
       };
+    };
+  };
+  readonly getAnchor: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path: {
+        readonly anchor_id: string;
+      };
+      readonly cookie?: never;
+    };
+    readonly requestBody?: never;
+    readonly responses: {
+      /** @description anchor */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly 'application/json': components['schemas']['AnchorListItem'];
+        };
+      };
+      readonly 404: components['responses']['Problem'];
     };
   };
   readonly deleteAnchor: {

@@ -295,6 +295,12 @@ class TestSchemaMatchesSnapshot:
     pydantic 自动装饰（title/description/format）是历史漂移源——K3 靠 K3 同款
     开关 + openapi_ext 后处理归零；本类把 anchors 这一项钉住，#4 注入 responses
     时不必重踩。
+
+    **M5-K8 新增四条钉**（裁 29-A「四钉全采，归 kilo 域随快照对齐单落」）：
+    ① live spec 内**所有 `$ref` 可解析**（防 R-2 悬空引用复发）；
+    ② `AnchorCreate`/`AnchorRename` ≡ 快照（含 1..64 长度约束，R-3①）；
+    ③ responses 键集 ⊇ §5.1 三处 + `/current` 的 404（R-3②③ 的契约面）；
+    ④ 列表**降序**（§1.1「最近存的在前」，R-6 采「契约为准改实现」）。
     """
 
     def test_anchor_list_item_matches_snapshot(self, client: TestClient) -> None:
@@ -308,6 +314,111 @@ class TestSchemaMatchesSnapshot:
             )
         )["components"]["schemas"]["AnchorListItem"]
         assert live == snap
+
+    def test_every_ref_in_live_spec_resolves(self, client: TestClient) -> None:
+        """K8 钉①：live 内不得有悬空 `$ref`（R-2 根因：注了 responses 却漏注 schema）。"""
+        spec = client.get("/openapi.json").json()
+
+        def walk(node: Any) -> list[str]:
+            if isinstance(node, dict):
+                out: list[str] = []
+                for key, value in node.items():
+                    if key == "$ref" and isinstance(value, str):
+                        out.append(value)
+                    else:
+                        out += walk(value)
+                return out
+            if isinstance(node, list):
+                return [ref for item in node for ref in walk(item)]
+            return []
+
+        def resolve(ref: str) -> bool:
+            node: Any = spec
+            for part in ref.lstrip("#/").split("/"):
+                if not isinstance(node, dict) or part not in node:
+                    return False
+                node = node[part]
+            return True
+
+        refs = walk(spec)
+        assert refs, "live spec 竟无 $ref（WS 联合都没挂上？）"
+        dangling = sorted({r for r in refs if not r.startswith("#/") or not resolve(r)})
+        assert dangling == [], f"悬空 $ref：{dangling}"
+
+    def test_write_request_models_match_snapshot(self, client: TestClient) -> None:
+        """K8 钉②（R-3①）：`AnchorCreate`/`AnchorRename` 与快照逐字段相等。
+
+        长度约束（1..64，§1.2「与 ProfileCreate 同口径」）一并锁住——它曾只在
+        live 侧存在，快照缺失 ⇒ 前端生成类型丢约束。
+        """
+        import json
+        from pathlib import Path
+
+        live_schemas = client.get("/openapi.json").json()["components"]["schemas"]
+        snap_schemas = json.loads(
+            (Path(__file__).parents[1].parent / "shared" / "openapi.json").read_text(
+                encoding="utf-8"
+            )
+        )["components"]["schemas"]
+        for name in ("AnchorCreate", "AnchorRename"):
+            assert live_schemas[name] == snap_schemas[name], f"{name} live 与快照漂移"
+            name_prop = snap_schemas[name]["properties"]["name"]
+            assert name_prop["minLength"] == 1 and name_prop["maxLength"] == 64
+
+    def test_problem_response_keysets_present(self, client: TestClient) -> None:
+        """K8 钉③（R-3②③）：§5.1 三处 responses ⊇ 声明 + `/current` 的 404。
+
+        `exception_handler` 的响应不会自动进 `/openapi.json`（anchors-api §3.3），
+        必须靠 `openapi_ext._attach_problem_responses` 手注——这条钉就是那道手注的
+        回归守卫。
+
+        **已知 live 缺口（R-3d，Claude 域一行）**：`GET /api/anchors/{anchor_id}` 的
+        404 快照已声明、路由也真抛，但 `_attach_problem_responses` 的 `attach()` 清单
+        尚未给它挂 Problem 声明（故此处只锁 200；404 的快照侧由下一例锁）。补齐后请把
+        本例的 `{"200"}` 收紧为 `{"200", "404"}`。
+        """
+        paths = client.get("/openapi.json").json()["paths"]
+        expected = {
+            ("/api/anchors", "post"): {"201", "400", "422"},
+            ("/api/anchors", "get"): {"200"},
+            ("/api/anchors/current", "get"): {"200", "404"},
+            ("/api/anchors/{anchor_id}", "patch"): {"200", "404", "422"},
+            ("/api/anchors/{anchor_id}", "delete"): {"204", "404", "409"},
+            ("/api/anchors/{anchor_id}", "get"): {"200"},
+        }
+        for (path, method), codes in expected.items():
+            declared = set(paths[path][method].get("responses", {}))
+            assert codes <= declared, f"{method.upper()} {path} 缺 {sorted(codes - declared)}"
+
+    def test_snapshot_declares_get_by_id_operation(self) -> None:
+        """K8 钉③配套（R-3③）：快照不得再漏登记 `GET /api/anchors/{anchor_id}`。
+
+        该路由 M0 就在 live 里，此前只有 patch/delete 进快照 ⇒ 前端生成类型里
+        `paths['/api/anchors/{anchor_id}']['get']` 是 `never`。快照侧同时锁住 404
+        声明（live 侧待补，见上一例的 R-3d 注）。
+        """
+        import json
+        from pathlib import Path
+
+        snap = json.loads(
+            (Path(__file__).parents[1].parent / "shared" / "openapi.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        op = snap["paths"]["/api/anchors/{anchor_id}"]["get"]
+        assert op["operationId"] == "getAnchor"
+        assert "404" in op["responses"]
+
+    def test_list_is_newest_first(self, client: TestClient) -> None:
+        """K8 钉④（R-6）：§1.1「`updated_at` 降序（最近存的在前）」。
+
+        K7 的实现是升序，K3 复验（裁 29-A R-6）判「契约为准改实现」，main `a50f903`
+        已改；本钉防回退。`_seed` 用 sleep 拉开 `updated_at`，末梢：最后插入者。"""
+        ids = _seed(anchors_mod.get_anchor_store(), 3)
+        resp = client.get("/api/anchors")
+        assert resp.status_code == 200
+        got = [item["id"] for item in resp.json()]
+        assert got == list(reversed(ids)), f"列表未按 updated_at 降序：{got}"
 
     def test_path_param_name_is_anchor_id_in_live_spec(self, client: TestClient) -> None:
         """§5 #7：实发 spec 的形参名也是 anchor_id（gen-protocol.ts 头注点名）。"""
@@ -326,4 +437,3 @@ class TestSchemaMatchesSnapshot:
         assert "post" in paths["/api/anchors"]
         assert "patch" in paths["/api/anchors/{anchor_id}"]
         assert "delete" in paths["/api/anchors/{anchor_id}"]
-

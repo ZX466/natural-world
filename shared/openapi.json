@@ -258,6 +258,21 @@
           "404": { "$ref": "#/components/responses/Problem" },
           "409": { "$ref": "#/components/responses/Problem" }
         }
+      },
+      "get": {
+        "operationId": "getAnchor",
+        "summary": "按 id 查单档（不回传原始 tick/seq/branch_id）",
+        "responses": {
+          "200": {
+            "description": "anchor",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AnchorListItem" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
       }
     }
   },
@@ -804,7 +819,7 @@
         "type": "object",
         "required": ["name"],
         "properties": {
-          "name": { "type": "string" }
+          "name": { "type": "string", "minLength": 1, "maxLength": 64 }
         },
         "additionalProperties": false
       },
@@ -812,7 +827,7 @@
         "type": "object",
         "required": ["name"],
         "properties": {
-          "name": { "type": "string" }
+          "name": { "type": "string", "minLength": 1, "maxLength": 64 }
         },
         "additionalProperties": false
       },
