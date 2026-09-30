@@ -7,6 +7,29 @@
 <!-- 4. 本会话教训已在各轮快照内联；重启后若五树有新交付，走标准收编流程（memory.md 收编流程条） -->
 <!-- ============ 恢复卡结束，以下为 ①节正文 ============ -->
 
+【2026-09-30 第三十六轮｜四单收编（main 2d878f4）+裁 30】
+①**四单收编**（零冲突——预警机制首战生效）：kilo K8（快照对齐 Create/Rename
+长度约束+GET /{id} 补行 `get?:never` 消除+五钉）/ codex S5（戏外词表 CR 判层
+四层模型+8 词草案+提闸 CR 70 起评）/ pi P7（**Xeon=需要建不紧急 P3**——
+median:25% 下 Xeon 曾全绿 17/59 被 1.9% 中位吃掉，不会假红但漏报；被动收集
+策略采——dispatch 不能挑机位主动=被动命中率；**降频自检探针** CLI 一行 JSON+
+soak 自动 skip，本机实测 ratio 10.08 throttled，soak 假红 433s→25.7s）/
+opencode A4（**0011 anchor_packages** 17 钉+**R-4 契约** R-4.1~R-4.7：真源=
+branches 禁 main fallback、is_current+部分唯一索引、**否决 recency**【anchor-fork
+子线并存且更晚=静默换线】、取 seq 与建档必须同改警告、**seq<= 判据修复** 6 钉）。
+②**裁 30**：CR-1 三点全采（8 词/空函数 YAGNI/无冲突）；CR-2 采 70+抖动继续计
+预算（硬闸防烧钱）；Xeon P3+被动；**stamp 事故台账**（opencode 自揭：stamp 只
+改版本行不执行迁移，「表都在≠迁移跑过」——A-DATA 轮埋雷本轮炸，纪律：stamp
+只能对物理匹配 revision）；0010 钉自修（往返钉钉具体 revision id 防 head 前进
+假红）；willingness Δ 护栏偶发越界登记归 P8。
+③门禁 **1851 passed / 119 skipped**（+22）、ruff/pyright 0、gen-protocol --check
+过、本机 upgrade head→0011 零错、探针实测工作。六树推送齐。
+④**下一波**：K9（kilo R-4 条款合入+R-5 落定）/ S6（codex 空表结构+负钉）/
+P8（pi Δ 护栏口径+Xeon 监控）/ A5（opencode 0012 is_current+开线闸收紧）/
+**我域下轮：R-4 施工（anchors.py 同改两处）+批次 A 架构件（chaos.py+接线，
+混沌=唯一未开工主体）**。
+
+
 【2026-09-30 第三十四轮｜R-6 排序修复（main a50f903）+ K8/S5/P7/A4 在途】
 五树无新交付（上轮五单刚派发执行中），收编轮做我域在途：**R-6 列表排序改
 降序**（anchors-api §1.1 契约为准；原实现升序违约+kilo K7 自认钉缺口——排序
