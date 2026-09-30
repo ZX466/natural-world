@@ -538,8 +538,25 @@ def _attach_problem_responses(schema: dict[str, Any]) -> None:
     必须在此手注。快照 components.responses.Problem 已就绪（K3 前瞻式声明）；
     live 侧在此对齐。调用点在 get_openapi(...) 之后（否则 paths 被重建冲掉）。
     """
-    problem = {"$ref": "#/components/schemas/ProblemDetail"}
     components = schema.setdefault("components", {})
+    # R-2（K7 HIGH）：responses.Problem 悬空 $ref 修复——live 侧同时注入
+    # ProblemDetail schema（快照那份的字段级副本；快照侧对账归 kilo 域）。
+    schemas_map = components.setdefault("schemas", {})
+    schemas_map.setdefault(
+        "ProblemDetail",
+        {
+            "type": "object",
+            "required": ["title", "status"],
+            "properties": {
+                "type": {"type": "string"},
+                "title": {"type": "string"},
+                "status": {"type": "integer"},
+                "detail": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
+    )
+    problem = {"$ref": "#/components/schemas/ProblemDetail"}
     components.setdefault("responses", {})["Problem"] = {
         "description": "RFC 7807 问题详情（戏外工程措辞，不回灌 Agent）",
         "content": {"application/json": {"schema": problem}},
@@ -554,6 +571,7 @@ def _attach_problem_responses(schema: dict[str, Any]) -> None:
             op.setdefault("responses", {})[code] = dict(problem_resp)
 
     attach("/api/anchors", "post", ["400", "422"])  # 世界未就绪 / 校验失败
+    attach("/api/anchors/current", "get", ["404"])  # R-3②：空库 404（K3 前瞻声明对齐）
     attach("/api/anchors/{anchor_id}", "patch", ["404", "422"])  # 不存在 / 校验失败
     attach("/api/anchors/{anchor_id}", "delete", ["404", "409"])  # 不存在 / 末梢受保护
 

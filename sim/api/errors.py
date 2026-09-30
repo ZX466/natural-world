@@ -30,6 +30,7 @@ _STATUS_TYPE = {
 #: 机器码 → 人读短标题（路由传 /errors/... 机器码时按此定 title）
 _TYPE_TITLE = {
     "/errors/anchor-not-found": "玩家档不存在",
+    "/errors/anchor-name-rejected": "档名含不可用词汇",
     "/errors/profile-not-found": "配置档案不存在",
     "/errors/anchor-protected": "该档不可删除",
     "/errors/world-not-ready": "世界未就绪",

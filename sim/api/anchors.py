@@ -334,10 +334,10 @@ async def create_anchor(payload: AnchorCreate, request: Request) -> dict[str, An
     游标：branch=当前活跃分支（D-16 默认 main）、tick=世界当前 tick、seq=当前
     分支 events 最大 seq（客户端不参与游标）。name 过 F-6 fail-closed 扫描。
     """
-    _assert_name_clean(payload.name)
     loop = getattr(request.app.state, "loop", None)
     if loop is None:
         raise HTTPException(status_code=400, detail="/errors/world-not-ready") from None
+    _assert_name_clean(payload.name)  # R-9：先世界就绪(400)后词表(422)，错误序对齐契约表
     tick = loop.state.tick
     seq = get_current_seq()
     item = get_anchor_store().create_item(payload.name, branch_id="main", tick=tick, seq=seq)

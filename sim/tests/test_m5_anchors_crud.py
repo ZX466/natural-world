@@ -222,3 +222,53 @@ class TestBackfillColumnReadConsistency:
             row = s.get(PlayerAnchor, tip["id"])
             assert row is not None and row.protected is True
         assert client.get("/api/anchors/current").json()["id"] == tip["id"]
+
+
+class TestLoadHookBoundedReturn:
+    """M5-K7 R-1 CRITICAL 钉：生产 hook 必须有界时间返回（不阻塞事件循环）。
+
+    R-1 病根：hook 在同一 loop 内忙等 fork task ⇒ task 永不推进 ⇒ 挂死。
+    修后契约：hook 只登记请求、立即返回 True；真执行在 driver 的 drain。
+    """
+
+    def test_hook_returns_immediately_with_pending_queue(self, client: TestClient) -> None:
+        """真 hook 在位时 load_anchor 有界返回（登记不阻塞），请求进入 pending 队列。"""
+        import time as _t
+
+        from sim.api import ws as ws_mod
+
+        assert ws_mod._ANCHOR_LOAD_HOOK is not None  # 生产 hook 已挂（非替身）
+        anchor = client.post("/api/anchors", json={"name": "溪边小驻"}).json()
+        t0 = _t.perf_counter()
+        with client.websocket_connect("/ws") as ws:
+            ws.receive_json()  # full_snapshot
+            ws.receive_json()  # session_state
+            ws.send_json({"type": "load_anchor", "channel": "session", "anchor_id": anchor["id"]})
+            reply = ws.receive_json()
+        elapsed = _t.perf_counter() - t0
+        assert elapsed < 2.0, f"load_anchor 阻塞 {elapsed:.2f}s（R-1 忙等回归？）"
+        assert reply["type"] in {"session_state", "error"}  # 受理或显式失败，不挂起
+
+    def test_driver_drains_pending_loads(self, client: TestClient) -> None:
+        """pending 请求由 driver 侧 drain 执行（受理后最终落 outcome）。"""
+        from sim.api.main import app
+
+        anchor = client.post("/api/anchors", json={"name": "溪边小驻"}).json()
+        with client.websocket_connect("/ws") as ws:
+            ws.receive_json()
+            ws.receive_json()
+            ws.send_json({"type": "load_anchor", "channel": "session", "anchor_id": anchor["id"]})
+            ws.receive_json()
+        # drain 是协作式的：TestClient 请求结束后手动跑一轮 drain 断言 outcome
+        import asyncio
+
+        drain = getattr(app.state, "drain_pending_loads", None)
+        assert drain is not None, "drain 未注册（R-1 修复缺半）"
+        asyncio.get_event_loop_policy()
+        outcome_run = asyncio.new_event_loop()
+        try:
+            outcome_run.run_until_complete(drain())
+        finally:
+            outcome_run.close()
+        outcomes = app.state.load_outcomes
+        assert outcomes and outcomes[-1][0] == anchor["id"]

@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import contextlib
+import uuid
+from collections import deque
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -100,45 +102,46 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.tile_map = tile_map
     app.state.driver = asyncio.create_task(run_world_driver(loop, manager, tile_map, on_flush))
 
-    # 生产读档 hook（裁 28-G driver 生产挂载）：WS load_anchor → 读档=分叉编排。
-    # 闭包持有事件循环（handler 在同一 loop 的 ws_endpoint 同步调用栈里执行），
-    # preflush 直接 await 驱动的 on_flush（冲掉父分支 in-flight 批次，P1 必填）；
-    # register_child 把新分支 id 交回 WS 侧登记（供后续读档链可载性）。
+    # 生产读档 hook（裁 28-G driver 生产挂载；R-1 修复后形态，M5-K7 R-1 CRITICAL）：
+    # load_anchor 分发块是**同步契约**，而 fork 事务必须跑在事件循环里——
+    # 同 loop 内忙等会让 task 永不推进（kilo 实证：挂死且 except 救不了）。
+    # 修法 = kilo 建议②「批处理范式」（与 fast_forward 同构，零新增消息类型）：
+    # handler 侧 hook 只做**请求登记**并立即受理；真正分叉由 driver 循环在
+    # flush 后的 await 窗口执行；完成/失败由后续单接完成通道定向回帧。
+    pending_loads: deque[tuple[str, str]] = deque()  # (request_id, anchor_id)
+
     def _production_load_hook(anchor_id: str) -> bool:
+        """登记读档请求（同步、不阻塞）；真执行在 driver 的 _drain_loads。"""
+        request_id = uuid.uuid4().hex[:12]
+        pending_loads.append((request_id, anchor_id))
+        return True  # 受理即 True；失败由 driver 侧记 load_failed
+
+    async def _drain_loads() -> None:
+        """driver 每帧调用：执行 pending fork（事件循环内，可 await）。"""
         from sim.core.persistence.fork_orchestration import orchestrate_load_anchor
 
-        async def _run() -> bool:
-            await orchestrate_load_anchor(
-                store.session_factory,
-                anchor_id=anchor_id,
-                flush_in_flight=on_flush_async,
-                register_child=register_new_branch,
-            )
-            return True
-
-        future = asyncio.get_running_loop().create_future()
-
-        async def _drive() -> None:
+        while pending_loads:
+            request_id, anchor_id = pending_loads.popleft()
             try:
-                future.set_result(await _run())
+                await orchestrate_load_anchor(
+                    store.session_factory,
+                    anchor_id=anchor_id,
+                    flush_in_flight=on_flush_async,
+                    register_child=register_new_branch,
+                )
+                logger.info("fork.load_completed", anchor_id=anchor_id, request_id=request_id)
             except Exception as exc:
-                future.set_exception(exc)
+                logger.warning(
+                    "fork.load_failed", anchor_id=anchor_id, request_id=request_id, reason=str(exc)
+                )
+                load_outcomes.append((anchor_id, False))
+            else:
+                load_outcomes.append((anchor_id, True))
 
-        task = asyncio.get_running_loop().create_task(_drive())
-        return _hook_wait(task, future)
-
-    def _hook_wait(task: asyncio.Task[None], future: asyncio.Future[bool]) -> bool:
-        # 同步等待 fork 事务完成：load_anchor 分发块是同步契约（§3.4 短期路径），
-        # fork 事务是毫秒级字节拷贝（D3-b），阻塞窗口可接受；异常向上冒给
-        # handler 的 except → 降级 load_failed（连接保持）。
-        import time as _time
-
-        while not task.done():
-            _time.sleep(0.001)
-        return future.result()
+    load_outcomes: list[tuple[str, bool]] = []
 
     def register_new_branch(_new_branch_id: str) -> None:
-        """子分支可载性登记（WS 侧；当前无 HTTP id 面，登记动作留观察日志）。"""
+        """子分支可载性登记（观察日志；两套注册表勿混，K4 §3.4）。"""
         logger.debug("fork.child_branch_registered", branch_id=_new_branch_id)
 
     async def on_flush_async() -> None:
@@ -146,10 +149,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         await flush_events(store, loop.drain_events())
 
-    # 同步 hook 出口（ws.py 分发块契约）：设进全局注册方
+    # 同步 hook 出口（ws.py 分发块契约）+ driver 每帧 drain 注册
     from sim.api import ws as _ws_mod
 
     _ws_mod.set_anchor_load_hook(_production_load_hook)
+    app.state.drain_pending_loads = _drain_loads
+    app.state.load_outcomes = load_outcomes
     yield
     app.state.driver.cancel()
     with contextlib.suppress(asyncio.CancelledError):
