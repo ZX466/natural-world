@@ -148,6 +148,50 @@ class PlayerAnchor(TimestampMixin, Base):
     __table_args__ = (Index("idx_anchors_branch", "branch_id"),)
 
 
+class AnchorPackage(TimestampMixin, Base):
+    """anchor 世界态物化包 — M5-A4/0011（设计稿 `docs/data/m5-anchor-materialization-preplan.md`）。
+
+    读档 = 分叉（§12）；历史点分叉要拿到「分叉点当时的世界态」，而投影表当前值 ≠ 分叉点
+    状态 ⇒ `fork.py` 对 `fork_seq < head_seq` fail-closed。本表是批次 E 的前置：把锚点
+    时刻的世界态**在存档时**固化一次，读档 O(1) 取包。
+
+    - `rng_state`：**anchor 时刻**的随机流状态包（`sim.core.rng_state.capture_rng_state`
+      输出）。必须按档存——`branches.rng_state` 只是分支当前值、每次 fork 覆写，读时取
+      会让「回退旧存档」**重掷混沌**（M5-A2 修正 2）。可空；NULL ⇒ 该档不可物化
+      （**禁止**用 `Branch.seed` 派生兜底：seed 不含 PCG64 进度，抽签必然跳变）。
+    - `snapshot_seq`/`snapshot_tick`：展开所用快照的**引用**（指 `(branch_id, seq)`），
+      不复制 blob ⇒ 快照被 GC 时退化为「全前缀重放」（语料/rng 仍在包内）。两列同有同无。
+    - `corpus_blob`：gzip JSON 的 3 张**不可重建**表行值（`npc_memories`/`knowledge`/
+      `relationships`）——它们没有事件源，只有当前值，不进包则历史点分叉必然拿错值。
+    - `agent_override`：档的 agent 覆盖副本（包自足，读档不 JOIN）。应用点 = 快照展开
+      **之后**（先套会被快照内容覆盖）。
+    - 1:1 于 `player_anchors`，**不建 FK**：档的删除语义归 kilo 的 CRUD 面。
+    """
+
+    __tablename__ = "anchor_packages"
+
+    anchor_id: Mapped[str] = mapped_column(String, primary_key=True)
+    branch_id: Mapped[str] = mapped_column(String, nullable=False)
+    tick: Mapped[int] = mapped_column(Integer, nullable=False)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    snapshot_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    snapshot_tick: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rng_state: Mapped[str | None] = mapped_column(Text, nullable=True)
+    agent_override: Mapped[str] = mapped_column(Text, nullable=False)
+    corpus_blob: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    state_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        CheckConstraint(
+            "(snapshot_seq IS NULL AND snapshot_tick IS NULL)"
+            " OR (snapshot_seq IS NOT NULL AND snapshot_tick IS NOT NULL)",
+            name="ck_anchor_packages_snapshot_pair",
+        ),
+        Index("idx_anchor_packages_branch", "branch_id"),
+    )
+
+
 class EntropyLog(TimestampMixin, Base):
     """熵日志 — 开发模式。§11 混合熵 + §4 C5 熵注入审计。
 
