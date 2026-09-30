@@ -1035,6 +1035,17 @@ uv run pyright sim/
   - 坑：R-E6 扫「已浮现」会误中 docstring——白盒钉用结构化正则（类/列/表名），
     不裸匹配关键词。
 
+- **M5-S3（P6 语料 CR + 权力判据提案）✅ `2f6df37`**（2026-09-29，双推）
+  46→52（P6 分叉意识 6 条入 CORPUS，TestDocSync 机器核对重生成 fixture，
+  P6 最小样本数 6 入参表，预算注释 52/60 闸）；新文件
+  `docs/security/m5-authority-criteria-preplan.md`（D-10 不可见三红线：
+  协议零新增/出站递归禁键 9 键/操纵感零豁免——键级与词面表判层互补）+
+  `test_m5_authority_surface.py` 10 钉全绿锁现状。方法论延续：「恰好对」钉死。
+  - 坑：**PowerShell 对 UTF-8 中文文件的 Get-Content 在 GBK console 下显示
+    乱码**（auth55.txt 案）——内容实际无损（GBK 双重编码特征字符集扫描为零）；
+    判据是扫文件字节而非信终端显示。另：pytest 输出曾误跑其它 worktree
+    （输出行带 `not bench` 但树不对）——门禁数字必须记 commit hash + 树路径。
+
 ## 下一步 / 待派（不在本单范围）
 - **T4 nightly 接线未闭合 → 需派 cline**：`.github/workflows/t4-nightly.yml` 探针 step
   仍是 TODO 注释态 + env 仍写 claude-sonnet-5；须接到
