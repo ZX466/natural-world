@@ -33,6 +33,7 @@ from sim.npc.utility import UtilityModel
 from sim.world.map import Chunk, TileMap
 from sim.world.pathfinding import Pathfinder
 
+from . import throttle_probe
 from .harness import make_state
 from .soak import (
     M2_ACCEPTANCE_TICKS,
@@ -51,6 +52,7 @@ from .thresholds import (
     SOAK_STEADY_MEAN_LIMIT_MS,
     TICK_BUDGET_MS,
 )
+from .throttle_probe import _SkipSoak, assert_not_throttled
 
 _MAP_W = 64
 _MAP_H = 64
@@ -99,7 +101,14 @@ def _build_loop_with_perception() -> TickLoop:
 
 
 def _assert_no_runaway(result, *, label: str) -> None:
-    """长跑稳定性断言（分窗口径，抗单窗离群）。"""
+    """长跑稳定性断言（分窗口径，抗单窗离群）。
+
+    **降频自检前置**（M5-P7 / M5-P6 风险①收口）：`SOAK_STEADY_MEAN_LIMIT_MS` 是绝对值
+    判据，而 soak 是分钟级持续 CPU 负载——本机若处于持续降频（实测 6.6x，
+    m5-p6-soak-arbitration.md §2.2）必然假红。先跑 `throttle_probe.probe()`；比值越
+    阈值即 `pytest.skip`（不是 fail：降频是环境事实，非代码回归；漂移比判据天然免疫）。
+    """
+    _skip_if_throttled()
     windows = result.windows
     assert len(windows) >= 2, f"{label}: 窗口数不足（{len(windows)}），无法判漂移"
     # 单窗均值不超过长跑稳态上限（含感知的全内核）
@@ -180,6 +189,16 @@ def _write_soak_artifact(result, *, label: str) -> None:
     with Path(_SOAK_ARTIFACT_PATH).open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
+def _skip_if_throttled() -> None:
+    """本机持续降频 ⇒ skip（M5-P7 接管 `throttle_probe` 的信号）。
+
+    在 soak 绝对阈值判据前调用；`PI_THROTTLE_SELFCHECK=0` 可显式关闭。
+    """
+    try:
+        assert_not_throttled(label="soak 降频自检")
+    except _SkipSoak as exc:
+        pytest.skip(str(exc))
+
 def test_soak_ci_smoke_stability() -> None:
     """CI 冒烟（M5-P5 收口）：50 NPC × 1,200 tick 只作**框架冒烟**。
 
@@ -215,6 +234,35 @@ def test_soak_probe_is_available_or_gracefully_unknown() -> None:
     assert p.rss_mb == -1.0 or p.rss_mb > 0.0
     assert p.handles == -1 or p.handles > 0
 
+def test_throttle_probe_shape() -> None:
+    """降频自检探针契约（M5-P7）：字段齐、`throttled` 与比值单调一致、成本小。
+
+    用 1s 持续段（env 覆盖）保持本用例秒级；真实判据 25s 段只在 soak 路径上跑。
+    """
+    result = throttle_probe.probe(seconds=1.0, iters=50_000)
+    assert set(result) == {
+        "burst_base_ms",
+        "sustained_worst_ms",
+        "throttle_ratio",
+        "ratio_limit",
+        "throttled",
+        "samples",
+        "iters",
+    }
+    assert result["burst_base_ms"] > 0
+    assert result["samples"] >= 1
+    assert result["throttled"] is (result["throttle_ratio"] > result["ratio_limit"])
+    assert throttle_probe.THROTTLE_RATIO_LIMIT == 2.0
+
+def test_throttle_probe_selfcheck_off_short_circuits() -> None:
+    """`PI_THROTTLE_SELFCHECK=0` 时 `_skip_if_throttled` 不自旋（CI 不打折）。"""
+    monkey = pytest.MonkeyPatch()
+    try:
+        monkey.setenv("PI_THROTTLE_SELFCHECK", "0")
+        _skip_if_throttled()  # 不 raise、不 skip ⇒ 直接返回
+    finally:
+        monkey.undo()
+
 
 def test_m2_acceptance_tick_constant_is_7_days() -> None:
     """量纲守卫：M2 验收 = 7 游戏日 = 604,800 tick（DESIGN §10/§17）。"""
@@ -223,7 +271,13 @@ def test_m2_acceptance_tick_constant_is_7_days() -> None:
 
 @pytest.fixture(scope="module")
 def nightly_soak_result():
-    """模块级缓存：nightly 30,000 tick 长跑只跑一次，多个断言共享（省 2× 墙钟）。"""
+    """模块级缓存：nightly 30,000 tick 长跑只跑一次，多个断言共享（省 2× 墙钟）。
+
+    降频自检在**这里**跑（不是测试体里）：30k soak 是分钟级持续负载，若本机已降频
+    （M5-P7 探针，见 `throttle_probe.py`），先 skip 再付 7 分钟墙钟纯属浪费
+    （m5-p6-soak-arbitration.md §2.2 的教训）。
+    """
+    _skip_if_throttled()
     loop = _build_loop_with_perception()
     result = run_soak(
         loop,
@@ -288,6 +342,10 @@ def test_m2_full_7day_acceptance() -> None:
     不经每提交 CI（超 timeout-minutes: 15 护栏）；nightly 接法由 cline 裁决
     （docs/perf/m2-acceptance.md §4）。环境门避免 nightly 默认就烧分钟级。
     """
+    # 30 分钟量级的持续负载：**先**判本机降频再付墙钟（M5-P7，探针见
+    # `throttle_probe.py`）。降频时绝对阈值不可信，但漂移比/资源判据仍可信，
+    # 故此处用「先写 artifact 再判」的顺序——保留窗口数字供回查。
+    _skip_if_throttled()
     loop = _build_loop_with_perception()
     result = run_soak(
         loop,
@@ -326,6 +384,7 @@ def test_soak_nightly_l1_feeder_stability() -> None:
     与 mock feeder 的分工见 docs/perf/m2-acceptance.md §3.1：
     mock = 内核负载上界（50 全走）；l1 = 真实 L1 计算 + 当前内容常量下的动作分布。
     """
+    _skip_if_throttled()  # 分钟级持续负载：先判降频，别白烧 7 分钟（M5-P7）
     loop = _build_loop_with_perception()
     runtime = _build_l1_runtime()
     result = run_soak(
