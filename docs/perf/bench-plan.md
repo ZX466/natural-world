@@ -94,6 +94,24 @@
 > ref = `ZX466/cline`）。**重生成状态：进行中**——全绿则按 step 1–7 整份复制重生成 `baseline.json`
 > （含 runner.txt 五字段核对）并把该 run 登记进 `rows_provenance`；若仍红（无论是否因 advisory 门外原因），
 > 按纪律**只记录原因、不造数**。`baseline.json` 的 `open_items`② 视本轮结果在重生成时一并更新。
+>
+> **2026-09-30 M5-C4 收口（基线已整体重生成）**：该 run **全步骤绿**（含「基线对比」——正是修复生效的直接证据），
+> 满足八步的触发前提 2，故按 step 1–7 做了**整份复制重生成**：
+> - **源 run = `36580639759`**（`conclusion=success`，59 行 / 11 个 bench 文件，runner.txt 五字段核对通过：
+>   ubuntu-latest / nproc 4 / **AMD EPYC 7763** / Python 3.12.3 / uv 0.12.20）；
+> - **单一 provenance**（不再是 C3 的两 run 混合），前两代（`35918283944` 21 行 + `36494001567` 38 行）
+>   记入 `rows_provenance.supersedes`；
+> - **一处偏离已如实登记**：该 run 跑在 ref `ZX466/cline`（head `1d5d3c5`）而非 main。核验结论＝对 main 无实质偏差：
+>   11 个 bench 文件与 main **逐字节相同**；本分支落后的两处 sim 改动对被测路径无影响
+>   （`ws.py` 纯新增函数、`models.py` 仅给 Branch 表加列，而 bench 走 structures 表）。
+>   另派 main-ref 复跑 **`36670751263`** 作交叉核对。
+> - step 5 的本机 sanity **实测 EXIT=0（69 passed / 1 skipped / 168s）**，并出现 pytest-benchmark 的
+>   `Benchmark machine_info is different` 警告（即确系跨机比较、CLI 正常接受新基线）。
+>   ⚠ **与本节 step 5 的预期相反**：该步原写「定标机跑 CI 基线**必然越线**（档位比 1.14），预期非零退出」——
+>   实测本机对 CI 基线**未越线**，说明「定标机必快于 CI runner」这一假设在本机不成立（至少对这 59 行如此）。
+>   该「预期非零」的措辞已与实跑不符，**留给性能域（pi）订正**，我未改他人文档正文。
+> - **仍未决（pi 域）**：机型口径矛盾——runner.txt 与 `machine_info` 均为 **EPYC 7763**，而本节 step 3 与
+>   `ci-calibration-m2p6.md` §0 表写 **EPYC 9V74**；两者不可能同时为真，需性能域订正其一。
 
 **触发前提（三条同时满足）**：
 1. M2-P6 advisory 门已收编进 main 且 nightly「跑基准」step 带 `PI_BENCH_ADVISORY= "1"`；
