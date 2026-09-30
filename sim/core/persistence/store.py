@@ -89,8 +89,10 @@ class EventStore(Protocol):
         """
         ...
 
-    async def latest_snapshot(self, branch_id: str, before_tick: int) -> SnapshotData | None:
-        """获取 before_tick 之前（含）的最新快照。"""
+    async def latest_snapshot(
+        self, branch_id: str, before_tick: int, *, max_seq: int | None = None
+    ) -> SnapshotData | None:
+        """获取 before_tick 之前（含）的最新快照；``max_seq`` 可选上界（见实现处说明）。"""
         ...
 
 
@@ -255,15 +257,26 @@ class SqlEventStore:
             session.add(snap)
             await session.commit()
 
-    async def latest_snapshot(self, branch_id: str, before_tick: int) -> SnapshotData | None:
-        """获取 before_tick 之前（含）的最新快照。"""
+    async def latest_snapshot(
+        self, branch_id: str, before_tick: int, *, max_seq: int | None = None
+    ) -> SnapshotData | None:
+        """获取 before_tick 之前（含）的最新快照。
+
+        ``max_seq``：可选上界，按 ``snapshots.seq``（= 快照点事件流最大 seq）过滤。
+        **锚点物化路径必须给**（``max_seq=anchor.seq``）：只按 ``tick <=`` 选，会在
+        「同 tick 内多事件」时选出 ``seq`` 已越界的快照 ⇒ 重放窗口倒挂/漏事件
+        （A3 §1.2）。不给则保持旧行为（纯 tick 口径，既有调用方零影响）。
+        """
         async with self._session_factory() as session:
-            result = await session.execute(
+            query = (
                 select(Snapshot)
                 .where(Snapshot.branch_id == branch_id)
                 .where(Snapshot.tick <= before_tick)
-                .order_by(Snapshot.tick.desc(), Snapshot.seq.desc())
-                .limit(1)
+            )
+            if max_seq is not None:
+                query = query.where(Snapshot.seq <= max_seq)
+            result = await session.execute(
+                query.order_by(Snapshot.tick.desc(), Snapshot.seq.desc()).limit(1)
             )
             snap = result.scalar_one_or_none()
             if snap is None:

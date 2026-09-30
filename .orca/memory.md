@@ -1133,6 +1133,48 @@ uv run pyright sim/
   `prettier --check`** ⇒ 本单按仓内 markdown 风格书写，未套 prettier 默认格式化（CJK 折行会
   破坏全仓统一的表格对齐）。若要把 docs 纳入门禁需先加仓根 `.prettierrc` 并全量重排＝独立仓级决定。
 
+## 2026-09-30 M5-A4（0011 anchor_packages + R-4 真源契约 + 快照 seq 判据）
+
+- 提交：`feat(m5-a4): 0011 anchor_packages 建表 + R-4 活跃分支真源契约 + latest_snapshot seq 判据`，
+  钉子 **17**（0011 表 11 + seq 判据 6），双推。
+- 【1】0011：`alembic/versions/0011_anchor_packages.py` + `models.py::AnchorPackage`（A3 §1.1 五件套）。
+  纯 `create_table` 无回填；`rng_state` 可空（NULL ⇒ 禁 seed 派生兜底）、`snapshot_seq/tick`
+  **两列同有同无**（CHECK）、`corpus_blob` 收 3 张不可重建表、1:1 **不建 FK**（删除语义归 kilo）。
+  钉子纪律新增一条：**降级丢包是有意的**（包可重算，玩家档不可丢）——我第一版钉错成
+  「包行也该幸存」，被 drop table 教回来。
+- 【2】R-4 契约：`docs/data/m5-r4-active-branch-contract.md`（**独立文件**，没碰 anchors-api——
+  防与 kilo K8 双写冲突）。要点：真源 = `branches` 表（禁 `'main'` 字面量 fallback、fail-closed
+  不猜）；两处硬编码（`anchors.py:274` 取 seq、`:345` 建档）**必须同改**，否则档的
+  `(branch_id, tick, seq)` 三元组自相矛盾；不变量「至多一个当前」的破坏口 = 裁 5「不存在即
+  开线」（必须收紧为「仅当无当前行才可开线」）；载体建议 `branches.is_current` + **部分唯一
+  索引**（DB 层保证），**明确否决 recency 选法**（读档子线故意与父线并存且可能更晚，recency 会
+  静默换线）；head-fork 当前行交给子、anchor-fork 保持父当前（子为读档线）。
+- 【3】`store.py::latest_snapshot` 加可选 `max_seq` 上界（不给 = 旧行为，既有调用方零影响）。
+  原 bug：只判 `tick <=`，同 tick 多事件时会选到 `seq` 已越界的快照 ⇒ 重放窗口倒挂/漏事件。
+- ⚠️ **修掉自己 0010 钉的一个设计缺陷**：`test_round_trip_0009_0010` 断言
+  `version == '0010_protected_backfill'`，但它跑的是 `upgrade head` ⇒ **head 会随新迁移前进，
+  0011 一落地就假红**。纪律：**迁移往返钉一律钉具体 revision id，不钉 head**（已把该文件 4 处
+  `upgrade head` 改钉 `0010_protected_backfill`）。
+
+### ⚠️ 环境：world.db 的版本行曾「说谎」（我的错，A-DATA 轮埋下，A4 轮爆）
+- 根因：A-DATA 轮我对一个物理 schema 停在 0001–0007 的旧库跑了
+  `alembic stamp 0008_m5_fork_identity` —— **stamp 只改版本行、不执行迁移**，于是版本行自称
+  0008/0009，而 0008 的列（`events.parent_branch_id`、`player_anchors.protected`、
+  `knowledge.evidence_seq`…）**从未落地**。后续任何走仓根 `world.db` 的进程/测试都撞
+  `no such column named parent_branch_id`。
+- A4 轮爆点：`anchor_packages` 被 `create_all` 提前建出 + 缺 `protected` ⇒ kilo
+  `test_m5_anchors_crud.py` 两个用例 error。
+- 处置：备份 `%TEMP%\opencode\world.db.bak-a4` → 该库只有 11 条 `world.create`、`player_anchors`
+  **0 行**（无玩家数据）⇒ 直接删库重建 + `alembic upgrade head`（现 version=0011，全列齐）。
+- **纪律（新增）**：真实部署/旧库修复时，`stamp` 只能 stamp 到**物理结构真正匹配**的 revision；
+  「表都在」不等于「迁移跑过」（`create_all` 会按 ORM 元数据建出所有表）。**先看列与约束，
+  再定 stamp 目标**；不确定就备份后重建，别用 stamp 猜。
+
+### 已知脆弱项（非本单引入，域 = cline/perf）
+- `sim/tests/bench/test_bench_willingness.py::test_tick_overhead_delta_sanity` 是**墙钟 Δ 护栏**
+  （断言 0.02–2.0ms/tick）：全量跑时 CPU 争用 ⇒ 偶发假红；单独跑或整目录跑均绿
+  （`pytest sim/tests/bench -q -m "not bench"` = 39 passed）。本单 diff 不碰该路径。
+
 ## 环境坑（codex 树实测）
 - `ruff format --check` **全仓基线就是红的**（27 个历史文件会 reformat），不是本单引入；
   判据应为「本单文件 clean + 全仓计数不增」（基线 27 → 本单后仍 27）。

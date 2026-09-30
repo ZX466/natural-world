@@ -213,7 +213,7 @@ class TestAlembic0010:
         finally:
             conn.close()
 
-        assert _alembic(tmp_path, "upgrade", "head").returncode == 0
+        assert _alembic(tmp_path, "upgrade", "0010_protected_backfill").returncode == 0
         conn = sqlite3.connect(str(db))
         try:
             rows = conn.execute(
@@ -225,7 +225,7 @@ class TestAlembic0010:
 
     def test_upgrade_on_empty_anchor_table(self, tmp_path: Path) -> None:
         """空 anchors 库升级不炸（零行更新是合法态）。"""
-        assert _alembic(tmp_path, "upgrade", "head").returncode == 0
+        assert _alembic(tmp_path, "upgrade", "0010_protected_backfill").returncode == 0
 
     def test_round_trip_0009_0010(self, tmp_path: Path) -> None:
         """0009 ↔ 0010 逐级往返：回填结果保持、升级幂等（downgrade **不撤销**回填）。"""
@@ -246,9 +246,9 @@ class TestAlembic0010:
         finally:
             conn.close()
 
-        assert _alembic(tmp_path, "upgrade", "head").returncode == 0
+        assert _alembic(tmp_path, "upgrade", "0010_protected_backfill").returncode == 0
         assert _alembic(tmp_path, "downgrade", "0009_branches_rng_state").returncode == 0
-        assert _alembic(tmp_path, "upgrade", "head").returncode == 0
+        assert _alembic(tmp_path, "upgrade", "0010_protected_backfill").returncode == 0
 
         conn = sqlite3.connect(str(db))
         try:
