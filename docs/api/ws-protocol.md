@@ -224,6 +224,7 @@ sim/api/ws  (FastAPI WebSocket 网关)
 - **`control_ack.speed` = 用户设定的倍率**，不是当前有效 tick 率；战斗期有效率 = `1 × speed`（`clock.py` 的 `ticks_per_real_second = base × speed`）。前端不得拿此值直算帧率。
 - **`control_ack.paused`（M5-K3 增，可选）**：省略 = 未表达（老客户端兼容）；给出则前端可直接渲染暂停态而不必推断。**暂停时 `speed` 是恢复后倍率**（枚举无 0，`pause` ack 一律不带 `speed`）。
 - `timescale` **只由战斗事件驱动**（`issue_combat_scale`→广播），与 `set_control` 无因果链。详见 `ws-dispatch-proposal.md` §1.5。
+- **GAP-D 登记（M5-CRUD / 裁 28-G，2026-09-30）**：`timescale` schema 与发射器方法（`TickLoop.issue_combat_scale`）均已就绪，但**当前无生产调用点**（战斗慢镜面未接线）——它是「有 schema 有发射器、无生产触发」的登记项，接战斗批次时按「事件先行、帧后投影」接线；在此之前属 R1 已知例外（与 GAP-E `combat_event` 同类，后者连发射器也未开工）。
 
 ### 4.4 session 通道
 

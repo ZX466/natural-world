@@ -7,6 +7,56 @@
 <!-- 4. 本会话教训已在各轮快照内联；重启后若五树有新交付，走标准收编流程（memory.md 收编流程条） -->
 <!-- ============ 恢复卡结束，以下为 ①节正文 ============ -->
 
+【2026-09-30 第三十一轮｜五单收编（main ac0d559）+ 裁 28-G Claude 域六件全落】
+①**五单收编**：opencode M5-A2（0010 protected 回填 10 钉+混沌流预研）/ codex M5-S3
+（P6 语料 46→52+权力判据提案 10 钉）/ kilo M5-K6（C-2 契约合入+unregister_anchor_id
+4 钉+GAP-F 行）/ pi M5-P5（ci_smoke 收口+soak 窗口 artifact+0.90 硬断言方案）/
+cline M5-C4（nightly-bench 基线对比 step 补 PI_BENCH_ADVISORY=1）。唯一冲突面
+docs/README 台账（本轮补翻 9 行历史遗留 ⏳→✅）。门禁 1801 passed/120 skipped。
+**陈旧 world.db 坑（本轮实测）**：仓库根 world.db 是 create_all 产物（alembic_version
+空戳、matter_state 单键 PK）——create_all 不给已存表补列，0009 后 WS 测试
+OperationalError「branches has no column named rng_state」；修复=删库重建
+（gitignore 已排除，非迁移链产物不可 alembic 硬升）。
+②**裁 28-G Claude 域六件全落**（本轮施工，TDD 先行）：
+- **S-1 ProblemDetail**：`sim/api/errors.py`（新）四键全局换形——HTTPException/
+  未匹配 404/RequestValidationError 三层；机器码 `type|detail` 分段解析；
+  `_TYPE_TITLE` 表（anchor/profile-not-found/protected/world-not-ready/validation）；
+  main.py `install_error_handlers(app)`。settings.py 404 换机器码。
+- **S-2/S-5/S-8 POST**：`AnchorCreate`（name 1..64, extra=forbid）；同事务
+  protected=true+清其余（A2 threading.Lock——asyncio.Lock 与同步 SQL 不兼容实测；
+  A3 单 session）；updated_at 只写一次；游标=loop.state.tick+`get_current_seq()`
+  （events max seq，D-16 默认 main 分支）；无 loop→400 world-not-ready；成功
+  register_anchor_id（K7 模式）。
+- **S-4 切列**：list/get/current 全读 protected 列（C1 派生式退休——opencode
+  跨域缝「派生式同刻标 N 行 vs 回填标 1 行」随切列闭合）；/current 退化态
+  （无 protected 行）回退 max(updated_at) 保底不 404、protected=false（D-14）。
+- **S-6/S-7 调用点 DELETE**：409 判据读列；硬删；成功 `unregister_anchor_id`；
+  不补位。
+- **F-6 注册侧 fail-closed**：`_assert_name_clean` 过现行 scan()（零词表扩散），
+  422 `/errors/anchor-name-rejected`（`type|detail` 分段）；**出站纵深**
+  fork_notice 终扫退化兜底行（存量行漏拦时不静默放行）；codex RED 钉
+  `test_banned_anchor_names_currently_pass_through` 按钉内指示转正为
+  `test_banned_anchor_names_degrade_at_outbound`+`test_clean_names_keep_named_notice`。
+- **driver 生产挂载**：`set_anchor_load_hook`（新 setter）注册
+  `orchestrate_load_anchor` 闭包（preflush=on_flush await、register_child 日志、
+  同步等待 fork 事务完成——load_anchor 分发块是同步契约，毫秒级阻塞窗口可接受；
+  异常冒给 handler 降级 load_failed）。
+- **S-9 responses 注入**：openapi_ext `_attach_problem_responses`（get_openapi
+  之后调用否则 paths 被重建冲掉）；live 与快照键集一致（post 201/400/422、
+  patch 200/404/422、delete 204/404/409）；`gen-protocol --check` 过=快照零漂移。
+- **GAP-D**：ws-protocol.md §4.3 登记 timescale「有 schema 有发射器、无生产触发」。
+③**测试**：test_m5_anchors_crud.py 21 例（CRUD+切列+回填一致性钉——同刻多行
+不变量 ≤1 与 /current 同源；**坑**：uuid4 随机 id 使「id 最大者」断言不可用于
+运行态，同刻兜底判据只对存量回填有意义）；test_m5_problem_detail.py 3 例；
+既有 4 钉随契约反转（_seed 补 protected 语义/mutation routes 断言反转）。
+**坑**：POST/PATCH 路由装饰器插错位置（routes 未注册致 405）——插入后必须
+`app.routes` 实证；「存档一」等日常词命中禁词表（存档=禁词），测试样例名改
+「溪边小驻」。**门禁：1827 passed/119 skipped**（+26 净增）、ruff/pyright 0、
+gen-protocol --check 过；bench 后台在途。
+④**下一波**：bench 绿后提交推送+写快照分发六树；cline 重生成 baseline
+（run 36580639759 全绿窗口已触发）；GAP-C 前端 dispatch 归 M5 刻度面板单。
+
+
 # memory.md — 多 Agent 记忆合集（分节收录各工作树各自的记忆）
 > 用户规则 #7（main `3e320b9` 裁决：memory.md 入库）。本文件 = 五树 + 主树记忆的**融合合集**；
 > 跨树收编由主导方（Claude）合并。各树本地副本是其对应节的**权威来源**，收编冲突时以各树版本为准。

@@ -70,19 +70,25 @@ class TestRegistrationSideScanContract:
     4. **不扩 BANNED_WORDS**——本契约只消费既有词表（裁 22-C⑤）。
     """
 
-    def test_banned_anchor_names_currently_pass_through(self) -> None:
-        """**RED 指纹**（现状记录）：禁词档名经 fork_notice 原样出站。
+    def test_banned_anchor_names_degrade_at_outbound(self) -> None:
+        """F-6 出站纵深（M5-CRUD 落地，原 RED 指纹按钉内指示转正）。
 
-        本断言**钉的是现状**（fail-closed 缺口本身），防止缺口被遗忘；注册侧
-        扫描落地后，本用例应改为断言「拒注册/退化兜底行」并改名
-        （test_banned_anchor_names_rejected_at_registration）。
+        注册侧（POST/PATCH fail-closed）漏拦的**存量行**到达出站侧时：
+        fork_notice 终扫命中 → 退化为无档名兜底行，**禁词不原样出站**。
         """
-        leaked = [n for n in _BANNED_NAMES if scan(fork_notice(n)).hits]
-        assert leaked == list(_BANNED_NAMES), (
-            "F-6 现状漂移：以下档名不再出站禁词（注册侧扫描可能已落地）——"
-            f"{leaked}。请把本用例改写为正式的 fail-closed 断言"
-            "（test_banned_anchor_names_rejected_at_registration），勿删除"
-        )
+        for name in _BANNED_NAMES:
+            notice = fork_notice(name)
+            hits = scan(notice).hits
+            assert not hits, f"档名 {name!r} 的禁词仍出站：{[(h.word) for h in hits]}"
+            assert "「" not in notice or name not in notice
+
+    def test_clean_names_keep_named_notice(self) -> None:
+        """正常档名（出站终扫零命中）仍带档名——纵深只退化违规行，不误伤正常行。"""
+        for name in _CLEAN_NAMES:
+            notice = fork_notice(name)
+            assert scan(notice).ok
+            if name:
+                assert name in notice
 
     def test_contract_requires_scan_on_name_fields(self) -> None:
         """契约可执行面：`sim/api/anchors.py` 落地 POST/PATCH 时必须 import scan。

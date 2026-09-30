@@ -14,7 +14,8 @@ FastAPI 只为 HTTP 路由生成 schema：WS 消息与设置页响应模型的�
 
 形状对齐依据：ws.py 实发（ControlAck 三项=action/applied/speed、channel=control）；
 hello/hello_ack（W6 鉴权握手）**故意不进联合**（安全域裁决，勿补齐）。
-anchors 三 schema（M5 阶段）与 ProblemDetail/WsEnvelope 无路由可挂，不施工。
+anchors 三 schema 与 ProblemDetail 由路由 response_model 生成（M5-CRUD 已施工，2026-09-30）；
+responses.Problem 由 `_attach_problem_responses` 注入（§5.1 手抄清单）。
 
 **M5-K10（裁 19 CRITICAL 修复，2026-09-27）**：新增 `PlanDelta` 第 15 个公共子
 schema（`{rtoken→RToken, text}`，both required，`additionalProperties: False`）+
@@ -529,6 +530,33 @@ def _strip_pydantic_decorations(node: Any) -> Any:
     return node
 
 
+
+def _attach_problem_responses(schema: dict[str, Any]) -> None:
+    """anchors 路由 Problem 响应声明（M5-S9 / anchors-api.md §5.1 手抄清单）。
+
+    exception_handler 产出的响应**不会自动进** /openapi.json（§3.3 关键坑）——
+    必须在此手注。快照 components.responses.Problem 已就绪（K3 前瞻式声明）；
+    live 侧在此对齐。调用点在 get_openapi(...) 之后（否则 paths 被重建冲掉）。
+    """
+    problem = {"$ref": "#/components/schemas/ProblemDetail"}
+    components = schema.setdefault("components", {})
+    components.setdefault("responses", {})["Problem"] = {
+        "description": "RFC 7807 问题详情（戏外工程措辞，不回灌 Agent）",
+        "content": {"application/json": {"schema": problem}},
+    }
+    problem_resp = {"$ref": "#/components/responses/Problem"}
+
+    def attach(route_key: str, method: str, codes: list[str]) -> None:
+        op = schema["paths"].get(route_key, {}).get(method)
+        if op is None:
+            return
+        for code in codes:
+            op.setdefault("responses", {})[code] = dict(problem_resp)
+
+    attach("/api/anchors", "post", ["400", "422"])  # 世界未就绪 / 校验失败
+    attach("/api/anchors/{anchor_id}", "patch", ["404", "422"])  # 不存在 / 校验失败
+    attach("/api/anchors/{anchor_id}", "delete", ["404", "409"])  # 不存在 / 末梢受保护
+
 def custom_openapi() -> dict[str, Any]:
     """自动 schema + WS 消息 schemas（components.schemas.WsMessage 联合）。挂到 app.openapi。"""
     if app.openapi_schema:
@@ -544,6 +572,7 @@ def custom_openapi() -> dict[str, Any]:
     schemas.update(_SUB_SCHEMAS)
     schemas.update(_WS_SCHEMAS)
     schemas["WsMessage"] = _WS_UNION
+    _attach_problem_responses(schema)
     schema = _strip_pydantic_decorations(schema)
     app.openapi_schema = schema
     return schema

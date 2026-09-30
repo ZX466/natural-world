@@ -10,10 +10,12 @@ import contextlib
 from collections.abc import AsyncIterator
 from typing import Any
 
+import structlog
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, ConfigDict, Field
 
 from sim.api.anchors import router as anchors_router
+from sim.api.errors import install_error_handlers
 from sim.api.settings import router as settings_router
 from sim.api.ws import (
     ConnectionManager,
@@ -31,6 +33,8 @@ from sim.core.persistence.store import SqlEventStore
 from sim.core.tick import TickLoop
 from sim.core.world import WorldState, build_default_bus
 from sim.world.map import TileMap
+
+logger = structlog.get_logger()
 
 manager = ConnectionManager()
 
@@ -95,6 +99,57 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.store = store
     app.state.tile_map = tile_map
     app.state.driver = asyncio.create_task(run_world_driver(loop, manager, tile_map, on_flush))
+
+    # 生产读档 hook（裁 28-G driver 生产挂载）：WS load_anchor → 读档=分叉编排。
+    # 闭包持有事件循环（handler 在同一 loop 的 ws_endpoint 同步调用栈里执行），
+    # preflush 直接 await 驱动的 on_flush（冲掉父分支 in-flight 批次，P1 必填）；
+    # register_child 把新分支 id 交回 WS 侧登记（供后续读档链可载性）。
+    def _production_load_hook(anchor_id: str) -> bool:
+        from sim.core.persistence.fork_orchestration import orchestrate_load_anchor
+
+        async def _run() -> bool:
+            await orchestrate_load_anchor(
+                store.session_factory,
+                anchor_id=anchor_id,
+                flush_in_flight=on_flush_async,
+                register_child=register_new_branch,
+            )
+            return True
+
+        future = asyncio.get_running_loop().create_future()
+
+        async def _drive() -> None:
+            try:
+                future.set_result(await _run())
+            except Exception as exc:
+                future.set_exception(exc)
+
+        task = asyncio.get_running_loop().create_task(_drive())
+        return _hook_wait(task, future)
+
+    def _hook_wait(task: asyncio.Task[None], future: asyncio.Future[bool]) -> bool:
+        # 同步等待 fork 事务完成：load_anchor 分发块是同步契约（§3.4 短期路径），
+        # fork 事务是毫秒级字节拷贝（D3-b），阻塞窗口可接受；异常向上冒给
+        # handler 的 except → 降级 load_failed（连接保持）。
+        import time as _time
+
+        while not task.done():
+            _time.sleep(0.001)
+        return future.result()
+
+    def register_new_branch(_new_branch_id: str) -> None:
+        """子分支可载性登记（WS 侧；当前无 HTTP id 面，登记动作留观察日志）。"""
+        logger.debug("fork.child_branch_registered", branch_id=_new_branch_id)
+
+    async def on_flush_async() -> None:
+        from sim.core.flush import flush_events
+
+        await flush_events(store, loop.drain_events())
+
+    # 同步 hook 出口（ws.py 分发块契约）：设进全局注册方
+    from sim.api import ws as _ws_mod
+
+    _ws_mod.set_anchor_load_hook(_production_load_hook)
     yield
     app.state.driver.cancel()
     with contextlib.suppress(asyncio.CancelledError):
@@ -108,6 +163,7 @@ app.include_router(anchors_router)  # M5-K7：玩家档读路径（落库 → WS
 from sim.api.openapi_ext import install as _install_openapi_ext  # noqa: E402
 
 _install_openapi_ext()  # WS components 进 OpenAPI（kilo K03 差异回写）
+install_error_handlers(app)  # ProblemDetail 全局错误形（anchors-api §3.2，S-1）
 
 
 class HealthStatus(BaseModel):

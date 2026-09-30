@@ -50,6 +50,7 @@ from sim.core.calendar import TICKS_PER_GAME_HOUR, game_time
 from sim.core.clock import MAX_CATCHUP_REAL_SECONDS
 from sim.core.events import EventKind, WorldEvent
 from sim.core.tick import TickLoop
+from sim.llm.prompts.banned_words import scan
 from sim.world.map import TileMap
 from sim.world.pathfinding import Pathfinder
 
@@ -786,6 +787,16 @@ _ANCHOR_LABELS: dict[str, dict[str, str]] = {}
 _ANCHOR_LOAD_HOOK: Any = None
 
 
+def set_anchor_load_hook(hook: Any) -> None:
+    """注册生产载入钩子（main.py lifespan 装配；读档=分叉编排缝）。
+
+    hook 契约（同步布尔）：`(anchor_id: str) -> bool`——True=已分叉换线；
+    抛异常=执行失败（handler 降级 load_failed）。None 卸载。
+    """
+    global _ANCHOR_LOAD_HOOK
+    _ANCHOR_LOAD_HOOK = hook
+
+
 def reset_anchor_registry() -> None:
     """测试辅助：清空 anchor id 集/标签表与载入钩子。"""
     _ANCHOR_IDS.clear()
@@ -900,7 +911,15 @@ def session_state_payload(
 
 
 def fork_notice(anchor_name: str) -> str:
-    """分叉告知文案（戏外口语行；不含量词数值、不出现分支/快照等系统词）。"""
+    """分叉告知文案（戏外口语行；不含量词数值、不出现分支/快照等系统词）。
+
+    F-6 出站纵深（m5-fork-evidence-preplan.md §4.2 表态 2c）：注册侧（POST/PATCH）
+    已 fail-closed 拦禁词档名，此处对**存量行**终扫兜底——命中禁词 → 退化为
+    无档名兜底行，**不静默放行**（不扩词表，消费现行 scan()）。
+    """
+    if anchor_name and scan(f"你回到了「{anchor_name}」那段日子").hits:
+        logger.warning("ws.fork_notice_degraded", reason="banned_name_outbound")
+        return "你回到了先前的那段日子"
     return f"你回到了「{anchor_name}」那段日子" if anchor_name else "你回到了先前的那段日子"
 
 
