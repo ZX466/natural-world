@@ -1,14 +1,20 @@
-# M2-P6②：CI 档位基线定标提案（EPYC 9V74 / 4 核 vs 本机）
+# M2-P6②：CI 档位基线定标提案（EPYC 7763 / 4 核 vs 本机）
 > 性能域（pi），2026-09-23。数据源：nightly run **35816437844** artifact
 > （`perf/bench.json` 38,597B + `docs/perf/runner.txt`）对照本机同 commit 全量 bench
 > （`-m bench` 31 passed/1 skipped）。本文件只出**数据与提案**，不动 thresholds 正文
 > （裁 1 已定：硬断言只留定标机；本文件给的是 baseline.json 的取值依据）。
+>
+> **2026-09-30 M5-P6 订正**：本文原写 CI 机型「AMD EPYC **9V74** 80-Core」**订正为
+> AMD EPYC 7763 64-Core Processor**（共享 4 核切片）。依据：run 35816437844 及其后各轮
+> 的 `docs/perf/runner.txt` 实录 `cpu: AMD EPYC 7763 64-Core Processor`，且
+> `docs/perf/baseline.json` 的 `machine_info.cpu.brand_raw` 同值逐字一致；「9V74」在本仓
+> 无任何实测出处，判为 M2-P6 期笔误。**档位比数字全部不变**（本文核心结论与机型名无关）。
 
 ## 0. 两档机器
 | 档位 | 机型 | nproc | Python | 说明 |
 |---|---|---|---|---|
 | 本机（定标机） | Win11 + WSL2 转发 | — | 3.12.13 | 硬断言跑这里（advisory 缺省 off） |
-| CI（nightly） | AMD EPYC 9V74 80-Core（共享切片） | 4 | 3.12.3 | `PI_BENCH_ADVISORY=1`；同机同核同时段被其他 job 抢 |
+| CI（nightly） | AMD EPYC 7763 64-Core（共享 4 核切片） | 4 | 3.12.3 | `PI_BENCH_ADVISORY=1`；同机同核同时段被其他 job 抢 |
 
 ## 1. 档位比（CI median ÷ 本机 median，同一 commit 同 seed）
 | 项 | CI (ms) | 本机 (ms) | CI/本机 | 判读 |
