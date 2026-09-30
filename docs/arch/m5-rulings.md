@@ -265,3 +265,95 @@ baseline +38 行真实 EPYC 7763 数据（双 run 混合登记+重定基线不�
 - **Claude 域（我下轮）**：driver 生产挂载（orchestration 件接真实 driver）
   + anchors CRUD 四路由 + F-6 注册侧扫描 + ProblemDetail + GAP-D 文档行；
   混沌流架构面（sim 侧）随 opencode 数据面预研件收编后出。
+
+
+---
+
+# 裁决 29（2026-09-30，Claude 主导）——五单收编（K7/S4/P6/A3/C6）+K7 缺陷裁定+P6 soak 仲裁采认
+
+## A. kilo M5-K7 采认+缺陷裁定（R-1~R-9）
+
+复验方法采认（活 HTTP+一次性脚本零残留）。**R-1 CRITICAL 采认且当轮已修**
+（`29d783c`）：hook 改批处理范式（kilo 建议②，与 fast_forward 同构——handler
+登记即受理，driver 的 `_drain_loads` 在事件循环内执行 fork；零新增消息类型），
+钉 2 例（有界返回 <2s + drain 落 outcome）。**「测试没抓到」归因采认**：CRUD
+21 例测 HTTP 面、gateway 用例全是 stub hook——正向钉教训再+1。
+- **R-2 采认已修**（live schemas 补 ProblemDetail；全 spec $ref 可解析白盒验证）。
+- **R-3② 采认已修**（live /current 补 404）；**R-3①③ 快照侧归 kilo 下单**
+  （AnchorCreate/Rename 长度约束 + GET /{anchor_id} 快照缺行——我域 live 已就绪）。
+- **R-4 采认，联合单**（分支硬编码 'main'：分叉后 POST 记档指错世界线）——
+  opencode 出「当前活跃分支真源」契约补充、kilo 出契约条款、我施工取值；
+  挂批次 A/E 前置单（下波派）。
+- **R-5 裁定采 ③+② 组合**：F-6 现行 scan 用于档名**维持**（Agent 面禁词进
+  玩家档名确有回灌路径——notice 虽不回流 prompt，但档名进 D-6 告知帧与
+  story_label 面，fail-closed 是对的）；但 **kilo 的戏外合法性证据成立**——
+  出戏体验受损（7/10 合法名被拒）。裁：①`anchors-api` §1.2 补「档名禁词」
+  契约条款+中文 title（kilo 下单）；②「戏外词表」钩子立项（空表先建结构，
+  codex 下波 CR 定义集合）；③现状不禁（不回退 F-6）。
+- **R-6 采认**（列表升序 vs 契约降序）：**契约为准改实现**——下轮随 R-4 单
+  一并修+补排序钉（kilo 承认钉缺口，钉归 kilo）。
+- **R-7/R-9 采认已修**（title 表补行；POST 先 400 后 422）。
+- kilo 建议四钉（$ref 可解析/schema≡快照/responses 键集/排序方向）全采，
+  归 kilo 域随快照对齐单落。
+
+## B. codex M5-S4 采认
+
+F-6 三契约点全闭合（词表 28 零 diff/422 双调用点/退化 warning）+ 权力判据
+三红线对照 CRUD 仍闭合（ProblemDetail 体亦零命中，补测采认）+ P6 接线评估
+「零新增接线位」（Hygiene 参数化自动纳入+LiveProbes 随 CORPUS 参数化）采认。
+**预算语义 MEDIUM 提案采**：calls++ 在 try 前=抖动也计预算、S9 抖动率 50%，
+顶闸漏测风险实——**裁：提闸 CR 60→70 起评，归 codex 下波随 P6 真跑轮一并**
+（S4 不擅改纪律保持）。环境缝处置（删残留 world.db）认；防复发登记 opencode。
+
+## C. pi M5-P6 采认
+
+**soak 仲裁采认：非真回归——本机 i7-14650HX 持续负载降频 6.6x 口径假象，
+不 BLOCK，连续红计数清零。**证据链完整：CI 定档机三形态逐窗全绿（P5 窗口
+artifact 首战立功：604,800 tick 7 窗漂移 1.0000/RSS 平）/同代码双 tip 同败/
+漂移比值免疫降频（1.017/1.020）。**板上红项清单订正采认**（run 36634414471
+soak 行实为 2 skip 0 failed；唯一红 step=基线对比 4 条=无 env 期的 CI 档越线）。
+**「绝对阈值在降频机必然假红」教训采**：后续本机 soak 红先跑自检探针或直看 CI。
+文档订正四处+提案稿（CRUD 不加 bench 行只登记预备行，四条升级触发）全采。
+**门禁语义裁**：C6「warning 不判红」维持；升硬门禁等 Xeon 档基线建立后再议
+（open_items③ 有效）。
+
+## D. opencode M5-A3 采认
+
+物化设计四问全采：**存档时一次物化**（懒物化会让老档永久不可读档——快照
+GC 证据成立）/包=快照指针+3 不可重建表+anchor 时刻 rng_state+agent_override+
+state_hash/次序铁律（展开→override→语料→rng→resume）/老档不可物化只给诊断面
+不回填（回填=重掷混沌）。**0011 新表 `anchor_packages` 号已裁予**（下波数据单）。
+解锁五条件（kind 参数化=语义级改动禁隐式区分）+改动面 7 处归批次 E 施工单。
+两处现状缝采认（latest_snapshot 缺 seq<= 判据/冷热分层未实现）——前者**归
+R-4 联合单**一并修（同为 store.py 快照选择面），后者挂归档批次。成本数字给 pi
+备案（物化 0.5-25ms/读档 20-40ms/语料 2GB 逼近稳态需配额+LRU）。
+
+## E. cline M5-C6 采认
+
+机型防漂两件全采：基线分文件（provenance 不断链+baseline_meta.file 登记）+
+warning-only 守卫（硬数据：同 run 59 行全「Xeon 更快」、17/59>25%、换基线即
+0 行——「不可比」顶到 summary 最显眼处）。**判红语义未动**红线自证采认。
+Xeon 档基线未建（open_items③）登记，需全绿 run 后按八步另建。dev-workflow
+两处历史漂移更正采认（路径少 docs/+20%→25%）。
+
+## F. 收编轮门禁（Claude 域即做）
+
+五单合并（k7/codex/pi/opencode 无冲突；cline 唯一冲突 bench-plan 双注记段——
+P6 订正与 C6 落地两条并存保留）；R-1/R-2/R-3②/R-7/R-9 当轮修复（`29d783c`）；
+门禁 **1829 passed / 119 skipped**，ruff/pyright 0，gen-protocol --check 过，
+yml key 断言过（advisory env×2 + 机型基线引用 + 守卫 step 在位）。
+
+## G. 下一波派发
+
+- **kilo M5-K8**：R-3①③ 快照侧对齐（AnchorCreate/Rename 长度约束+GET
+  /{anchor_id} 补行+regen）+ 四钉落地（$ref 可解析/schema≡快照/responses 键集/
+  排序方向）+ R-5③ 契约条款（档名禁词+中文 title）+ R-6 排序钉。
+- **codex M5-S5**：戏外词表钩子 CR（R-5②：空表建结构+集合定义草案）+ 预算闸
+  提闸 CR（60→70 起评，随 P6 真跑轮）。
+- **pi M5-P7**：Xeon 档基线评估（open_items③：等 Xeon 全绿 run 或主动 dispatch
+  拿档）+ 自检探针落地（降频本机 soak 红先探针）。
+- **opencode M5-A4**：0011 anchor_packages 建表迁移+0010 同款钉子纪律+R-4 联合
+  契约补充（当前活跃分支真源）+ store.py 快照 seq<= 判据修复（A3 缝）。
+- **cline**：待命（C6 闭环；Xeon 基线建立时按八步协助登记）。
+- **Claude 域（我下轮）**：R-4 施工（POST 分支取值接真源）+ R-6 排序改实现 +
+  批次 A 架构件（混沌流 sim 侧）。
