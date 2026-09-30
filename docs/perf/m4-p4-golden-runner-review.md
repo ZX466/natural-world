@@ -3,8 +3,10 @@
 > 每 job 单种子 × 864,000 tick）`timeout-minutes: 90` 的余量复核 + 与 M4-P2 红线无冲突确认。
 > 依据：C3 本机口径（`docs/arch/t5-golden-scaffold.md` §4，0.62ms/tick @10 实体）、
 > C5 workflow（cline ZX466/cline `53175ca`）、**nightly-bench CI artifact**
-> run `36269054118`（2026-09-26，ubuntu-latest / EPYC 9V74 4 核 / Python 3.12.3，
-> `perf/bench.json` 56 bench + `docs/perf/runner.txt`）。
+> run `36269054118`（2026-09-26，ubuntu-latest / **EPYC 7763** 4 核 / Python 3.12.3，
+> `perf/bench.json` 56 bench + `docs/perf/runner.txt`）。**机型名 2026-09-30 M5-P6 订正**：
+> 原文写「EPYC 9V74」，按 runner.txt 实录与 `baseline.json` `machine_info.cpu.brand_raw`
+> 双证改为 **EPYC 7763**（9V74 在仓内无实测出处）。档位推论数字不受影响。
 > 本机复核口径：Win11 + WSL2（24 核逻辑 / 7GB 可见内存），Python 3.12.13。
 > **纪律：只读 + 文档**；不动 sim/、不动 thresholds.py。
 

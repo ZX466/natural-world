@@ -7,7 +7,7 @@
 - T1/T2/T3 一次性不变量 + 回放确定性是**每提交**的 CI 门槛（秒级）。
 - **本条 bench 独立**：性能基准不进每提交红线（硬性机器抖动会把 CI 变红灯制造机），按 **nightly** 跑，对比基线存档；**关键回归线**（§3）可选择性进 CI（用相对上基线 ±% 判）。
 - **advisory 门（M2-P6，Claude 2026-09-22 裁决 1）**：`PI_BENCH_ADVISORY=1` 时 `harness.assert_*` 越线**只记录不断言**（structlog `bench.advisory.*`，返回是否越线）。nightly-bench.yml「跑基准」step 传 "1"——runner 是共享 4 核（取证 run 35816437844：边缘越线 2-9% 属调度噪声，soak 本机 pass/pass/fail 同源抖动），nightly 回到「归档 + 相对基线漂移」口径（本条原意）；**硬断言只留定标机**（本机/专用 runner）。门只改「断不断言」，bench 采集逻辑零改动；契约单测 `sim/tests/bench/test_bench_advisory_gate.py`。
-- **机器档位两套口径**（M2-P6 §P6② 待定标）：本机（定标机）跑 advisory=0 硬断言；CI 档位（EPYC 9V74 / 4 核）跑 advisory=1，阈值按 CI 实测缩摆放独立基线（`docs/perf/baseline.json`，未建前只提示不判红）。
+- **机器档位两套口径**（M2-P6 §P6② 待定标）：本机（定标机）跑 advisory=0 硬断言；CI 档位（EPYC 7763 / 4 核，原写 9V74 已订正，见 §4.1 M5-P6 注）跑 advisory=1，阈值按 CI 实测缩摆放独立基线（`docs/perf/baseline.json`，未建前只提示不判红）。
 - 确定性要求（C5）对 bench 同样适用：**所有 bench 用固定 seed**，跑在干净种子流上。
 
 ## 1. M0 必带 bench 清单（对齐 §17 M0 范围：地图/寻路/渲染/摄像机/RNG/时钟/apply）
@@ -84,8 +84,7 @@
 > `36494001567`（main `78ccdf1`）的 `bench-result` artifact 实测**，机型与本文件同档（AMD EPYC 7763 / nproc 4 /
 > py3.12.3）。**未覆盖** 2026-09-23 那 21 条原值——重定基线属性能域裁决，故当前产物是**两 run 混合基线**
 > （逐 run 登记见 `baseline.json` 的 `machine_info.baseline_meta.rows_provenance`）。
-> **规范路径仍是下方八步的「首个全绿 run 整体重生成」**，本轮触发前提 2 未满足，已登记为 `baseline_meta.open_items`
-> （含一项机型口径待订正：runner.txt 实录 **7763**，而本节 step 3 与 `ci-calibration-m2p6.md` §0 表写 **9V74**）。
+> **规范路径仍是下方八步的「首个全绿 run 整体重生成」**，本轮触发前提 2 未满足，已登记为 `baseline_meta.open_items`。
 >
 > **2026-09-29 M5-C4（CI advisory 缺陷修复，裁 28-E 授权）**：`nightly-bench.yml`「基线对比」step 已补
 > `env: PI_BENCH_ADVISORY: "1"`（此前只有「跑基准」step 有 ⇒ 定标机绝对阈值在共享 runner 上重新变成硬断言，
@@ -110,8 +109,10 @@
 >   ⚠ **与本节 step 5 的预期相反**：该步原写「定标机跑 CI 基线**必然越线**（档位比 1.14），预期非零退出」——
 >   实测本机对 CI 基线**未越线**，说明「定标机必快于 CI runner」这一假设在本机不成立（至少对这 59 行如此）。
 >   该「预期非零」的措辞已与实跑不符，**留给性能域（pi）订正**，我未改他人文档正文。
+>   （**2026-09-30 M5-P6 已订正**：step 5 正文改为「EXIT=0 与非 0 都可能是正常结果，判据是越线项集合」。）
 > - **仍未决（pi 域）**：机型口径矛盾——runner.txt 与 `machine_info` 均为 **EPYC 7763**，而本节 step 3 与
 >   `ci-calibration-m2p6.md` §0 表写 **EPYC 9V74**；两者不可能同时为真，需性能域订正其一。
+>   （**2026-09-30 M5-P6 已订正**：9V74 → 7763，本节 §4.1 末 M5-P6 注。）
 >
 > **2026-09-30 M5-C5（main-ref 交叉核对 → 结论：不采用，但发现 runner 池跨厂商）**：复跑 **`36670751263`**
 > （ref = main，head `ac0d559`）**全步骤绿**，但 runner.txt 机型是
@@ -124,6 +125,14 @@
 > ⇒ **`ubuntu-latest` 池跨厂商且会漂**。本门禁是**跨机相对漂移**判定（median 25%），
 > 换机即可造成「假红」，也可能掩盖真回归。**建议裁**：固定 runner 机型 / 或对 `brand_raw` 不一致直接告警而不判绿 /
 > 基线按机型分文件。**本轮未擅自改门禁语义**，已登记为 `open_items`②。
+>
+> **2026-09-30 M5-P6（性能域订正，两项，均为文档口径）**：①**机型笔误已订正**：本节 step 3 与
+> `ci-calibration-m2p6.md` §0 表的「EPYC **9V74**」→ **EPYC 7763**（runner.txt 实录与 `baseline.json`
+> `machine_info.cpu.brand_raw` 双证；9V74 在仓内无任何实测出处，判为 M2-P6 期笔误）。
+> ②**step 5 措辞已订正**：「定标机跑 CI 基线必然越线，预期非零退出」与实跑 **EXIT=0** 相反
+> （`36580639759` sanity：69 passed / 1 skipped / 168s）——已改为「EXIT=0 与非 0 都可能是正常结果，
+> 判据是越线项集合能否由档位比/单轮离群解释」。⚠ 订正②同时说明：**C5 记的 open_items②（runner
+> 池跨厂商）仍然有效**，与机型笔误无关——那是真实门禁风险，待裁。
 
 **触发前提（三条同时满足）**：
 1. M2-P6 advisory 门已收编进 main 且 nightly「跑基准」step 带 `PI_BENCH_ADVISORY= "1"`；
@@ -134,12 +143,15 @@
 1. `gh run list --workflow nightly-bench.yml` 找首个绿色 run 的 run id（例：`<RUN_ID>`）；
 2. `gh run download <RUN_ID> -n bench-result -D <tmp>`（artifact 含 `perf/bench.json` + `docs/perf/runner.txt`）；
 3. 核对 runner.txt 五字段（date / runner / nproc / cpu / python / uv）与 `ci-calibration-m2p6.md` §0 表一致
-   （EPYC 9V74 / 4 核 / py3.12.3）——**不一致就跑第二步重新取**，不同档位不能混基线；
+   （**AMD EPYC 7763** / 4 核 / py3.12.3）——**不一致就跑第二步重新取**，不同档位不能混基线；
 4. 把 bench.json 复制为 `docs/perf/baseline.json`，并在文件头补 `runner` 注释块（五字段 +
    `source_run: <RUN_ID>` + `note: "CI 档位基线；定标机阈值见 sim/tests/bench/thresholds.py"`）；
 5. 本地 sanity：`uv run pytest -m bench --benchmark-compare=docs/perf/baseline.json --benchmark-compare-fail=median:25%`
-   —— 定标机跑 CI 基线必然越线（档位比 1.14），**这条只验证 CLI 参数被 pytest-benchmark 接受**，
-   预期非零退出；要看的是「越线项集合与档位比一致」而非全绿；
+   —— **这条只验证 CLI 参数被 pytest-benchmark 接受**，并查看「越线项集合与档位比是否符合预期」；
+   ⚠ **本步曾写「定标机跑 CI 基线必然越线（档位比 1.14），预期非零退出」——实跑为 EXIT=0（69 passed /
+   1 skipped / 168s，M5-C4 `36580639759`）**：本机对这 59 行**未越线**，即「定标机必快于 CI runner」的
+   档位比（1.14）在本机不成立（本例档差更小）。故**以实跑为准**：EXIT=0 与 EXIT≠0 都可能是正常结果，
+   **判据是越线项集合能否由档位比/单轮离群解释**，非退出码本身。
 6. 改 `nightly-bench.yml` 「基线对比」step：把现 echo 提示换成
    `uv run pytest -m bench --benchmark-compare=docs/perf/baseline.json --benchmark-compare-fail=median:25%`
    （**CI 档位跑自己的基线**，此时才可全绿；阈值仍不复制进 yml）；
