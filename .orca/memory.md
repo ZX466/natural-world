@@ -1040,6 +1040,47 @@ uv run pyright sim/
   真跑迁移（0009 态既有行）/ 空库升级 / 0009↔0010 往返 / **语句同源**（钉子里的 SQL
   按源码逐字比对迁移，防两处漂移）。
 
+## 2026-09-30 M5-A3（anchor 世界态物化数据面设计｜纯文档零代码）
+
+- 提交：`docs(data): M5-A3 anchor 世界态物化数据面设计（批次 E 前置）`，双推，零代码。
+- 交付：`docs/data/m5-anchor-materialization-preplan.md`（新）+ `docs/README.md` §5.4 台账行。
+- **地基分类（本域最重要的一条）**：可重放的 5 张（`npc_profiles`/`npc_health`/`matter_state`/
+  `structures`/`material_balances`，有 fold 器）vs **不可重建的 3 张**（`npc_memories` 治理列、
+  `knowledge` told 链+治理列、`relationships` 累计值原地演进——`npc_store.py`/`fork_replay.py`
+  均无物化器与可比字段）。**物化包必须同时兜住两类**，否则历史点分叉会把「回退前当前值」当
+  「回退点历史值」——那正是 fail-closed 要防的近似糊。
+- 四问结论（供施工单直接引用）：
+  1. 包 = 快照指针 + 3 张不可重建表行值(`corpus_blob`) + **anchor 时刻 `rng_state`** +
+     `agent_override` + `state_hash`；**存档时（`create_item` 的 A3 同事务位）一次物化**，
+     理由 = 快照只留最近 8 份+每日首份会被 GC，**懒物化会让老档永久不可读档**。
+     次序铁律：展开世界态 → 套 `agent_override`（先套会被快照内容覆盖）→ 灌语料 →
+     `restore_rng_state` → resume。快照缺失 ⇒ 从 seq 0 全前缀重放，三条判据（事件连续 /
+     语料行集一致 / rng 非 NULL），否则 `AnchorMaterializationError`。
+  2. **既有 0008/0009/0010 零改动**即可定义包；落库只需 **1 张新表 `anchor_packages`**
+     （1 条 `create_table`，号待 Claude 派——不占号，A2 撞号教训）。老档无包且 rng 不可得
+     ⇒ 不可物化，只给只读诊断面（`no_package`/`rng_unavailable`/`snapshot_lost`/`event_gap`/
+     `corpus_mismatch`）；**不用 `Branch.seed` 派生兜底、不批量回填**。
+  3. 解锁 `kind="anchor"` 五条：包 ready / 3 张进包 / **`kind` 参数化（回退旧档不封存父分支，
+     现行逻辑无条件把父分支标 abandoned）** / 语料克隆源切包（`_truncation_sql` 对包语义无效）
+     / 钉子集齐。改动面 7 处（`anchor_package.py` 新、0011 新表、`anchors.py` 写包+诊断路由、
+     `fork.py` kind+package 入参+语料源、`fork_orchestration.py` 读档编排、`store.py` 快照
+     `seq<=` 判据、新测试）。**零事件白名单改动、零 branches/events/snapshots 结构改动**。
+  4. 成本（pi 实测）：单次物化 **≈0.5–25ms**（最坏项 = ≤1000 tick 窗口重放 **14.8ms**
+     @0.74µs/事件；语料包写 10k 行 ~6.1ms @0.61µs/行）⇒ 相当于 10–60 tick 存档成本，不进热路径；
+     读档 ≈20–40ms（与现行 head-fork 同阶）。存储：**快照是可弃缓存**（引用即可，丢了退化为
+     全前缀重放 10 日 1.728M 事件 = 1.28s ⇒ 设前缀上限），**语料+rng 是不可重建资产必须内联**
+     ⇒ 每 anchor O(语料行数)（10k 行 ≈2MB）⇒ 需 10% 配额 + LRU。
+- 本单发现的两处现状缝（只记录，施工归他单）：
+  - `store.py::latest_snapshot` **只判 `tick <=`、不判 `seq <=`** ⇒ 同 tick 多事件时可能选出
+    「tick 在窗口内、seq 已超 anchor.seq」的快照（窗口倒挂/漏事件）。物化路径须加 `seq <=` 判据。
+  - **冷热分层未实现**：全仓无代码把 `is_cold` 置 1，`latest_snapshot` 也不按它过滤 ⇒ 冷归档
+    目前只是 schema 声明。
+- 门禁：零代码（未跑 pytest，按「加速」授权）；`npx prettier --check` 的仓内口径 = **CI 只覆盖
+  `client/`**（`ci.yml:171-173` `working-directory: client`，配置 `client/.prettierrc.json` 按路径
+  解析）⇒ `docs/*.md` 不在门禁范围，且**仓内既有 docs（含 main 的）同样不满足默认
+  `prettier --check`** ⇒ 本单按仓内 markdown 风格书写，未套 prettier 默认格式化（CJK 折行会
+  破坏全仓统一的表格对齐）。若要把 docs 纳入门禁需先加仓根 `.prettierrc` 并全量重排＝独立仓级决定。
+
 ## 环境坑（codex 树实测）
 - `ruff format --check` **全仓基线就是红的**（27 个历史文件会 reformat），不是本单引入；
   判据应为「本单文件 clean + 全仓计数不增」（基线 27 → 本单后仍 27）。
