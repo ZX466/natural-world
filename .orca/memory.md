@@ -1130,6 +1130,18 @@ uv run pyright sim/
     判据是扫文件字节而非信终端显示。另：pytest 输出曾误跑其它 worktree
     （输出行带 `not bench` 但树不对）——门禁数字必须记 commit hash + 树路径。
 
+- **M5-S4（F-6 复核 + P6 接线评估）✅ `bdf0a13`**（2026-09-30，双推）
+  新文件 `docs/security/m5-s4-f6-review-and-p6-wiring.md`。F-6 三契约点闭合
+  （词表 28 零扩散 / 422 双调用点 / 退化+warning 不静默，S2b RED 指纹已转正）；
+  权力判据三红线对照 CRUD 面仍闭合（补测 ProblemDetail 体）；P6 接线就绪
+  零新增接线位。**1 MEDIUM**：预算语义抖动也计数（calls++ 在 try 前），
+  S9 抖动率 50% 下 8 条余量可能不够——留主树裁 CR 提闸。**LOW 已处置**：
+  本树残留旧 schema world.db（create_all 不补列）撞 CRUD teardown——
+  已删重建；防复发登记 opencode（本地起步走 alembic upgrade head）。
+  - 坑：**本地残留 world.db 是 create_all 快速起步库，迁移落地后永不自动补列**
+    ——CRUD teardown 类 INSERT 报「no column named X」先查它；处置 = 删库
+    重建（gitignore 已盖零生产数据）。
+
 ## 下一步 / 待派（不在本单范围）
 - **T4 nightly 接线未闭合 → 需派 cline**：`.github/workflows/t4-nightly.yml` 探针 step
   仍是 TODO 注释态 + env 仍写 claude-sonnet-5；须接到
