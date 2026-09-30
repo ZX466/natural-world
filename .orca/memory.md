@@ -7,6 +7,22 @@
 <!-- 4. 本会话教训已在各轮快照内联；重启后若五树有新交付，走标准收编流程（memory.md 收编流程条） -->
 <!-- ============ 恢复卡结束，以下为 ①节正文 ============ -->
 
+【2026-09-30 第三十七轮｜批次 A 架构件首件（main 6211c87）】
+五树无新交付（K9/S6/P8/A5 执行中），收编轮做我域批次 A 主项：
+**sim/world/chaos.py 落地**——`chaotic(stream)` 纯函数抽签（材料指纹重建
+Generator，无进度无调用序依赖，区别于 registry.generator 进度语义；抽样不
+落事件=opencode 预研 §a）+ `chaotic_at(stream, tick)` 变度抽签（tick 揉材料，
+同刻恒同值/异刻独立）+ inject 接缝（EntropyMixer.mix 重播种→序列整体切换，
+replay_mix 重放逐位一致 C5）+ T1 标量边界。11 钉全绿。
+**坑**：行替换法两处断言失败后改「精确整行匹配」才成（注释文字与实际落盘
+不一致时 replace 不可靠——先打印实际行再写匹配）。
+门禁 **1862 passed / 119 skipped**（+11）、ruff/pyright 0。六树推送齐（下轮
+merge 时分发）。
+批次 A 余项：世界循环 inject 接线（weather daily_reseed_due 生产化——
+EntropyMixer 首个生产调用方）+ chaos 消费点（寻路扰动/情绪回落抽样）+
+与 A5 的 R-4 施工（anchors.py 同改两处）——均待下轮（A5 数据面到位后）。
+
+
 【2026-09-30 第三十六轮｜四单收编（main 2d878f4）+裁 30】
 ①**四单收编**（零冲突——预警机制首战生效）：kilo K8（快照对齐 Create/Rename
 长度约束+GET /{id} 补行 `get?:never` 消除+五钉）/ codex S5（戏外词表 CR 判层
