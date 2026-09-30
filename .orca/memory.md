@@ -7,6 +7,25 @@
 <!-- 4. 本会话教训已在各轮快照内联；重启后若五树有新交付，走标准收编流程（memory.md 收编流程条） -->
 <!-- ============ 恢复卡结束，以下为 ①节正文 ============ -->
 
+【2026-09-30 第三十二轮｜cline C4 收口+C5 收编（main f442252）+四项裁决】
+①**收编**：cline 两交付入 main——C4 收口 `e5fb44c`（**baseline.json 整份重生成
+达成**：源 run 36580639759 全绿、59 行单一 provenance、supersedes 记前两代
+21+38 行混合基线；§4.1 八步全留痕，runner 五字段脚本 assert）+ C5 `82360b7`
+（main-ref 交叉核对 run 36670751263 全绿但落 Xeon 8573C，按「不同档位不能混
+基线」**不采用**，只登记 cross_check.adopted_as_baseline=false）。
+②**裁 cline 四未决项**：①机型「9V74」系笔误以实测 7763 为准（订正归 pi P6）；
+②step5「预期非零」旧假设按实测 EXIT=0 订正（同归 pi）；③runner 池跨厂商
+漂移（近 4 轮 3 EPYC+1 Xeon）→「机型分文件+brand_raw 告警」方向批，执行立
+M5-C6（等 pi 仲裁结论合并派发），本轮不动门禁语义；④维持 EPYC 基线不换
+Xeon（cline 否决卡面指示**正确**）。
+③**README 表格缺陷修复**（cline 随 C5）：我 CRUD 行 prose 的 `type|detail`
+未转义致表格拆 7 cell，已转义 `\|`（11 表 0 不一致）。
+④门禁：not-bench 1827 passed / 119 skipped、ruff/pyright 0、gen-protocol
+--check 过；六树同头 f442252 双远程推齐。
+⑤**仍开**：soak bench 仲裁（本机两轮红/截断，pi P6 定标机裁）；K7/S4/P6/C5
+四单在途；M5-C6 立单待 pi 结论。
+
+
 【2026-09-30 第三十一轮｜五单收编（main ac0d559）+ 裁 28-G Claude 域六件全落】
 ①**五单收编**：opencode M5-A2（0010 protected 回填 10 钉+混沌流预研）/ codex M5-S3
 （P6 语料 46→52+权力判据提案 10 钉）/ kilo M5-K6（C-2 契约合入+unregister_anchor_id
