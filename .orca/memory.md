@@ -1233,6 +1233,13 @@ uv run pyright sim/
     ——CRUD teardown 类 INSERT 报「no column named X」先查它；处置 = 删库
     重建（gitignore 已盖零生产数据）。
 
+- **M5-S5（戏外词表钩子 CR + 提闸 CR）✅ `bbc98f3`**（2026-09-30，双推，纯文档）
+  新文件 `docs/security/m5-s5-meta-lexicon-and-budget-cr.md`。CR-1 判层模型四层
+  （Agent 叙事面/锚点 name 跨界 F-6 维持/纯戏外面建空表结构/权力键级互补）+
+  集合草案 8 词（游戏行为词；AI/模型等元信息词不入——本表不做 Agent 面豁免源）；
+  CR-2 提闸 60→70 起评（抖动计预算 + S9 抖动率 50% 依据链；三把锁不动）。
+  两件待主树裁后施工（CR-2 随 P6 真跑轮，文档与常量同 commit 防漂移）。
+
 ## 下一步 / 待派（不在本单范围）
 - **T4 nightly 接线未闭合 → 需派 cline**：`.github/workflows/t4-nightly.yml` 探针 step
   仍是 TODO 注释态 + env 仍写 claude-sonnet-5；须接到
