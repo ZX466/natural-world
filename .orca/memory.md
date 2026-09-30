@@ -7,6 +7,34 @@
 <!-- 4. 本会话教训已在各轮快照内联；重启后若五树有新交付，走标准收编流程（memory.md 收编流程条） -->
 <!-- ============ 恢复卡结束，以下为 ①节正文 ============ -->
 
+【2026-09-30 第三十三轮｜五单收编（main c77e252）+裁 29+K7 缺陷当轮修】
+①**五单收编**：kilo K7（CRUD 复验：R-1~R-9 缺陷清单）/ codex S4（F-6 三契约
+点闭合+权力判据适配+P6 接线「零新增位」）/ pi P6（**soak 仲裁：降频 6.6x 假象
+不 BLOCK 计数清零**——CI 定档机三形态逐窗全绿+P5 窗口 artifact 首战立功+
+同代码双 tip 同败；订正 9V74 笔误与 step5 假设；CRUD 不加 bench 行提案）/
+opencode A3（anchor 物化设计：**存档时一次物化**防老档不可读+0011 表号请裁）/
+cline C6（机型防漂：**基线分文件 baseline-epyc7763.json** provenance 不断链+
+warning-only 守卫，硬数据同 run 换基线 17/59→0 行）。
+②**裁 29**：R-1 CRITICAL 当轮修（hook 批处理范式：登记即受理+driver
+_drain_loads 执行——kilo 实证同 loop 忙等挂死且 except 救不了；「测试没抓到」
+归因=CRUD 测 HTTP 面、gateway 全 stub hook，正向钉教训再+1）；R-2 悬空 ref 修
+（live schemas 补 ProblemDetail+全 spec $ref 可解析白盒）；R-3② /current 补
+404（①③快照侧归 kilo K8）；**R-5 三组合裁**（F-6 维持+戏外词表钩子立项
+codex S5+契约条款 kilo K8）；R-4 联合单（分支硬编码 main，opencode 出真源
+契约）；R-6 契约为准改实现（我下轮）；R-7/R-9 已修。**P6 仲裁全采**（绝对
+阈值降频机必假红教训：后续本机 soak 红先探针）；**A3 全采**（0011 号裁予；
+两缝归 R-4 单与归档批次）；**C6 全采**（升硬门禁等 Xeon 基线）。
+③**修复提交** `29d783c`：R-1（批处理范式+2 钉：有界返回<2s+drain 落 outcome）/
+R-2/R-3②/R-7（title 表补行）/R-9（先 400 后 422）。**坑**：行替换法修 lifespan
+块时留了双 yield（generator didn't stop）——块级替换后必须检查 yield 配对。
+④门禁 **1829 passed / 119 skipped**（+2 R-1 钉）、ruff/pyright 0、gen-protocol
+--check 过、yml key 断言过（advisory×2+机型基线引用+守卫 step）。唯一冲突
+bench-plan 双注记段并合保留（P6 订正+C6 落地并存）。六树同头 c77e252 推齐。
+⑤**下一波**：K8（kilo 快照对齐四钉）/ S5（codex 戏外词表 CR+提闸 CR）/
+P7（pi Xeon 基线+自检探针）/ A4（opencode 0011+R-4 契约+seq<= 修复）/
+我域（R-4 施工+R-6 排序+批次 A 混沌架构件）。
+
+
 【2026-09-30 第三十二轮｜cline C4 收口+C5 收编（main f442252）+四项裁决】
 ①**收编**：cline 两交付入 main——C4 收口 `e5fb44c`（**baseline.json 整份重生成
 达成**：源 run 36580639759 全绿、59 行单一 provenance、supersedes 记前两代
