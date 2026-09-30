@@ -7,7 +7,7 @@
 - T1/T2/T3 一次性不变量 + 回放确定性是**每提交**的 CI 门槛（秒级）。
 - **本条 bench 独立**：性能基准不进每提交红线（硬性机器抖动会把 CI 变红灯制造机），按 **nightly** 跑，对比基线存档；**关键回归线**（§3）可选择性进 CI（用相对上基线 ±% 判）。
 - **advisory 门（M2-P6，Claude 2026-09-22 裁决 1）**：`PI_BENCH_ADVISORY=1` 时 `harness.assert_*` 越线**只记录不断言**（structlog `bench.advisory.*`，返回是否越线）。nightly-bench.yml「跑基准」step 传 "1"——runner 是共享 4 核（取证 run 35816437844：边缘越线 2-9% 属调度噪声，soak 本机 pass/pass/fail 同源抖动），nightly 回到「归档 + 相对基线漂移」口径（本条原意）；**硬断言只留定标机**（本机/专用 runner）。门只改「断不断言」，bench 采集逻辑零改动；契约单测 `sim/tests/bench/test_bench_advisory_gate.py`。
-- **机器档位两套口径**（M2-P6 §P6② 待定标）：本机（定标机）跑 advisory=0 硬断言；CI 档位（EPYC 7763 / 4 核，原写 9V74 已订正，见 §4.1 M5-P6 注）跑 advisory=1，阈值按 CI 实测缩摆放独立基线（`docs/perf/baseline.json`，未建前只提示不判红）。
+- **机器档位两套口径**（M2-P6 §P6② 待定标）：本机（定标机）跑 advisory=0 硬断言；CI 档位（EPYC 7763 / 4 核，原写 9V74 已订正，见 §4.1 M5-P6 注）跑 advisory=1，阈值按 CI 实测缩摆放独立基线（**M5-C6 起按机型分文件**：`docs/perf/baseline-epyc7763.json`，未建前只提示不判红）。
 - 确定性要求（C5）对 bench 同样适用：**所有 bench 用固定 seed**，跑在干净种子流上。
 
 ## 1. M0 必带 bench 清单（对齐 §17 M0 范围：地图/寻路/渲染/摄像机/RNG/时钟/apply）
@@ -74,8 +74,8 @@
 
 ## 4.1 baseline.json 建立流程（裁 4 执行件；M3-P1 落地 2026-09-23）
 > **状态：已执行（2026-09-23，pi M3-P2②）**——首绿 run `35918283944`（main `372153a`，EPYC 7763/nproc4/py3.12.3）
-> 产物已建 `docs/perf/baseline.json`（21 benchmarks + `machine_info.baseline_meta`），
-> nightly「基线对比」step 已切 `--benchmark-compare=docs/perf/baseline.json --benchmark-compare-fail=median:25%`。
+> 产物已建 `docs/perf/baseline-epyc7763.json`（21 benchmarks + `machine_info.baseline_meta`），
+> nightly「基线对比」step 已切 `--benchmark-compare=docs/perf/baseline-epyc7763.json --benchmark-compare-fail=median:25%`。
 > 目的：CI 档位（EPYC 9V74 / 4 核，档位比见 `docs/perf/ci-calibration-m2p6.md`）的回归检出
 > 走**相对基线漂移**，不动 thresholds 定标机口径。
 >
@@ -127,12 +127,26 @@
 > 基线按机型分文件。**本轮未擅自改门禁语义**，已登记为 `open_items`②。
 >
 > **2026-09-30 M5-P6（性能域订正，两项，均为文档口径）**：①**机型笔误已订正**：本节 step 3 与
-> `ci-calibration-m2p6.md` §0 表的「EPYC **9V74**」→ **EPYC 7763**（runner.txt 实录与 `baseline.json`
+> `ci-calibration-m2p6.md` §0 表的「EPYC **9V74**」→ **EPYC 7763**（runner.txt 实录与基线
 > `machine_info.cpu.brand_raw` 双证；9V74 在仓内无任何实测出处，判为 M2-P6 期笔误）。
 > ②**step 5 措辞已订正**：「定标机跑 CI 基线必然越线，预期非零退出」与实跑 **EXIT=0** 相反
 > （`36580639759` sanity：69 passed / 1 skipped / 168s）——已改为「EXIT=0 与非 0 都可能是正常结果，
 > 判据是越线项集合能否由档位比/单轮离群解释」。⚠ 订正②同时说明：**C5 记的 open_items②（runner
 > 池跨厂商）仍然有效**，与机型笔误无关——那是真实门禁风险，待裁。
+>
+> **2026-09-30 M5-C6（机型防漂：按机型分文件 ＋ warning-only 守卫）**：上条建议已部分落地，
+> **判红语义与阈值均未动**（`median:25%` 原样、`sim/tests/bench/thresholds.py` **零改动**）：
+> - **基线按机型分文件**：`docs/perf/baseline.json` → **`docs/perf/baseline-epyc7763.json`**（`git mv`，历史不断）。
+>   命名约定 `baseline-<machine_key>.json`；文件内 `baseline_meta.file` 登记改名来源、理由与
+>   「**provenance 链未断**」（`source_run=36580639759` 与迁移前逐字一致，**未改任何测量值**）。
+> - **workflow 新增「runner 机型防漂检查」step**（置于「基线对比」之前）：读基线 `brand_raw` 与本轮
+>   `/proc/cpuinfo` 的 `model name`；一致 → `::notice::`，不一致 → **`::warning::`** 并在 step summary 标注
+>   「本次漂移不可直接比较」。该 step **绝不 `exit 1`、结尾显式 `exit 0`** ⇒ **不可能把 job 判红**；
+>   判红仍只由「基线对比」step 的 `median:25%` 决定。
+> - **已知局限（`open_items`③）**：Xeon 档位基线尚未建立；落到 Xeon 的 run 只得到 warning，
+>   其 median 与 EPYC 基线**不可直接比较**。若 Xeon 成为常用档，需按同样八步另建 `baseline-xeon8573c.json`。
+> - 顺带校正两处**历史文档漂移**：`dev-workflow.md` 的对照命令原写 `perf/baseline.json`（路径少 `docs/`）
+>   且容差写 `median:20%`，与 workflow 实际 `median:25%` 不符 ⇒ 已按 workflow 实际值更正。
 
 **触发前提（三条同时满足）**：
 1. M2-P6 advisory 门已收编进 main 且 nightly「跑基准」step 带 `PI_BENCH_ADVISORY= "1"`；
@@ -143,19 +157,19 @@
 1. `gh run list --workflow nightly-bench.yml` 找首个绿色 run 的 run id（例：`<RUN_ID>`）；
 2. `gh run download <RUN_ID> -n bench-result -D <tmp>`（artifact 含 `perf/bench.json` + `docs/perf/runner.txt`）；
 3. 核对 runner.txt 五字段（date / runner / nproc / cpu / python / uv）与 `ci-calibration-m2p6.md` §0 表一致
-   （**AMD EPYC 7763** / 4 核 / py3.12.3）——**不一致就跑第二步重新取**，不同档位不能混基线；
-4. 把 bench.json 复制为 `docs/perf/baseline.json`，并在文件头补 `runner` 注释块（五字段 +
+   （**AMD EPYC 7763** / 4 核 / py3.12.3；原写 9V74 系笔误，M5-P6 订正）——**不一致就跑第二步重新取**，不同档位不能混基线；
+4. 把 bench.json 复制为 `docs/perf/baseline-epyc7763.json`（**M5-C6 起按机型分文件**），并在文件头补 `runner` 注释块（五字段 +
    `source_run: <RUN_ID>` + `note: "CI 档位基线；定标机阈值见 sim/tests/bench/thresholds.py"`）；
-5. 本地 sanity：`uv run pytest -m bench --benchmark-compare=docs/perf/baseline.json --benchmark-compare-fail=median:25%`
+5. 本地 sanity：`uv run pytest -m bench --benchmark-compare=docs/perf/baseline-epyc7763.json --benchmark-compare-fail=median:25%`
    —— **这条只验证 CLI 参数被 pytest-benchmark 接受**，并查看「越线项集合与档位比是否符合预期」；
    ⚠ **本步曾写「定标机跑 CI 基线必然越线（档位比 1.14），预期非零退出」——实跑为 EXIT=0（69 passed /
    1 skipped / 168s，M5-C4 `36580639759`）**：本机对这 59 行**未越线**，即「定标机必快于 CI runner」的
    档位比（1.14）在本机不成立（本例档差更小）。故**以实跑为准**：EXIT=0 与 EXIT≠0 都可能是正常结果，
-   **判据是越线项集合能否由档位比/单轮离群解释**，非退出码本身。
+   **判据是越线项集合能否由档位比/单轮离群解释**，非退出码本身（M5-P6 订正）。
 6. 改 `nightly-bench.yml` 「基线对比」step：把现 echo 提示换成
-   `uv run pytest -m bench --benchmark-compare=docs/perf/baseline.json --benchmark-compare-fail=median:25%`
+   `uv run pytest -m bench --benchmark-compare=docs/perf/baseline-epyc7763.json --benchmark-compare-fail=median:25%`
    （**CI 档位跑自己的基线**，此时才可全绿；阈值仍不复制进 yml）；
-7. commit `docs/perf/baseline.json`（阈值类基线入库，同 runner.txt 先例）+ yml 改一行，回执留言板
+7. commit `docs/perf/baseline-epyc7763.json`（阈值类基线入库，同 runner.txt 先例）+ yml 改一行，回执留言板
    （**已完成 2026-09-23**：commit 见 git log「perf(M3-P2②)」；runner 五字段 = ubuntu-latest /
    nproc 4 / AMD EPYC 7763 64-Core / py3.12.3 / uv 0.12.18，源 run `35918283944`）；
 8. 后续 nightly 若本 step 红 → 按 `gh run download` 取新 JSON，与 baseline 逐项比 median 找漂移源

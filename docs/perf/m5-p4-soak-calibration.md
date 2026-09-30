@@ -105,7 +105,7 @@
 |---|---|---|---|
 | golden 首跑（M5-P1 §2.1，2026-09-27） | CI EPYC 7763 / 4 核 | mean_tick_ms（10 实体） | 0.125–0.232 |
 | golden 本轮（§1.1，2026-09-29） | CI EPYC 7763 / 4 核 | mean_tick_ms（10 实体） | **0.118–0.234**（同区间） |
-| `baseline.json`（2026-09-23，commit 372153a） | CI EPYC 7763 / 4 核 | **21 项** bench median | 见 `docs/perf/baseline.json` |
+| `baseline.json`（2026-09-23，commit 372153a） | CI EPYC 7763 / 4 核 | **21 项** bench median | 见 `docs/perf/baseline-epyc7763.json` |
 | CI 档位比（M2-P6，apply/flush 侧） | CI ÷ 本机 | median | 0.86–1.35（Python 侧 CI 慢、numpy 侧 CI 快） |
 
 **注意（纪律）**：`baseline.json` 是 **2026-09-23 的 21 项旧集**（缺 M3-P2/M4 新增 bench：

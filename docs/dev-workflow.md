@@ -110,8 +110,12 @@ uv run pytest -m t4 --junitxml=t4-results/t4.xml
 ```bash
 uv run pytest -m bench                                   # 跑基准（pytest-benchmark）
 uv run pytest -m bench --benchmark-json=perf/bench.json   # 出基线文件
-uv run pytest -m bench --benchmark-compare=perf/baseline.json --benchmark-compare-fail=median:20%
+uv run pytest -m bench --benchmark-compare=docs/perf/baseline-epyc7763.json --benchmark-compare-fail=median:25%
 ```
+
+> 基线**按机型分文件**（`baseline-<machine_key>.json`，当前只有 `baseline-epyc7763.json`）——GitHub `ubuntu-latest`
+> 池跨厂商且会漂；runner 机型与基线不一致时 nightly 只打 **warning 不判红**，但本轮漂移数值**不可直接比较**。
+> 上面的对照容差与 workflow 一致＝`median:25%`（**不要在这里抄 thresholds.py 的红线数值**，那是定标机绝对口径）。
 
 - GitHub 上由 `.github/workflows/nightly-bench.yml` 每天 02:00（北京）自动跑并归档机器档位 + 结果 JSON。
 - M2 新增 bench（pi M2-P1）：`sim/tests/bench/test_bench_l1_utility.py` / `test_bench_smell.py`，随 `-m bench` 自动纳入 nightly，**无需改 yml**；红线常量集中在 `sim/tests/bench/thresholds.py`（单一真相源，别在 yml 或文档里抄数值）。
