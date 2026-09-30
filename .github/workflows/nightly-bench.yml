@@ -106,29 +106,40 @@ jobs:
             docs/perf/runner.txt
           if-no-files-found: warn
 
-      - name: runner 机型防漂检查（不一致 → **仅 warning，不判红**；判红语义仍只由下方 median:25% 决定）
+      - name: runner 机型防漂检查（不一致 → warning + `::error::` 标注，但**绝不判红**；判红语义仍只由 median:25% 决定）
         # 背景：GitHub `ubuntu-latest` 池**跨厂商且会漂**（近 4 轮实测 3×EPYC 7763 + 1×Xeon 8573C）。
         # 本工作流是**跨机相对漂移**判定，换机即可造成「假红」，也可能掩盖真回归。
-        # 故基线**按机型分文件**，本 step 只做「机型是否与基线同档」的可见性：
-        #   · 一致 → ::notice::
-        #   · 不一致 → ::warning::（**绝不 exit 1**，不改变任何判红语义、不碰 thresholds）
-        # 已知局限（登记在 baseline 的 open_items③）：落到别的机型时，本轮 median 与本基线**不可直接比较**。
+        # 故基线**按机型分文件**（`baseline-<machine_key>.json`），本 step 负责「不可比」时的可见性：
+        #   · 机型一致     → ::notice::
+        #   · 机型不一致   → ::warning:: **＋ ::error title=基线不可比::**（job summary 顶部首行标注）
+        # **绝不 exit 1**（结尾显式 exit 0）：机型不一致**不把 job 判红**，判红仍只由下方 median:25% 决定。
+        # 实测依据（run 36670751263，Xeon run 对 EPYC 基线）：**17/59 行 |drift|>25%**、中位 |drift| 21.7%、
+        # 59 行全部「Xeon 更快」⇒ 这些红/不红是**换机造成的，不是代码回归**。
         run: |
           BASE=docs/perf/baseline-epyc7763.json
           base_cpu=$(uv run python -c "import json;print(json.load(open('$BASE'))['machine_info']['cpu']['brand_raw'])" 2>/dev/null || echo "<读取失败>")
           now_cpu=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//' || true)
           [ -z "$now_cpu" ] && now_cpu="<读取失败>"
-          {
-            echo "### runner 机型防漂检查"
-            echo "- 基线文件：\`$BASE\`（machine_key=epyc7763）"
-            echo "- 基线机型：$base_cpu"
-            echo "- 本轮 runner：$now_cpu"
-          } >> "$GITHUB_STEP_SUMMARY"
           if [ "$base_cpu" = "$now_cpu" ]; then
+            {
+              echo "### runner 机型防漂检查"
+              echo "- 基线文件：\`$BASE\`（machine_key=epyc7763）"
+              echo "- 基线机型：$base_cpu"
+              echo "- 本轮 runner：$now_cpu"
+              echo "- 结论：机型一致，本次 median 漂移**可直接**与基线比较"
+            } >> "$GITHUB_STEP_SUMMARY"
             echo "::notice::机型一致：$now_cpu（本次 median 漂移可直接与基线比较）"
           else
-            echo "::warning::runner 机型与基线不一致：当前『$now_cpu』vs 基线『$base_cpu』——本轮 median 漂移可能由换机引起而非代码回归；按裁 2x **只告警不判红**，判红仍只由 median:25% 决定（语义与阈值均未变更）"
-            echo "- ⚠ 机型不一致：本次漂移数值**不可直接与本基线比较**（已知局限，见基线 open_items③）" >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "### ❌ 基线不可比（EPYC vs Xeon）—— 本轮 median 数值不可用"
+              echo "- **本轮 runner 机型（$now_cpu）与基线机型（$base_cpu）不是同一台机器**。"
+              echo "- **本轮 median 数值不可用**：与 \`$BASE\` 的任何差值只反映**换机**，不反映代码回归。"
+              echo "- 判红语义未变：本次 job 的红/绿仍只由 \`median:25%\` 相对漂移决定；本 step **不判红**。"
+              echo "- 基线文件：\`$BASE\`（machine_key=epyc7763）；本轮 runner：$now_cpu"
+              echo "- 处置：按 §4.1 另建 \`baseline-xeon8573c.json\`（需该机型上的全绿 run），见基线 \`open_items\`③"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=基线不可比::runner 机型（$now_cpu）与基线机型（$base_cpu）不同：基线不可比（EPYC vs Xeon），本轮 median 数值不可用（差值只反映换机，不反映代码回归）。本 step 不判红，判红仍只由 median:25% 决定。"
+            echo "::warning::runner 机型与基线不一致：当前『$now_cpu』vs 基线『$base_cpu』——本轮 median 漂移可能由换机引起而非代码回归；**只告警不判红**（语义与阈值均未变更）"
           fi
           exit 0
 
