@@ -33,7 +33,17 @@ class TimestampMixin:
 
 
 class Branch(TimestampMixin, Base):
-    """世界线分支 — §6 Branch + §12 双轨存档。"""
+    """世界线分支 — §6 Branch + §12 双轨存档。
+
+    **rng_state（M5-A-DATA / 0009，裁 27-B b2）**：本分支承接的**随机流状态包**
+    （`sim/core/rng_state.capture_rng_state` 的 JSON 串，≈198 B/流：``RngRegistry``
+    快照 + 每流 PCG64 抽签进度）。读档 = 分叉时在 **fork 事务内**原子落库 →
+    分支自带状态，**可连续分叉**（child 的状态即 grandchild 的输入）。
+    ``NULL`` = 该分支**未承接过**状态（根分支 / 调用方未提供 ⇒ 随机流从头开始，
+    接缝跳变风险由 `fork_from_anchor` 的 warning 暴露）。
+    为什么不落一个 seed：seed 表达不了抽签进度（实测接缝跳变），详见
+    `docs/data/m5-fork-archive-preplan.md` §6.3。
+    """
 
     __tablename__ = "branches"
 
@@ -42,6 +52,7 @@ class Branch(TimestampMixin, Base):
     forked_from_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False, default="active")
     abandoned_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rng_state: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (Index("idx_branches_status", "status"),)
 

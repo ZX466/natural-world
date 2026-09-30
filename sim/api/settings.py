@@ -223,19 +223,19 @@ async def create_profile(data: ProfileCreate) -> dict[str, Any]:
 async def update_profile(profile_id: str, data: ProfileUpdate) -> dict[str, Any]:
     row = get_profile_store().update(profile_id, data)
     if row is None:
-        raise HTTPException(status_code=404, detail="profile 不存在")
+        raise HTTPException(status_code=404, detail="/errors/profile-not-found")
     return _profile_to_item(row)
 
 
 @router.delete("/{profile_id}", status_code=204)
 async def delete_profile(profile_id: str) -> None:
     if not get_profile_store().delete(profile_id):
-        raise HTTPException(status_code=404, detail="profile 不存在")
+        raise HTTPException(status_code=404, detail="/errors/profile-not-found")
 
 
 @router.post("/{profile_id}/activate", response_model=ProfileListItem)
 async def activate_profile(profile_id: str) -> dict[str, Any]:
     row = get_profile_store().activate(profile_id)
     if row is None:
-        raise HTTPException(status_code=404, detail="profile 不存在")
+        raise HTTPException(status_code=404, detail="/errors/profile-not-found")
     return _profile_to_item(row)

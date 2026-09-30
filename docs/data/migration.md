@@ -613,6 +613,20 @@ def downgrade() -> None:
 
 ---
 
+### 6.5 0009_branches_rng_state.py（M5-A-DATA 已落地，裁 27-B b2）
+
+- `branches` 加 `rng_state TEXT NULL`：本分支承接的随机流状态包
+  （`sim/core/rng_state.capture_rng_state` 的 JSON，≈198 B/流）。读档 = 分叉时由
+  `fork_from_anchor(rng_state=…)` 在 **fork 事务内**原子写入 ⇒ 分支自带状态、**可连续分叉**；
+- 纯 `add_column`（可空、无 CHECK、无 `server_default`）⇒ **不需要** `batch_alter_table`
+  （0008 需要 batch 是因为 CHECK 属表级约束、`ADD COLUMN` 表达不了）；
+- 为什么不是一个 `seed` 列：seed 表达不了抽签进度（实测「只承接 registry」后续抽签必然跳变，
+  `m5-fork-archive-preplan.md` §6.3）；
+- 往返验证同 0008 纪律：scratch DB + **全 revision id**（`downgrade 0008_m5_fork_identity`）
+  → `upgrade head` → autogenerate 期望 `upgrade()` 只剩 `pass`（实测零漂移）。
+
+---
+
 ## 7. 迁移执行命令
 
 ```bash

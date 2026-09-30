@@ -16,8 +16,11 @@
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import os
 import statistics
+from pathlib import Path
 
 import pytest
 
@@ -58,6 +61,10 @@ _CI_WINDOW_TICKS = 400
 # nightly 长跑：30,000 tick 分 5 窗（本机 ~1 min），验稳态漂移/p99/缓存。
 _NIGHTLY_SOAK_TICKS = 30_000
 _NIGHTLY_WINDOW_TICKS = 6_000
+#: soak 窗口级 artifact（nightly/里程碑落，供红时回查单窗离群 vs 单调退化）。
+#: JSONL 追加（不覆写）：本文件多个 soak 长跑在同一 session 落同一文件时各一行。
+#: 只在 nightly（PI_BENCH_ADVISORY=1）与里程碑（PI_M2_FULL_SOAK=1）写；每提交 CI 不写。
+_SOAK_ARTIFACT_PATH = "perf/soak-windows.jsonl"
 
 
 def _open_map() -> TileMap:
@@ -131,9 +138,56 @@ def _assert_no_runaway(result, *, label: str) -> None:
         f"{label}: 实体数漂移 {result.entity_count_start} → {result.entity_count_end}"
     )
 
+def _assert_smoke(result, *, label: str, expected_ticks: int) -> None:
+    """CI 冒烟（框架契约）：只验「可跑通 + 实体集稳定 + 总 tick 到位」。
+
+    ci_smoke 形态收口（裁 28-D / M5-P5）：**不判漂移、不判稳态均值、不判资源增长**——
+    旧口径把它当 `_assert_no_runaway` 跑（漂移/稳态/RSS/GC/句柄全量），但其 3 窗 × 400 tick
+    样本量不足以判「末窗/首稳态窗」比值（M5-P4 实测：单窗均值 CV 8.5%，两次抽样比的右尾
+    可噬 2x 假漂移）。故本处只作框架冒烟；漂移判定留给 nightly 30k（5 窗×6000）与
+    里程碑 604.8k（7 窗）形态的 `_assert_no_runaway`。
+    """
+    assert result.windows, f"{label}: 无窗口（长跑未采样）"
+    assert result.total_ticks == expected_ticks, (
+        f"{label}: 总 tick {result.total_ticks} != {expected_ticks}"
+    )
+    assert result.entity_count_end == result.entity_count_start, (
+        f"{label}: 实体数漂移 {result.entity_count_start} → {result.entity_count_end}"
+    )
+
+def _write_soak_artifact(result, *, label: str) -> None:
+    """窗口级数字落 artifact（裁 28-D 建议②采纳）。
+
+    nightly（`PI_BENCH_ADVISORY=1`）与里程碑（`PI_M2_FULL_SOAK=1`）写 `perf/soak-windows.jsonl`
+    （JSONL 追加，多 soak 长跑各一行：label + dataclass 快照）。每提交 CI（无上述 env、
+    `-m "not bench"` 选中 `test_soak_ci_smoke_stability`）不写。
+
+    用途：nightly 红时回查单窗离群（单窗均差大） vs 单调退化（窗口均值随 tick 持续爬升），
+    不再只能取「绿/红」二值（M5-P4 §1.2 缺口）。
+    """
+    env = os.environ
+    if env.get("PI_BENCH_ADVISORY") != "1" and env.get("PI_M2_FULL_SOAK") != "1":
+        return
+    drift_ratio: float | None = None
+    if len(result.windows) >= 2 and result.windows[1].mean_ms > 0:
+        drift_ratio = result.windows[-1].mean_ms / result.windows[1].mean_ms
+    record: dict[str, object] = {
+        "label": label,
+        "drift_ratio": drift_ratio,
+        **dataclasses.asdict(result),
+    }
+    Path(_SOAK_ARTIFACT_PATH).parent.mkdir(parents=True, exist_ok=True)
+    with Path(_SOAK_ARTIFACT_PATH).open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 def test_soak_ci_smoke_stability() -> None:
-    """CI 冒烟：50 NPC × 1,200 tick 分窗稳定性（框架可跑 + 无界增长契约成立）。"""
+    """CI 冒烟（M5-P5 收口）：50 NPC × 1,200 tick 只作**框架冒烟**。
+
+    旧口径：`_assert_no_runaway` 全量（漂移/稳态均值/RSS/GC/句柄/实体数）。
+    新口径：`_assert_smoke` 只验「窗口非空 + 总 tick 到位 + 实体集稳定」。
+    原因：3 窗 × 400 tick 样本量不足以判「末窗/首稳态窗」比值（M5-P4 实测定论，
+    2.81x 假红），漂移判定挪 nightly 30k / 里程碑 604.8k 形态。
+    """
     loop = _build_loop_with_perception()
     result = run_soak(
         loop,
@@ -141,7 +195,7 @@ def test_soak_ci_smoke_stability() -> None:
         window_ticks=_CI_WINDOW_TICKS,
         feeder=make_mock_feeder(_MAP_W, _MAP_H),
     )
-    _assert_no_runaway(result, label="M2 长跑 CI 冒烟")
+    _assert_smoke(result, label="M2 长跑 CI 冒烟", expected_ticks=_CI_SOAK_TICKS)
 
 
 @pytest.mark.bench
@@ -184,6 +238,7 @@ def nightly_soak_result():
 def test_soak_nightly_longrun_stability(nightly_soak_result) -> None:
     """nightly：50 NPC × 30,000 tick 分窗稳定性（无 O(n) 累积/内存/句柄泄漏）。"""
     _loop, result = nightly_soak_result
+    _write_soak_artifact(result, label="M2 长跑 nightly 30k")
     _assert_no_runaway(result, label="M2 长跑 nightly 30k")
 
 
@@ -240,6 +295,7 @@ def test_m2_full_7day_acceptance() -> None:
         window_ticks=TICKS_PER_GAME_DAY,  # 每游戏日一窗（7 窗）
         feeder=make_mock_feeder(_MAP_W, _MAP_H),
     )
+    _write_soak_artifact(result, label="M2 7 日自转完整跑")
     _assert_no_runaway(result, label="M2 7 日自转完整跑")
     assert result.total_ticks == M2_ACCEPTANCE_TICKS
 
@@ -278,12 +334,18 @@ def test_soak_nightly_l1_feeder_stability() -> None:
         window_ticks=_NIGHTLY_WINDOW_TICKS,
         feeder=make_l1_feeder(runtime, grid_w=_MAP_W, grid_h=_MAP_H),
     )
+    _write_soak_artifact(result, label="M2 长跑 L1 feeder 30k")
     _assert_no_runaway(result, label="M2 长跑 L1 feeder 30k")
 
 
 @pytest.mark.bench
 def test_soak_l1_feeder_ci_smoke() -> None:
-    """CI 冒烟：L1 feeder 可跑通 + 与 mock feeder 同口径无界增长契约成立。"""
+    """CI 冒烟（M5-P5 收口）：L1 feeder 只作**框架冒烟**。
+
+    旧口径：`_assert_no_runaway` 全量（无界增长契约=漂移/稳态/RSS/GC/句柄）。
+    新口径：`_assert_smoke` 只验「窗口非空 + 总 tick 到位 + 实体集稳定」。
+    原因同 `test_soak_ci_smoke_stability`：3 窗 × 400 tick 不足以判漂移比，挪 nightly/里程碑。
+    """
     loop = _build_loop_with_perception()
     runtime = _build_l1_runtime()
     result = run_soak(
@@ -292,4 +354,4 @@ def test_soak_l1_feeder_ci_smoke() -> None:
         window_ticks=_CI_WINDOW_TICKS,
         feeder=make_l1_feeder(runtime, grid_w=_MAP_W, grid_h=_MAP_H),
     )
-    _assert_no_runaway(result, label="M2 长跑 L1 feeder CI 冒烟")
+    _assert_smoke(result, label="M2 长跑 L1 feeder CI 冒烟", expected_ticks=_CI_SOAK_TICKS)

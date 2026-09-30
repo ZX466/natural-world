@@ -51,9 +51,11 @@ def client(tmp_path, monkeypatch) -> TestClient:
 
 
 def _seed(store: Any, n: int = 2) -> list[str]:
-    """直插 n 行 anchor（POST 路由未实现；本批次只测读路径）。
+    """直插 n 行 anchor（读路径测试用；protected 按 0010 回填口径：末梢=True）。
 
     返回按插入顺序的 id 列表；时间戳用 sleep 拉开，保证 updated_at 可比。
+    S-4 切列后列表读列——种子行必须自带正确列值（末梢 protected=True，
+    其余 False），与 0010 回填「ORDER BY updated_at DESC, id DESC 取 1」同口径。
     """
     ids: list[str] = []
     for i in range(n):
@@ -65,6 +67,7 @@ def _seed(store: Any, n: int = 2) -> list[str]:
                     branch_id="b-root",
                     tick=10 * i,
                     seq=5 * i,
+                    protected=(i == n - 1),  # 末梢=最后插入者
                 )
             )
             s.commit()
@@ -316,11 +319,10 @@ class TestSchemaMatchesSnapshot:
         assert "get" in paths["/api/anchors"]
         assert "get" in paths["/api/anchors/{anchor_id}"]
 
-    def test_mutation_routes_absent_this_batch(self, client: TestClient) -> None:
-        """本批次范围外：POST/PATCH/DELETE 仍归 Claude 域（§5 清单 #2/#5）。
-
-        断言它们缺席，避免未来有人误以为读写路径已齐。
-        """
+    def test_mutation_routes_present_after_crud(self, client: TestClient) -> None:
+        """M5-CRUD 落地（裁 28-G）：POST/PATCH/DELETE 已在位（原「缺席」断言随契约反转）。"""
         paths = client.get("/openapi.json").json()["paths"]
-        assert set(paths["/api/anchors"]) == {"get"}
-        assert {k for k in paths["/api/anchors/{anchor_id}"] if k != "parameters"} == {"get"}
+        assert "post" in paths["/api/anchors"]
+        assert "patch" in paths["/api/anchors/{anchor_id}"]
+        assert "delete" in paths["/api/anchors/{anchor_id}"]
+

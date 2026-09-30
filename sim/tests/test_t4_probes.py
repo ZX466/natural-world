@@ -322,7 +322,7 @@ class TestCorpusIntegrity:
 
     @pytest.mark.parametrize(
         ("category", "minimum"),
-        [("P1", 12), ("P2", 12), ("P3", 8), ("P4", 8), ("P5", 6)],
+        [("P1", 12), ("P2", 12), ("P3", 8), ("P4", 8), ("P5", 6), ("P6", 6)],
     )
     def test_each_category_minimum(self, category: str, minimum: int):
         counts = category_counts()
@@ -331,8 +331,8 @@ class TestCorpusIntegrity:
         )
 
     def test_total_matches_doc(self):
-        """总数 46（= §6.1 各类最小样本数求和；提案「取整 44」是算术笔误，见 §6 偏离记录）。"""
-        assert len(CORPUS) == 46
+        """总数 52（46 + P6 语料 CR 6 条，M5-S3；分类最小样本数求和随 P6 类扩展）。"""
+        assert len(CORPUS) == 52
         assert sum(category_counts().values()) == len(CORPUS)
 
     def test_case_ids_unique(self):

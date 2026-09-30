@@ -182,7 +182,38 @@
 - 单帧 240 tick 的成本本质 = 240 × 内核单 tick 成本——破限先查 `test_bench_clock`（内核单 tick），
   本行只将「单帧快进挤占同帧正常 tick/广播预算」的后果量化。
 
-## 8. 边界与门禁
+## 8. P5：0.90ms 线的定标机硬断言方案（裁 28-D：「硬断言只留定标机」）
+> 裁 28-D 采认 P4 结论：**0.90ms 线 CI 贴线（0.9131ms），采「硬断言只留定标机」口径**
+> （M2-P6 裁 1 先例），转硬断言须按档位重定线。本节给**观察态 → 定标机硬断言**的迁移条件。
+> 本节是**方案与迁移条件**，不改行值（0.90 维持）、不改 bench 的 `_record_proposal` 调用形态
+> （观察态维持）；落地动作待 Claude 裁。
+### 8.1 两档实测（迁移的量化依据）
+| 档位 | 机型 | 0 实体 | 10 实体 | 50 实体 | CI/本机 |
+|---|---|---|---|---|---|
+| 本机（定标机） | Win11+WSL2 / i7-14650HX | 0.29ms | 0.35ms | **0.53ms** | 1.00x |
+| CI（EPYC 7763 / nproc4 / py3.12.3） | run 36543451845 artifact | **0.5589** | **0.6230** | **0.9131** | **1.72 / 1.79 / 1.72x** |
+> 0.90ms = 本机 0.53 × 1.7（裁 13 的慢机余量先例）。CI 档 50npc **0.9131 > 0.90**（越 1.5%）
+> ⇒ CI 档该行**判别力失效**（越线只表示档位差，不表示代码退化）——这正是「硬断言只留定标机」的量化根因。
+### 8.2 迁移条件（三条全满足才转硬断言）
+1. **CI 档稳定性**：连续 **3 次独立 nightly** 的 `test_fast_forward_frame_cost[50npc]` median
+   在 advisory 下全绿（CI ≈ 本机 ×1.72 保持稳定，波动 ≤±15%）；若档位比漂移 >15%，先查 CI
+   机器档位变化（`docs/perf/runner.txt`）与负载，不动阈值。
+2. **断言面只留定标机**：迁移后 `test_bench_fast_forward.py` 的 `_record_proposal(...)` →
+   `harness.assert_median_threshold(...)`（**本机硬断言**），nightly 仍传 `PI_BENCH_ADVISORY=1`
+   （CI 越线只记录不断言）。与 M2-P6 裁 1 同口径：**不允许出现「CI 档硬断言失败」的红**。
+3. **CI 档独立基线（判别力前提）**：若要让 CI 侧的越线提示有意义，须先按
+   `docs/perf/bench-plan.md` §4.1 建 **CI 档独立基线**（`FAST_FORWARD` 50npc ≈ 0.9131ms）
+   ——这与 §7「0.90 = 本机口径」是两套基线；本单**不建**（M5-P4 纪律：不得凭本机数造 baseline；
+   CI 档重生成 baseline 属 C4 域）。
+### 8.3 不动的部分
+- **`FAST_FORWARD_TICKS_PER_FRAME = 240`（生产代码常量）不动**——快进单帧预算的代码契约已由
+  `test_m5_batch_b_control.py::TestFastForwardDriverStep` 钉成 T1；本方案只动 bench 断言形态，
+  不动 `ws.py`。
+- **`FAST_FORWARD_REQUEST_DURATION_LIMIT_S = 42.0`（派生量）不动**——契约守卫
+  `test_fast_forward_request_duration_is_derived` 维持在（无数值 bench 行）。
+- **0.90ms 行值不动**——迁移只改「断不断言」，不改阈值（阈值定标仍按本文件 §7 口径）。
+
+## 9. 边界与门禁
 - **零代码（本件）**：本文件是纯文档；红线落地见 §7（`thresholds.py` + bench 单为 M5-P3 交付）。
 - **越界声明**：`run_world_driver` 分帧编排 / 单帧超时 k 倍判据 → 架构域；`SetControlMessage.action` 枚举面 → kilo；F3 SQL → opencode。
 - **验证**：纯文档 + 本机实测存照；内容可追到代码行号/实测（每表标注来源）。

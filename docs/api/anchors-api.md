@@ -135,6 +135,57 @@ name: str = Field(min_length=1, max_length=64)
 - **`protected` 落库**（`player_anchors.protected` 新列）：构造时计算写入，列表时直接读，避免 N+1 查询。
 - **`updated_at` 只写一次**（`default=lambda: time.time()`，仅 INSERT 赋值；改名/删除都不改它）。它代表「这个档是什么时候存的」，不是「记录什么时候被改过」——后者若参与排序，改名就会篡改 `protected` 归属。删掉末梢后，剩余档中的最新者**不自动补位**为 `protected`（保守：补位要重算，且删档后立刻有新存档才是常态；真需要时由下一次新建档统一维护）。
 
+### 1.5 切列与 CRUD v2 增补条款（**正式契约**，2026-09-29 合入）
+
+> **裁决依据**：裁 21-C④（`protected` 无写入方暂不切列）→ 裁 26-C④（同上，派单记为「CRUD 落地单再切」）→ **裁 27-C**（D-14 `/current` 保底、**D-15** DELETE 同步摘除，全采 kilo 契约）→ **裁 28-C**（**GAP-A＝0010**、**GAP-B 回填强制**、S-7 归属 kilo 先落函数）。
+> 提案原件：`docs/api/m5-batch-c-prestudy-authority.md` §3（K4）+ 审计稿 `docs/api/m5-batch-a-c-compat-audit.md` §3（K5）。本节是**合入后的正典**，施工单以本节为准（不再回看提案稿）。
+> **落地现状**：`0008_m5_fork_identity.py` 第 9 项已落 `player_anchors.protected`（`NOT NULL, server_default=0`）；读路径目前**仍是派生**（`anchors.py::_max_updated_at()`）；POST/rename/DELETE **未施工**。
+
+**I. 切列三步（顺序不可颠倒）**
+
+```
+[前置 0] POST 路由落地（写入方）——同一事务：清旧末梢 protected=false + 写新档 protected=true（§6.1 A2 锁 + A3）
+   ↓
+[前置 1] 存量回填迁移 = **0010**（down_revision 指向 0009；0009 已予 branches.rng_state，见 裁 27-B）
+        UPDATE player_anchors SET protected = (updated_at = 全表最大)
+   ↓
+[前置 2] 读路径开关式切换：list_items / get_item / current_item 全部读列，删除派生分支
+```
+
+- **回填是强制项（裁 28-C GAP-B）**：`0008` 给存量行的默认值是 `0` ⇒ **只落 CRUD 不回填 = 全表 `protected=false`** ⇒ DELETE 末梢的 409 保险丝**静默失效**（数据不丢，保险丝没了）。回填后必须能断言「`protected=true` 的行数 = 1（空库 0）」。
+- **迁移号（裁 28-C GAP-A）**：回填取 **0010**；0009 已由裁 27-B 预定给 `branches.rng_state`，两者都取 0009 会让 alembic 出现两个 `down_revision=0008` 的 head。
+- **回滚**：切列若引发回归 ⇒ 恢复派生读路径 + 停用 CRUD 的 `protected` 写入，**列保留不删、不需数据迁移**（列值与派生式在正常态等价）。
+
+**II. 条款 C1~C4**
+
+| 条款 | 内容 |
+|---|---|
+| **C1** | 读路径从派生切列是**一次性开关**；切列后 `protected` 列是**唯一真相源**，派生分支删除，**不留双读**（双源必漂：`updated_at` 派生 vs 构造时快照，中途改名/删档即分叉） |
+| **C2** | 四个末梢消费者**同源**：①列表 `protected` ②`/current` ③WS 首帧 `session_state.anchor`（取 `current_item()` 同一行，自动同源）④WS 标签注册表 `_ANCHOR_LABELS` |
+| **C3** | 不变量钉子：常驻断言「`protected=true` 行数 ≤ 1」——存两档后恒 1、**删末梢后为 0 是合法退化态**（见 §1.4 末条「不补位」与 III 的 `/current` 保底） |
+| **C4** | 切列前后各面行为对照（正常态 / 退化态）见 III 表 |
+
+**III. v2 增量条款（相对 §1.2–§1.4 的收紧与新增）**
+
+| 路由 | v2 条款 |
+|---|---|
+| `POST /api/anchors` | ①**同事务**写：新档 `protected=true` + 清其余 `protected=false`；②`updated_at` 只写一次（不变）；③成功响应照 K7 模式调 `register_anchor_id(id, name, story_label)`；④`400 /errors/world-not-ready` 判据 = 当前活跃 loop 存在（`app.state.loop`）；游标 `branch_id` 取**当前活跃分支**（客户端不参与游标，D-16 随 D-10 闭合按此默认） |
+| `PATCH /api/anchors/{id}` | ①**不动** `updated_at` / `protected`（复述为硬约束）；②成功后同步刷新 WS 标签表的 `name`（`register_anchor_id` 幂等覆盖） |
+| `DELETE /api/anchors/{id}` | ①`409` 当且仅当 **`protected=true`（切列后读列，不再派生）**；②硬删（不变）；③**成功后必须摘除 WS 注册表**：调 `unregister_anchor_id(id)`（裁 27-C D-15 / 28-C S-7，函数已在 `sim/api/ws.py` 落地，**调用点属 CRUD 单**）；④**不补位**（与 §1.4 末条成对） |
+| `GET /api/anchors` | 切列后读列（II.C1）；排序仍按 `updated_at`；无分页（§6.2 B1 维持） |
+| `GET /api/anchors/current` | **D-14 保底**：判据 = `protected=true` 的行；**若无 protected 行（删末梢后的合法退化态），回退 `max(updated_at)` 保底不 404**，响应 `protected` 字段此时为 `false`（语义=「没有受保护的末梢」）。选此案的理由：若只用 `protected` 为唯一判据，退化态下会 404 而列表里明明有档（玩家视角自相矛盾） |
+
+**IV. 摘除后的 WS 侧错误映射（K5 C-3 口径，**不新增 error code**）**
+
+`unregister_anchor_id` 之后 `load_anchor` 查表未命中 → **`load_failed`**（不是 `bad_anchor`：后者语义是「形状非法/缺失」；「存在过但已删」归载入失败成立），文案「这个档读不出来了」。钉子见 `sim/tests/test_ws_gateway.py::TestUnregisterAnchorId`（注册→摘除→失配 / 标签指针清空 / 告知帧 `anchor=null` / 幂等与可逆，4 例）。
+
+**V. 施工单须同时写死的三件事**（K5 审计发现，防返工）
+
+1. 回填迁移编号 = **0010**（GAP-A）。
+2. 回填是**强制**项，且带「true 行数 = 1」断言（GAP-B）。
+3. `DELETE` 路由里**必须**有 `unregister_anchor_id` 调用（S-7 调用点）——否则已删档在 WS 侧继续「存在」，`load_anchor` 回假成功。
+
+
 ## 2. 错误形（ProblemDetail，RFC 7807 风格）
 
 统一错误体（与 `openapi.md` §5 一致）：

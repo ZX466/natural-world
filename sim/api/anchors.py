@@ -1,36 +1,36 @@
 """玩家档（anchor）HTTP API — M5-K7 最小实现（anchors-api.md §4）+ M5-K3 D-9 当前指针。
 
-**本批次范围（K7 部署债 #1）**：只做读路径，替 ws.py `_ANCHOR_IDS` 内存替身
-换成落库供数——`GET /api/anchors` 列表 + `GET /api/anchors/current` 当前游标
-（M5-K3 / 裁 21-A D-9，**必须注册在路径参数路由之前**）+ `GET /api/anchors/{anchor_id}`
-按 id 查，每条落库项调 `register_anchor_id()` 注进 WS 分发块的同步查表集
-（连带登记 name/story_label 叙事标签，供 D-6 分叉告知帧组游标指针）。
-
-**不在本批次（§5 清单余项，Claude 域）**：
-- POST/PATCH/DELETE 三路由（含 `AnchorCreate`/`AnchorRename` 请求模型与 name 校验）；
-- `sim/api/errors.py` ProblemDetail handler（§3.2 三层接法）；
-- `player_anchors.protected` 新列迁移（现由 §1.4 派生公式在列表时算）。
-
-因此 404 目前走 FastAPI 默认 `HTTPException`（`{"detail": ...}` 形），
-**不是** ProblemDetail 四键形——待 #3/#4 落地后统一收编。
-
-`protected` 派生（§1.4）：`NOT EXISTS(other.updated_at > 本档.updated_at)`
-——末梢=updated_at 最大者。派生只读、不落库（POST 未实现时无写入路径，
-等 POST 落库时 §1.4 要求改为「构造时计算写列」，届时只动本文件一处）。
+**M5-CRUD（2026-09-30，裁 28-G Claude 域）**：读 + 写路径全量。
+- GET 列表/current/单查（K7 最小实现，现读 `protected` **列**——S-4 切列完成，
+  派生式退休，C1 单一真相源；`/current` 退化态回退 max(updated_at) 保底不 404，
+  D-14）；每条落库项调 `register_anchor_id()` 注进 WS 分发块查表集。
+- POST（§1.2）：仅 `name`（1..64）；同事务写新档 protected=true + 清其余
+  （A2 进程锁 + A3 同事务，§6.1）；`updated_at` 只写一次；游标 = 世界当前
+  tick + 当前活跃分支（D-16 默认 main）；无活跃 loop → 400 world-not-ready。
+- PATCH（§1.3）：只改 name；不动 updated_at/protected；刷新 WS 标签。
+- DELETE（§1.4）：409 判据**读列**；硬删；成功调 `unregister_anchor_id`
+  （D-15/S-7 调用点）；不补位。
+- F-6 注册侧 fail-closed（codex S2b §4.2）：name 过现行 `scan()`，命中 → 422
+  `/errors/anchor-name-rejected`；不扩词表，只消费既有表。
+- 404 走 ProblemDetail（`sim/api/errors.py` 全局换形，detail=机器码）。
 """
 
 from __future__ import annotations
 
+import threading
+import time
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import Session, sessionmaker
 
-from sim.api.ws import register_anchor_id
+from sim.api.ws import register_anchor_id, unregister_anchor_id
 from sim.core.persistence.models import PlayerAnchor
+from sim.llm.prompts.banned_words import scan
 
 router = APIRouter(prefix="/api/anchors", tags=["anchors"])
 
@@ -56,11 +56,49 @@ class AnchorListItem(BaseModel):
     protected: bool
 
 
-class AnchorStore:
-    """PlayerAnchor 读路径（同步 SQL；settings.py ProfileStore 同口径）。
+class AnchorCreate(BaseModel):
+    """§1.2 请求体：仅 name（1..64，与 ProfileCreate 同口径）。
 
-    只读：`list_items()` / `get_item()`。写路径（POST/PATCH/DELETE）归
-    §5 清单 #2/#5，本批次不实现。
+    `extra="forbid"` 拒绝越权字段（tick/branch_id 等服务端定，客户端不参与游标）。
+    """
+
+    model_config = ConfigDict(extra="forbid", json_schema_extra={"description": ""})
+
+    name: str = Field(min_length=1, max_length=64)
+
+
+class AnchorRename(BaseModel):
+    """§1.3 请求体：仅 name 必填非可空（全量替换语义；不复用 ProfileUpdate）。"""
+
+    model_config = ConfigDict(extra="forbid", json_schema_extra={"description": ""})
+
+    name: str = Field(min_length=1, max_length=64)
+
+
+#: 写路径进程锁（§6.1 A2：同步临界区互斥；单 worker 部署匹配——写方法是同步 SQL，
+#: 在事件循环线程内执行，threading.Lock 足够且避免 asyncio.Lock 的同步/异步混用问题）。
+_anchor_write_lock = threading.Lock()
+
+
+def _assert_name_clean(name: str) -> None:
+    """F-6 注册侧 fail-closed：name 过现行 scan()，命中即拒（不扩词表）。
+
+    422 形由全局 handler 兜底为 ProblemDetail；此处抛 HTTPException 携机器码。
+    """
+    result = scan(name)
+    if not result.ok:
+        words = "、".join(sorted({h.word for h in result.hits}))
+        raise HTTPException(
+            status_code=422,
+            detail=f"/errors/anchor-name-rejected|{name!r} 含不可用词汇：{words}",
+        ) from None
+
+
+class AnchorStore:
+    """PlayerAnchor 读写路径（同步 SQL；settings.py ProfileStore 同口径）。
+
+    protected 单一真相源 = **列**（C1 切列完成，派生式退休）。
+    退化态（全表无 protected 行）是合法态（C3 删末梢不补位）。
     """
 
     def __init__(self, db_url: str = "sqlite:///world.db", create_tables: bool = True) -> None:
@@ -83,38 +121,101 @@ class AnchorStore:
             return rows
 
     def _max_updated_at(self) -> float | None:
+        """D-14 保底判据（退化态 /current 用）；非 protected 判据（C1 已切列）。"""
         with self._session_local() as s:
             return s.query(func.max(PlayerAnchor.updated_at)).scalar()
 
     def list_items(self) -> list[AnchorListItem]:
+        """§1.1 列表：protected 直接读列（S-4 切列，C1 单一真相源）。"""
         rows = self._rows()
-        newest = self._max_updated_at()
         return [
             AnchorListItem(
                 id=row.id,
                 name=row.name,
                 story_label="",
                 created_at=_iso(row.created_at),
-                protected=newest is not None and row.updated_at >= newest,
+                protected=bool(row.protected),
             )
             for row in rows
         ]
 
     def current_item(self) -> AnchorListItem | None:
-        """M5-K3 / 裁 21-A D-9：当前游标（末梢=updated_at 最大者）。
+        """M5-K3 / 裁 21-A D-9 + D-14：当前游标（protected 列优先）。
 
-        同 `updated_at` 时按 `id` 降序兜底排序，保证多档同刻的返回**确定**（测试
-        可复现）。`protected=True` 恒成立——它按定义就是末梢。
+        正常态：protected=true 的行（≤1，C3）；同刻多行按 id 降序兜底（与 0010
+        回填同口径）。退化态（无 protected 行，删末梢不补位）：回退 max(updated_at)
+        保底**不 404**，protected=false（语义=「没有受保护的末梢」，D-14）。
         """
         with self._session_local() as s:
             row: PlayerAnchor | None = (
                 s.query(PlayerAnchor)
+                .filter(PlayerAnchor.protected.is_(True))
                 .order_by(PlayerAnchor.updated_at.desc(), PlayerAnchor.id.desc())
                 .first()
             )
+            degraded = row is None
+            if degraded:
+                row = (
+                    s.query(PlayerAnchor)
+                    .order_by(PlayerAnchor.updated_at.desc(), PlayerAnchor.id.desc())
+                    .first()
+                )
             if row is None:
                 return None
             s.expunge(row)
+            return AnchorListItem(
+                id=row.id,
+                name=row.name,
+                story_label="",
+                created_at=_iso(row.created_at),
+                protected=not degraded,
+            )
+
+    def get_item(self, anchor_id: str) -> AnchorListItem | None:
+        """按 id 查：protected 读列（S-4 切列）。"""
+        with self._session_local() as s:
+            row: PlayerAnchor | None = s.get(PlayerAnchor, anchor_id)
+            if row is None:
+                return None
+            s.expunge(row)
+            return AnchorListItem(
+                id=row.id,
+                name=row.name,
+                story_label="",
+                created_at=_iso(row.created_at),
+                protected=bool(row.protected),
+            )
+
+
+    # ---- 写路径（A2 进程锁串行；每方法一个 session = A3 同事务）----
+
+    def create_item(
+        self, name: str, *, branch_id: str, tick: int, seq: int
+    ) -> AnchorListItem:
+        """§1.2 POST：同事务写新档 protected=true + 清其余（§6.1 A3）。
+
+        updated_at 只写一次（INSERT default；此处显式赋值一次，后续永不改）。
+        游标 (branch_id, tick, seq) 由路由层从世界态取（客户端不参与，D-16）。
+        """
+        with _anchor_write_lock, self._session_local() as s:
+            anchor_id = uuid.uuid4().hex[:12]
+            now = time.time()
+            row = PlayerAnchor(
+                id=anchor_id,
+                name=name,
+                branch_id=branch_id,
+                tick=tick,
+                seq=seq,
+                agent_override="{}",
+                protected=True,
+                updated_at=now,
+            )
+            s.add(row)
+            # 同事务清旧末梢（A3：两写一事务，SQLite 写串行兜底）
+            s.query(PlayerAnchor).filter(PlayerAnchor.id != anchor_id).update(
+                {PlayerAnchor.protected: False}
+            )
+            s.commit()
             return AnchorListItem(
                 id=row.id,
                 name=row.name,
@@ -123,20 +224,54 @@ class AnchorStore:
                 protected=True,
             )
 
-    def get_item(self, anchor_id: str) -> AnchorListItem | None:
-        with self._session_local() as s:
+    def rename_item(self, anchor_id: str, name: str) -> AnchorListItem | None:
+        """§1.3 PATCH：只改 name；**不动** updated_at/protected（硬约束）。
+
+        返回 None = 不存在（404 判定归路由层）。
+        """
+        with _anchor_write_lock, self._session_local() as s:
             row: PlayerAnchor | None = s.get(PlayerAnchor, anchor_id)
             if row is None:
                 return None
-            s.expunge(row)
-            newest = self._max_updated_at()
+            row.name = name
+            s.commit()
             return AnchorListItem(
                 id=row.id,
                 name=row.name,
                 story_label="",
                 created_at=_iso(row.created_at),
-                protected=newest is not None and row.updated_at >= newest,
+                protected=bool(row.protected),
             )
+
+    def delete_item(self, anchor_id: str) -> str | None:
+        """§1.4 DELETE：409 判据**读列**；硬删；返回 None=不存在 / "protected"=409 / "ok"=删成。
+
+        不补位（删末梢后 protected=0 是合法退化态，C3）。
+        """
+        with _anchor_write_lock, self._session_local() as s:
+            row: PlayerAnchor | None = s.get(PlayerAnchor, anchor_id)
+            if row is None:
+                return None
+            if row.protected:
+                return "protected"
+            s.delete(row)
+            s.commit()
+            return "ok"
+
+
+def get_current_seq() -> int:
+    """当前活跃分支 events 表最大 seq（POST 游标用；无事件 → 0）。
+
+    直接走 anchor store 的 engine（同一 world.db；轻查询不进驱动热路径）。
+    """
+    from sqlalchemy import text
+
+    store = get_anchor_store()
+    with store._session_local() as s:
+        row = s.execute(
+            text("SELECT COALESCE(MAX(seq), 0) FROM events WHERE branch_id = 'main'")
+        ).scalar()
+    return int(row or 0)
 
 
 def _iso(epoch: float) -> str:
@@ -187,8 +322,49 @@ async def current_anchor() -> dict[str, Any]:
     """
     item = get_anchor_store().current_item()
     if item is None:
-        raise HTTPException(status_code=404, detail="还没有存过档") from None
+        raise HTTPException(status_code=404, detail="/errors/anchor-not-found") from None
     return _item_payload(item)
+
+
+@router.post("", response_model=AnchorListItem, status_code=201)
+async def create_anchor(payload: AnchorCreate, request: Request) -> dict[str, Any]:
+    """§1.2 POST 新建游标（裁 28-G S-2/S-5/S-8）。
+
+    世界未就绪（无活跃 loop）→ 400 world-not-ready（判据=app.state.loop，§1.5 ③）。
+    游标：branch=当前活跃分支（D-16 默认 main）、tick=世界当前 tick、seq=当前
+    分支 events 最大 seq（客户端不参与游标）。name 过 F-6 fail-closed 扫描。
+    """
+    _assert_name_clean(payload.name)
+    loop = getattr(request.app.state, "loop", None)
+    if loop is None:
+        raise HTTPException(status_code=400, detail="/errors/world-not-ready") from None
+    tick = loop.state.tick
+    seq = get_current_seq()
+    item = get_anchor_store().create_item(payload.name, branch_id="main", tick=tick, seq=seq)
+    return _item_payload(item)
+
+
+@router.patch("/{anchor_id}", response_model=AnchorListItem)
+async def rename_anchor(anchor_id: str, payload: AnchorRename) -> dict[str, Any]:
+    """§1.3 PATCH 重命名（S-2/S-6）：只改 name；成功刷新 WS 标签（register 幂等覆盖）。"""
+    _assert_name_clean(payload.name)
+    item = get_anchor_store().rename_item(anchor_id, payload.name)
+    if item is None:
+        raise HTTPException(status_code=404, detail="/errors/anchor-not-found") from None
+    register_anchor_id(item.id, item.name, item.story_label)  # 幂等覆盖标签
+    return _item_payload(item)
+
+
+@router.delete("/{anchor_id}", status_code=204)
+async def delete_anchor(anchor_id: str) -> Response:
+    """§1.4 DELETE（S-6）：409 读列判定；硬删；成功摘除 WS 注册表（D-15/S-7 调用点）。"""
+    outcome = get_anchor_store().delete_item(anchor_id)
+    if outcome is None:
+        raise HTTPException(status_code=404, detail="/errors/anchor-not-found") from None
+    if outcome == "protected":
+        raise HTTPException(status_code=409, detail="/errors/anchor-protected") from None
+    unregister_anchor_id(anchor_id)  # S-7 调用点（契约 §1.5 V.3）
+    return Response(status_code=204)
 
 
 @router.get("/{anchor_id}", response_model=AnchorListItem)
@@ -196,5 +372,5 @@ async def get_anchor(anchor_id: str) -> dict[str, Any]:
     """§4 按 id 查：404 时回 `{"detail"}`（ProblemDetail 收编见 §5 #3）。"""
     item = get_anchor_store().get_item(anchor_id)
     if item is None:
-        raise HTTPException(status_code=404, detail="anchor 不存在") from None
+        raise HTTPException(status_code=404, detail="/errors/anchor-not-found") from None
     return _item_payload(item)

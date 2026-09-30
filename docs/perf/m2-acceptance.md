@@ -61,9 +61,18 @@
 
 | 层 | 触发 | 规模 | 断言 | 用例 |
 |---|---|---|---|---|
-| L-CI（每提交） | `-m "not bench"` | 2,000~3,000 tick | C1/C7 + 探针契约 + 量纲守卫 | `test_bench_soak.py::test_soak_ci_smoke_stability` 等 |
-| L-nightly | `-m bench`（nightly-bench.yml） | 30,000 tick（≈1/3 游戏日） | C1/C3~C10 全量 | `test_bench_soak.py::test_soak_nightly_*` |
+| L-CI（每提交） | `-m "not bench"` | 2,000~3,000 tick | **只作框架冒烟**（跑通/总 tick/实体集稳定，**不断漂移**）+ 探针契约 + 量纲守卫 | `test_bench_soak.py::test_soak_ci_smoke_stability` 等 |
+| L-nightly | `-m bench`（nightly-bench.yml） | 30,000 tick（≈1/3 游戏日） | C1/C3~C10 全量（**漂移判定在此层**） | `test_bench_soak.py::test_soak_nightly_*` |
 | L-里程碑 | nightly 同 step（§4 方案 A，env `PI_M2_FULL_SOAK=1`）+ 里程碑手动 | **604,800 tick** | 同 nightly + 汇总量落盘 | 见 §4 接法 |
+
+> **L-CI 形态收口（M5-P5 / 裁 28-D 建议①采纳）**：L-CI 的 3 窗 × 400 tick 样本量不足以判
+> 「末窗/首稳态窗」比值——M5-P4 实测定论（单窗均值 CV 8.5%，两次独立抽样比的右尾可噬 2x
+> 假漂移，历史红项「均值漂移 2.81x」经定标机复核为假红）。故 L-CI 由 `_assert_no_runaway`
+> 全量断言改为 `_assert_smoke` 框架冒烟（只验跑通/总 tick/实体集稳定），**漂移判定上移到
+> L-nightly（5 窗×6000）与 L-里程碑（7 窗）**。用例 docstring 已写明新旧口径。
+> **窗口级 artifact**：L-nightly 与 L-里程碑落 `perf/soak-windows.jsonl`（JSONL，逐窗
+> mean/p99/max/RSS/句柄/GC + 漂移比），nightly 红时据此回查「单窗离群」vs「单调退化」
+> （M5-P4 §1.2 缺口的收口）。写入门 = `PI_BENCH_ADVISORY=1`（nightly）或 `PI_M2_FULL_SOAK=1`。
 
 **采样段代表性**：L-nightly 的 30,000 tick 覆盖**多个昼夜相位**（30,000/86,400 ≈ 1/3 日 → 含若干相位切换）。
 跨 7 日的相位全覆盖由 L-里程碑 完整跑补足。三段同 seed，故小段是完整段的**确定性前缀**（可外推趋势）。

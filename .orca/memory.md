@@ -7,6 +7,56 @@
 <!-- 4. 本会话教训已在各轮快照内联；重启后若五树有新交付，走标准收编流程（memory.md 收编流程条） -->
 <!-- ============ 恢复卡结束，以下为 ①节正文 ============ -->
 
+【2026-09-30 第三十一轮｜五单收编（main ac0d559）+ 裁 28-G Claude 域六件全落】
+①**五单收编**：opencode M5-A2（0010 protected 回填 10 钉+混沌流预研）/ codex M5-S3
+（P6 语料 46→52+权力判据提案 10 钉）/ kilo M5-K6（C-2 契约合入+unregister_anchor_id
+4 钉+GAP-F 行）/ pi M5-P5（ci_smoke 收口+soak 窗口 artifact+0.90 硬断言方案）/
+cline M5-C4（nightly-bench 基线对比 step 补 PI_BENCH_ADVISORY=1）。唯一冲突面
+docs/README 台账（本轮补翻 9 行历史遗留 ⏳→✅）。门禁 1801 passed/120 skipped。
+**陈旧 world.db 坑（本轮实测）**：仓库根 world.db 是 create_all 产物（alembic_version
+空戳、matter_state 单键 PK）——create_all 不给已存表补列，0009 后 WS 测试
+OperationalError「branches has no column named rng_state」；修复=删库重建
+（gitignore 已排除，非迁移链产物不可 alembic 硬升）。
+②**裁 28-G Claude 域六件全落**（本轮施工，TDD 先行）：
+- **S-1 ProblemDetail**：`sim/api/errors.py`（新）四键全局换形——HTTPException/
+  未匹配 404/RequestValidationError 三层；机器码 `type|detail` 分段解析；
+  `_TYPE_TITLE` 表（anchor/profile-not-found/protected/world-not-ready/validation）；
+  main.py `install_error_handlers(app)`。settings.py 404 换机器码。
+- **S-2/S-5/S-8 POST**：`AnchorCreate`（name 1..64, extra=forbid）；同事务
+  protected=true+清其余（A2 threading.Lock——asyncio.Lock 与同步 SQL 不兼容实测；
+  A3 单 session）；updated_at 只写一次；游标=loop.state.tick+`get_current_seq()`
+  （events max seq，D-16 默认 main 分支）；无 loop→400 world-not-ready；成功
+  register_anchor_id（K7 模式）。
+- **S-4 切列**：list/get/current 全读 protected 列（C1 派生式退休——opencode
+  跨域缝「派生式同刻标 N 行 vs 回填标 1 行」随切列闭合）；/current 退化态
+  （无 protected 行）回退 max(updated_at) 保底不 404、protected=false（D-14）。
+- **S-6/S-7 调用点 DELETE**：409 判据读列；硬删；成功 `unregister_anchor_id`；
+  不补位。
+- **F-6 注册侧 fail-closed**：`_assert_name_clean` 过现行 scan()（零词表扩散），
+  422 `/errors/anchor-name-rejected`（`type|detail` 分段）；**出站纵深**
+  fork_notice 终扫退化兜底行（存量行漏拦时不静默放行）；codex RED 钉
+  `test_banned_anchor_names_currently_pass_through` 按钉内指示转正为
+  `test_banned_anchor_names_degrade_at_outbound`+`test_clean_names_keep_named_notice`。
+- **driver 生产挂载**：`set_anchor_load_hook`（新 setter）注册
+  `orchestrate_load_anchor` 闭包（preflush=on_flush await、register_child 日志、
+  同步等待 fork 事务完成——load_anchor 分发块是同步契约，毫秒级阻塞窗口可接受；
+  异常冒给 handler 降级 load_failed）。
+- **S-9 responses 注入**：openapi_ext `_attach_problem_responses`（get_openapi
+  之后调用否则 paths 被重建冲掉）；live 与快照键集一致（post 201/400/422、
+  patch 200/404/422、delete 204/404/409）；`gen-protocol --check` 过=快照零漂移。
+- **GAP-D**：ws-protocol.md §4.3 登记 timescale「有 schema 有发射器、无生产触发」。
+③**测试**：test_m5_anchors_crud.py 21 例（CRUD+切列+回填一致性钉——同刻多行
+不变量 ≤1 与 /current 同源；**坑**：uuid4 随机 id 使「id 最大者」断言不可用于
+运行态，同刻兜底判据只对存量回填有意义）；test_m5_problem_detail.py 3 例；
+既有 4 钉随契约反转（_seed 补 protected 语义/mutation routes 断言反转）。
+**坑**：POST/PATCH 路由装饰器插错位置（routes 未注册致 405）——插入后必须
+`app.routes` 实证；「存档一」等日常词命中禁词表（存档=禁词），测试样例名改
+「溪边小驻」。**门禁：1827 passed/119 skipped**（+26 净增）、ruff/pyright 0、
+gen-protocol --check 过；bench 后台在途。
+④**下一波**：bench 绿后提交推送+写快照分发六树；cline 重生成 baseline
+（run 36580639759 全绿窗口已触发）；GAP-C 前端 dispatch 归 M5 刻度面板单。
+
+
 # memory.md — 多 Agent 记忆合集（分节收录各工作树各自的记忆）
 > 用户规则 #7（main `3e320b9` 裁决：memory.md 入库）。本文件 = 五树 + 主树记忆的**融合合集**；
 > 跨树收编由主导方（Claude）合并。各树本地副本是其对应节的**权威来源**，收编冲突时以各树版本为准。
@@ -345,6 +395,7 @@ schema.md §19.4/README/m3-plan 已同步已裁状态。实施放行 opencode「
 （各节由对应 agent 维护；快照纪律见 workflow §8：交付后在**自己节**顶部写一行快照 `【日期 轮次｜状态】`，旧快照压缩为 `git log --oneline -- .orca/memory.md` 指针，不无限堆积。）
 
 ## ③ opencode（数据 / 数据库域）
+- 【2026-09-28｜**M5-A-DATA 0009 `branches.rng_state` 已交（裁 27-B b2，8 钉）**】新增 `0009_branches_rng_state.py`（**纯 `add_column`、可空、无 CHECK ⇒ 不需要 batch**，与 0008 的 CHECK 情形不同）+ `models.Branch.rng_state` + `fork_from_anchor(rng_state=…)` **在 fork 事务内原样落库** + `ForkResult.rng_state_persisted` **如实翻转**（`rng_state is not None` 才 True；未提供时列留 NULL + **warning**——漏传 = 接缝跳变风险，属调用方 bug）+ `sim/tests/test_m5_branches_rng_state.py`（8 钉：落库/父行不变/未传告警/回滚无半写/连续分叉链 child→grandchild/**端到端接缝抽签逐位一致**/0008↔0009 全 revision id 往返/零漂移）+ `test_m5_fork_replay.py` 的 D 钉翻转（原断言 `persisted is False` → 现断言落库 + 读回行值）。门禁：scratch DB 全 revision id 往返 `0008_m5_fork_identity`↔`0009_branches_rng_state` 全过 + autogenerate **实测 `upgrade()` 只剩 `pass`**（零漂移）；`-m "not bench"` **1786 passed / 0 failed**、ruff 全仓 ok、pyright 0。**⚠️ 施工中撞到并修掉一个缩进 bug。**⚠️ 误溯源更正（2026-09-29 M5-A2 补记）**：这条 bug 是我在 **M5-A-DATA 编辑 `fork.py` 时自己引入的**（D3-b 已收编进 main 的原提交是**正确的**），上轮把责任推给 D3-b 是错的**：我给 `INSERT INTO branches` 加参数时把该块多缩进 4 空格，导致 `async with session_factory() as session, session.begin():` 的**事务体被提前结束**——克隆语句落到事务外，session 关闭时回滚，**子分支行整条不落库**。D3-b 的原子性钉（`test_dangling_...rolls_back_whole_fork`）**测不出这个**（回滚场景下两种实现都"通过"），是本单「落库后读回子分支行」的新钉抓到的。教训见下。**环境修复（非代码）**：本树根 `world.db` 是**旧 schema 的真实库**（`alembic_version` 空行、11 events、无 `rng_state` 列），而 `sim.api.main` 的全局引擎指向它 → 加列后 `test_settings_api` 报 `no column named rng_state`。处置：先备份到 `%TEMP%\opencode\world.db.bak-pre0009`，再 `alembic stamp 0008_m5_fork_identity` + `alembic upgrade head`（只应用 0009，数据与列都在）——这是任何真实部署面对「库比代码旧」的标准姿势。
 - 【2026-09-28｜**M5-D3-c R2 三断言 + RNG 承接已交（批次 B 收官，19 钉，零 schema）**】新增 `sim/core/rng_state.py`（`capture_rng_state`/`restore_rng_state` + `RngStateError`，JSON 状态包 ≈**198 B/流**，带版本 + 材料指纹校验，未知版本/指纹不匹配 fail-closed）+ `sim/core/persistence/fork_replay.py`（`COMPARABLE_MEMORY_FIELDS`/`COMPARABLE_KNOWLEDGE_FIELDS`/`EXCLUDED_FIELDS` + 两个 comparator）+ `fork.py` 增 `rng_state` **透明透传**（`ForkResult.rng_state_persisted` 恒 False，不预设裁决）+ `sim/tests/test_m5_fork_replay.py`（19 钉）。**给 Claude 的 (a)/(b) 建议 = 采 (b)、否 (a)**，实测依据：`RngRegistry` 只记 `world_seed`+熵材料，**抽签进度活在调用方持有的 PCG64 生成器里**；实测（3 流各抽 11 次）**只承接 registry（= seed 语义）后续抽签必然跳变**，承接 registry+PCG64 状态才逐位一致 ⇒ seed 不含进度，(a) 要正确就得重放全部抽签（脆弱 + O(抽签数)）。建议落 **`branches.rng_state` 一支 0009**（fork 事务内原子落，分支自带状态 ⇒ 可连续分叉链；~4KB/分支可忽略），优于「写进子分支第一份快照」（状态只存在于那一份快照、连续分叉时祖父状态无处可取）。钉子 `test_D_seed_only_resume_diverges` 把「seed 语义必跳变」钉成二阶守卫防退化。**口径修正（D3-c 才想清楚）**：子分支 `events` 只含自己的事件（事件不克隆）而它**继承**的投影行事件住在父分支 ⇒ 「单独重放子分支事件流」**必然少一半**（实测子分支 replay 只折出 tool-1、漏继承的 hut-1）→ **R2 = 父分支前缀折叠 ∘ 子分支自身事件折叠**（沿 branch 链回放），B 组按此写并复用 store 同一批 `fold_*`（C2 检验点）。**C 组照妖镜已验证有牙**：往 `materialize_matter_replay` 的 `read_range` 注入一处单分支回归 → 只有 `test_C_child_state_invariant_to_parent_growth` 变红（18 钉照绿）。可比字段集归一化一条：`evidence_branch_id` 不直接比（NULL 语义=本分支，克隆后被改写成父分支 id，0008-d）⇒ 归一为 `evidence_ref=(分支, seq)` 二元组再比。门禁：`-m "not bench"` **1774 passed / 2 failed（均墙钟抖动**：soak_ci_smoke_stability clean tree 同样红；willingness delta sanity 隔离 3/3 绿，stash 对照同样 3/3 绿）、ruff 全仓 ok、pyright 0。bench 全量本轮**未重跑**（D3-c 不碰热路径，D3-b 全量 bench 刚跑过 103 passed；用户催加快）。
 - 【2026-09-28｜**M5-D3-b fork 事务 + 克隆已交（裁 6 (c)+裁 10 (i)+R-1/R-2，22 钉）**】新增 `sim/core/persistence/fork.py`（`fork_from_anchor` + `ForkError` + `ForkResult` + `derive_child_entry_id`）+ `vector.py::clone_branch_vectors` + `store.py` 裁 5 分支闸门（`InactiveBranchError`）+ `sim/tests/test_m5_fork_clone.py`（22 钉）+ 文档回写（`schema.md` 新增 §20 fork 事务契约表、`event-sourcing.md` §2.2 步骤 2 与 §4.2 注、预研稿 §3.3/§3.5/§3.7(新节)/§3.8/§9、`docs/README.md` 台账）。**一次事务**：P1 `preflush` **必填钩子**（投影追平做成动作不是断言）→ 父/子分支存在性校验（子分支 id 不可复用）→ 建子分支 → 6 张有界表 `INSERT…SELECT` 换 `branch_id` → 2 张语料表**两道截断**克隆 → 父分支封存（仅当仍 active）；提交后 vec 行**字节**拷贝（零 LLM，V4）。**四个实施增补（原稿未预见）**：①语料表**自增 id 显式分配**（`MAX(id)+1+i`）+ 事务内临时映射表 `fork_mem`/`fork_know`（`INSERT…SELECT` 拿不到新 id，而 told 链 `source_knowledge_id` 是 int id、vec rowid 也是 id → 无映射表则指针无从重写；映射表事务末 DROP）；②`entry_id` 重映射用 **`uuid5(ns,"子分支:父 entry_id")` 确定性派生**而非随机 uuid4（T2 要「同一 anchor 重算可复现」；分支 id 进命名空间 ⇒ 跨分支不撞、且子分支 id 不可复用才使「重算同一分支」有意义）；③**R-2 置 NULL 语义**：`superseded_by` 的替换者若写在分叉点之后（不克隆），指针**置 NULL**——那正是该分支时间线里「还没被取代」的状态，保留=悬空=治理污染；钉子另验 SQL 侧结果与 Python 期望值一致（不符即 ForkError）；④**裁 5 闸门选「不存在则按需开线」而非「必须预建分支行」**（严格存在校验会打断 20+ 测试文件与全部 driver/golden/bench 的 `append`；开线语义=「世界从第一条事件长出来」，且闸门在 seq 分配**前**→被拒不吃 seq 号、事件表零写）。**⚠️ 上报重大缺口（回执 + 预研稿 §3.7）**：**分叉点只支持父分支头部**（`fork_seq == max(seq)`），历史点（回退旧存档）**fail-closed**——投影当前值==分叉点状态仅当父分支此后未推进，而 `npc_memories`/`knowledge` 的**治理列不记时间**、`relationships` 累计值原地演进，三者**无事件源**（F2）⇒ 历史状态不可重建。给了三条候选修法：(a) 裁 7 `*.written` 事件（触冻结基线+S1，须 codex）/ (b) 治理列加 `*_at_seq`（只解一半）/ (c) **anchor 世界态物化**（最贴 §12 读档原文，建议优先评估）。**产品影响：玩家档「回退」玩法本轮未覆盖**。**R-3 留痕**已写进 `schema.md` §20 末段（S1 禁词表是活资产；R-1 要求逐字节克隆 ⇒ 词表日后扩面时历史分支记忆保留当时未禁词面，运行期不可判）。**append 闸门成本实测**（A/B，内存 SQLite 下界，20 事件/批）：带闸门 1.8895ms/批（94.48µs/事件）vs 无闸门 1.5572ms/批（77.86µs/事件）→ **+0.332ms/批 = +16.6µs/事件 = 1.21x**；无闸门值 77.86µs/事件与 pi 实测 78.7µs/事件**互相验证**（可请 pi 重定标 append 基线）。门禁：`-m "not bench"` **1683 passed / 113 skipped / 0 failed**、bench 单跑 **103 passed / 1 skipped**、ruff 全仓 ok、pyright 0、我的 5 文件 format clean。
 - 【2026-09-28｜**M5-D3-a 0008 分叉身份四件已交（迁移件，16 钉）**】新增 `0008_m5_fork_identity.py`（~120 行）+ `sim/tests/test_m5_fork_identity_schema.py`（16 例，先 RED 后绿）。四件 = **a** `npc_profiles` PK `id`→`(branch_id,id)`（裁 1 = F1 硬前置，batch_alter_table + naming_convention，0006 同款模板）／**裁 3** `events.parent_branch_id`／**裁 4** `knowledge.evidence_branch_id`（封 C4 跨分支悬空）／**裁 9** `player_anchors.protected`（与 kilo K7 同表一支）。**0008-b/c 作废**（裁 10 采 (i) 重映射 → (ii) 不启动；裁 2 不加 global_seq）——原预估 4 件变实际 4 件但成员换了。**清点兑现**：生产单键 `session.get(NpcProfile,…)` 全仓 **1 处**（`npc_store.py:630 _project_lod_change`，`branch_id` 就在参数里 → 改双键一行）+ 测试 **3 处**（`test_m2_runtime_store.py:146,232,256`）；对比 M4-D2a 改 `matter_state` 连带 10 处。**顺带封一个真 bug**：`_project_lod_change` 原按 `npc_id` 单键取行**不看分支** → 分叉后子分支 LOD 事件会写父分支行（跨分支写），属 §5-C1 应用面缺口。**两条设计决定**：①成对 CHECK 必须**单向**（`parent_branch_id IS NULL OR parent_seq IS NOT NULL`）——`(NULL, seq)` = 引用在本分支，是既有行常态，写成等值会把全部既有行打成非法（第一版想用等值，被这条理由否掉）；②**零回填**（NULL 语义即「本分支」，原预估里 0008-c 的确定性排序回填随之消失）。**`parent_branch_id` 生产侧不在本刀**：`WorldEvent`（冻结基线）无该字段（裁 7/8 精神不破基线），持久层已按 `parent_seq` 同款透传（`append` 读 `event.get("parent_branch_id")` + `validate_store_row` 一并做 optional-str 校验），生产侧接线随读档编排（架构域）。**downgrade 前置条件**：还原单列 PK 要求库内无同 id 跨分支共存行 → 0008 后产生的分叉数据不可降到 0007（downgrade 只服务往返验证）。**门禁**：scratch DB + **全 revision id**（`downgrade 0007_m4_material_balances` → 逐级 `0006_m4_structures` → `upgrade head`）全过 + autogenerate **`upgrade()` 只剩 `pass`**（零漂移）；`-m "not bench"` **1661 passed / 113 skipped / 0 failed**（含 bench 单跑 103 passed）；ruff 全仓 ok、pyright 0；我改的 7 文件 `ruff format --check` clean（仓内 27 个 drift 是 clean tree 既有）。文档回写 `schema.md`（events/knowledge/player_anchors/npc_profiles 四节 + 索引总结 + ER 提示）、`migration.md` §6.4（0008 专节）、预研稿 §2.6/§5-C1/§5-C4/§8/§9/§10、`docs/README.md` 台账。
@@ -407,6 +458,8 @@ schema.md §19.4/README/m3-plan 已同步已裁状态。实施放行 opencode「
 - **「引用缺失」要先分清「正常未来」与「真悬空」**：`superseded_by` 指向的对象写在分叉点之后 → 不克隆是**对的**，此时清空指针＝该分支时间线的正确状态（置 NULL）；而 `source_knowledge_id`/`source_memory` 的目标缺失＝依赖断裂，必须 fail-closed。同一句「指针重映射」里两种语义，别一刀切。
 - **确定性重映射用 uuid5 不用 uuid4**：只要重映射值会进入「可逐位比较的业务键」（如 `(branch_id, entry_id)`），随机 id 就让「同一输入重算两次」不可比。命名空间里带上区分维度（子分支 id），并同时禁止目标 id 复用（否则「重算同一分支」无从谈起）。
 - **给写路径加闸门前先量爆炸半径**：`append`/`persist` 这类热路径的严格前置校验会波及所有调用方（本仓 20+ 文件、含 golden/bench driver）。若「校验存在」只是文档洁癖，改成「不存在则按需创建 + 存在但状态不对才 fail-closed」通常零破坏；闸门放在**消耗资源之前**（seq 分配前），保证被拒不留半写。
+- **「回滚场景」的测试证明不了原子性**：只断言「失败后没有半写」的用例，在「所有写根本没进事务」的错误实现下**同样会绿**（该写的没写 ⇒ 断言自然成立）。要证明原子性必须有**正向钉**：成功路径后**从库读回**关键行（本例：分叉后 `session.get(Branch, 子分支)` 必须拿到行）。另：给事务体内某块加代码时**改缩进会提前结束 `async with …begin():`**（Python 合法、不报错、后续语句静默落到事务外并在 session 关闭时回滚）——改完必须重跑「正向读回」类钉子。
+- **仓内存在比代码旧的真实 `world.db`**（`sim.api.main` 的全局引擎指向它）：任何 schema 变更后，跑测试前先确认它是否需要 `alembic stamp <旧 head>` + `upgrade head`（**先备份**）；否则相关测试会报 `no column named …`，容易被误判成自己代码的 bug。`alembic_version` 有表但**无行** = 从没 stamp 过的脏库，不能直接 `upgrade head`（0001 的 create_table 会撞已存在的表）。
 
 
 > ——以下为 opencode 树 memory.md 原文（收编于 3309c0f）——
@@ -449,7 +502,7 @@ schema.md §19.4/README/m3-plan 已同步已裁状态。实施放行 opencode「
 
 ## 当前任务
 
-**D3-c 已交**（批次 B 收官）。**批次 B 剩余待裁**：①`branches.rng_state` 落库（我建议 = (b)，D3-c 已给实测依据；`rng_state_persisted` 恒 False 等你翻）②历史点分叉（预研稿 §3.7 三条修法，建议先评估 (c) anchor 世界态物化）——**②卡着玩家档「回退」玩法**。**下一步**：等 Claude 派新单（批次 A 时间刻度 / 批次 C 权力牙齿 / 批次 D 火灾生态的数据面）。
+**M5-A-DATA 已交**（0009 + fork 事务内原子落库 + persisted 翻转，8 钉，零漂移往返全过）。**批次 B 剩余待裁**：**历史点分叉**（回退旧存档）仍 fail-closed（预研稿 §3.7 三条修法，建议先评估 (c) anchor 世界态物化）——**卡着玩家档「回退」玩法**。**下一步**：等 Claude 派新单（批次 A 时间刻度 / 批次 C 权力牙齿 / 批次 D 火灾生态的数据面）。
 
 
 ## 留言板
@@ -553,6 +606,23 @@ uv run pyright sim/
 - (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)
 
 ## ⑤ pi（性能域）
+- 【2026-09-29 第二十二轮快照｜M5-P5 三件：ci_smoke 形态收口 + soak 窗口级 artifact + 0.90ms 线定标机硬断言方案（裁 28-D 建议①②采纳）】任务书（Claude M5-P5）：P4 结论全采、计数清零；建议①②裁定采纳③（baseline 补项）落 C4。产出：`sim/tests/bench/test_bench_soak.py`（ci_smoke 收口 + artifact 写入门）+ `sim/tests/bench/thresholds.py`（仅注释：解除 stale「提案待裁」+ 迁移条件 + CI 1.72x 依据）+ `docs/perf/m5-fast-forward-budget.md` §8/§9 + `docs/perf/m2-acceptance.md` §3 表格/注。**零行值改动**（0.90 / 42.0 不动；`FAST_FORWARD_TICKS_PER_FRAME=240` 生产常量不动——M5-K3 T1 钉子）。
+  - **【1｜ci_smoke 形态收口】** `test_soak_ci_smoke_stability` 与 `test_soak_l1_feeder_ci_smoke` 由 `_assert_no_runaway`（漂移/稳态均值/RSS/GC/句柄全量）→ 新增 `_assert_smoke`（只验「窗口非空 + `total_ticks == expected_ticks` + 实体集稳定」）；**旧口径 → 新口径已写进两处 docstring**（任务书显式要求）。原因：3 窗 × 400 tick 样本量不足以判「末窗/首稳态窗」比值（P4 实测定论 CV 8.5%，2.81x 假红）。**漂移判定仍在 nightly 30k（5 窗×6000）与里程碑 604.8k（7 窗）**——`_assert_no_runaway` 未改，nightly/里程碑调用点原样。
+  - **【2｜soak 窗口级 artifact】** 新增 `_write_soak_artifact(result, *, label)`：落 `perf/soak-windows.jsonl`（**JSONL 追加**——同 session 多个 soak 长跑各一行，不覆写）；内容 = `dataclasses.asdict(result)` + 便利字段 `drift_ratio`（末窗/第 2 窗）。写入门：`PI_BENCH_ADVISORY=1`（nightly「跑基准」step）或 `PI_M2_FULL_SOAK=1`（里程碑 step），**任一满足即写**；每提交 CI（无上述 env）不写。调用点 = 3 个长跑用例（nightly mock 30k / 7 日完整跑 / nightly L1 feeder 30k），**断言前写**（红了也有窗口数字）。nightly-bench 的「上传基线结果」step 已 `path: perf/` + `if: always()` ⇒ **无需改 yml**，红灯也归档（「跑基准」step 已 `mkdir -p perf`；本函数也 `mkdir(parents=True, exist_ok=True)` 兜底）。
+  - **【3｜0.90ms 线硬断言方案（§8）】** 裁 28-D「硬断言只留定标机」：三条迁移条件（全满足才转硬断言）——①连续 3 次独立 nightly 的 `[50npc]` median advisory 全绿且 CI/本机档位比稳定 **1.72x±15%**（漂移 >15% 先查 `runner.txt` 机器档位与负载，不动阈值）；②迁移动作 = `_record_proposal` → `harness.assert_median_threshold`，**只留定标机**，nightly 仍传 advisory（**不允许出现「CI 档硬断言失败」的红**）；③CI 档须先建独立基线（50npc CI ≈ **0.9131ms**）否则 CI 侧无判别力。**CI 档实测**（run 36543451845 artifact）：0 实体 0.5589 / 10 实体 0.6230 / 50 实体 **0.9131ms**（CI/本机 0.5589/0.29=1.93、0.6230/0.35=1.79、0.9131/0.53=**1.72**）——50npc 恰越 0.90（1.5%），即档位差非代码退化，量化根因即此。**未动**：0.90 行值、42.0s 派生量、`ws.py` 240 常量、bench 的 `_record_proposal` 调用形态（仍观测态；迁移待 Claude 裁）。
+  - **验证**：`-m "not bench"` **1797 passed / 114 skipped / 70 deselected / 4 warnings**（与 main 门禁基线一致，non-bench 含两个 ci_smoke 收口用例）；`_g3.bat`（`set PI_BENCH_ADVISORY=1` 后跑 soak+fast_forward 全 bench）**14 passed / 1 skipped / 0 failed**（193.72s；skip=env 门 604,800 tick 里程碑，预期）；artifact 落盘实见 `soak-windows.jsonl` 2 行（`M2 长跑 nightly 30k` 5 窗 drift 0.988 / `M2 长跑 L1 feeder 30k` 5 窗 drift 1.0329，`total_ticks=30000`，UTF-8 中文 label 正常）；ruff **All checks passed**；pyright **0 errors**。
+  - **环境坑（重要，踩了 5 分钟）**：本机 bash 里 `PI_BENCH_ADVISORY=1 ./.venv/Scripts/python.exe ...` / `env PI_...=1 uv.exe run ...` **环境变量全部不传递**（Win32 `.exe` 经 WSL 互操作启动时丢失 bash env，连 `HOME` 都是 None；`cmd.exe /c "set X=1 && ..."` 引号嵌套会被 cmd 解析炸）。**正解 = 写临时 `.bat`**：`printf 'set PI_BENCH_ADVISORY=1\r\n.venv\\Scripts\\python.exe -m pytest ...\r\n' > _g.bat && cmd.exe /c "_g.bat"`（读真 env 值 `ADVISORY= 1` 已实证）。
+  - **门禁遵守**：只动 `sim/tests/bench/` + `docs/perf/` + `.orca/`；**未动** `.github/workflows/`（artifact 靠 `path: perf/` + `if: always()` 已有配置，零 yml 改动）、`thresholds.py` 行值、生产代码、`baseline.json`（C4 域）。
+  - **已知小瑕疵（登记未改）**：`perf/soak-windows.jsonl` 不在 `.gitignore`（现有规则只忽略 `perf/*.json`）⇒ 本地跑 advisory bench 后 `git status` 会出现 `?? perf/`（本次已手工清理）。修法 = `.gitignore` 加一行 `perf/soak-windows.jsonl`，但 `.gitignore` 在任务书门禁（`sim/tests/bench/` + `docs/perf/`）之外 ⇒ **留给 C4/后续单**，未越权改。
+- 【2026-09-28 第二十一轮快照｜M5-P4 soak 定标机复测：本机口径（非真回归）——2.81x 假红，连续红计数清零】裁 27-E 触发（soak 连续 3 轮全量门禁红）→ 上定标机跑干净 soak 复核「均值漂移 2.81x」。产出 `docs/perf/m5-p4-soak-calibration.md`（唯一新文件）+ 本⑤节。**结论：本机口径（advisory），非真回归 → 不 BLOCK；连续红计数清零**。
+  - **定标机（EPYC 7763 / nproc4 / py3.12.3）两形态全绿**：①golden-nightly run `36503174990`（gh dispatch，main）**10/10 绿**——10 种子×864k tick，**逐日漂移 0.982–1.008**、mean_tick_ms 0.118–0.2335（与 M5-P1 首跑 0.125–0.232 同区间）；②nightly-bench run `36543451845` **soak 两形态绿**（`-m bench` 69 passed/1 skipped/291s；M2 604,800 tick 完整跑 **1 passed / 39:14**）。
+  - **本机干净进程**：全量门禁 `-m "not bench"` **连续 3 次 1778 passed / 0 failed**（含 `test_soak_ci_smoke_stability`）；CI 形态冒烟 **60 次 0 红**（漂移 min0.83/median0.98/P95 1.12/max1.14，单窗均值 CV **8.5%**）；**200k tick × 20 窗漂移 0.998x、无单调上升**（末窗 2.58 vs 首窗 2.58；前 6 窗 2.5–2.8 反最高）→ **排除 O(n) 累积的决定性证据**。
+  - **2.81x 归因（口径脆弱，非累积）**：判据 `SOAK_MEAN_DRIFT_RATIO_LIMIT` 是「末窗/首稳态窗」**比值**；CI 形态只 **3 窗×400 tick** ⇒ base/last 各是单次采样，CV 8.5% 下两次独立抽样之比的**右尾**可命中 2x+。**负载对照（决定性）**：8/20 路 CPU 争用下**漂移比不抬（0.87–1.05x）但绝对均值抬到 3.4–8.9ms** → 2.81x 必是「末窗偶抽慢采样/首窗偶抽快采样」单次离群，非单调退化。
+  - **CI 档越线项全为绝对阈值**（advisory 只记录，与 soak 无关）：apply 单事件 0.051>0.040、apply 50 批 2.477>2.000、感知听觉 5.449>3.600、RNG 1M 394.8>330。
+  - **P3 口径重申（裁 27-E 要求）**：两红线为**实现观测态**（`_record_proposal` 不断言）；CI 档 `test_fast_forward_frame_cost[50npc]` 实测 **0.9131ms 恰在线 0.90 上**（CI/本机≈1.72x）→ **转硬断言前须按档位重定线或声明「硬断言只留定标机」**（M2-P6 裁 1）。
+  - **建议（登记，待裁，本单未执行）**：①CI 形态 3 窗×400 tick 样本量不足 → `test_soak_ci_smoke_stability` 只作框架冒烟、漂移判定留给 nightly 30k/里程碑 604k（属 test_bench_soak.py 改动，另单）；②给 soak 加窗口级 artifact（否则 CI 侧漂移只能取绿/红二值）；③`baseline.json` 补 4 项（retrieval/structure/willingness/fast_forward，CI 域，随下次全绿 nightly 重生成）。
+  - **门禁**：只动 `docs/perf/`（新文件）+ memory⑤；**未改 thresholds.py / soak.py / test_bench_soak.py / 生产代码**；**未重生成 baseline.json**（守「不得凭本机数造 baseline」）。两 CI run 均 gh dispatch+artifact 取数；本机数不用于定 baseline。
+  - **未决风险**：①CI soak 窗口级数字无 artifact（缺口）；②CI 形态样本量不足以判漂移比；③baseline.json 缺 4 项；④fast_forward 0.90 线 CI 贴线。
 - 【2026-09-28 第二十轮快照｜M5-P3 fast_forward 红线落 thresholds + soak 第 2 红观察项（未提交待收编）】两件：①soak 观察项更新（裁 21-D）；②M5-P2 提案落码。产出：`sim/tests/bench/thresholds.py`（+2 行）+ 新 `sim/tests/bench/test_bench_fast_forward.py`（4 bench + 2 契约）+ `docs/perf/m5-fast-forward-budget.md` §7 回填 + `m5-time-scale-fork-budget.md` §5 状态更新 + memory ⑤节。
   - **【1｜soak 观察项】** 裁 21-D「连续 3 轮全量门禁 soak 红→定标机复测」：本轮全量门禁 soak **第 2 红**（均值漂移口径，已单独复跑确认为本机抖动非代码回归）——**还差 1 轮**，下一轮全量门禁若再红即启动定标机复测。本轮**不动作**，仅记观察项。
   - **【2｜red line 落 thresholds】** 裁 21-A D-2 已落码（main `848ee18` 起）：`sim/api/ws.py::step_fast_forward` 按 `FAST_FORWARD_TICKS_PER_FRAME=240` 预算摊还（跨连接共享），`run_world_driver` 每帧调并抑制逐帧 state_delta 广播；`TestFastForwardDriverStep` 已把「恒 ≤ 240 预算 / 跨连接共享」钉成 T1 代码契约基线。本单补性能侧数值：
@@ -771,9 +841,18 @@ uv run pyright sim/
 
 - 【2026-09-28 M5-K4 轮｜**批次 C 预研稿已交 `74d8029`（已推 origin+gitee，待 Claude 收编）**】提案制**零代码零 schema**（git status 只有 1 新文档 / prettier 过 / 未跑 pytest）。交付 `docs/api/m5-batch-c-prestudy-authority.md`（~300 行）。**立场**：批次 C 机制本体不属本稿（§13/§18 未展开、`m5-plan.md:118` 明写「本骨架不发明机制」、验收判据待 codex 提案）——只答「机制落地时协议面必须满足什么 + 候选面 + 待裁」。**①权力牙齿协议面**：五条铁律 R1~R5（死 schema 防线/出戏边界禁数值/可见性走 K8 投递面路由/事件是真相帧是投影/兼容三档成本表，均来自批次 A/B 已发生教训）；候选四案 **A 零 schema 改动（默认：perception+monologue+plan 已足够）**、B `monologue.form` 扩（唯一有理由的扩面，D-11，扩枚举动三处 schema+投递表）、C `state_delta` 顶层可选数组（需举证+禁数值）、D 新 S→C 帧（一律不预建）；**D-12 主张 `perception.sense` 不扩**（权力不是新感官，扩了是长期语义债）；若裁「位阶可见」走 `{label:string}` 窄组件先例（`story_label`/`SessionAnchor`）；安规报备三条（权力文本与 M4 `impulse_gate` 同道扫描不新造词表/**拒绝权必须玩家可感知**否则就是 §10 禁的「被操纵感」/禁暗改零表现）；**若最终裁「权力完全不可见」则协议面零改动**（合法结局，砍掉时无沉没成本）。**②protected 切列+CRUD 契约草案**（我出契约、Claude 出施工）：切列三步（POST 写入方 → **0009 存量回填** `protected=(updated_at=全表最大)` → 读路径开关式切换不双源），**回填不可省**（不回填⇒全 false⇒DELETE 末梢 409 保险丝静默失效＝裁 26-C④ 的实质原因）；四消费者一致性矩阵（列表/current/`session_state.anchor` 同源自动/WS 标签表）；**🔧 缺口 1（D-14）**：「删末梢不补位」是已定契约⇒切列后「全表无 protected 行」合法⇒`/current` 以 protected 为唯一判据会回 404 而列表仍有档 ⇒ 补**回退保底**条款；**🔧 缺口 2（D-15）**：`_ANCHOR_IDS`/`_ANCHOR_LABELS` **只增不减**（`reset_anchor_registry` 仅测试辅助）而 `load_anchor` 只查它 ⇒ **删档后 D3-c 接线前会「假成功 + 全量快照」** ⇒ DELETE 须同步摘除（成对函数）；条款 C1~C4（开关式/一致性矩阵/不变量钉「protected 行数 ≤1、删末梢后可为 0」/回滚**不需数据迁移**）；CRUD v2 增量表；**明确「读档不自动建档」**（D3-b fork 产分支不产玩家档，`register_child` 与 `_ANCHOR_IDS` 是两套注册表勿混）；**schema 零新增**（`AnchorCreate`/`AnchorRename`/`ProblemDetail`/`responses.Problem` 均已在快照，Claude 域注入）。**③复用面清单 R-1~R-9**（三处陷阱：R-4 快进摊还与广播抑制耦合⇒快进期 plan/actors 不上线（终态全量补）须写明否则被当 bug；R-5 标签注册表成对摘除；R-6 CRUD 新路径段须排在静态段之后+复用 `TestCurrentAnchorRoute` 白盒顺序钉）+ 反向清单（不碰 `timescale`/`speed` 枚举/`state_delta` 封闭键集/`updated_at` 只写一次）。**待裁 D-10~D-16**（建议裁序：D-10 → D-14/D-15 → D-11~D-13/D-16）。**既有小债（非本轮引入）**：K3 给 `/current` 快照声明了 `404: $ref responses.Problem`（前瞻式，与快照既有 POST/PATCH/DELETE 同款），**实跑 404 仍是 `{"detail":…}`**，待 Claude 域 `errors.py` 落地才成 ProblemDetail 形。
 
+## ⑥ kilo（接口 / 兼容性域）
+
+- 【2026-09-29 M5-K5 轮｜**批次 A/C 接口兼容审计已交 `ddbbaed`（已推 origin+gitee，待 Claude 收编）**】提案制**零代码零 schema**（git status 只有 1 新文档 / prettier 过）。交付 `docs/api/m5-batch-a-c-compat-audit.md`（~230 行）。**审计方法**（脚本一次性、跑在 `C:\Users\...\Temp\kilo\`、不入库、仓库零残留）：实例化**真实构造器**逐帧对拍快照（键集 ⊆ 属性、type/channel ∈ 枚举、required 齐全、递归禁键/禁值词）+ `TestClient` 实打 6 个 HTTP 端点（`SIM_DB_PATH` 指临时目录不落仓库）+ **type 发射点普查**补盲区。**已声明盲区**：证不了「没有未注册构造器」（普查是字面量级启发）。**①批次 A 对账**：WS **24 样本全 OK**（render/narrative×3/control×6/session×2/error 全词表 11 码）；`tick`/`seq`/`branch_id`/`entity_id`/`seed`/`agent_override`/`updated_at` **各 0 次**；白名单 `ws_seq`（§2 传输序号）/`v`（§1.7 版本）＝协议词汇非世界真相。旧客户端兼容四档全落 minor（扩枚举/加可选键/加新 type/加新路径），未知 type 静默忽略有**实现级证据** `client/src/net/ws.ts:99-101`。**②CRUD v2 清单**：S-1~S-9 施工项（Claude 域，逐条带断言）+ C-1~C-5 契约项（我域；**C-2 = K4 的 C1~C4/v2 表尚未合入 `anchors-api` 正式契约，建议施工单开工前合入**）；**S-7 归属报备**：`unregister_anchor_id` 函数本体在 `sim/api/ws.py`（我域文件）、调用点在 `anchors.py`（Claude 施工）——按分工我未动代码，撞车风险请其在派单点名或拆小单；**本批无新增路由顺序风险**（PATCH/DELETE 与 `/{anchor_id}` 同路径不同方法，R6 陷阱只对新增静态段成立）。**③🔴 两个高价值发现**：**GAP-A 迁移号撞车**——`alembic/versions/` 最新 `0008_m5_fork_identity.py` 其第 9 项**已落** `player_anchors.protected`（`NOT NULL server_default=0`），而**裁 27-B 已把 0009 预定给 `branches.rng_state`** ⇒ 我方回填迁移须**让号（建议 0010）**否则两个 `down_revision=0008` 的 head 导致迁移链分叉；**GAP-B 回填是强制项**——0008 默认 0 ⇒ 不回填则全表 false ⇒ DELETE 末梢 409 保险丝**静默失效**（这正是「无写入方暂不切列」的实质机理）。**④0009 rng_state 边界**：与 `seed`/`tick` 同族的世界真相，**可逆向推演抽签序列**故必须禁出（`seed` 是同族最小泄露面，`rng_state` 是其超集）；证据：快照/生成物中 `rng_state`/`branches`/`forked_from`/`abandoned` **各 0 次**；`branch_id` 快照 1 次**只在 `info.description` 边界声明散文**、生成物 **0 次**（佐证 openapi-typescript 不映射 `info`）；`seed` 3 次全是 description/summary 散文；**四步论证不需改 `protocol.ts`**（0009 只加 DB 列不经 ext 注入 + `branches` 无端点 ⇒ 快照零变化 ⇒ 生成物零变化；铁律管的是 ext↔快照，两处都不碰；形态零变化 ⇒ §7 不登记新版本），已实跑 `gen-protocol --check` 留痕 + `test_m5_batch_b_schema` 17 例绿。**另登记**：GAP-C 前端零消费 K3 新帧（全进 `ws.ts` `default:`）/ GAP-D `timescale` 零发射（R1 已知例外需文档登记）/ GAP-E `combat_event` 零发射 / GAP-F `perception` **有意**只进 prompt（`loop.perception_frames`+`main.py:85`）不出 WS 却在联合占永不发射成员 ⇒ 建议 `ws-protocol` §3.2 明记一行（我域零成本）。裁 27-C **D-10=权力完全不可见已闭合 ⇒ 批次 C 协议零新增**（本稿无任何权力 schema 建议）。
+
+## ⑥ kilo（接口 / 兼容性域）
+
+- 【2026-09-29 M5-K6 轮｜**C-2 契约合入 + S-7 `unregister_anchor_id` + GAP-F 文档行 已交 `fe2ea78`（已推 origin+gitee，待 Claude 收编）**】**commit `fe2ea78`｜钉子 4 例｜改动面＝`sim/api/ws.py` + `docs/api` 两份（零 schema）**。①**S-7**：`unregister_anchor_id(anchor_id)` 摘除 `_ANCHOR_IDS`+`_ANCHOR_LABELS`，**幂等**；缺口来源＝K5 审计（两表只增不减 ⇒ 删档后 `load_anchor` 回**假成功**）；摘除后错误映射按 K5 C-3＝**`load_failed`**（**不新增 code**；`bad_anchor` 语义是「形状非法/缺失」），告知帧游标指针退化 `anchor=null`；`register_anchor_id` docstring 补「必须成对」；**CRUD 调用点归 Claude 域**。钉子 4 例在 `sim/tests/test_ws_gateway.py::TestUnregisterAnchorId`（失配得 load_failed / 标签指针清空 / 告知帧 anchor=null 且 notice 不含档名（用 hook 强制走成功路径单独检验取数面）/ 幂等+可逆）。②**C-2 合入**：`docs/api/anchors-api.md` 新增 **§1.5**（正式契约、日期化、依据链 21-C④→26-C④→**27-C**→**28-C**、**施工以本节为准不再回看 K4 提案稿**）：切列三步（POST 写入方 → **0010 回填**（GAP-A）→ 读路径开关式切换）+ **回填强制**（GAP-B）+ 条款 C1~C4 + **v2 增量表** + D-14 `/current` 保底 + D-15 摘除 + **V「施工单须写死三件事」**（0010／回填强制+「true 行数=1」断言／DELETE 必须调 `unregister_anchor_id`）+ 回滚不需数据迁移。③**GAP-F**：`ws-protocol.md` §3.2 加一行「`perception` **不经 WS 出站**」（只进 Agent 侧 `loop.perception_frames`+`attach_perception`，玩家侧看 `monologue`；联合保留成员是**冻结形状**不是漏接线，与 GAP-D 真缺口显式区分）。**门禁**：`pytest -m "not bench"` **1801 passed / 114 skipped / 0 failed / 0 error**（1797 基线+4 钉子）；`ruff` 全过；`pyright` 0；`gen-protocol --check` 过且 **`git status shared/` 零 diff**（未触 schema）；`prettier` 全过；四文件 `w/lf`。
+  **⚠ 本机环境坑（重要，踩过）**：仓库根 **`world.db`（2026-09-27 本地产物、gitignored、225KB）schema 早于 main 的 0009 `branches.rng_state`** ⇒ 任何以默认 `SIM_DB_PATH`（=仓库根 `world.db`）启动 app 的用例会写穿 `sqlite3.OperationalError: table branches has no column named rng_state`，且因是**后台 driver 任务**抛出，落点是**随机 teardown**（伪装成随机 flake）。诊断法：`git stash` 清树对照同样复现 + **只把 `SIM_DB_PATH` 指向 temp 目录、代码零改**即全绿。**建议**：跑全量 pytest 前先重定向 `SIM_DB_PATH`；处置陈旧 DB 二选一＝删掉（dev 产物，测试会重建）或 `alembic upgrade head` 补列。**该文件不是我的，未擅自删改，只报备。**
+
 ### ▶ 接续入口（新对话先读这 5 行）
-1. **当前位置**：`ZX466/kilo` @ `74d8029`（**K1 预研 / K2 口径订正 / K3 批次 B 四面（已收编 main `9f0852f`）/ K4 批次 C 预研均已交、已双推、待 Claude 收编**）。工作树干净。
-2. **未修债（本树域内，等 Claude 派单）**：①`sim/api/ws.py` 驱动层只有 `if moved:` 才广播 `state_delta` ⇒ **plan-only 变更不上线**（修：放宽 `moved or plan_dirty`）——`docs/api/m4-integration-audit.md` §2.3（**K3 未动此债**）；②G-5 `timescale` 帧零广播（未裁，施工时随战斗慢镜面接）；③**pi 域 M5-P2 thresholds 提案**（快进单帧 tick 预算 + 上限时长并入 `sim/core/thresholds.py`——我未动该文件）；④（跨域，非我域）`impulse_gate` 接线归 Claude；分叉本体 `_ANCHOR_LOAD_HOOK` 生产注册方仍未接（D3-b）；`player_anchors.protected` 切列待 POST/CRUD 落地那单。**G-1~G-4 + G-7 + G-8 已全部清零**。
+1. **当前位置**：`ZX466/kilo` @ `fe2ea78`（含 main `7af3927` 裁 28）。**K1/K2/K3（已收编 `9f0852f`）/K4/K5/K6 均已交、已双推、待 Claude 收编**。工作树干净。
+2. **未修债（本树域内，等 Claude 派单）**：①`sim/api/ws.py` 驱动层只有 `if moved:` 才广播 `state_delta` ⇒ **plan-only 变更不上线**（修：放宽 `moved or plan_dirty`）——`docs/api/m4-integration-audit.md` §2.3（**K3/K6 均未动此债**）；②G-5 `timescale` 零广播（未裁，裁 28-C 归 Claude 域「一行文档登记随 CRUD 单」）；③pi 域 M5-P2 thresholds（快进单帧 tick 预算 + 上限时长；`0009` 已由裁 27-B 落 `branches.rng_state`，**回填迁移取 0010**）；④（跨域，非我域）`impulse_gate` 接线归 Claude；分叉本体 `_ANCHOR_LOAD_HOOK` 生产注册方（D3-c）；`player_anchors.protected` 切列待 CRUD 单（含 0010 回填）。**G-1~G-4 + G-7 + G-8 + GAP-F 已清零**；GAP-A/B 已裁进契约（施工时执行）。
 3. **新对话恢复序**：`.orca/talking.txt`（有没有新派单）→ 本文件⑥节 → `.orca/workflow.txt` + `.orca/agent-registry.md` → `git fetch origin main && git merge origin/main`。
 4. **本树工作纪律**：只提交本分支，不自行 push/merge 到 main；收编由 Claude 执行。
 5. **接口域一句话现状**：CRITICAL（PlanDelta）已清零；协议面主交付（openapi/protocol.ts/gen-protocol/ws-protocol.md）齐备且 `gen:protocol:check` 绿；**M5 协议面 D-1~D-9 已全裁，施工面待派**。
@@ -901,6 +980,40 @@ uv run pyright sim/
 - 更早：M4-S1~S4b（安全/合规/风险面 T1 钉子 99 例、T3 语料与实弹、词面 CR、
   收官门预审）均已收官，见 git log。
 
+## 2026-09-29 M5-A2（0010 protected 回填 + 混沌流预研）
+
+- 提交：`feat(m5-a2): 0010 末梢档保护回填（GAP-B）+ 混沌流数据面预研`，10 钉，双推。
+- 交付：`sim/core/persistence/alembic/versions/0010_protected_backfill.py`（down=0009）+
+  `sim/tests/test_m5_anchor_protected_backfill.py`（新 10）+
+  `docs/data/m5-chaos-stream-data-preplan.md`（新，零代码）。
+- 0010 判据：`ORDER BY updated_at DESC, id DESC LIMIT 1`（与 kilo `anchors.py::current_item`
+  同口径）⇒ 恰一行；**空表零行更新合法**（子查询 NULL，`WHERE id = NULL` 匹配 0 行）；
+  **幂等**（重跑同选一行）。只回填不切列（裁 26-C④），读路径仍派生式。
+- **downgrade 有意不撤销回填**：0010 的效果是让列与「仍在役的派生式」一致；撤销会制造
+  「派生式说 protected=True、列说 0」的新矛盾。已由往返钉钉住。
+- ⚠️ **跨域口径缝（已上报 kilo）**：`anchors.py::list_items` 派生式是
+  `row.updated_at >= max(updated_at)`——**同刻多行会标 N 行**，而 K3 `/current` 与 0010 回填
+  按 `id DESC` 只标 1 行。同刻多行时「列」与「派生列表」会不一致；需 kilo 补 id 兜底
+  或 CRUD 落地后让派生式退休。
+- 混沌预研四问结论（供后续单直接引用）：
+  - (a) **不需新 kind**：注入走既有 `entropy.inject`（`{stream, material}`）；**抽样不落事件**
+    （纯函数，续接靠 0009 `branches.rng_state`）；倍速不落事件（守「无按墙钟效应」红线，
+    否则 T2 replay 失配）。
+  - (b) **20–150 条/游戏日**（0.0002–0.002 事件/tick，占 e≈20 事件/tick 的 <0.01%）⇒
+    连 collapse 的「≤100 条/帧摊还」都不需要，**零新增预算行**；per-tick 化会是 36MB/日
+    ⇒ 将来若要 per-tick 必须先做摊还预算。真正成本在 `chaotic()` 调用，不在存储。
+  - (c) 派单假设**成立**：事件不克隆 ⇒ 子分支 `entropy_log` 从空、`event_seq`/`entropy_ref`
+    皆分支内 ⇒ 无悬空；连续性靠 0009 而非事件；R2 从**父前缀事件**恢复材料，不需复制父事件。
+    **修正 2（对主树 §3.7 的补充）**：历史点分叉时父分支 anchor 时刻的 `rng_state` 不可得 ⇒
+    **anchor 世界态物化方案必须把 `rng_state` 一起纳入包**，否则回退旧存档会重掷混沌。
+  - (d) **不新增 F2 缺口**：混沌是仓库唯一「状态+事件+查询面」三件齐备的随机性设施
+    （`entropy_log` 已是查询面），可作 F2 修复的正面样板。
+- 门禁：not-bench **1807 passed / 0 failed / 114 skipped**（88s）；ruff 0；pyright 0；
+  scratch 往返 0009↔0010 全 revision id 过；autogenerate `upgrade()` 仅 `pass`（零漂移）。
+- 钉子：恰一行 / 同刻 id 降序兜底 / 幂等×3 / 空表合法 / 单行 / 不误伤他列 /
+  真跑迁移（0009 态既有行）/ 空库升级 / 0009↔0010 往返 / **语句同源**（钉子里的 SQL
+  按源码逐字比对迁移，防两处漂移）。
+
 ## 环境坑（codex 树实测）
 - `ruff format --check` **全仓基线就是红的**（27 个历史文件会 reformat），不是本单引入；
   判据应为「本单文件 clean + 全仓计数不增」（基线 27 → 本单后仍 27）。
@@ -976,6 +1089,27 @@ uv run pyright sim/
     player_anchors.name 无扫描入口 → 档名含禁词直接出站（实测全中）。
   - 坑：先 merge origin/main 才拿到 `fork_orchestration.py`（`5755a62` 在 main，
     我树 merge `53afac6` 早于它）——复核别人的新文件前先确认它在树里。
+
+- **M5-S2b（RED 钉+F-6 契约+P6 草案）✅ `1253998`**（2026-09-29，双推）
+  `test_m5_fork_evidence.py`（R-E2 三段链祖父指针保留 / R-E3+E5 可见可证分离双面 /
+  R-E6 构造载体白盒 + 纯函数侧证）+ `test_m5_notice_outbound.py`（出站锁绿 +
+  **RED 指纹**：禁词档名现状原样出站 + CRUD 落地自动启用的契约钉）+
+  P6 分叉意识 6 条题面草案（判定预演+卫生全过，未进 CORPUS，随下次语料 CR）。
+  - 方法论坑：**「恰好对」的实现必须钉死**——R-E3 的 fail-closed 实测成立但
+    evidence_branch_id 全仓零读侧消费，无断言即未受保护状态。
+  - 坑：R-E6 扫「已浮现」会误中 docstring——白盒钉用结构化正则（类/列/表名），
+    不裸匹配关键词。
+
+- **M5-S3（P6 语料 CR + 权力判据提案）✅ `2f6df37`**（2026-09-29，双推）
+  46→52（P6 分叉意识 6 条入 CORPUS，TestDocSync 机器核对重生成 fixture，
+  P6 最小样本数 6 入参表，预算注释 52/60 闸）；新文件
+  `docs/security/m5-authority-criteria-preplan.md`（D-10 不可见三红线：
+  协议零新增/出站递归禁键 9 键/操纵感零豁免——键级与词面表判层互补）+
+  `test_m5_authority_surface.py` 10 钉全绿锁现状。方法论延续：「恰好对」钉死。
+  - 坑：**PowerShell 对 UTF-8 中文文件的 Get-Content 在 GBK console 下显示
+    乱码**（auth55.txt 案）——内容实际无损（GBK 双重编码特征字符集扫描为零）；
+    判据是扫文件字节而非信终端显示。另：pytest 输出曾误跑其它 worktree
+    （输出行带 `not bench` 但树不对）——门禁数字必须记 commit hash + 树路径。
 
 ## 下一步 / 待派（不在本单范围）
 - **T4 nightly 接线未闭合 → 需派 cline**：`.github/workflows/t4-nightly.yml` 探针 step

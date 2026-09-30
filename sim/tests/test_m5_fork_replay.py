@@ -688,8 +688,13 @@ class TestRngContinuity:
         with pytest.raises(RngStateError, match="指纹"):
             restore_rng_state(json.dumps(blob), {}, ("a",))
 
-    async def test_D_fork_passes_rng_state_through(self, store, session: AsyncSession) -> None:
-        """`fork_from_anchor` 透明透传调用方的 rng_state（不吞、不改写）。"""
+    async def test_D_fork_persists_rng_state(self, store, session: AsyncSession) -> None:
+        """`fork_from_anchor` 把 rng_state **原样落进**子分支行（不吞、不改写）。
+
+        裁 27-B b2 之后：状态进 `branches.rng_state`（0009，与克隆同事务），
+        `rng_state_persisted` 随「是否真落库」翻转。落库细节与往返验证的钉子在
+        `sim/tests/test_m5_branches_rng_state.py`。
+        """
         await _seed_world(store, session)
         reg = RngRegistry(world_seed=7)
         cache: dict[str, np.random.Generator] = {}
@@ -707,9 +712,10 @@ class TestRngContinuity:
             rng_state=blob,
         )
         assert result.rng_state == blob
-        assert result.rng_state_persisted is False, (
-            "落库形态等裁 26 的 (a)/(b)；在此之前 persisted 必须为 False"
-        )
+        assert result.rng_state_persisted is True
+        session.expire_all()
+        child = await session.get(Branch, CHILD)
+        assert child is not None and child.rng_state == blob
 
 
 # ---------------------------------------------------------------------------

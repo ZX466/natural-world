@@ -194,7 +194,7 @@ COLLAPSE_FRAME_LIMIT_MS = 0.85
 #   再查独白事件构造是否退化。
 WILLINGNESS_TICK_LIMIT_MS = 0.35
 
-# --- M5-P3：fast_forward 帧预算（2026-09-28 pi 定标提案；# 提案待裁）---
+# --- M5-P3/P5：fast_forward 帧预算（裁 28-D：「硬断言只留定标机」）---
 # 依据 docs/perf/m5-fast-forward-budget.md（M5-P2 提案）+ 本文件红线表；
 # 实现 = M5-K3（main `848ee18` 起：sim/api/ws.py::step_fast_forward 按 240 tick/帧摊还，
 # run_world_driver 每帧调并**抑制逐帧 state_delta 广播**）。代码契约基线
@@ -202,11 +202,17 @@ WILLINGNESS_TICK_LIMIT_MS = 0.35
 # 已由 `test_m5_batch_b_control.py::TestFastForwardDriverStep` 钉成 T1。口径与既有红线同源：
 # 定标机暖态中位（warmup_rounds=1 + median）。
 # **观察态起步**：bench 侧用 `_record_proposal` 只记录「实测中位 vs 建议阈值」，**不断言**
-# （硬断言待 nightly 数据后另裁，与 M3-P3 / M4-P2 / M4-P3 收口一致）。
+# （M2-P6 裁 1 / M3-P3 / M4-P2 / M4-P3 收口一致）。转**定标机硬断言**的迁移条件见
+# `docs/perf/m5-fast-forward-budget.md` §8（含 CI/本机档位比 1.72x 实测依据）：① nightly CI 档
+# 3 次独立全绿且档位比稳定 1.72x±15%；② 断言只留定标机、CI 维持 advisory；③ CI 档须先建独立
+# 基线（实测 50npc CI 0.9131ms）否则 0.90 在 CI 无判别力（贴线）。
 #
 # ① `FAST_FORWARD_FRAME_LIMIT_MS` —— 单帧快进 tick 预算（240 tick）的墙钟上限 = 0.90ms。
 #    实测（本机暖态中位，生产口径 step+drain，无 L1 feeder）：0 实体 **0.30ms** /
 #    10 实体 **0.35ms** / 50 实体 **0.53ms**。0.53 × 1.7 ≈ 0.90（裁 13 的 1.7x 慢机余量先例）。
+#    **M5-P4 CI 档实测（EPYC 7763/nproc4，run 36543451845 artifact bench.json）**：
+#    0 实体 **0.5589** / 10 实体 **0.6230** / 50 实体 **0.9131ms**——CI/本机比 ≈ **1.72x**
+#    （与 0.53×1.7 的定标余量同源）；50npc **恰在线上**，CI 档判别力失效（须按 §8 方案处理）。
 #    口径 = 一帧推进 240 tick 的 step+drain 成本；破限先查内核单 tick 成本（`test_bench_clock`），
 #    不是放宽本行（单帧快进挤掉同帧正常 tick/广播预算）。
 #    ⚠️ 上界参考（未来负载）：若快进帧**也跑** mock feeder 满负载，plain-50 单帧 ~2.9ms、

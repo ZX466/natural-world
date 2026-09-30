@@ -729,6 +729,95 @@ class TestLoadAnchor:
             ws_mod._ANCHOR_LOAD_HOOK = None
 
 
+class TestUnregisterAnchorId:
+    """M5-K6 / 裁 27-C D-15（28-C S-7）：`unregister_anchor_id` 与 register 成对。
+
+    缺口来源（K5 审计 GAP）：同步查表集 `_ANCHOR_IDS` / `_ANCHOR_LABELS` **只增不减**
+    ⇒ 删档后 `load_anchor` 仍查表命中，回**假成功**（无 hook 时直接给全量快照）。
+    本组钉子锁「注册→摘除→失配」三态与成对可逆性；**CRUD 调用点归 Claude 域**。
+    """
+
+    def test_register_then_unregister_makes_load_anchor_fail(
+        self, loop: TickLoop, pf: Pathfinder
+    ):
+        from sim.api import ws as ws_mod
+        from sim.api.ws import frames_of, register_anchor_id, unregister_anchor_id
+
+        anchor_id = "unreg0000001"
+        register_anchor_id(anchor_id, name="初到临河", story_label="第二日")
+        ok = frames_of(
+            handle_client_message(
+                {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id}, loop, pf
+            )
+        )
+        assert [f["type"] for f in ok] == ["session_state", "full_snapshot"]
+
+        unregister_anchor_id(anchor_id)
+        reply = handle_client_message(
+            {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id}, loop, pf
+        )
+        # 摘除后：单帧 error + load_failed（K5 C-3 口径，**不新增 code**）
+        assert isinstance(reply, dict)
+        assert reply["type"] == "error"
+        assert reply["ref"] == "load_anchor"
+        assert reply["code"] == "load_failed"
+        assert ws_mod.anchor_pointer(anchor_id) is None
+
+    def test_unregister_clears_label_pointer_for_session_state(
+        self, loop: TickLoop, pf: Pathfinder
+    ):
+        """摘除后分叉告知帧的游标指针退化（anchor=null），不再带该档。"""
+        from sim.api.ws import anchor_pointer, register_anchor_id, unregister_anchor_id
+
+        anchor_id = "unreg0000002"
+        register_anchor_id(anchor_id, name="临河镇", story_label="第三日 · 夜")
+        assert anchor_pointer(anchor_id) == {"name": "临河镇", "story_label": "第三日 · 夜"}
+        unregister_anchor_id(anchor_id)
+        assert anchor_pointer(anchor_id) is None
+
+    def test_load_anchor_notice_pointer_is_null_after_unregister(
+        self, loop: TickLoop, pf: Pathfinder
+    ):
+        """告知帧本身也不得再引用已摘除的档（anchor=null / 通用文案）。"""
+        from sim.api import ws as ws_mod
+        from sim.api.ws import frames_of, register_anchor_id, unregister_anchor_id
+
+        anchor_id = "unreg0000003"
+        register_anchor_id(anchor_id, name="初到临河", story_label="第二日")
+        unregister_anchor_id(anchor_id)
+        ws_mod._ANCHOR_LOAD_HOOK = lambda _anchor_id: True
+        try:
+            # 强制走成功路径（hook 忽略查表）以单独检验**告知帧**的取数面
+            frames = frames_of(
+                handle_client_message(
+                    {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id},
+                    loop,
+                    pf,
+                )
+            )
+        finally:
+            ws_mod._ANCHOR_LOAD_HOOK = None
+        assert frames[0]["type"] == "session_state"
+        assert frames[0]["anchor"] is None
+        assert "初到临河" not in frames[0]["notice"]
+
+    def test_pair_is_idempotent_and_reversible(self):
+        """幂等（重复摘除不炸）与可逆（摘除后重注册可再用）。"""
+        from sim.api import ws as ws_mod
+        from sim.api.ws import register_anchor_id, unregister_anchor_id
+
+        anchor_id = "unreg0000004"
+        unregister_anchor_id(anchor_id)  # 未注册 → no-op
+        unregister_anchor_id(anchor_id)  # 重复 → no-op
+        register_anchor_id(anchor_id, name="档", story_label="")
+        unregister_anchor_id(anchor_id)
+        assert anchor_id not in ws_mod._ANCHOR_IDS
+        assert anchor_id not in ws_mod._ANCHOR_LABELS
+        register_anchor_id(anchor_id, name="档", story_label="")
+        assert anchor_id in ws_mod._ANCHOR_IDS
+        assert anchor_id in ws_mod._ANCHOR_LABELS
+
+
 # ---------------------------------------------------------------------------
 # K4 提案 §7 验收对表（15-18）— error code 词表 + 注册成对（M5-K6 施工）
 # ---------------------------------------------------------------------------
