@@ -101,7 +101,7 @@
 ## 6. RETRIEVAL_* before 存照（裁 21-B-11 / opencode F3 前置）
 > 背景：opencode 施工 F3（`vec_candidate_ids` 补 `branch_id` 过滤，裁 11 M5 硬前置）；
 > pi 跑 before（F3 落地前）→ after（F3 落地后），漂移超 advisory 门则报数。
-> **重要**：`docs/perf/baseline.json`（CI 首绿 run `35918283944`，2026-09-23）**不含 retrieval 行**——
+> **重要**：`docs/perf/baseline-epyc7763.json`（CI 首绿 run `35918283944`，2026-09-23）**不含 retrieval 行**——
 > 检索 bench（`test_bench_retrieval.py`）2026-09-23 22:11 才入库，晚于 baseline commit。故 **before = 本机实测**（下）。
 ### 6.1 before 实测（本机暖态中位，2026-09-27，`test_bench_retrieval.py -m bench`，3 次独立跑取代表值）
 | 用例 | 红线（thresholds.py） | 实测中位 | 余量 | 对照 M3-P2 记录 |
@@ -147,7 +147,7 @@
 #### 6.2.2 对账点 5 收口
 - D1 §7 对账点 5「F3 加分支过滤的检索成本」→ **关闭**：分叉谓词 ≈0 + over-fetch +0.057ms，全量 1.07x，不破线；
 - `pi ↔ opencode` 交叉对账（D1 §7 全 9 点）至此**全部收口**（5 由本单关闭，1–4/6–9 M5-P1 已回填）。
-- **baseline 建议**：`docs/perf/baseline.json` 应随下次 nightly 重生成时补入 retrieval/structure/willingness 行（现 21 项为 2026-09-23 旧集，缺 M3-P2/M4 新增 bench）——属 CI 域，本单只登记。
+- **baseline 建议**：`docs/perf/baseline-epyc7763.json` 应随下次 nightly 重生成时补入 retrieval/structure/willingness 行（现 21 项为 2026-09-23 旧集，缺 M3-P2/M4 新增 bench）——属 CI 域，本单只登记。
 
 ## 7. M5-P3：红线落 thresholds（提案已落码，**实现观测态起步**）
 > 依据 M5-P2 §2/§4（本件）+ M5-K3 实现（`sim/api/ws.py::step_fast_forward`，main `848ee18` 起）。

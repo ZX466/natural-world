@@ -106,12 +106,38 @@ jobs:
             docs/perf/runner.txt
           if-no-files-found: warn
 
+      - name: runner 机型防漂检查（不一致 → **仅 warning，不判红**；判红语义仍只由下方 median:25% 决定）
+        # 背景：GitHub `ubuntu-latest` 池**跨厂商且会漂**（近 4 轮实测 3×EPYC 7763 + 1×Xeon 8573C）。
+        # 本工作流是**跨机相对漂移**判定，换机即可造成「假红」，也可能掩盖真回归。
+        # 故基线**按机型分文件**，本 step 只做「机型是否与基线同档」的可见性：
+        #   · 一致 → ::notice::
+        #   · 不一致 → ::warning::（**绝不 exit 1**，不改变任何判红语义、不碰 thresholds）
+        # 已知局限（登记在 baseline 的 open_items③）：落到别的机型时，本轮 median 与本基线**不可直接比较**。
+        run: |
+          BASE=docs/perf/baseline-epyc7763.json
+          base_cpu=$(uv run python -c "import json;print(json.load(open('$BASE'))['machine_info']['cpu']['brand_raw'])" 2>/dev/null || echo "<读取失败>")
+          now_cpu=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//' || true)
+          [ -z "$now_cpu" ] && now_cpu="<读取失败>"
+          {
+            echo "### runner 机型防漂检查"
+            echo "- 基线文件：\`$BASE\`（machine_key=epyc7763）"
+            echo "- 基线机型：$base_cpu"
+            echo "- 本轮 runner：$now_cpu"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$base_cpu" = "$now_cpu" ]; then
+            echo "::notice::机型一致：$now_cpu（本次 median 漂移可直接与基线比较）"
+          else
+            echo "::warning::runner 机型与基线不一致：当前『$now_cpu』vs 基线『$base_cpu』——本轮 median 漂移可能由换机引起而非代码回归；按裁 2x **只告警不判红**，判红仍只由 median:25% 决定（语义与阈值均未变更）"
+            echo "- ⚠ 机型不一致：本次漂移数值**不可直接与本基线比较**（已知局限，见基线 open_items③）" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit 0
+
       - name: 基线对比（CI 档位相对漂移，裁 4 / pi M3-P2② 落地）
         # 契约：阈值真相源唯一 = sim/tests/bench/thresholds.py（定标机硬断言），本 yml **不复制阈值**。
         # advisory 门（PI_BENCH_ADVISORY=1）下 runner 侧绝对越线不再是红灯信号 → CI 回归判定靠
-        # 本 step 的**相对基线漂移**：docs/perf/baseline.json 由性能域从首个全绿 run 入库
-        # （bench-plan §4.1 八步；现为 59 行混合基线＝run 35918283944 的 21 行 + run 36494001567 的 38 行，
-        # 逐 run 登记见 baseline.json 的 machine_info.baseline_meta.rows_provenance）。
+        # 本 step 的**相对基线漂移**：docs/perf/baseline-epyc7763.json（**按机型分文件**；由性能域从首个
+        # 全绿 run 入库，bench-plan §4.1 八步；现 59 行单一 provenance ＝ run 36580639759 @2026-09-29），
+        # 逐 run 登记见该文件的 machine_info.baseline_meta.rows_provenance。
         # 25% = 覆盖 CI/本机档位比（~1.14-1.71 实测分布）+ 调度抖动；**不是新阈值**，勿抄进 thresholds。
         # 失败处置：先看是不是单轮被抢断（mean/median >2x → 重跑），再看是否定标机也越硬线（真回归）。
         # 本 step 的 env 必须与「跑基准」step 一致带 `PI_BENCH_ADVISORY: "1"`：缺它会让定标机绝对阈值
@@ -121,5 +147,5 @@ jobs:
           PI_BENCH_ADVISORY: "1"
         run: |
           uv run pytest -q -m bench \
-            --benchmark-compare=docs/perf/baseline.json \
+            --benchmark-compare=docs/perf/baseline-epyc7763.json \
             --benchmark-compare-fail=median:25%

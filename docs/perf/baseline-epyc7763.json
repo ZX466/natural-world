@@ -188,8 +188,18 @@
       },
       "open_items": [
         "① 机型口径仍待性能域（pi）订正：runner.txt 与本文件 machine_info.cpu.brand_raw 均为 **AMD EPYC 7763**，而 bench-plan §4.1 step 3 与 ci-calibration-m2p6 §0 表写 **EPYC 9V74**——两者不可能同时为真，需 pi 订正其一（本轮沿用实跑机型，不改他人文档）。",
-        "② **runner 池跨厂商漂移，直接威胁本门禁有效性**（2026-09-30 实测）：GitHub `ubuntu-latest` 近 4 轮里出现过 1 轮 **Intel Xeon 8573C**（run 36670751263），其余 3 轮为 **AMD EPYC 7763**。本门禁是**跨机相对漂移**判定（median 25%），若某轮落到不同 CPU/微架构，**漂移可能纯由换机引起**而非代码回归，反之亦然（漏报真回归）。建议性能域＋Claude 裁：①固定 runner 标签/机型；②或在门禁里对`machine_info.cpu.brand_raw` 不一致直接告警而不判绿；③基线按机型分文件留存。**本轮未擅自改门禁语义。**"
-      ]
+        "② **runner 池跨厂商漂移，直接威胁本门禁有效性**（2026-09-30 实测）：GitHub `ubuntu-latest` 近 4 轮里出现过 1 轮 **Intel Xeon 8573C**（run 36670751263），其余 3 轮为 **AMD EPYC 7763**。本门禁是**跨机相对漂移**判定（median 25%），若某轮落到不同 CPU/微架构，**漂移可能纯由换机引起**而非代码回归，反之亦然（漏报真回归）。建议性能域＋Claude 裁：①固定 runner 标签/机型；②或在门禁里对`machine_info.cpu.brand_raw` 不一致直接告警而不判绿；③基线按机型分文件留存。**本轮未擅自改门禁语义。**",
+        "③ **Xeon 档位基线尚未建立**：M5-C5 的 main-ref 全绿 run `36670751263` 落在 **INTEL(X) XEON 8573C**（59 行，与 EPYC 不同档故未混用）。若该机型成为常用档，需按同样八步另建 `baseline-xeon8573c.json`；在此之前落到 Xeon 的 run 只会拿到 warning，其 median 与 EPYC 基线**不可直接比较**（已登记为门禁已知局限）。"
+      ],
+      "file": {
+        "name": "docs/perf/baseline-epyc7763.json",
+        "machine_key": "epyc7763",
+        "renamed_from": "docs/perf/baseline.json",
+        "renamed_on": "2026-09-30（M5-C6，裁「基线按机型分文件」）",
+        "provenance_chain": "未断：source_run/commit/rows_provenance 与迁移前逐字一致，文件名变更不改任何测量值与来源登记",
+        "why": "GitHub `ubuntu-latest` 池跨厂商且会漂（近 4 轮实测 3×EPYC 7763 + 1×Xeon 8573C），单文件基线无法表达「这份基线是哪个机型测的」，故按机型分文件并在文件名中带机型键",
+        "peer_files_convention": "基线文件命名 `baseline-<machine_key>.json`；workflow 固定比对本机型文件，并在 runner 机型不一致时**只打 warning 不判红**（判红语义仍只由 median:25% 相对漂移决定）"
+      }
     }
   },
   "commit_info": {

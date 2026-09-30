@@ -42,9 +42,9 @@
 
 ## 3. 提案（报 Claude 裁决；本次不动 thresholds）
 
-**P-A（主提案）**：建 `docs/perf/baseline.json`（pytest-benchmark 的
+**P-A（主提案）**：建 `docs/perf/baseline-epyc7763.json`（pytest-benchmark 的
 `--benchmark-json` 产物可直接当基线），头部带机器档位，nightly「基线对比」step 改用
-`--benchmark-compare=docs/perf/baseline.json --benchmark-compare-fail=median:25%`：
+`--benchmark-compare=docs/perf/baseline-epyc7763.json --benchmark-compare-fail=median:25%`：
 - 25% 而非 20%：CI 档位比稳定档 median 1.14 且有单轮 2.9x 的负载离群；25% 覆盖
   「1.24 档位差 + 少量抖动」而不误红。
 - 建立时机：等 advisory 门（P6①）合入 + 首个 **advisory=1 全绿 run** 的 JSON，
