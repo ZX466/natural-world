@@ -86,6 +86,14 @@
 > （逐 run 登记见 `baseline.json` 的 `machine_info.baseline_meta.rows_provenance`）。
 > **规范路径仍是下方八步的「首个全绿 run 整体重生成」**，本轮触发前提 2 未满足，已登记为 `baseline_meta.open_items`
 > （含一项机型口径待订正：runner.txt 实录 **7763**，而本节 step 3 与 `ci-calibration-m2p6.md` §0 表写 **9V74**）。
+>
+> **2026-09-29 M5-C4（CI advisory 缺陷修复，裁 28-E 授权）**：`nightly-bench.yml`「基线对比」step 已补
+> `env: PI_BENCH_ADVISORY: "1"`（此前只有「跑基准」step 有 ⇒ 定标机绝对阈值在共享 runner 上重新变成硬断言，
+> 即 M5-C3 上报的 4 条 AssertionError 之因，**与 25% 漂移无关**）。该缺陷正是「全绿 run 永不出现」的根因，
+> 修复后本节八步的前置才可能满足。已在本分支 dispatch 一轮验证：**run `36580639759`**（head `1d5d3c5`，
+> ref = `ZX466/cline`）。**重生成状态：进行中**——全绿则按 step 1–7 整份复制重生成 `baseline.json`
+> （含 runner.txt 五字段核对）并把该 run 登记进 `rows_provenance`；若仍红（无论是否因 advisory 门外原因），
+> 按纪律**只记录原因、不造数**。`baseline.json` 的 `open_items`② 视本轮结果在重生成时一并更新。
 
 **触发前提（三条同时满足）**：
 1. M2-P6 advisory 门已收编进 main 且 nightly「跑基准」step 带 `PI_BENCH_ADVISORY= "1"`；
