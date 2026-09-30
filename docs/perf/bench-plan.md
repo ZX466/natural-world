@@ -112,6 +112,18 @@
 >   该「预期非零」的措辞已与实跑不符，**留给性能域（pi）订正**，我未改他人文档正文。
 > - **仍未决（pi 域）**：机型口径矛盾——runner.txt 与 `machine_info` 均为 **EPYC 7763**，而本节 step 3 与
 >   `ci-calibration-m2p6.md` §0 表写 **EPYC 9V74**；两者不可能同时为真，需性能域订正其一。
+>
+> **2026-09-30 M5-C5（main-ref 交叉核对 → 结论：不采用，但发现 runner 池跨厂商）**：复跑 **`36670751263`**
+> （ref = main，head `ac0d559`）**全步骤绿**，但 runner.txt 机型是
+> **INTEL(R) XEON(R) PLATINUM 8573C** —— 与本基线的 **AMD EPYC 7763** **不是同一档位**。
+> 按本节 step 3「五字段与 §0 表一致……**不同档位不能混基线**」，**不采用**其 59 行（也未与 EPYC 行混合），
+> 仅在 `rows_provenance.cross_check` 登记（含「为何不采用」）。它证明的是：修复后的 nightly-bench 在 **main ref**
+> 上同样能跑出全绿 run。
+> ⚠ **由此暴露一条对门禁有实质影响的事实**：近 4 轮 nightly-bench 机型为
+> `36494001567`=EPYC 7763 / `36580639759`=EPYC 7763 / `36634414471`=EPYC 7763 / `36670751263`=**Xeon 8573C**
+> ⇒ **`ubuntu-latest` 池跨厂商且会漂**。本门禁是**跨机相对漂移**判定（median 25%），
+> 换机即可造成「假红」，也可能掩盖真回归。**建议裁**：固定 runner 机型 / 或对 `brand_raw` 不一致直接告警而不判绿 /
+> 基线按机型分文件。**本轮未擅自改门禁语义**，已登记为 `open_items`②。
 
 **触发前提（三条同时满足）**：
 1. M2-P6 advisory 门已收编进 main 且 nightly「跑基准」step 带 `PI_BENCH_ADVISORY= "1"`；

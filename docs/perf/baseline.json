@@ -170,12 +170,25 @@
           "rows": 59,
           "conclusion": "success（首个全绿 run：nightly-bench「基线对比」step 补 PI_BENCH_ADVISORY 后首次全步骤绿）",
           "scope": "M0–M5 全量 bench（11 个 bench 文件 / 59 行）",
-          "deviation": "本 run 跑在 ref ZX466/cline（head 1d5d3c5）而非 main。已逐项核验对 main 无实质偏差：①产出 59 行涉及的 11 个 bench 文件与 main **逐字节相同**（git rev-parse 比对 11/11 SAME）；②本分支落后 main 的 sim 改动仅 `sim/api/ws.py`（**纯新增** `unregister_anchor_id`＋注释，未触任何既有热路径，影响面＝`test_bench_fast_forward` 3 行）与 `sim/core/persistence/models.py`（**仅给 Branch 表加一列 `rng_state`**，bench 走的是 structures 表，不触该表）。③机型与原基线同档（EPYC 7763 / nproc4 / py3.12.3）。另有 main-ref 复跑 run 36670751263 作为交叉核对。"
+          "deviation": "本 run 跑在 ref ZX466/cline（head 1d5d3c5）而非 main。已逐项核验对 main 无实质偏差：①产出 59 行涉及的 11 个 bench 文件与 main **逐字节相同**（git rev-parse 比对 11/11 SAME）；②本分支落后 main 的 sim 改动仅 `sim/api/ws.py`（**纯新增** `unregister_anchor_id`＋注释，未触任何既有热路径，影响面＝`test_bench_fast_forward` 3 行）与 `sim/core/persistence/models.py`（**仅给 Branch 表加一列 `rng_state`**，bench 走的是 structures 表，不触该表）。③机型与原基线同档（EPYC 7763 / nproc4 / py3.12.3）。main-ref 交叉核对已完成：run 36670751263 全绿，但**机型不同（Intel Xeon 8573C）故未采用**，详见 cross_check。"
         },
-        "supersedes": "run_35918283944_2026-09-23（21 行，M3-P2 首建）＋ run_36494001567_2026-09-28（38 行，M5-C3 增量补行）"
+        "supersedes": "run_35918283944_2026-09-23（21 行，M3-P2 首建）＋ run_36494001567_2026-09-28（38 行，M5-C3 增量补行）",
+        "cross_check": {
+          "run_36670751263_2026-09-30": {
+            "commit": "ac0d559",
+            "ref": "main",
+            "rows": 59,
+            "conclusion": "success（全步骤绿，含「基线对比」）",
+            "machine_class": "INTEL(R) XEON(R) PLATINUM 8573C · Linux · nproc 4 · CPython 3.12.3",
+            "adopted_as_baseline": false,
+            "why_not": "bench-plan §4.1 step 3 明令「五字段与 §0 表一致……**不同档位不能混基线**」。该 run 落在 **Intel Xeon 8573C**，而本基线为 **AMD EPYC 7763**，两者不是同一档位，故按纪律**不采用**其 59 行（也未与 EPYC 行混合）。本条仅证明：修复后的 nightly-bench 在 main ref 上同样能跑出全绿 run。"
+          },
+          "runner_pool_survey": "近 4 轮 nightly-bench 机型：36494001567(09-28)=EPYC 7763 / 36580639759(09-29 14:10)=EPYC 7763 / 36634414471(09-29 21:36)=EPYC 7763 / 36670751263(09-30 04:51)=**Xeon 8573C**。⇒ ubuntu-latest 池子**跨厂商且会漂**。"
+        }
       },
       "open_items": [
-        "① 机型口径仍待性能域（pi）订正：runner.txt 与本文件 machine_info.cpu.brand_raw 均为 **AMD EPYC 7763**，而 bench-plan §4.1 step 3 与 ci-calibration-m2p6 §0 表写 **EPYC 9V74**——两者不可能同时为真，需 pi 订正其一（本轮沿用实跑机型，不改他人文档）。"
+        "① 机型口径仍待性能域（pi）订正：runner.txt 与本文件 machine_info.cpu.brand_raw 均为 **AMD EPYC 7763**，而 bench-plan §4.1 step 3 与 ci-calibration-m2p6 §0 表写 **EPYC 9V74**——两者不可能同时为真，需 pi 订正其一（本轮沿用实跑机型，不改他人文档）。",
+        "② **runner 池跨厂商漂移，直接威胁本门禁有效性**（2026-09-30 实测）：GitHub `ubuntu-latest` 近 4 轮里出现过 1 轮 **Intel Xeon 8573C**（run 36670751263），其余 3 轮为 **AMD EPYC 7763**。本门禁是**跨机相对漂移**判定（median 25%），若某轮落到不同 CPU/微架构，**漂移可能纯由换机引起**而非代码回归，反之亦然（漏报真回归）。建议性能域＋Claude 裁：①固定 runner 标签/机型；②或在门禁里对`machine_info.cpu.brand_raw` 不一致直接告警而不判绿；③基线按机型分文件留存。**本轮未擅自改门禁语义。**"
       ]
     }
   },
