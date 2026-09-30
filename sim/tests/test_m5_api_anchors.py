@@ -126,9 +126,10 @@ class TestListAnchors:
         _seed(anchors_mod.get_anchor_store(), 1)
         assert client.get("/api/anchors").json()[0]["protected"] is True
 
-    def test_list_ordering_by_created_at(self, client: TestClient) -> None:
+    def test_list_ordering_desc_by_updated_at(self, client: TestClient) -> None:
+        """§1.1 契约：updated_at 降序（最近存的在前）——R-6 修复钉（原实现升序违约）。"""
         ids = _seed(anchors_mod.get_anchor_store(), 3)
-        assert [i["id"] for i in client.get("/api/anchors").json()] == ids
+        assert [i["id"] for i in client.get("/api/anchors").json()] == ids[::-1]
 
     def test_list_registers_ids_into_ws_registry(self, client: TestClient) -> None:
         """部署债 #1 核心：列表路由把 id 注进 WS 同步查表集。"""

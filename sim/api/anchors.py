@@ -115,7 +115,9 @@ class AnchorStore:
     def _rows(self) -> list[PlayerAnchor]:
         with self._session_local() as s:
             rows: list[PlayerAnchor] = list(
-                s.query(PlayerAnchor).order_by(PlayerAnchor.updated_at).all()
+                s.query(PlayerAnchor).order_by(
+                    PlayerAnchor.updated_at.desc(), PlayerAnchor.id.desc()
+                ).all()
             )
             s.expunge_all()
             return rows
