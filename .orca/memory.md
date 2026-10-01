@@ -1333,6 +1333,15 @@ uv run pyright sim/
   CR-2 提闸 60→70 起评（抖动计预算 + S9 抖动率 50% 依据链；三把锁不动）。
   两件待主树裁后施工（CR-2 随 P6 真跑轮，文档与常量同 commit 防漂移）。
 
+- **M5-S6（META_SHELL 空表+负钉）✅ `19168df`**（2026-10-01，双推）
+  banned_words.py：BANNED_WORDS_META_SHELL 空表（8 词候选批注留存，填值随首个
+  戏外消费方 CR）+ scan_meta_shell 分派（BANNED_WORDS − META_SHELL，面宽于
+  Agent 面；persist/meta kind 同口径）。**判层核心负钉**：
+  test_agent_dispatch_never_reads_meta_shell——scan() 源码白盒零 META_SHELL
+  引用，戏外表接成 Agent 面豁免源立即红。空表下 scan_meta_shell ≡ scan（钉死）。
+  坑：RUF003 全角「−」必炸——文档注释用「减去」不用符号；SIM300 Yoda 条件
+  ruff --fix 可清。
+
 ## 下一步 / 待派（不在本单范围）
 - **T4 nightly 接线未闭合 → 需派 cline**：`.github/workflows/t4-nightly.yml` 探针 step
   仍是 TODO 注释态 + env 仍写 claude-sonnet-5；须接到
