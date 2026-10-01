@@ -1,3 +1,41 @@
+<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-09-30 A4 收官）===== -->
+<!-- 0. 工作树 E:\zxdevelop\.orca\worktrees\project7\opencode，分支 ZX466/opencode；
+      HEAD f4448ba（A4，已双推 origin+gitee）；基线 main 14aa57f（merge 后 A4 已被裁 30 收编） -->
+<!-- 1. 已交全景：M5-D1 预研 / D2 T1+向量分支隔离 / D3-a 0008 四件 / D3-b fork 事务+克隆 /
+      D3-c R2 三断言+RNG 承接 / A-DATA 0009 rng_state 落库 / A2 0010 protected 回填 /
+      A3 anchor 物化设计（纯文档）/ A4 0011 anchor_packages + R-4 真源契约 + seq 判据 -->
+<!-- 2. 在途下一单 = A5：0012 branches.is_current + append 开线闸收紧。设计已裁（见下方速记） -->
+<!-- 3. 恢复序：git fetch+merge origin/main → 读 talking.txt（在途单卡）→ 读本卡 →
+      需要细节再翻 ③ opencode 节各轮快照 / git log --oneline -- .orca/memory.md -->
+<!-- 4. 门禁（全绿基线 1884 passed）：uv run pytest -m "not bench" -q；uv run ruff check .；
+      uv run pyright sim/；迁移往返必须 scratch DB + 全 revision id（WORLD_DB_URL 指向
+      tmp 文件），**绝不用仓根 world.db** -->
+<!-- 5. 域内纪律（血泪）：① stamp 只改版本行不执行迁移，「表都在 ≠ 迁移跑过」，stamp 只能对
+      物理匹配的 revision；② 迁移往返钉钉**具体 revision id** 不钉 head；③ 回滚场景的测试
+      证明不了原子性，必须正向读回；④ 改事务体内代码注意缩进会提前结束 session.begin()；
+      ⑤ 文档门禁 prettier 只覆盖 client/，docs/*.md 按仓内风格写 -->
+
+【A5 速记｜0012 branches.is_current + 开线闸收紧（2026-09-30 裁 30 §F 派发，R-4 契约已裁）】
+- 迁移 0012：`branches` 加 `is_current INTEGER NOT NULL DEFAULT 0` +
+  **部分唯一索引** `CREATE UNIQUE INDEX ux_branches_current ON branches(is_current)
+  WHERE is_current = 1` ⇒ 「至多一个当前」由 DB 保证（第二个 is_current=1 ⇒ IntegrityError，
+  fail-closed 落在写入层）。模型侧 `Branch.is_current: Mapped[bool] default=False`。
+- **必须含回填**（同 0010 判据：只做必要的、幂等、零行合法）：既有库 DEFAULT 0 ⇒ 无任何
+  当前行 ⇒ 读路径会查不到。回填 = 把**唯一** `status='active'` 的分支置 1；若 ≥2 个 active
+  ⇒ **保持全 0 并 fail-closed**（**禁 recency 选法**：anchor-fork 的读档子线故意与父线并存且
+  可能更晚，recency 会静默把「玩家在跑的线」换成「最近被分叉出去的线」——正是 R-4 的病）。
+- **开线闸收紧**：`store.py::_assert_branch_writable` 现为「分支不存在即开线」（裁 5），
+  改为「仅当当前行数为 0 才允许开线；已有当前行时向别分支 append ⇒ 抛异常」。这是不变量
+  成立的**唯一入口**（A4 契约 R-4.2.1）。
+- 归属规则：head-fork ⇒ 当前行交给子分支、父封存；anchor-fork ⇒ **父分支保持当前**，
+  子分支 is_current=0（读档线，多条并存合法）。
+- 钉子清单（R-4.7 六条 + 追加）：POST 档 (branch_id,tick,seq) 三元组自洽（取 seq 与建档必须
+  同改真源）/ anchor-fork 落父线 / 多 active 不 recency 而报错 / 部分唯一索引 IntegrityError /
+  两种 fork 的当前行归属 / 查不到当前行不回落 'main' / 闸收紧：零当前可开线、已有当前向他
+  分支 append 拒 / 回填：唯一 active 被置 1、≥2 active 全 0 且零行合法、幂等。
+- ⚠️ R-4 施工（anchors.py `:274` 取 seq + `:345` 建档同改接 branches 真源）= **Claude 域**，
+  我只出数据面；钉子若依赖那两处接线，**先与 Claude 对齐口径**。
+
 <!-- ===== 新对话快速恢复卡（Claude 主树，2026-10-01 交接态）===== -->
 <!-- 0. 本会话状态：main `e7706fc`，1862 passed/119 skipped，六树同头双远程推齐，工作树全干净 -->
 <!-- 1. M0-M4 全收官；M5 ≈75%：批次B✅ CRUD链✅ 性能治理✅；批次A≈80%（chaos.py 已落 `6211c87`，
@@ -500,6 +538,9 @@ schema.md §19.4/README/m3-plan 已同步已裁状态。实施放行 opencode「
 （各节由对应 agent 维护；快照纪律见 workflow §8：交付后在**自己节**顶部写一行快照 `【日期 轮次｜状态】`，旧快照压缩为 `git log --oneline -- .orca/memory.md` 指针，不无限堆积。）
 
 ## ③ opencode（数据 / 数据库域）
+- 【2026-09-30｜**M5-A4 已交：0011 `anchor_packages` + R-4 活跃分支真源契约 + `latest_snapshot(seq<=)` 判据（17 钉）**】新增 `0011_anchor_packages.py` + `models.py::AnchorPackage`（纯 create_table 无回填；快照引用两列同有同无 CHECK；rng_state 可空=禁 seed 兜底；1:1 不建 FK）+ `docs/data/m5-r4-active-branch-contract.md`（**独立文件**，未碰 anchors-api 防双写；真源=branches 表、禁 'main' fallback、`is_current`+部分唯一索引、**否决 recency**、取 seq 与建档必须同改）+ `store.py::latest_snapshot(..., *, max_seq=None)`（原只判 tick<= ⇒ 同 tick 多事件时窗口倒挂）。**自修**：0010 往返钉钉了 head 导致假红 ⇒ 改钉具体 revision id。**环境**：world.db 版本行说谎（A-DATA 轮 stamp 只改版本行未执行迁移）⇒ 备份后删库重建（0 玩家档）。详见置顶 opencode 恢复卡与本节下方 A4 段。
+- 【2026-09-30｜**M5-A3 已交：anchor 世界态物化数据面设计（纯文档零代码，批次 E 前置）**】`docs/data/m5-anchor-materialization-preplan.md`（新）+ `docs/README.md` §5.4 台账行。四问：包=快照指针+3 张不可重建表行值+**anchor 时刻 rng_state**+override+state_hash，**存档时一次物化**（快照会被 GC ⇒ 懒物化会让老档永久不可读档）；地基分类=可重放 5 张 vs 不可重建 3 张（npc_memories/knowledge/relationships）；成本：单次物化 ≈0.5–25ms、读档 ≈20–40ms。
+- 【2026-09-30｜**M5-A2 已交：0010 protected 回填（GAP-B，10 钉）+ 混沌流数据面预研（零代码）**】`0010_protected_backfill.py`（判据 `ORDER BY updated_at DESC, id DESC LIMIT 1` 与 K3 /current 同口径；空表零行合法；**downgrade 有意不撤销回填**）+ `docs/data/m5-chaos-stream-data-preplan.md`（a 不需新 kind、抽样不落事件；b 20–150 条/游戏日零新增预算行；c 分叉归属假设成立+**修正 2：历史点分叉须把 rng_state 纳入物化包否则回退重掷混沌**；d 不新增 F2 缺口）。
 - 【2026-09-28｜**M5-A-DATA 0009 `branches.rng_state` 已交（裁 27-B b2，8 钉）**】新增 `0009_branches_rng_state.py`（**纯 `add_column`、可空、无 CHECK ⇒ 不需要 batch**，与 0008 的 CHECK 情形不同）+ `models.Branch.rng_state` + `fork_from_anchor(rng_state=…)` **在 fork 事务内原样落库** + `ForkResult.rng_state_persisted` **如实翻转**（`rng_state is not None` 才 True；未提供时列留 NULL + **warning**——漏传 = 接缝跳变风险，属调用方 bug）+ `sim/tests/test_m5_branches_rng_state.py`（8 钉：落库/父行不变/未传告警/回滚无半写/连续分叉链 child→grandchild/**端到端接缝抽签逐位一致**/0008↔0009 全 revision id 往返/零漂移）+ `test_m5_fork_replay.py` 的 D 钉翻转（原断言 `persisted is False` → 现断言落库 + 读回行值）。门禁：scratch DB 全 revision id 往返 `0008_m5_fork_identity`↔`0009_branches_rng_state` 全过 + autogenerate **实测 `upgrade()` 只剩 `pass`**（零漂移）；`-m "not bench"` **1786 passed / 0 failed**、ruff 全仓 ok、pyright 0。**⚠️ 施工中撞到并修掉一个缩进 bug。**⚠️ 误溯源更正（2026-09-29 M5-A2 补记）**：这条 bug 是我在 **M5-A-DATA 编辑 `fork.py` 时自己引入的**（D3-b 已收编进 main 的原提交是**正确的**），上轮把责任推给 D3-b 是错的**：我给 `INSERT INTO branches` 加参数时把该块多缩进 4 空格，导致 `async with session_factory() as session, session.begin():` 的**事务体被提前结束**——克隆语句落到事务外，session 关闭时回滚，**子分支行整条不落库**。D3-b 的原子性钉（`test_dangling_...rolls_back_whole_fork`）**测不出这个**（回滚场景下两种实现都"通过"），是本单「落库后读回子分支行」的新钉抓到的。教训见下。**环境修复（非代码）**：本树根 `world.db` 是**旧 schema 的真实库**（`alembic_version` 空行、11 events、无 `rng_state` 列），而 `sim.api.main` 的全局引擎指向它 → 加列后 `test_settings_api` 报 `no column named rng_state`。处置：先备份到 `%TEMP%\opencode\world.db.bak-pre0009`，再 `alembic stamp 0008_m5_fork_identity` + `alembic upgrade head`（只应用 0009，数据与列都在）——这是任何真实部署面对「库比代码旧」的标准姿势。
 - 【2026-09-28｜**M5-D3-c R2 三断言 + RNG 承接已交（批次 B 收官，19 钉，零 schema）**】新增 `sim/core/rng_state.py`（`capture_rng_state`/`restore_rng_state` + `RngStateError`，JSON 状态包 ≈**198 B/流**，带版本 + 材料指纹校验，未知版本/指纹不匹配 fail-closed）+ `sim/core/persistence/fork_replay.py`（`COMPARABLE_MEMORY_FIELDS`/`COMPARABLE_KNOWLEDGE_FIELDS`/`EXCLUDED_FIELDS` + 两个 comparator）+ `fork.py` 增 `rng_state` **透明透传**（`ForkResult.rng_state_persisted` 恒 False，不预设裁决）+ `sim/tests/test_m5_fork_replay.py`（19 钉）。**给 Claude 的 (a)/(b) 建议 = 采 (b)、否 (a)**，实测依据：`RngRegistry` 只记 `world_seed`+熵材料，**抽签进度活在调用方持有的 PCG64 生成器里**；实测（3 流各抽 11 次）**只承接 registry（= seed 语义）后续抽签必然跳变**，承接 registry+PCG64 状态才逐位一致 ⇒ seed 不含进度，(a) 要正确就得重放全部抽签（脆弱 + O(抽签数)）。建议落 **`branches.rng_state` 一支 0009**（fork 事务内原子落，分支自带状态 ⇒ 可连续分叉链；~4KB/分支可忽略），优于「写进子分支第一份快照」（状态只存在于那一份快照、连续分叉时祖父状态无处可取）。钉子 `test_D_seed_only_resume_diverges` 把「seed 语义必跳变」钉成二阶守卫防退化。**口径修正（D3-c 才想清楚）**：子分支 `events` 只含自己的事件（事件不克隆）而它**继承**的投影行事件住在父分支 ⇒ 「单独重放子分支事件流」**必然少一半**（实测子分支 replay 只折出 tool-1、漏继承的 hut-1）→ **R2 = 父分支前缀折叠 ∘ 子分支自身事件折叠**（沿 branch 链回放），B 组按此写并复用 store 同一批 `fold_*`（C2 检验点）。**C 组照妖镜已验证有牙**：往 `materialize_matter_replay` 的 `read_range` 注入一处单分支回归 → 只有 `test_C_child_state_invariant_to_parent_growth` 变红（18 钉照绿）。可比字段集归一化一条：`evidence_branch_id` 不直接比（NULL 语义=本分支，克隆后被改写成父分支 id，0008-d）⇒ 归一为 `evidence_ref=(分支, seq)` 二元组再比。门禁：`-m "not bench"` **1774 passed / 2 failed（均墙钟抖动**：soak_ci_smoke_stability clean tree 同样红；willingness delta sanity 隔离 3/3 绿，stash 对照同样 3/3 绿）、ruff 全仓 ok、pyright 0。bench 全量本轮**未重跑**（D3-c 不碰热路径，D3-b 全量 bench 刚跑过 103 passed；用户催加快）。
 - 【2026-09-28｜**M5-D3-b fork 事务 + 克隆已交（裁 6 (c)+裁 10 (i)+R-1/R-2，22 钉）**】新增 `sim/core/persistence/fork.py`（`fork_from_anchor` + `ForkError` + `ForkResult` + `derive_child_entry_id`）+ `vector.py::clone_branch_vectors` + `store.py` 裁 5 分支闸门（`InactiveBranchError`）+ `sim/tests/test_m5_fork_clone.py`（22 钉）+ 文档回写（`schema.md` 新增 §20 fork 事务契约表、`event-sourcing.md` §2.2 步骤 2 与 §4.2 注、预研稿 §3.3/§3.5/§3.7(新节)/§3.8/§9、`docs/README.md` 台账）。**一次事务**：P1 `preflush` **必填钩子**（投影追平做成动作不是断言）→ 父/子分支存在性校验（子分支 id 不可复用）→ 建子分支 → 6 张有界表 `INSERT…SELECT` 换 `branch_id` → 2 张语料表**两道截断**克隆 → 父分支封存（仅当仍 active）；提交后 vec 行**字节**拷贝（零 LLM，V4）。**四个实施增补（原稿未预见）**：①语料表**自增 id 显式分配**（`MAX(id)+1+i`）+ 事务内临时映射表 `fork_mem`/`fork_know`（`INSERT…SELECT` 拿不到新 id，而 told 链 `source_knowledge_id` 是 int id、vec rowid 也是 id → 无映射表则指针无从重写；映射表事务末 DROP）；②`entry_id` 重映射用 **`uuid5(ns,"子分支:父 entry_id")` 确定性派生**而非随机 uuid4（T2 要「同一 anchor 重算可复现」；分支 id 进命名空间 ⇒ 跨分支不撞、且子分支 id 不可复用才使「重算同一分支」有意义）；③**R-2 置 NULL 语义**：`superseded_by` 的替换者若写在分叉点之后（不克隆），指针**置 NULL**——那正是该分支时间线里「还没被取代」的状态，保留=悬空=治理污染；钉子另验 SQL 侧结果与 Python 期望值一致（不符即 ForkError）；④**裁 5 闸门选「不存在则按需开线」而非「必须预建分支行」**（严格存在校验会打断 20+ 测试文件与全部 driver/golden/bench 的 `append`；开线语义=「世界从第一条事件长出来」，且闸门在 seq 分配**前**→被拒不吃 seq 号、事件表零写）。**⚠️ 上报重大缺口（回执 + 预研稿 §3.7）**：**分叉点只支持父分支头部**（`fork_seq == max(seq)`），历史点（回退旧存档）**fail-closed**——投影当前值==分叉点状态仅当父分支此后未推进，而 `npc_memories`/`knowledge` 的**治理列不记时间**、`relationships` 累计值原地演进，三者**无事件源**（F2）⇒ 历史状态不可重建。给了三条候选修法：(a) 裁 7 `*.written` 事件（触冻结基线+S1，须 codex）/ (b) 治理列加 `*_at_seq`（只解一半）/ (c) **anchor 世界态物化**（最贴 §12 读档原文，建议优先评估）。**产品影响：玩家档「回退」玩法本轮未覆盖**。**R-3 留痕**已写进 `schema.md` §20 末段（S1 禁词表是活资产；R-1 要求逐字节克隆 ⇒ 词表日后扩面时历史分支记忆保留当时未禁词面，运行期不可判）。**append 闸门成本实测**（A/B，内存 SQLite 下界，20 事件/批）：带闸门 1.8895ms/批（94.48µs/事件）vs 无闸门 1.5572ms/批（77.86µs/事件）→ **+0.332ms/批 = +16.6µs/事件 = 1.21x**；无闸门值 77.86µs/事件与 pi 实测 78.7µs/事件**互相验证**（可请 pi 重定标 append 基线）。门禁：`-m "not bench"` **1683 passed / 113 skipped / 0 failed**、bench 单跑 **103 passed / 1 skipped**、ruff 全仓 ok、pyright 0、我的 5 文件 format clean。
