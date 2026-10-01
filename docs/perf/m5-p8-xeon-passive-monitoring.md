@@ -22,7 +22,10 @@
 |---|---|---|---|
 | 2026-09-30 | 36721350832 | AMD EPYC 7763 | 主动 dispatch 数据点，落 EPYC 未命中 Xeon ⇒ 实证「dispatch 不挑机位」，不再追加；全步骤绿（59 行），median\|drift\| 1.9%、0/59>25%，无回归。 |
 | 2026-09-30 | 36670751263 | **Intel Xeon 8573C** | Xeon 全绿 run，但 17/59 行\|drift\|>25%（median 吃掉了，step success）；与 EPYC 不同档**不混基线**（C5 登记 cross_check），Xeon 基线未建。 |
-| — | — | — | （此后待 nightly 落 Xeon 且全绿时登记；本单未捕获到新的 Xeon 全绿 run ⇒ 未预建 `baseline-xeon8573c.json`。） |
+| 2026-10-01 | 36793983148 | AMD EPYC 7763 | 经 GitHub Actions API 查证：nightly 成功，check 注释「机型一致：AMD EPYC 7763」（notice，非 mismatch）⇒ **未落 Xeon**，无新触发；不建基线。 |
+
+> 备注：本单通过 GitHub Actions API（`actions/runs` + `check-runs` 注释）核对 nightly 机型，
+> 最近一次（36793983148）为 EPYC。**自 P7 后无新 Xeon 全绿 run ⇒ 未预建 `baseline-xeon8573c.json`**。
 
 ---
 
@@ -39,8 +42,10 @@
 ---
 
 ## 3. 现状
-- **未预建 `baseline-xeon8573c.json`**：本单无网络（代理 127.0.0.1:7897 不可达、无 `gh` CLI），
-  无法轮询 nightly / 下载 artifact；且自 P7 后未观察到新的「落 Xeon 且全绿」run。
+- **未预建 `baseline-xeon8573c.json`**：本单经 GitHub Actions API（`actions/runs`+`check-runs` 注释）
+  核对 nightly，最近一次（36793983148，2026-10-01）为 **AMD EPYC 7763**⇒ 未落 Xeon；
+  自 P7 后无新的「落 Xeon 且全绿」run。（注：无 `gh` CLI、无 token，故仅能读 check 注释判断机型，
+  未能下载 artifact 本体；据此不预建基线。）
 - **已知可作为触发源的 run**：`36670751263`（Xeon 全绿）——但为**回溯分析**用，其 artifact
   当时已不可再下载，且 P7 已将其作为 EPYC 基线的 `cross_check` 处理；按 step7 纪律**未擅动基线**。
 - **下一步（网络可用 / 命中新 Xeon run 时）**：按 §2 八步建基线，并回填本台账 + open_items③。
