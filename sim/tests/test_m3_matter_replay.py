@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from sim.core.events import EventKind, matter_event
 from sim.core.persistence.database import init_database
-from sim.core.persistence.models import MatterState
+from sim.core.persistence.models import Branch, MatterState
 from sim.core.persistence.npc_store import NpcStore
 from sim.core.persistence.store import SqlEventStore
 
@@ -131,6 +131,11 @@ class TestMatterReplayTwoEntry:
 
     async def test_replay_branch_isolated(self, store) -> None:
         """分支隔离：同 matter_id 在两分支各自重建，不串值（R4 + 裁 14-2 ③）。"""
+        # M5-A5 / R-4.2.1：按需开线只在**无当前行**时允许 ⇒ 并存分支必须先声明存在
+        # （读档子线形态：active + is_current=0，R-4.4 允许多条并存）。
+        async with store.session_factory() as s:
+            s.add(Branch(id="branch-b", status="active", is_current=False))
+            await s.commit()
         ns_main = NpcStore(store, branch_id="main")
         ns_b = NpcStore(store, branch_id="branch-b")
         await ns_main.flush_tick(

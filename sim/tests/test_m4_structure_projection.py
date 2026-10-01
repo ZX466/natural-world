@@ -16,7 +16,7 @@ from sim.core.events import (
     structure_started_event,
 )
 from sim.core.persistence.database import init_database
-from sim.core.persistence.models import Structure
+from sim.core.persistence.models import Branch, Structure
 from sim.core.persistence.npc_store import NpcStore, NpcStoreError
 from sim.core.persistence.store import SqlEventStore
 from sim.world.structure import StructurePhase
@@ -190,6 +190,10 @@ class TestStructureTwoEntry:
         assert await ns.materialize_structures_replay([]) == {}
 
     async def test_replay_branch_isolated(self, store) -> None:
+        # M5-A5 / R-4.2.1：按需开线只在无当前行时允许 ⇒ 并存分支先声明（读档子线形态）
+        async with store.session_factory() as s:
+            s.add(Branch(id="fork", status="active", is_current=False))
+            await s.commit()
         main = NpcStore(store, branch_id="main")
         fork = NpcStore(store, branch_id="fork")
         await main.flush_tick([started()])
