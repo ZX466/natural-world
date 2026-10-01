@@ -22,6 +22,7 @@ band≥1 时每 NPC 一条 `npc_monologue_event`（K8 通路）。按惯例新�
 
 from __future__ import annotations
 
+import statistics
 import time
 
 import pytest
@@ -240,14 +241,19 @@ def test_expression_band_mapping_contract() -> None:
 def test_tick_overhead_delta_sanity() -> None:
     """端到端增量合理性护栏（非红线）：注入 band≥1 的 Δ 应落在 µs~亚 ms 量级。
 
-    护栏 0.02ms~2.0ms：过低 = 独白分支被短路（异常）；过高 = 事件构造退化（须重定标）。
+    护栏 0.02ms~2.0ms（**对逐对增量取中位**，非均值）：过低 = 独白分支被短路（异常）；
+    过高 = 事件构造退化（须重定标）。
+    **取中位**：均值会被单个多 ms 离群值（GC/上下文切换）拖走——A4 报的偶发越界
+    （裁 30-D 登记，M5-P8 订正）。实测（2026-10-01，本机暖态）：均值 0.47ms（max
+    ~9.6ms 离群），而中位稳定 **~0.21ms**；CPU 争用下中位仍 0.25ms。中位抗离群，
+    保留两个失效方向的判别力（短路→中位≈0.004ms<0.02；退化→中位远超 2.0）。
     """
     baseline = _make_runtime(None)
     injected = _make_runtime(_verdict(1))
     _warm(injected)
     _warm(baseline)
-    delta_ms = _paired_delta(baseline, injected, iters=40) * 1000.0
-    assert 0.02 <= delta_ms <= 2.0, f"注入增量异常: {delta_ms:.4f}ms/tick"
+    delta_median_ms = statistics.median(_paired_deltas(baseline, injected, iters=60)) * 1000.0
+    assert 0.02 <= delta_median_ms <= 2.0, f"注入增量异常: {delta_median_ms:.4f}ms/tick"
 
 
 def test_monologue_event_payload_has_no_band_metadata() -> None:
@@ -261,14 +267,16 @@ def _warm(runtime: NpcRuntime, iters: int = 5) -> None:
         runtime.tick(1)
 
 
-def _paired_delta(baseline: NpcRuntime, injected: NpcRuntime, *, iters: int) -> float:
-    """交替 tick 相减的配对增量（秒/tick）；交替消除墙钟漂移。"""
-    total = 0.0
+def _paired_deltas(baseline: NpcRuntime, injected: NpcRuntime, *, iters: int) -> list[float]:
+    """交替 tick 相减的逐对增量（秒/tick）列表；交替消除墙钟漂移，取中位抗离群。"""
+    deltas: list[float] = []
     for _ in range(iters):
+        total = 0.0
         t0 = time.perf_counter()
         baseline.tick(1)
         total -= time.perf_counter() - t0
         t0 = time.perf_counter()
         injected.tick(1)
         total += time.perf_counter() - t0
-    return total / iters
+        deltas.append(total)
+    return deltas
