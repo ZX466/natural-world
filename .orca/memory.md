@@ -50,17 +50,40 @@
 - 连带修：4 个「两分支并存」钉先声明并存分支（m3_matter_replay / m4_structure_projection /
   m4_structures_schema / t1_m4_material_balance）；0011 两个往返钉 head → 具体 revision id。
 
-<!-- ===== 新对话快速恢复卡（Claude 主树，2026-10-01 交接态）===== -->
-<!-- 0. 本会话状态：main `e7706fc`，1862 passed/119 skipped，六树同头双远程推齐，工作树全干净 -->
-<!-- 1. M0-M4 全收官；M5 ≈75%：批次B✅ CRUD链✅ 性能治理✅；批次A≈80%（chaos.py 已落 `6211c87`，
-     余：world 循环 inject 接线+消费点）；批次C/D/E 待开工（前置全备：判据8钉/0011/R-4契约/0012在派） -->
-<!-- 2. 在途四单（裁30 §F）：K9 kilo（R-4条款合入）/ S6 codex（META_SHELL空表+负钉）/
-     P8 pi（Δ护栏口径+Xeon被动监控）/ A5 opencode（0012 is_current+开线闸收紧）；cline 待命 -->
-<!-- 3. 我域下轮：收编四单→裁31→R-4施工（anchors.py :274取seq+:345建档 同改接branches真源，
-     A4警告执行）→批次A收口→批次C机制施工 -->
+<!-- ===== 新对话快速恢复卡（Claude 主树，2026-10-01 第三十八轮交接态）===== -->
+<!-- 0. 本会话状态：main `5b0bcbc`，2013 passed/121 skipped，双远程推齐；台账零 ⏳ -->
+<!-- 1. M0-M4 全收官；M5 ≈80%：批次B✅ CRUD链✅ 性能治理✅；批次A≈85%（chaos.py `6211c87` +
+     R-4 数据面全备）；批次C/D/E 待开工（前置全备：判据8钉/0011/0012/R-4契约§1.6 全在 main） -->
+<!-- 2. 在途 = 零：K9/S6/P8/A5 已全收编（第三十八轮快照）；cline 待命（候选单：T4 接线口径待用户定） -->
+<!-- 3. 我域下轮：R-4 施工（anchors.py :274取seq+:345建档 同改接branches真源=is_current，
+     六钉落 test_m5_anchors_branch_source.py，opencode 配合出数据面钉）→批次A收口（world循环
+     inject 接线+chaos 消费点）→批次C机制施工；挂账：P5 婉辞生成载体 -->
 <!-- 4. 恢复序：talking.txt（在途单卡）→本文件①节顶部最新快照→workflow.txt+agent-registry.md
      →git fetch+merge origin/main。坑与教训全在各轮快照内联（stamp纪律/正向钉/行替换先打印） -->
 <!-- ============ 恢复卡结束，以下为 ①节正文 ============ -->
+
+【2026-10-01 第三十八轮｜在途四单全收编（main 5b0bcbc，台账零 ⏳）】
+①**四单收编零冲突**（预警机制再生效）：kilo K9（`68b5c9c`，R-4 条款合入
+anchors-api §1.6——R-4.1~R-4.7 与 A4 原件逐字可对 + R-4.1-S 裁死 0 行/多歧义
+均 400 world-not-ready 零快照变更，否决 409/503；R-5 集合落定 META_SHELL 8 词
++判层模型订正+锚点 name 不接钩子+空函数先行）→ pi P8（`f32373f`，护栏结论=
+**改单调性判据 Option 2 中位而非均值**——均值被大 ms 离群拖走 0.47 vs 中位
+稳定 0.21ms，窗口值没错错在聚合口径，thresholds 不动 + Xeon 被动监控台账）
+→ codex S6（`19168df`，META_SHELL 空表 + scan_meta_shell 分派 + **判层负钉**
+test_agent_dispatch_never_reads_meta_shell 源码白盒：Agent 面零引用即红）
+→ opencode A5（`1eeb294`，**0012 branches.is_current 真源载体 + 开线闸收紧**
+R-4 数据面：部分唯一索引 WHERE is_current=1、回填否决 recency、
+current_branch_id() 禁 'main' fallback、CurrentBranchConflictError 只锁开线
+不锁读档子线 append；36 钉）。四树分支 ZX466/* 逐个 ff 并入。
+②**README 台账翻转**：A4/A3/A5 三行 ⏳→✅（收编 hash），新增 K9/S6/P8 三行；
+**M5 台账零 ⏳**。③门禁 **2013 passed / 121 skipped**（+151：A5 36+S6 94+
+其余散增）、ruff/pyright 0、gen-protocol --check 过（node tools/gen-protocol.ts
+——**坑**：pyproject 无 [project.scripts]，gen-protocol 不是 uv run 目标，
+是 tools/*.ts 走 node）。④双远程推送 `2a4ef6d..5b0bcbc`。
+我域下一步：**R-4 施工**（anchors.py :274 取 seq 与 :345 建档同改接 branches
+真源——K9 施工单写死六钉+落点 test_m5_anchors_branch_source.py；A5 闸门/
+current_branch_id 已备，opencode 出数据面钉不码）→ 批次 A 收口（world 循环
+inject 接线+chaos 消费点）。
 
 【2026-09-30 第三十七轮｜批次 A 架构件首件（main 6211c87）】
 五树无新交付（K9/S6/P8/A5 执行中），收编轮做我域批次 A 主项：
