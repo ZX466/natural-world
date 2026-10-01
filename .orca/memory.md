@@ -444,6 +444,33 @@ schema.md §19.4/README/m3-plan 已同步已裁状态。实施放行 opencode「
 坑：cline/pi/kilo merge 冲突均为「当前任务」小节（main 带 opencode 文本 vs 各树待命文本），按各树本地版权威解决；
 .orca 在子树也是 gitignore 的，tracked 文件须 `git add -f`。
 ## ② cline（依赖 / 配置 / 文档域）
+<!-- ===== cline 树专属：新对话快速恢复卡（2026-10-01 写）===== -->
+> **新对话读这 4 处即可续上（顺序固定）**：① 本卡 ② `.orca/talking.txt`（当前卡/回执，**只认最新 `===` 段**）
+> ③ 本节最新快照（顶部往下）④ `git log --oneline -15`（本树 `ZX466/cline`，双推 origin+gitee）。
+> **我的域**：依赖/配置/文档/CI。**不碰** `sim/`（代码/阈值）与 `docs/security`（codex 域）、`docs/arch` 的裁决正文。
+>
+> **当前状态（2026-10-01）**：M4 收官 + M5 C1–C6 全部交付；工作树干净，双推齐。
+> **最新成果**：① T4 改约本地跑法接线 ② m5-plan 回填裁 21 ③ t4-nightly M4 收官存照 + README M2-K2b 改号
+> ④ baseline.json 按 §4.1 整份重生成 ⑤ 机型防漂：`baseline-epyc7763.json` ＋「不一致只 `::error title` 标注、**绝不判红**」守卫 step。
+>
+> **⚠ 唯一待触发任务（talking.txt 状态卡）**：等 **pi P7 被动收集命中「Xeon + 全绿」nightly** 后，
+> 按 `docs/perf/bench-plan.md` §4.1 八步协助登记 **`baseline-xeon8573c.json`**。
+> **现成候选（未动手，等触发）**：run **`36670751263`**（`conclusion=success`，全步骤绿，ref=main，head `ac0d559`，
+> 2026-09-30T04:51Z）——机型 `INTEL(R) XEON(R) PLATINUM 8573C`、nproc 4、py3.12.3、uv 0.12.21；
+> artifact `bench-result` 内 59 行 / 11 个 bench 文件，schema 与 EPYC 基线完全一致。
+> ⚠ 复核过：其后新增的 `36721350832`（09-30 13:24Z）与 `36780592123`（09-30 21:37Z）**虽全绿但都是 EPYC 7763**，不满足触发条件。
+>
+> **开工前必做**：`git merge origin/main`（主树推陈旧代码）；**本机若有陈旧 `world.db` 先移走再跑门禁**（pi/kilo 本轮都踩过）。
+>
+> **本域未决项（都不是我能单方拍板的）**：① 机型口径 **EPYC 7763（实测）vs 文档 EPYC 9V74（`bench-plan §4.1` step 3 /
+> `ci-calibration-m2p6` §0）**——矛盾待 pi 订正；② `bench-plan §4.1` step 5「定标机跑 CI 基线**预期非零**」与实测
+> **EXIT=0** 不符（待 pi 订正）；③ runner 池跨厂商漂移的**根治**（固定机型 / 按机型选基线文件已做一半）；④ Xeon 档基线未建。
+>
+> **本域纪律（别再踩）**：thresholds 数值**只在 `sim/tests/bench/thresholds.py`**（yml/文档里出现即错）；
+> CI 门禁按**文件路径/marker** 接；prettier **只 gate `client/`**，`docs/*.md` 不 gate（HEAD 本就不干净，**别跑 `--write`**）；
+> **跨域发现只报不改**；改别人文档正文前先问。**验证命令**：`uv run pytest -m "not bench"`（长跑须 `.bat`+`cmd /c` 包
+> 并给绝对路径，见教训 11）、`uv run ruff check`、`uv run pyright`、`git ls-files --eol | grep -c 'w/crlf'`（期望 0）。
+<!-- ===== cline 树专属恢复卡结束 ===== -->
 - 【2026-09-30 第二十五轮快照｜**M5-C6 交付：机型防漂（分文件 + error 标注不判红）**（`f52858d`＋`959ccaf`，双推齐；基线建于 `0133b40` 之上）】**①按机型分文件**：`docs/perf/baseline.json` → **`baseline-epyc7763.json`**（`git mv` 保历史），命名约定 `baseline-<machine_key>.json`；`baseline_meta.file` 登记改名来源/理由/命名约定，**provenance 不断**（`source_run=36580639759` 与迁移前逐字一致，未改任何测量值）；`open_items` 增③「Xeon 档位基线未建」。**②守卫 step**（置于「基线对比」前）：比对基线 `brand_raw` 与 `/proc/cpuinfo` 的 `model name`；一致 `::notice::`；不一致 → `::warning::` **＋ `::error title=基线不可比::`**（裁 30-A3 要求），且 **mismatch 分支第一条 summary 输出即该横幅**（本 workflow 无别的 step 写 summary ⇒ 落在 job summary 顶部）。**绝不判红**：无非零退出、结尾显式 `exit 0`；`median:25%` 未动、`thresholds.py` 零改动（脚本断言）。**③硬数据（同一 run 两机型文件对照）**：run `36670751263`（Xeon）对 EPYC 基线 **17/59 行 >25%**、中位 |drift| 21.7%、**59 行全部「Xeon 更快」**；同一 run 自建 Xeon 基线则 **0/59** ⇒ 同一份测量换基线结论由 17 报警变 0。**④顺带修**：`dev-workflow.md` 对照命令原写 `perf/baseline.json`（**该文件从不存在**）且容差 `median:20%` 与实际 25% 不符 ⇒ 已按实际更正。**教训**：①**「同一 run 换基线对照」是把抽象风险变成数字的最短路径**（17 vs 0，直接证明「换机即可造假红」）；②**bash 在本 Windows 机不可用**（`Bash/Service/0x8007072c`），shell 逻辑无法本地实跑 ⇒ 只能结构化断言，须在回执**明写该局限**；③**先读完整卡再动手**——我漏了卡里 L5「先 merge origin/main（同头 0133b40）」与裁 30-A3 补齐项，事后靠自查补回；④**validator 自己会写错**：我误以为 `{…} >> file` 的重定向在每行 echo 上（实际在收尾 `}` 行），误报失败两次才定位。
 - 【2026-09-30 第二十四轮快照｜**M5-C5 交付：main-ref 交叉核对全绿但按「不同档位不能混基线」不采用**（`82360b7`，双推齐）】**背景澄清**：看板「baseline 重生成未达成」是因 `e5fb44c`（重生成）**尚未被 main 收编**——main 只收了我 C4-1 的 `1d5d3c5`；重生成本体早已在 C4 收口做完（源 run `36580639759` 全绿、五字段核对、整份复制、provenance 登记、旧两代入 `supersedes`）。**C5 第 3 项**：复跑 `36670751263`（ref=main, head `ac0d559`）**全步骤绿**，但 runner.txt 机型＝**INTEL XEON 8573C** ≠ 基线的 **AMD EPYC 7763** ⇒ 按 §4.1 step 3「**不同档位不能混基线**」**否决卡上「若全绿则优先用它重生成」的字面指示**，只登记 `cross_check`（`adopted_as_baseline:false` + 为何不采用），**未混入 EPYC 行**。**连带发现（更要紧，已入 open_items②）**：近 4 轮机型 EPYC×3 + **Xeon×1** ⇒ **`ubuntu-latest` 池跨厂商会漂**，而门禁是**跨机相对漂移**判定（median 25%）⇒ **换机即可造假红、也可掩盖真回归**；建议裁固定机型 / `brand_raw` 不一致告警不判绿 / 按机型分文件，**未擅自改门禁语义**。**顺带修**：main 的 `M5-CRUD` 行（`12dbbb1`）prose 里未转义的 `` `type|detail` `` 把行拆成 **7 cell** ⇒ 转义为 `` `type \| detail` ``，复校 11 表/0 不一致（**只改结构未改语义**）。**教训**：①**跨机相对漂移门禁在异构 runner 池上不成立**——「同 workflow 连跑两轮」可能落在不同 CPU，结论不可比，必须先比 `runner.txt` 的 `cpu:` 字段；②**卡上指示与项目规范冲突时按规范否决并写明**，请裁方一句确认（本轮我按「不同档位不能混基线」否决了「优先用 main-ref run」）；③**校验 markdown 表格要转义感知**（忽略 `\|`），否则会把正确的转义误报成缺陷；④**看板的「未达成」先查是不是"提交没被收编"**，而非真的没做。
 - 【2026-09-30 第二十三轮快照｜**M5-C4 收口：baseline.json 已按 §4.1 整份重生成**（`e5fb44c`，双推齐）】run **`36580639759` 全步骤绿**（含「基线对比」＝advisory env 修复生效的直接证据；对比 run `36494001567` 同 step 从 failure→success）⇒ §4.1 触发前提 2 达成。**八步留痕**：run id → `gh run download` → **runner.txt 五字段 assert**（ubuntu-latest/nproc4/EPYC 7763/py3.12.3/uv 0.12.20，且与 artifact `brand_raw` 逐字一致）→ **整份复制重生成**（非逐行拼接）→ step 5 sanity → step 6 命令早已正确无需改 → commit。**产物**：`baseline.json` = **59 行单一 provenance**（`source_run=36580639759`、branch `ZX466/cline`、commit `1d5d3c5`），**C3 的两 run 混合基线问题消除**，前两代（`35918283944` 21 行＋`36494001567` 38 行）记入 `rows_provenance.supersedes`。**step 5 sanity 实测 EXIT=0（69 passed/1 skipped/168s）**＋出现 `machine_info is different` 警告（确系跨机比较）——**与 §4.1 step 5「预期非零」旧假设相反**（本机未越线，属 pi 域文档正文，未代改，只记实跑）。**偏离已登记**：源 run 跑在 ref `ZX466/cline` 而非 main（等 main 需 ~50min），核验＝**11 个 bench 文件与 main 逐字节相同**（`git rev-parse` 11/11 SAME）＋落后的两处 sim 改动对被测路径无影响（`ws.py` **纯新增** `unregister_anchor_id`；`models.py` **仅给 Branch 表加列**，bench 走 structures 表）＋机型同档；另派 main-ref 复跑 **`36670751263`** 交叉核对（在途，已过跑基准）。**仍未决（pi 域）**：机型口径 7763 vs 文档 9V74、step 5 旧假设。**教训**：①**§4.1 触发前提一旦满足要立刻重算**——C3 的「两 run 混合基线」是权宜，全绿 run 出现后必须整份替换；②**重生成用 artifact 整份复制而非逐行拼接**（`bench-plan §4.1` step 4 的原意），并把前代记进 `supersedes` 保追溯；③**脚本 assert 五字段 + brand_raw 逐字比对**是「不同档位不能混基线」的唯一可靠执行方式；④**branch-ref 全绿 run 也可用作基线**，前提是逐文件核验被测代码对目标分支无实质差异（`git rev-parse` 比对 + 读 diff 判断是否触被测路径）。
