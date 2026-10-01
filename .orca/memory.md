@@ -1060,14 +1060,34 @@ uv run pyright sim/
   **未跑 `--write`**（纪律 12），只修掉自己引入的唯一真缺陷（§1.6 前多一个空行），新表按本文件
   既有风格写（不按 prettier CJK 宽度补空格）。**非本次引入**：本树
   `sim/tests/test_m5_monologue_s2c.py` `i/lf w/crlf`（自检期望计数 0、实测 1），下轮重签出时清。
+- **✅ M5-K10 已交 `1d01d24`（origin+gitee 已推；K9 已由 Claude 收编进 main `8c4f8a7`）**——
+  `docs/api/anchors-api.md` 79+/7-，**零代码零 schema**（`shared/` 零 diff）。①**§5.2 R-4 六钉验收对表**
+  （`[T]`/`[O]`/`[C]`，与 §1.6 互引）：逐钉判红判据；**三条关键构造**——钉 1 两分支 `seq` **必须刻意
+  不等**（child=3/parent=99，否则「只改一处」不可见）、钉 3 歧义 fixture＝**两条 `active`+`is_current`
+  全 0**（0012 回填真实形态；硬塞两个 `is_current=1` 会被部分唯一索引拒掉、测不到 HTTP 面）、钉 3 附
+  **白盒负钉**（`anchors.py` 源码 `branch_id="main"`/`WHERE branch_id = 'main'` 零出现）；钉 4 **引用
+  A5 已有钉**（`test_m5_branch_current.py` 两例 + `partial=1` 索引钉）不重复造；**钉 5 阻塞于 Claude
+  施工单里的 `fork.py` 当前行交接**（0012 docstring 自述「本迁移不移动当前行」＝head-fork 后读档侧
+  报「无当前分支」，必须由该施工单关掉）；跨钉总闸三条（live≡快照逐字段相等／`gen-protocol --check`
+  EXIT 0 + `shared/` 零 diff／`branch-ambiguous` 反向钉各 0 次）+ 前端 `M5-K10-R4 #1`。
+  ②**§2.1 `/errors/branch-ambiguous` 快照登记单**（只登记零施工）：形状 ProblemDetail 四键、触发＝歧义库
+  读取、与 400 的边界一句话（前者「世界线自相矛盾、重试无用」vs 后者「还没准备好、可重试」）、
+  将来必同改四处、三条禁忌。**两处订正**：**R-4.1-S 触发形态**（0012 后 ≥2 个 `is_current=1` 不可达，
+  歧义＝`is_current` 全 0 + `current_branch_id()` 抛 `NoCurrentBranchError`；**400 裁定不变**）、
+  **`protocol-types.test.ts` 命名冲突**（已有历史 M5-K10 标签＝裁 19 `state_delta.plan`；新断言必须
+  `M5-K10-R4` 前缀，勿复用 `K10 #n`）。
+  **门禁**：ruff 全过／pyright 0／`gen-protocol --check` EXIT 0／`w/lf`／全量 **1945 passed /
+  119 skipped / 0 failed / 4 errors**（errors 全是陈旧 `world.db` 缺 `branches.is_current` 的 teardown，
+  `git stash` 清树对照同样复现 ⇒ 环境债非回归；**台账第三个实例**，前两个 `rng_state`/`protected`）。
 - **新对话第一动作**：`git fetch origin main && git merge origin/main` → 读 `.orca/talking.txt`
   （有没有新派单／上一轮回执）→ 回这里。**不要**从历史快照开始读。
-- **⚡ 在途单（2026-10-01 起）**：**无**（M5-K9 已交 `68b5c9c`）。下一个 M5-K 单由 Claude 派。
+- **⚡ 在途单（2026-10-01 起）**：**无**（K9 `68b5c9c`、K10 `1d01d24` 均已交）。下一个 M5-K 单由 Claude 派。
   上一轮派单原文留档：M5-K9＝①A4 的 R-4.1~R-4.7 合入 `anchors-api.md`（日期化、依据＝裁 30-D）
   ＋R-4.7 六钉抄成「施工单须写死」段；②R-5 集合落定（META_SHELL 8 词、接线＝空函数先行、
   锚点 name 维持 F-6 不接钩子）。门禁：prettier 过＋条款编号与 A4 原件逐字可对＋双推。
   **⚠ 门禁口径订正**：「prettier 过」对 `docs/**` **不成立**（不在 CI 门禁 + HEAD 本就红）——
   正确口径＝**先测基线**，红了就保持最小 diff 不 `--write`（纪律 12），并回报基线数字。
+  **K10 派单门禁口径**同（另加「零代码单也跑 ruff/pyright/gen-protocol 三件套」）。
 
 **② 接口域现状（一句话）**
 协议面＝`shared/openapi.json`（唯一真相源）→ `npm run gen-protocol` → `shared/protocol.ts`（**禁手写**）→
@@ -1076,13 +1096,16 @@ uv run pyright sim/
 批次 C 权力面按裁 27-C/D-10「权力完全不可见」＝**协议零新增**。CRITICAL（G-1 plan 越界、R-1 读档挂死）与全部 HIGH 已清零。
 
 **③ 下一步**
-- ~~**在途：M5-K9**~~ **✅ 已交 `68b5c9c`（见上）**。K9 之后的**等派项**：
+- ~~**在途：M5-K9 / M5-K10**~~ **✅ 均已交（见上）**。**等派项**：
   ①**R-4 取值施工的复验**（Claude 域 `anchors.py` 两处同改 + 新建
-  `sim/tests/test_m5_anchors_branch_source.py` 六钉）——收编后我照 §1.6 R-4.7 表逐条核；
-  ②**A5 的 0012 落地后**核过渡期→`is_current` 切换无双源（§1.6 R-4.3）；
-  ③若要 `500 /errors/branch-ambiguous`（歧义机器码级区分）＝**我另立快照单**（ext + 快照 +
-  gen-protocol，**禁**在 R-4 施工单里顺手做）；④pi 的 M5-P2 thresholds 落地后复核快进钉仍绿；
-  ⑤任何新增/变更协议面。
+  `sim/tests/test_m5_anchors_branch_source.py`）——收编后我照 **§5.2 六钉对表**逐条核（含「两分支 seq
+  刻意不等」「歧义＝两条 active+全 0」「`main` 字面量白盒负钉」三条构造，**别用自己想象的 fixture 复核**）；
+  ②**`fork.py` 当前行交接**是否随施工单落地（0012 已知缺口；不落地则 head-fork 后读档侧报「无当前分支」＝§5.2 钉 5 红）；
+  ③若要 `500 /errors/branch-ambiguous`（歧义机器码级区分）＝**我另立快照单**（规格已写好在 §2.1：
+  必同改四处 + 三条禁忌，**禁**在 R-4 施工单里顺手做）；
+  ④pi 的 M5-P2 thresholds 落地后复核快进钉仍绿；⑤任何新增/变更协议面。
+  **另可主动做（不接未派单）**：把 §5.2 对表的可机检部分（白盒负钉、pipe 数一致性）做成
+  TestDocSync 族钉子——但需先确认 sim/tests 已有 doc 同步测试的落点约定。
 - 我可主动做（**不接未派的施工单**）：协议面审计与对表、live↔快照对账、契约草案、钉子补齐、复验评审。
 
 **④ 未修债（本树域内，分级）**
