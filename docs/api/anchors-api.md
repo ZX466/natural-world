@@ -230,11 +230,12 @@ name: str = Field(min_length=1, max_length=64)
 
 | 情形 | 契约 | 理由 |
 |---|---|---|
-| 当前行为 **0** 行 | **`400` + `/errors/world-not-ready`**（沿用 §1.2 既有机器码，`detail` 写「无当前世界线」） | §1.2 已定「无活跃分支」＝世界未就绪＝400；**零新增 code ⇒ 零快照变更**，前端错误映射不动 |
-| 当前行 **≥2**（歧义，仅 0012 落地前可能） | **同 `400` + 同一 code**，`detail` 写「世界线状态歧义，请重开世界」 | 歧义是**服务端数据完整性**异常而非客户端可重试态；`409` 语义是「客户端动作与当前状态冲突」，`503` 语义是「稍后重试」，两者都误导。**同码 + detail 区分**保住 fail-closed 且不引 500 面 |
-| `is_current=1` 第二行（0012 落地后） | 写层 **IntegrityError ⇒ fail-closed**，不落 HTTP 面 | DB 层不变量（方案 A），HTTP 面根本到不了 |
+| 真源查询 **0 行**（`branches.is_current` 无 1） | **`400` + `/errors/world-not-ready`**（沿用 §1.2 既有机器码，`detail` 写「无当前世界线」） | §1.2 已定「无活跃分支」＝世界未就绪＝400；**零新增 code ⇒ 零快照变更**，前端错误映射不动 |
+| **歧义库**：0 行当前 **且** `branches` 存在 ≥2 个 `status='active'` 行 | **同 `400` + 同一 code**，`detail` 写「世界线状态歧义，请重开世界」 | 歧义是**服务端数据完整性**异常而非客户端可重试态；`409` 语义是「客户端动作与当前状态冲突」，`503` 语义是「稍后重试」，两者都误导。**同码 + detail 区分**保住 fail-closed 且不引 500 面 |
+| `is_current=1` 第二行 | 写层 **IntegrityError ⇒ fail-closed**，不落 HTTP 面 | DB 层不变量（方案 A），HTTP 面根本到不了 |
 
-- **登记为待升级项（不在本轮）**：若 0012 落地后仍需**机器码级**区分歧义（前端要分别提示「重开世界」vs「稍后再试」），则新增 `500 /errors/branch-ambiguous`——**那是一次快照变更**（ext 补 500 声明 + `shared/openapi.json` 同步 + `gen-protocol` 重生成），**归 kilo 单独立单**，不在 R-4 施工单里顺手做。
+- **登记为待升级项（不在本轮）**：若 0012 落地后仍需**机器码级**区分歧义（前端要分别提示「重开世界」vs「稍后再试」），则新增 `500 /errors/branch-ambiguous`——**那是一次快照变更**（ext 补 500 声明 + `shared/openapi.json` 同步 + `gen-protocol` 重生成），**归 kilo 单独立单**，不在 R-4 施工单里顺手做。**登记单见 §2.1（只登记、零施工）**。
+- **⚠ 触发形态订正（2026-10-01，K10 核对 0012 落地后的事实；**状态码裁定不变**）**：本节初稿写「当前行 ≥2（歧义，仅 0012 落地前可能）」——落地后**该形态不可达**：部分唯一索引 `ux_branches_current` 使第二个 `is_current=1` 直接 IntegrityError（A5 `test_m5_branch_current.py` 已钉）。**歧义在 0012 后表现为「`is_current` 全 0」**：0012 的 `BACKFILL_SQL` 只在**唯一** active 时置 1，**≥2 个 active ⇒ 一行都不置**（不按 recency 兜底）⇒ `SqlEventStore.current_branch_id()`（`sim/core/persistence/store.py:181`，已落）抛 `NoCurrentBranchError`。**验收构造方式随之确定**：钉 #3 的歧义 fixture = 两条 `status='active'` + `is_current` 全 0，**不是**「硬塞两个 `is_current=1`」（那会被 DB 拒、测不到 HTTP 面）。
 
 **条款 R-4.2（唯一性不变量）**
 
@@ -284,7 +285,9 @@ name: str = Field(min_length=1, max_length=64)
 | 6 | 查不到当前行 ⇒ 报错，**不**回退 `'main'`（钉子须实跑一次「branches 表空 / 全 abandoned」场景） | 同 #1 文件 |
 
 - **落点文件名已写死**：`sim/tests/test_m5_anchors_branch_source.py`（新建）。命名入 `test_m5_*.py` glob ⇒ 自动进每提交 CI 门禁（`ci.yml` M5 步骤），**不得**并入 bench 或用 `-m` 标记排除。
-- **kilo 域零施工**：本节**不新增 schema、不改快照**（R-4.1-S 刻意复用既有 400 机器码）⇒ `gen-protocol --check` 应保持 EXIT 0、生成物零变化。
+- **验收面在 §5.2**（`[T]`/`[O]`/`[C]` 三类断言 + 跨钉总闸，M5-K10 备齐）——本段是「要什么」，§5.2 是「怎么判红」，两处互引。
+- **⚠ 已登记的施工缺口（0012 落地后仍在）**：`0012_branches_current.py` docstring 自述「本迁移**不移动当前行**」⇒ head-fork 后当前行仍停在已被封存的父分支，读档侧会报「无当前分支」。**该缺口由 R-4 施工单的 `fork.py` 当前行交接关闭**（§5.2 钉 #5 即其验收面），不是新缺陷。
+- **kilo 域零施工**：本节**不新增 schema、不改快照**（R-4.1-S 刻意复用既有 400 机器码）⇒ `gen-protocol --check` 应保持 EXIT 0、生成物零变化（该保证已升格为 §5.2 的一只总闸）。
 
 ## 2. 错误形（ProblemDetail，RFC 7807 风格）
 
@@ -301,7 +304,7 @@ name: str = Field(min_length=1, max_length=64)
 
 | 状态码 | `type` | `title` | 触发 |
 |---|---|---|---|
-| 400 | `/errors/world-not-ready` | 世界未就绪 | 无活跃 loop / 分支，无法取游标 |
+| 400 | `/errors/world-not-ready` | 世界未就绪 | 无活跃 loop / 无「当前活跃分支」（含 0 行与歧义两种 fail-closed，判据见 §1.6 R-4.1-S），无法取游标 |
 | 404 | `/errors/anchor-not-found` | 玩家档不存在 | PATCH / DELETE 的 `{anchor_id}` 无行 |
 | 409 | `/errors/anchor-protected` | 该档不可删除 | DELETE 时 `protected=true` |
 | 422 | `/errors/validation` | 请求校验失败 | pydantic `RequestValidationError`（FastAPI 自动，兜底 §3.2） |
@@ -309,6 +312,34 @@ name: str = Field(min_length=1, max_length=64)
 - `ProblemDetail` 的形状**固定为 `title` + `status` 必填，`type` + `detail` 可选**（`shared/openapi.json` 保留位已定，勿改）。
 - `title`/`detail` 是**戏外工程措辞**，可不进戏内、不回灌 Agent（`openapi.md` §5）。
 - 错误响应**不含** `agent_override` / `branch_id` / `tick` 等内部结构。
+
+### 2.1 `/errors/branch-ambiguous` 快照登记单（**只登记，零施工**｜M5-K10，2026-10-01）
+
+> **状态**：**未施工、未登记快照、未进任何生成物**。本节存在的唯一目的是**把 R-4.1-S 的待升级项写成可施工的规格**，让将来那一单不必重新考古。
+> **⚠ 本节不是契约**：`shared/openapi.json` 里 `branch-ambiguous` **当前 0 次**（反向钉见 §5.2 总闸），`sim/api/errors.py::_TYPE_TITLE` **无此条目**，HTTP 面**到不了**这个 code。**任何施工单读到本节都不得据此改码**。
+
+| 项 | 值 |
+|---|---|
+| `type` | `/errors/branch-ambiguous`（URI 风格，不要求可解析，同 §2 其余码） |
+| 形状 | **ProblemDetail 四键**（§2 已定形，零新组件）：`type` + `title` + `status` + `detail` |
+| `status` | **`500`**（**未裁定为契约值**——见下方「为什么是 500 / 未裁定」） |
+| `title` | 候选：`世界线状态歧义`（人读短标题，戏外工程措辞，**待施工时定稿**） |
+| `detail` | 形态：说明 `branches.is_current` 无当前行且存在 ≥2 个 `status='active'` 行、需重开世界；**禁**写出分支 id 以外的内部结构 |
+| 触发条件 | **歧义库读取**：读「当前活跃分支」真源时，`is_current` 命中 0 行 **且** `branches` 存在 ≥2 个 `status='active'` 行（0012 `BACKFILL_SQL` 对歧义库**一行都不置**的结果，见 §1.6 R-4.1-S 订正） |
+| 现状处置 | 走 **`400 /errors/world-not-ready`**（§1.6 R-4.1-S 已裁，本单**不翻案**） |
+
+**与 `400 /errors/world-not-ready` 的边界（一句话）**：`world-not-ready` 答的是「**世界还没准备好**」（可重试：等开线、等 loop 起），`branch-ambiguous` 答的是「**世界线状态自相矛盾**」（重试无用：必须人工重开世界）——**同一读路径的两种失败语义，机器码必须能分开**，否则前端只能把两种都提示成「稍后再试」，玩家对着一个永远好不了的状态反复重试。
+
+**为什么是 500 / 为什么标「未裁定为契约值」**：歧义是**服务端数据完整性**异常（库里的分支状态互相矛盾），不是客户端能修的请求问题（故非 4xx），也不是「稍后重试会好」的瞬时态（故非 503 的通常语义）。选 500 是为了**与「已裁定不选 409/503」不冲突**，且复用既有 ProblemDetail 形。**但 500 面会把 anchors 的 `responses` 声明面扩一格**，属快照变更（见下）⇒ 该取舍**留待施工那一单连同快照一起正式裁定**，本单不定案。
+
+**将来施工那一单必须同改的四处（缺一即半成品，防返工，同 §1.5 V 体例）**：
+
+1. `sim/api/errors.py::_TYPE_TITLE` 增 `"/errors/branch-ambiguous": "世界线状态歧义"`（**不增**则 `title` 退化为「请求错误」，与 `_TYPE_TITLE.get(...) or _STATUS_TITLE[...]` 的兜底链同款坑）。
+2. `sim/api/anchors.py`：`NoCurrentBranchError` 的映射**按「是否歧义」分流**——歧义 ⇒ 本 code；其余 0 行情形仍 `400 /errors/world-not-ready`（**R-4.1-S 的 0 行档不许被顺手改道**）。
+3. `sim/api/openapi_ext.py` 的 `_attach("/api/anchors", "post", [...])` 补 `"500"` 声明（§5.1 关键坑：`exception_handler` 写的响应**不会自动进** `/openapi.json`）。
+4. `shared/openapi.json` 同步 + `npm run gen-protocol` 重生成 + `client/src/net/__tests__/protocol-types.test.ts` 加键集断言。
+
+**禁做的事**：❌ 在 **R-4 施工单**里顺手加（§1.6 R-4.1-S 已明写「归 kilo 单独立单」）；❌ 只改 `errors.py` 不改 ext/快照（⇒ live↔快照漂移破 K3 铁律，前端类型缺该响应）；❌ 借本 code 之名把 **0 行**（真·世界未就绪）也改道成 500。
 
 ## 3. sim 全局 404 handler 提案
 
@@ -506,6 +537,47 @@ _attach("/api/anchors/{anchor_id}", "delete", ["404", "409"])    # 不存在 / �
 > - `sim/api/openapi_ext.py:17`：「anchors 三 schema（M5 阶段）与 ProblemDetail/WsEnvelope 无路由可挂，不施工。」→ M5 施工后应改为「anchors 三 schema 随 M5 路由生成；ProblemDetail/responses.Problem 由本文件 §5.1 注入」。
 > - `sim/tests/test_m2_openapi_rework.py` 的 `ADDED_SCHEMAS` 白名单未含 anchors 三 schema（§2.2 判「本轮不施工」）→ M5 施工后复验口径会变（`MISSING in ext` 应为 0），该测试的期望值需同步。
 
+### 5.2 R-4 六钉验收对表（M5-K10，2026-10-01｜`[T]`/`[O]`/`[C]` 三类，沿用 §5 体例）
+
+**归属**：条款在 **§1.6**（R-4.1~R-4.7 + R-4.1-S），本节是它的**验收面**——Claude 域 R-4 施工后逐条自测，kilo 复验照此核。两处互为交叉引用，改一处必须同步另一处。
+
+**已落地的施工基线（复验起点，非本单产物）**：
+
+| 件 | 位置 | 状态 |
+|---|---|---|
+| 真源读入口 | `sim/core/persistence/store.py::SqlEventStore.current_branch_id`（`:181`）—— 谓词**只有** `is_current`，查不到 ⇒ 抛 `NoCurrentBranchError`（**禁**回退 `'main'`） | ✅ A5 已落（`1eeb294`） |
+| 数据面载体 | `sim/core/persistence/alembic/versions/0012_branches_current.py`：`is_current` 列 + 部分唯一索引 `ux_branches_current … WHERE is_current = 1` + `BACKFILL_SQL`（**仅唯一 active 置 1**，≥2 active ⇒ 一行都不置） | ✅ A5 已落 |
+| 开线闸收紧 | `CurrentBranchConflictError`（`InactiveBranchError` 子类）——「仅当无当前行才可开线」 | ✅ A5 已落（钉子 `test_m5_branch_current.py`） |
+| **待施工** | `sim/api/anchors.py`：`get_current_seq()`（`:264`，现 `WHERE branch_id = 'main'`）与 `create_anchor()`（`:345`，现 `branch_id="main"`）**两处同改**接真源 | ⏳ **Claude 域（R-4 施工单）** |
+
+**fixture 约定**（本组钉子与 §5 既有 `client` fixture 不同，**必须真 branches/events 行**）：
+HTTP 壳沿用 §5 的 `client` 写法（`sim/tests/test_m2_openapi_rework.py:46-56`，`LZ_MASTER_KEY` + 临时 sqlite）；
+**分支行/事件行**用 async session 直插，照 `sim/tests/test_m5_branch_current.py` 已有的 `_branch(...)`（`:93`）/ `_branch_row(...)` 助手写法（**复用，不重造**）。
+落点文件 **`sim/tests/test_m5_anchors_branch_source.py`**（§1.6 R-4.7 已写死）——命名入 `test_m5_*.py` glob ⇒ 自动进每提交 CI 的 M5 步骤，**禁**并入 bench、**禁**用 `-m` 排除。
+
+| # | R-4.7 钉子 | 断言与判红判据 |
+|---|---|---|
+| 1 | 分叉后 POST 记档 ⇒ `branch_id` = **子分支**、`seq` 取自**同一分支**（三元组自洽） | `[T]` fixture：子分支 `child`（`status='active'`、`is_current=1`、`MAX(seq)=3`）＋父分支 `parent`（`status='abandoned'`、`is_current=0`、`MAX(seq)=99`）——**两分支的 `seq` 必须刻意不等**（否则「只改一处」的缺陷在断言里不可见）。`POST /api/anchors {"name":…}` → `201`，直查 `player_anchors` 新行：断言 `branch_id == "child"` **且** `seq == 3`。**判红**：`seq == 99` ⇒ 取 seq 那处仍按父线取（**三元组自相矛盾，比两处都错更坏**，A4 警告）；`branch_id == "parent"` ⇒ 建档那处未改 |
+| 2 | 历史点分叉（`kind="anchor"`）后 POST 记档 ⇒ 落在**仍在跑的父分支** | `[T]` fixture：父 `parent`（`active`、`is_current=1`、`MAX(seq)=5`）＋读档子线 `child`（`active`、`is_current=0`、`MAX(seq)=77`，**故意更大**作 recency 诱饵）。`POST` → `201`，断言新行 `branch_id == "parent"` **且** `seq == 5`。**判红**：`branch_id == "child"`（哪怕 `seq` 对）⇒ 用了「最新/recency」而非真源当前行——正是 R-4.3 否决方案 B 要根治的病 |
+| 3 | 歧义 ⇒ **fail-closed**，不默认 `'main'` | `[T]` fixture：**两条 `status='active'` + `is_current` 全 0**（= 0012 `BACKFILL_SQL` 对歧义库的真实结果；**不是**硬塞两个 `is_current=1`——那会被部分唯一索引拒掉、测不到 HTTP 面）。`POST` → 断言 `400` 且 `body["type"] == "/errors/world-not-ready"`、`detail` 含「歧义」（或至少含「无当前活跃分支」）；**断言 `player_anchors` 行数不变**（fail-closed ≠ 「记到某条线上」）。<br>`[T]` **负钉（白盒，K5 审计同款手法）**：读 `sim/api/anchors.py` 源码，断言 `branch_id="main"`／`branch_id = "main"`／`WHERE branch_id = 'main'` **零出现**——钉死字面量兜底复发（R-4 就是这么来的，且它在 K7 复验时潜伏在 `:345` 与 `:274` 两处）。<br>`[O]` 同一场景下 `paths["/api/anchors"]["post"]["responses"]` 键集仍 ⊇ `{201,400,422}` 且**不含 `500`**（歧义**不走** 500，见 §2.1 登记单） |
+| 4 | `is_current=1` 第二行 ⇒ **IntegrityError** | `[T]` **已由 A5 覆盖**：`sim/tests/test_m5_branch_current.py` 两例（直接插第二个 `is_current=1`、以及交接时撞索引）断言 `IntegrityError` 且 msg 含 `UNIQUE constraint failed: branches.is_current`。**验收口径＝引用该钉即算通过，本单不重复造**。<br>`[O]` 迁移往返后 `PRAGMA index_list(branches)` 含 `ux_branches_current` 且 `partial = 1`（锁「部分」二字：全列唯一索引会让两条 `is_current=0` 的读档子线互撞，见 R-4.4） |
+| 5 | head-fork ⇒ 父 `abandoned` + 子当前；anchor-fork ⇒ 父仍当前 + 子非当前 | `[T]` **⚠ 依赖 `fork.py` 当前行交接**（同属 R-4 施工单；0012 docstring 已自述「本迁移**不移动当前行**……施工单落地前 head-fork 后当前行仍停在已被封存的父分支」——**这是已登记的已知缺口，必须由本施工单关掉**）。head-fork 后断言父 `status=='abandoned'` **且** `is_current==False`、子 `is_current==True`；anchor-fork 后断言父仍 `is_current==True`、子 `is_current==False`。**判红**：head-fork 后当前行仍在父 ⇒ 红；中间态出现两个 1 或零个 1 ⇒ 红（**必须同事务**，否则第二个 `is_current=1` 直接 IntegrityError） |
+| 6 | 查不到当前行 ⇒ 报错，**不**回退 `'main'` | `[T]` **三种 0 行情形各跑一次** `POST`（①`branches` 空表 ②全 `status='abandoned'`、`is_current` 全 0 ③唯一 `active` 但 `is_current=0`，= 0012 前的历史库形态）：三者均 `400` + `/errors/world-not-ready`，且 **`player_anchors` 零新增**。**判红**：任一 `201`/`500`/`503` 即红（`201` = 又写进了一条猜的线） |
+
+**跨钉总闸（三条，任一红即整体不通过）**
+
+| 闸 | 断言 | 为什么 |
+|---|---|---|
+| `[O]` live ≡ 快照 | `client.get("/openapi.json")` 的 anchors 段与 `shared/openapi.json` **逐字段相等**（K3 铁律） | R-4 是**纯服务端取值**改动，协议面零变化；一旦 live 多了 500/409 声明而快照没同步，前端类型与文档即漂移 |
+| `[O]` 生成管线 | `cd client && node ../tools/gen-protocol.ts --check` **EXIT 0** 且 `git status shared/` **零 diff** | 这是「R-4.1-S 复用 400 机器码」换来的好处——**钉住它**，防止施工顺手加新 code 把快照面扩一格 |
+| `[O]` 登记单反向钉 | `shared/openapi.json`、`sim/api/errors.py`、生成物中 `branch-ambiguous` 出现次数 **各 = 0** | §2.1 是**登记单不是契约**；此钉防它被误当成待施工清单（§2.1「禁做的事」第 1 条） |
+
+**前端 `[C]` 面（K10 新增一条断言，命名有坑）**
+
+`client/src/net/__tests__/protocol-types.test.ts` 增 `M5-K10-R4 #1`：`operations['createAnchor']['responses']` 键集 ≡ 快照（**无 `500`**、无新键），且 `AnchorListItem` 仍**恰为五键**（`branch_id`/`tick`/`seq` 仍不可达，§0 出戏边界）——R-4 改的是服务端取值，前端类型面**零变化**，故只需一条防漂移断言。
+
+> **⚠ 命名冲突（必读）**：该文件已有**历史 M5-K10** 标签（裁 19 `state_delta.plan` 一轮，`:17`/`:369`/`:370`）。本轮单号沿用 **M5-K10**（Claude 派单口径），故**新断言必须用 `M5-K10-R4` 前缀**，**勿复用 `K10 #n`**——否则 grep 锚点会把两轮同名断言混起来，review 时无法分辨。
+
 ## 6. 待决议与已知风险
 
 > **提案制说明**：以下为 kilo 提案（K3 提案制），**不擅改契约**，待主树裁决后落档。每项含：现状 / 选项 / 建议 / 影响面。
@@ -597,7 +669,7 @@ K1 版 §1.2 曾写「`id` 由 sim 生成（建议 `anc_` 前缀 + 短随机，�
 | `agent_override` 不回传 | 已定型 | §0 出戏边界。§12 读档需要它，但载入走 WS `load_anchor`（服务端从库自取），**不经 HTTP**，客户端无需该字段 |
 | 档名禁词（Agent 词表） | **已定型（裁 29-A ③ / 裁 30-B①）** | 档名过 `scan()`，命中 422 `/errors/anchor-name-rejected`（§1.2 档名禁词小节）。**取舍已知**：戏外语义合法的「存档/读档/分支」类名字会被挡；**明确不接戏外词表钩子**（锚点 name 是跨界字段、有回灌路径，fail-closed 维持）。钩子本身已落集合（`BANNED_WORDS_META_SHELL` 8 词）+ 接线时机（空函数先行），归 codex 域 |
 | 列表排序 `updated_at` 降序 | **已定型（裁 29-A R-6「契约为准改实现」）** | K7 实现曾是升序，main `a50f903` 已改；钉子 `test_m5_api_anchors.py::TestSchemaMatchesSnapshot::test_list_is_newest_first` 防回退 |
-| 游标 `branch_id` 取当前活跃分支 | **契约已落（§1.6，裁 30-D / kilo M5-K9），⏳ 施工在途** | 现实现硬编码 `'main'`（`anchors.py` 取 seq + 建档两处，**必须同改**）⇒ 分叉后记档指错世界线。**真源定义、fail-closed 状态码归属（复用 400 `/errors/world-not-ready`，零快照变更）、R-4.7 六条施工钉子**已进 §1.6；数据面载体 = A5 迁移 0012（`is_current` + 部分唯一索引），取值施工归 Claude 域 |
+| 游标 `branch_id` 取当前活跃分支 | **契约 + 验收面已齐（§1.6 + §5.2），⏳ 取值施工在途（Claude 域）** | 数据面载体已由 A5 落地（0012 `is_current` + 部分唯一索引 + `store.py::current_branch_id`）。**剩余施工**＝`anchors.py` 取 seq（`:264`）与建档（`:345`）**两处同改**，验收面见 §5.2 六钉。另登记：`fork.py` 当前行交接未落（0012 docstring 自述）＝head-fork 后读档侧会报「无当前分支」，由同一施工单关闭（§5.2 钉 #5） |
 | 无「删全部 / 批量」端点 | 已定型 | 玩家档数量级十位数（§6.2 同论证），不需要批量操作；也无 list 删除语义 |
 | `updated_at` 时间源 | 已定型 | `time.time()`（同 `PlayerAnchor.updated_at`，`models.py:107`）；只写一次（§1.4），不随改名推进 |
 
