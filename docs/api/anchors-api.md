@@ -64,7 +64,7 @@ BASE = `/api/anchors`。所有路由 `tags: ["anchors"]`，与 `settings.py` 同
 |---|---|
 | 请求 | `AnchorCreate` = **仅 `name`**（1..64，与 `ProfileCreate` 同口径） |
 | 201 | `AnchorListItem`（含服务端生成的 `id`） |
-| 400 | 当前世界未就绪（无 loop / 无活跃分支）→ 无法取游标（**先于** 422 判定，R-9） |
+| 400 | 当前世界未就绪（无 loop / **无「当前活跃分支」**——含查不到当前行与多当前歧义两种 fail-closed）→ 无法取游标（**先于** 422 判定，R-9；判据见 §1.6 R-4.1-S） |
 | 422 | pydantic 校验失败（`name` 缺失 / 超长 / 空）**或** 档名命中禁词（见下） |
 
 ```jsonc
@@ -102,11 +102,15 @@ name: str = Field(min_length=1, max_length=64)
 
 - **为什么 fail-closed 是对的**（裁 29-A ③）：档名**会进 D-6 分叉告知帧的游标指针**（`SessionAnchor.name`）与 `story_label` 面 ⇒ 存在回灌路径 ⇒ 沿用 Agent 面向的 fail-closed 闸门，不另造口径。
 - **玩家可感知的代价**（已登记，见 §6.7 已定型决策备忘）：Agent 词表含 `存档`/`读档`/`游戏`/`玩家`/`分支`/`快照`/`重放`，故「存档：第二日」「读档前」「分支甲」等**戏外语义合法**的名字会被 422 挡下（K7 复验实测 10 个样本 7 拒 3 放）。这是**已知取舍**，不是缺陷——若将来要放开，走下面的钩子。
-- **「戏外词表」钩子（裁 29-A ②，结构已留、集合待定）**：档名扫描的判定式预留为「**Agent 词表 ∪ 豁免表**」两段结构，**本版豁免表为空** ⇒ 行为等价于现状（纯 Agent 词表）。集合由 **codex 下波 CR** 定义（词表是活资产，扩面按 CR 走）。豁免表落地后**不改** HTTP 契约（仍 422 同一 code），只改判定输入。
+- **「戏外词表」钩子（裁 29-A ② 立结构 → **裁 30-B① 集合与时机落定**，2026-10-01）**：
+  - **集合初值已裁 = 8 词**（`BANNED_WORDS_META_SHELL`，`{重开, 读档, 存档, 快照, 回放, 游戏, 模拟, 玩家}`）：判据是「**游戏行为词**」——戏外语境正常、Agent 面必须拦（双面成立才入表）。**元信息词不入**（`AI`/`模型`/`prompt`/`token`/`seed`/`tick`/`profile`/`随机数`/`概率`/`注定`/`luck`）与**纯工程词不入**（`entity_id`/`branch`/`分支`/`abandoned`）⇒ 这两类在**戏外面仍按拦**处理（沉浸契约的第一观感是安全底线）。词表是活资产，**只增不减且同 CR**（codex 域）。
+  - **判层模型（订正此前「豁免表」措辞）**：本表**不是** `scan()` 的豁免源——Agent 面分派**永不读它**（S5 §2.5）。它只服务**纯戏外面**扫描 `scan_meta_shell(text)` ＝ `BANNED_WORDS − BANNED_WORDS_META_SHELL`（戏外面比 Agent 面**宽**，但**不是无扫描**：未被 META_SHELL 覆盖的词在戏外面仍拦）。
+  - **锚点 `name` 维持 F-6、明确「不接钩子」**（裁 30-B①②）：本接口档名判定式**仍是** `banned_words.scan()`（纯 Agent 词表），**行为与契约零变化**；8 词落地后「存档：第二日」「读档前」等名字**仍被 422 挡**（见上「已知取舍」，非缺陷）。**锚点 name 是跨界字段**（进 D-6 告知帧与 `story_label`）⇒ 回灌路径成立，fail-closed 不放宽。
+  - **接线时机 = 空函数先行（YAGNI，裁 30-B②）**：codex M5-S6 只建**空表 + `scan_meta_shell` 空函数**；**首个消费方**（错误 title 国际化 / 未来覆盖层等不进任何 WS 戏内帧的纯戏外面）出现时才接。届时本接口**不改 HTTP 契约**（仍 422 同一 code），只在其自身判定式里按面选表。
 - **前端提示口径**：`title` 是人读短标题（戏外工程措辞，§2）；玩家看到的应是「档名含不可用词汇」而非内部词表名——`detail` 里的命中词仅供调试，别直接上屏。
 
 **服务端游标来源**（构造规则，客户端不参与）：
-`branch_id` = 当前活跃分支 id、`tick`/`seq` = 世界当前游标、`agent_override` = 当前主角 agent 状态快照（`models.py` §6 PlayerAnchor 的内部结构，不经 HTTP 回传）。
+`branch_id` = **当前活跃分支** id（真源定义与取值纪律见 **§1.6**，禁 `'main'` 字面量兜底）、`tick`/`seq` = 世界当前游标、`agent_override` = 当前主角 agent 状态快照（`models.py` §6 PlayerAnchor 的内部结构，不经 HTTP 回传）。
 `id` 由 sim 生成：`uuid4().hex[:12]`，与 `sim/api/settings.py:131` 的 profile id **逐字一致**（无前缀惯例——全仓不用 `prof_`/`anc_` 字面前缀；前端按不透明字符串对待，详见 §6.5）。
 
 ### 1.3 `PATCH /api/anchors/{anchor_id}` — 重命名
@@ -199,6 +203,88 @@ name: str = Field(min_length=1, max_length=64)
 2. 回填是**强制**项，且带「true 行数 = 1」断言（GAP-B）。
 3. `DELETE` 路由里**必须**有 `unregister_anchor_id` 调用（S-7 调用点）——否则已删档在 WS 侧继续「存在」，`load_anchor` 回假成功。
 
+### 1.6 「当前活跃分支」真源与游标取值条款（**正式契约**，R-4 增补，2026-10-01 合入）
+
+> **依据链**：缺陷 R-4（K7 复验发现 `anchors.py` 游标分支硬编码 `'main'`）→ opencode M5-A4 出条款原件 `docs/data/m5-r4-active-branch-contract.md` → **裁 30-D 全采** → 联合单 = A4 条款 + **kilo 契约面（本节）** + Claude 取值施工。
+> **与 §1.5 的体例一致**：条款 R-4.1~R-4.7 的**编号与措辞同 A4 原件、逐字可对**（本节只补接口侧判据、状态码归属与施工钉子，不改原件语义）。**施工单以本节为准**，A4 原件仅作依据核对。
+> **配套前置**：opencode M5-A5 迁移 **0012**（`branches.is_current` + 部分唯一索引）落地**前**，真源按 **R-4.3 过渡期**判据（唯一的 `status='active'` 行）。
+> **与 §1.2 的关系**：§1.2「服务端游标来源」写的是**目标口径**（「`branch_id` = 当前活跃分支 id」）；本节给出该「当前活跃分支」的**唯一定义与取值纪律**。
+
+**条款 R-4.1（真源定义）**
+
+**当前活跃分支 = `branches` 表中「当前」的那一行**，查询形如 `SELECT id FROM branches WHERE <当前谓词>`。
+
+- 真源是**表**，**不是**：`'main'` 之类的字面量、进程内常量、WS 会话状态、driver 内存态。
+- 需要「当前世界线」的读路径**一律**经这一个查询：
+
+| 读路径 | 取值形态 | 边界 |
+|---|---|---|
+| POST 记档游标（`branch_id`/`tick`/`seq`） | HTTP 内部取，落 `player_anchors` 行 | 响应**不回传**（§0 出戏边界不变） |
+| `GET /api/anchors/current` 的分支 | HTTP 内部取（判末梢档用） | 响应**零原始数值**（§0 不变） |
+| D-6 告知帧的 branch | 驱动侧取，用于分叉身份 | **禁出网关**（`branch_id` 不进任何 WS 载荷） |
+| fast-forward 目标分支 | 驱动侧取 | 禁出网关 |
+
+- **fail-closed**：查不到「当前」⇒ 报「无当前世界线」，**禁止**回退到 `'main'` 或任何默认串。猜分支 = 记档指向错误世界线，比拒绝更坏。
+
+**R-4.1-S（状态码归属｜kilo 裁定，A4 原件留「409/503 由 kilo 契约定」的悬项）**
+
+| 情形 | 契约 | 理由 |
+|---|---|---|
+| 当前行为 **0** 行 | **`400` + `/errors/world-not-ready`**（沿用 §1.2 既有机器码，`detail` 写「无当前世界线」） | §1.2 已定「无活跃分支」＝世界未就绪＝400；**零新增 code ⇒ 零快照变更**，前端错误映射不动 |
+| 当前行 **≥2**（歧义，仅 0012 落地前可能） | **同 `400` + 同一 code**，`detail` 写「世界线状态歧义，请重开世界」 | 歧义是**服务端数据完整性**异常而非客户端可重试态；`409` 语义是「客户端动作与当前状态冲突」，`503` 语义是「稍后重试」，两者都误导。**同码 + detail 区分**保住 fail-closed 且不引 500 面 |
+| `is_current=1` 第二行（0012 落地后） | 写层 **IntegrityError ⇒ fail-closed**，不落 HTTP 面 | DB 层不变量（方案 A），HTTP 面根本到不了 |
+
+- **登记为待升级项（不在本轮）**：若 0012 落地后仍需**机器码级**区分歧义（前端要分别提示「重开世界」vs「稍后再试」），则新增 `500 /errors/branch-ambiguous`——**那是一次快照变更**（ext 补 500 声明 + `shared/openapi.json` 同步 + `gen-protocol` 重生成），**归 kilo 单独立单**，不在 R-4 施工单里顺手做。
+
+**条款 R-4.2（唯一性不变量）**
+
+**同一时刻至多一个「当前」分支。** 该不变量目前**不成立**：`store.py::_assert_branch_writable` 的「不存在即开线」（裁 5）允许向任意新分支名 append 并自动开线，于是分叉后「子线 active + 父线被按需开线再次 active」= 两个当前。
+
+- **R-4.2.1**：`append` 的按需开线必须**收紧**为——仅当 `branches` 表**当前行为零**时才允许开线；已有当前行时向另一分支 append ⇒ fail-closed（`InactiveBranchError` / `MultipleCurrentBranchesError`）。**这是不变量成立的唯一入口**（A5 施工项）。
+- **R-4.2.2**：`fork.py` 的「父转 abandoned + 子转 active」是**唯一**允许改变当前行的写路径（现状已如此；只在 `parent_status == 'active'` 时改父——父已 abandoned 时子仍 active，属再分叉，合法）。
+
+**条款 R-4.3（真源载体：`branches.is_current` + 部分唯一索引）**
+
+- **方案 A 采**（A5 迁移 **0012**）：`branches.is_current INTEGER NOT NULL DEFAULT 0` + `CREATE UNIQUE INDEX ux_branches_current ON branches(is_current) WHERE is_current = 1` ⇒ 不变量由**数据库层**保证，第二个 `is_current=1` ⇒ IntegrityError。
+- **方案 B 否决**：真源 = `status='active'` 且 `created_at` 最新（靠 recency 猜）。**否决理由**：读档子线（历史点分叉，A3 §3.2）**故意**与父线并存且可能**更晚**被 fork/触碰 ⇒ `created_at` 最新 ≠ 玩家当前线；recency 会把「玩家正在跑的线」换成「最近被分叉出去的线」，且**静默错**——正是 R-4 要根治的病。
+- **过渡期（零迁移，0012 落地前）**：「当前」= 唯一的 `status='active'` 行；**若出现 ≥2 个 active ⇒ fail-closed**（按 R-4.1-S 回 400 + 「世界线状态歧义」），**不 recency 兜底**。
+
+**条款 R-4.4（分叉后的当前行归属：head 模式 vs anchor 模式）**
+
+| fork 模式 | 当前行归属 | 被封存父线 | 允许多个读档子线 |
+| --- | --- | --- | --- |
+| `kind="head"`（现行：读最近档） | **子分支** | 是（`status='abandoned'`） | 否（只有一条当前） |
+| `kind="anchor"`（A3：回退旧档） | **父分支保持当前** | **否**（玩家还在跑它） | **是**（多条读档子线并存，`is_current=0`） |
+
+⇒ 「至多一个当前」与「多条读档子线并存」**不矛盾**：读档子线不是当前。head 模式自动把当前行交给子分支；anchor 模式**不动**父分支的当前身份。
+
+**条款 R-4.5（多子并存时的选择规则）**
+
+- 多条读档子线并存时，**由显式用户动作决定**「当前」（读档 / 切档请求显式声明目标分支），**不由任何时间戳或数量规则推断**。
+- 读档子线要成为当前 ⇒ 必须走一次显式切换（把目标分支 `is_current=1`、其余置 0，**同一事务内**；撞唯一索引 ⇒ IntegrityError ⇒ fail-closed）。
+- 切换后原当前分支**不自动封存**（它可能仍是玩家想切回的线）；封存是显式动作。⚠️ 与 head-fork「父自动 abandoned」不冲突：head-fork 是**派生**新线（双轨存档语义），切档是**回到**既有线。
+
+**条款 R-4.6（与既有条款的接口）**
+
+- **裁 A6（anchor 引用即热钉）**：被任一 anchor 指向的分支永不整分支冷归档 ⇒ 被选为「当前」的分支天然热存，两条款不打架。
+- **D-9 / 0010（当前游标 = `protected` 列优先，同刻按 id 降序）**：那是**档**的游标；本契约是**分支**的当前行。两者是不同层：**档游标 → 档的 `branch_id` → 该分支**；**两者不得互相推导**——禁止用「`protected` 档的 branch」当分支当前行（多个档可指同一分支，而当前行是分支属性）。
+- **R-6（列表排序，kilo 域）**：与本契约无交集，纯列表顺序。
+
+**条款 R-4.7（施工单须写死——六条钉子，与 §1.5 V 体例一致）**
+
+**⚠ 施工前必读（opencode A4 警告）**：`sim/api/anchors.py` 的**取 `seq`**（`:274` `SELECT COALESCE(MAX(seq), 0) … WHERE branch_id = 'main'`）与**建档**（`:345` `create_item(…, branch_id="main", …)`）**两处必须同改**。只改其一会让档的 `(branch_id, tick, seq)` 三元组**自相矛盾**（branch 指向子线、`seq` 却来自父线）⇒ **比两者都错更坏，且更难查**。
+
+| # | 钉子（可测断言） | 落点 |
+|---|---|---|
+| 1 | 分叉后 POST 记档 ⇒ 档的 `branch_id` = **子分支**、`seq` 取自**同一分支**（三元组自洽） | `sim/tests/test_m5_anchors_branch_source.py` |
+| 2 | 历史点分叉（`kind="anchor"`）后 POST 记档 ⇒ 落在**仍在跑的父分支**（当前行未转移） | 同上 |
+| 3 | 多 active ⇒ **fail-closed**：回 `400 /errors/world-not-ready` 且 `detail` 含「歧义」；**断言响应/落库中零处出现 `'main'` 兜底** | 同上 |
+| 4 | `is_current=1` 的第二行 ⇒ **IntegrityError**（DB 层不变量，0012 后） | A5 迁移往返钉 |
+| 5 | head-fork ⇒ 父 `abandoned` + 子当前；anchor-fork ⇒ 父仍当前 + 子非当前 | 同 #1 文件 |
+| 6 | 查不到当前行 ⇒ 报错，**不**回退 `'main'`（钉子须实跑一次「branches 表空 / 全 abandoned」场景） | 同 #1 文件 |
+
+- **落点文件名已写死**：`sim/tests/test_m5_anchors_branch_source.py`（新建）。命名入 `test_m5_*.py` glob ⇒ 自动进每提交 CI 门禁（`ci.yml` M5 步骤），**不得**并入 bench 或用 `-m` 标记排除。
+- **kilo 域零施工**：本节**不新增 schema、不改快照**（R-4.1-S 刻意复用既有 400 机器码）⇒ `gen-protocol --check` 应保持 EXIT 0、生成物零变化。
 
 ## 2. 错误形（ProblemDetail，RFC 7807 风格）
 
@@ -509,9 +595,9 @@ K1 版 §1.2 曾写「`id` 由 sim 生成（建议 `anc_` 前缀 + 短随机，�
 |---|---|---|
 | `story_label` 构造期空串 | 已定型 | calendar 未就绪时返回 `""`（字段非 null），前端显「未标注」。若 calendar 给出结构化时间，具体格式需与 narrative 域对齐，本文只定非空性 |
 | `agent_override` 不回传 | 已定型 | §0 出戏边界。§12 读档需要它，但载入走 WS `load_anchor`（服务端从库自取），**不经 HTTP**，客户端无需该字段 |
-| 档名禁词（Agent 词表） | **已定型（裁 29-A ③）** | 档名过 `scan()`，命中 422 `/errors/anchor-name-rejected`（§1.2 档名禁词小节）。**取舍已知**：戏外语义合法的「存档/读档/分支」类名字会被挡；放开走**戏外豁免表**钩子（裁 29-A ②，集合由 codex 下波 CR 定义，当前为空表 ⇒ 行为等价现状） |
+| 档名禁词（Agent 词表） | **已定型（裁 29-A ③ / 裁 30-B①）** | 档名过 `scan()`，命中 422 `/errors/anchor-name-rejected`（§1.2 档名禁词小节）。**取舍已知**：戏外语义合法的「存档/读档/分支」类名字会被挡；**明确不接戏外词表钩子**（锚点 name 是跨界字段、有回灌路径，fail-closed 维持）。钩子本身已落集合（`BANNED_WORDS_META_SHELL` 8 词）+ 接线时机（空函数先行），归 codex 域 |
 | 列表排序 `updated_at` 降序 | **已定型（裁 29-A R-6「契约为准改实现」）** | K7 实现曾是升序，main `a50f903` 已改；钉子 `test_m5_api_anchors.py::TestSchemaMatchesSnapshot::test_list_is_newest_first` 防回退 |
-| 游标 `branch_id` 取当前活跃分支 | ⏳ **联合单在途**（R-4，opencode 出真源 + kilo 条款 + Claude 取值） | 现实现硬编码 `'main'`（`anchors.py`），分叉后会指错世界线；本节 §1.2 的「服务端游标来源」条款是目标口径，待联合单落地后回填真源定义 |
+| 游标 `branch_id` 取当前活跃分支 | **契约已落（§1.6，裁 30-D / kilo M5-K9），⏳ 施工在途** | 现实现硬编码 `'main'`（`anchors.py` 取 seq + 建档两处，**必须同改**）⇒ 分叉后记档指错世界线。**真源定义、fail-closed 状态码归属（复用 400 `/errors/world-not-ready`，零快照变更）、R-4.7 六条施工钉子**已进 §1.6；数据面载体 = A5 迁移 0012（`is_current` + 部分唯一索引），取值施工归 Claude 域 |
 | 无「删全部 / 批量」端点 | 已定型 | 玩家档数量级十位数（§6.2 同论证），不需要批量操作；也无 list 删除语义 |
 | `updated_at` 时间源 | 已定型 | `time.time()`（同 `PlayerAnchor.updated_at`，`models.py:107`）；只写一次（§1.4），不随改名推进 |
 
