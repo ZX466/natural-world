@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from sim.core.events import EventKind, matter_event
 from sim.core.persistence.database import init_database
-from sim.core.persistence.models import MatterState, Structure
+from sim.core.persistence.models import Branch, MatterState, Structure
 from sim.core.persistence.npc_store import NpcStore
 from sim.core.persistence.store import SqlEventStore
 
@@ -111,6 +111,9 @@ class TestStructureSchema:
 @pytest.mark.t1
 class TestMatterProjectionBranchIdentity:
     async def test_same_matter_id_projects_per_branch(self, store, session: AsyncSession) -> None:
+        # M5-A5 / R-4.2.1：按需开线只在无当前行时允许 ⇒ 并存分支先声明（读档子线形态）
+        session.add(Branch(id="branch-b", status="active", is_current=False))
+        await session.commit()
         main = NpcStore(store, branch_id="main")
         branch_b = NpcStore(store, branch_id="branch-b")
 

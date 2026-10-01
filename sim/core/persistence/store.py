@@ -53,6 +53,28 @@ class InactiveBranchError(RuntimeError):
     """
 
 
+class CurrentBranchConflictError(InactiveBranchError):
+    """**已有**当前分支时向另一分支按需开线被拒（M5-A5 / R-4.2.1）。
+
+    继承 :class:`InactiveBranchError`：被拒的成因正是「目标分支不是当前世界线」，
+    既有调用方的 ``except InactiveBranchError`` 无需改（分支闸门只有一个出口）。
+
+    为什么收紧（codex S4 缺陷 R-4）：原闸门是「分支行不存在就开线」，于是分叉后
+    驱动误 append 到另一个新分支名就能再开一条 active 线 ⇒ **两个当前世界线**，
+    记档于是指错世界线。现在「开线」只在**无当前行**时允许；已有当前行 ⇒ fail-closed。
+    """
+
+
+class NoCurrentBranchError(RuntimeError):
+    """查不到当前活跃分支（R-4.1 fail-closed）。
+
+    **禁止**回退到 ``'main'`` 或任何默认串：猜分支 = 记档指向错误世界线，比拒绝更坏。
+    合法触发：库刚建（无任何分支）、0012 之后尚未有行被置 ``is_current=1``
+    （含 ≥2 active 的歧义库被回填为全 0）、head-fork 后当前行还停在已封存父分支上
+    （`fork.py` 当前行交接属 R-4 施工单，待落）。
+    """
+
+
 @runtime_checkable
 class EventStore(Protocol):
     """持久化接口 — m0-core.md §8。"""
@@ -73,7 +95,8 @@ class EventStore(Protocol):
         原子写入；None 时仅写 events（当前内核把熵材料存于 event payload，无需双写）。
         validate：默认 True，落库前行级 schema/白名单校验（M2-D3）。
         **分支闸门（裁 5）**：实现须拒向非 active 分支写入（读档 = 分叉后父分支封存，
-        禁误写被弃时间线）；分支行不存在时按需开线。
+        禁误写被弃时间线）；分支行不存在时按需开线，**但仅当当前无活跃分支**
+        （M5-A5 / R-4.2.1 收紧：已有当前行时向别分支开线 = 第二个世界线，fail-closed）。
         """
         ...
 
@@ -117,12 +140,36 @@ class SqlEventStore:
         return self._session_factory
 
     async def _assert_branch_writable(self, session: AsyncSession, branch_id: str) -> None:
-        """裁 5 分支闸门：不存在则开线；非 active 则 fail-closed（见 append docstring）。"""
+        """分支闸门（裁 5 + M5-A5 / R-4.2.1 收紧）。
+
+        三态：
+
+        1. 分支行**不存在** ⇒ **开线**，但**仅当当前无活跃行**（``is_current`` 全 0）。
+           已有当前行时向别分支开线 = 第二个世界线 ⇒ 抛
+           :class:`CurrentBranchConflictError`（fail-closed，**不**留分支行）。
+        2. 行存在且 ``status != 'active'`` ⇒ :class:`InactiveBranchError`（裁 5 原语义）。
+        3. 行存在且 active ⇒ 放行。**含「active 但非当前」**：读档子线（anchor-fork
+           的历史点分叉产物，R-4.4）就是这种行，多条并存合法且都要能写——闸门只管
+           「开线」，不把「非当前」误判成「不可写」。
+        """
         status = (
             await session.execute(select(Branch.status).where(Branch.id == branch_id))
         ).scalar_one_or_none()
         if status is None:
-            session.add(Branch(id=branch_id, status="active"))
+            current = (
+                await session.execute(
+                    select(func.count()).select_from(Branch).where(Branch.is_current.is_(True))
+                )
+            ).scalar_one()
+            if current:
+                raise CurrentBranchConflictError(
+                    f"拒绝为分支 {branch_id!r} 开线：库中已有 {current} 个当前活跃分支"
+                    "（branches.is_current=1）。读档 = 分叉后世界线必须唯一，"
+                    "再开一条 active 线会让记档指向错误世界线（R-4）。"
+                    "要切换当前世界线请走显式切换（同一事务内清旧置新，"
+                    "撞 ux_branches_current 即 fail-closed）"
+                )
+            session.add(Branch(id=branch_id, status="active", is_current=True))
             await session.flush()
             return
         if status != "active":
@@ -130,6 +177,34 @@ class SqlEventStore:
                 f"分支 {branch_id!r} 状态为 {status!r}，不可写入（读档 = 分叉后父分支封存，"
                 "追加即污染被弃时间线）"
             )
+
+    async def current_branch_id(self) -> str:
+        """当前活跃分支 id —— **R-4.1 真源读入口**（表 ``branches.is_current``）。
+
+        需要「当前世界线」的读路径一律经这里：POST 记档游标（branch/tick/seq）、
+        ``GET /api/anchors/current`` 的分支、D-6 告知帧、fast-forward 目标分支。
+
+        **至多一个**由部分唯一索引 ``ux_branches_current`` 保证，故本查询最多一行；
+        **零行 ⇒ :class:`NoCurrentBranchError`**（**禁**回退 ``'main'``：猜分支 =
+        记档指向错误世界线，比拒绝更坏）。
+
+        ⚠️ 本方法**不加** ``status='active'`` 过滤：真源谓词只有 ``is_current``
+        （R-4.1「当前谓词」是唯一载体），「当前行必然 active」这条不变式由
+        ``fork.py`` 的当前行交接（R-4 施工单）维持。读到已封存分支时调用方会被
+        append 闸门拒（fail-closed），不会静默写进被弃时间线。
+        """
+        async with self._session_factory() as session:
+            branch_id = (
+                await session.execute(select(Branch.id).where(Branch.is_current.is_(True)).limit(1))
+            ).scalar_one_or_none()
+        if branch_id is None:
+            raise NoCurrentBranchError(
+                "无当前活跃分支（branches.is_current 全为 0）："
+                "要么世界还没开线，要么 ≥2 个 active 的歧义库被回填为全 0，"
+                "要么 head-fork 后当前行尚未交接（fork.py R-4 施工单）。"
+                "禁止回退 'main' 或任何默认分支（R-4.1）"
+            )
+        return branch_id
 
     async def append(
         self,
@@ -159,9 +234,11 @@ class SqlEventStore:
         NPC_ACT 动作/参数白名单、witnesses 必须 list[str]），拒绝夹带/伪造。
         仅低层存储机制测试可用 ``validate=False`` 传合成 payload（**生产勿用**）。
 
-        分支闸门（裁 5，M5-D3-b）：写入前校验分支 —— 分支行**不存在**则按需开线
-        （世界从第一条事件长出来，``event-sourcing.md`` §2.2 的「校验存在」由
-        「不存在即开线」实现，避免每个测试/驱动都手工建线）；分支行存在但
+        分支闸门（裁 5，M5-D3-b；**M5-A5 收紧**）：写入前校验分支 —— 分支行**不存在**
+        则按需开线（世界从第一条事件长出来，``event-sourcing.md`` §2.2 的「校验存在」
+        由「不存在即开线」实现，避免每个测试/驱动都手工建线），但**仅当无当前活跃分支**
+        （R-4.2.1：已有 ``is_current=1`` 的行时向别分支开线 ⇒
+        :class:`CurrentBranchConflictError`，「两个世界线」比拒绝更坏）；分支行存在但
         ``status != 'active'`` → 抛 :class:`InactiveBranchError`（读档 = 分叉把父
         分支标 abandoned 后，禁再往被弃时间线追加；世界档 append-only，事后删不掉）。
         闸门在 seq 分配**之前**，故被拒的 append 不吃 seq 号。

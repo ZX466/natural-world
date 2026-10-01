@@ -40,13 +40,21 @@
   写路径（现状已如此，且只在 `parent_status == 'active'` 时改父——父已 abandoned 时子仍
   active，属再分叉，合法）。
 
-## 条款 R-4.3（真源载体：建议加 `branches.is_current` + 部分唯一索引）
+## 条款 R-4.3（真源载体：**0012 已落** `branches.is_current` + 部分唯一索引）
+
+> **落库状态（M5-A5，0012）**：方案 A 已实施——`branches.is_current BOOLEAN NOT NULL
+> DEFAULT 0` + `ux_branches_current ON branches(is_current) WHERE is_current = 1`，
+> 回填「唯一 active 置 1、≥2 active 全置 0」，写路径闸门已收紧（R-4.2.1），
+> 读路径真源入口 = `SqlEventStore.current_branch_id()`。
+> ⚠️ **未落**：`fork.py` 的当前行交接（R-4.4）——head-fork 后当前行仍停在**已封存**的父
+> 分支上，子分支 `is_current=0`；施工要点 = 分叉事务内**先清父、再置子**（否则撞
+> `ux_branches_current` 整批回滚，钉子 `test_switch_without_clearing_hits_index`）。
 
 「当前」需要**可判定的载体**。两个候选：
 
 | 方案 | 判定 | 结论 |
 | --- | --- | --- |
-| **A：`branches.is_current INTEGER NOT NULL DEFAULT 0` + 部分唯一索引** `CREATE UNIQUE INDEX ux_branches_current ON branches(is_current) WHERE is_current = 1` | 显式、可索引、**数据库层**保证不变量（第二个 `is_current=1` ⇒ IntegrityError ⇒ fail-closed 在写入层） | **建议采**（1 条迁移 0012） |
+| **A：`branches.is_current INTEGER NOT NULL DEFAULT 0` + 部分唯一索引** `CREATE UNIQUE INDEX ux_branches_current ON branches(is_current) WHERE is_current = 1` | 显式、可索引、**数据库层**保证不变量（第二个 `is_current=1` ⇒ IntegrityError ⇒ fail-closed 在写入层） | **已采**（0012） |
 | B：真源 = `status='active'` 且 `created_at` 最新 | 靠 recency 猜 | **否决** |
 
 **否决 B 的理由**：读档子线（历史点分叉，见 A3 §3.2）**故意**与父线并存，且子线可能比父线
@@ -55,6 +63,8 @@
 
 **过渡期（零迁移）**：在 0012 落地前，「当前」= 唯一的 `status='active'` 行；
 **若出现 ≥2 个 active ⇒ fail-closed**（报「世界线状态歧义，请重开世界」），**不 recency 兜底**。
+0012 的回填**沿用同一判据**（唯一 active 置 1；≥2 active 保持全 0），故过渡期歧义库在
+0012 之后仍是「无当前行」⇒ 读路径照旧 fail-closed，而不是被 recency 悄悄治好。
 
 ## 条款 R-4.4（分叉后的当前行归属：head 模式 vs anchor 模式）
 
@@ -87,6 +97,10 @@ head 模式自动把当前行交给子分支；anchor 模式**不动**父分支�
 - **R-6（列表排序，kilo 域）**：与本契约无交集，纯列表顺序。
 
 ## 条款 R-4.7（钉子要求，kilo/Claude 施工时补）
+
+> **已落钉子**（`sim/tests/test_m5_branch_current.py`，36 例）：第 3/4/6 条 + 回填三态 +
+> 开线闸正负例 + 两种 fork 的**数据面**现状/载体可用性。第 1/2 条（POST 游标三元组）随
+> `anchors.py` 施工单落。
 
 1. 分叉后 POST 记档 ⇒ 档的 `branch_id` = **子分支**、`seq` 取自**同一分支**（三元组自洽）；
 2. 历史点分叉后 POST 记档 ⇒ 落在**仍在跑的父分支**（当前行未转移）；

@@ -174,9 +174,14 @@ class TestAlembic0011:
         assert count == 0
 
     def test_downgrade_upgrade_round_trip(self, tmp_path: Path) -> None:
-        """0010 ↔ 0011 逐级往返：表消失再回来，version 复原。"""
+        """0010 ↔ 0011 逐级往返：表消失再回来，version 复原。
+
+        ⚠️ 往返一律**钉具体 revision id**、不钉 `head`（A4 自修纪律）：钉 head 会随
+        新迁移（如 0012）前进而假红——本用例断的是 0010/0011 这一段，不是「从 0010 到
+        最新」的任意路径。
+        """
         assert _alembic(tmp_path, "upgrade", "0010_protected_backfill").returncode == 0
-        assert _alembic(tmp_path, "upgrade", "head").returncode == 0
+        assert _alembic(tmp_path, "upgrade", "0011_anchor_packages").returncode == 0
         assert _alembic(tmp_path, "downgrade", "0010_protected_backfill").returncode == 0
 
         conn = sqlite3.connect(str(tmp_path / "mig.db"))
@@ -188,7 +193,7 @@ class TestAlembic0011:
             conn.close()
         assert gone == 0
 
-        assert _alembic(tmp_path, "upgrade", "head").returncode == 0
+        assert _alembic(tmp_path, "upgrade", "0011_anchor_packages").returncode == 0
         conn = sqlite3.connect(str(tmp_path / "mig.db"))
         try:
             back = conn.execute(
@@ -235,9 +240,9 @@ class TestAlembic0011:
         assert packages == 0, "降级 drop 表后重建应为空（包是可重算派生物）"
 
     def test_upgrade_is_repeatable(self, tmp_path: Path) -> None:
-        """幂等：连续 upgrade head 不炸（version 已是 head 时 alembic 直接 no-op）。"""
-        assert _alembic(tmp_path, "upgrade", "head").returncode == 0
-        assert _alembic(tmp_path, "upgrade", "head").returncode == 0
+        """幂等：连续 upgrade 到同一 revision id 不炸（已在该 version 时 alembic no-op）。"""
+        assert _alembic(tmp_path, "upgrade", "0011_anchor_packages").returncode == 0
+        assert _alembic(tmp_path, "upgrade", "0011_anchor_packages").returncode == 0
         conn = sqlite3.connect(str(tmp_path / "mig.db"))
         try:
             version = conn.execute("SELECT version_num FROM alembic_version").fetchall()

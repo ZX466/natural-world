@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from sim.core.events import material_moved_event
 from sim.core.persistence.database import init_database
-from sim.core.persistence.models import Event, MaterialBalance, Structure
+from sim.core.persistence.models import Branch, Event, MaterialBalance, Structure
 from sim.core.persistence.npc_store import NpcStore, NpcStoreError
 from sim.core.persistence.store import SqlEventStore
 
@@ -120,6 +120,10 @@ class TestMaterialConservation:
         assert snapshot == replay
 
     async def test_branch_isolated(self, store) -> None:
+        # M5-A5 / R-4.2.1：按需开线只在无当前行时允许 ⇒ 并存分支先声明（读档子线形态）
+        async with store.session_factory() as s:
+            s.add(Branch(id="fork", status="active", is_current=False))
+            await s.commit()
         main = NpcStore(store, branch_id="main")
         fork = NpcStore(store, branch_id="fork")
         event = move(1, from_ref="world:stockpile", to_ref="npc:chenmo", quantity=1.0)

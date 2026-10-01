@@ -18,6 +18,7 @@ from sqlalchemy import (
     PrimaryKeyConstraint,
     String,
     Text,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -43,6 +44,20 @@ class Branch(TimestampMixin, Base):
     接缝跳变风险由 `fork_from_anchor` 的 warning 暴露）。
     为什么不落一个 seed：seed 表达不了抽签进度（实测接缝跳变），详见
     `docs/data/m5-fork-archive-preplan.md` §6.3。
+
+    **is_current（M5-A5 / 0012，R-4.3 方案 A）**：本分支是不是**当前活跃世界线**
+    （条款 `docs/data/m5-r4-active-branch-contract.md` R-4.1）。真源是**本列**，
+    不是 `'main'` 字面量、不是 ``status='active'`` 的 recency 猜测：
+
+    - **至多一个当前**：部分唯一索引 ``ux_branches_current ON branches(is_current)
+      WHERE is_current = 1`` —— 索引值恒为 1，第二个 1 直接 ``IntegrityError``
+      （DB 层保证，应用层检查会被并发绕过）；
+    - **多条读档子线并存合法**（R-4.4）：anchor-fork 的历史点读档子线是
+      ``is_current=0`` 的普通行，「至多一个当前」与「多条读档线并存」不矛盾；
+    - **否决 recency**：读档子线故意与父线并存且可能**更晚**被触碰，按时间戳选会把
+      「玩家正在跑的线」换成「最近被分叉出去的线」，且静默错；
+    - 写路径（``store.py``）按需开线据此收紧为「仅当无当前行才可开线」，读路径经
+      ``SqlEventStore.current_branch_id``；查不到当前行**报错**，禁回退 `'main'`。
     """
 
     __tablename__ = "branches"
@@ -53,8 +68,19 @@ class Branch(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String, nullable=False, default="active")
     abandoned_at: Mapped[float | None] = mapped_column(Float, nullable=True)
     rng_state: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_current: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("0")
+    )
 
-    __table_args__ = (Index("idx_branches_status", "status"),)
+    __table_args__ = (
+        Index("idx_branches_status", "status"),
+        Index(
+            "ux_branches_current",
+            "is_current",
+            unique=True,
+            sqlite_where=text("is_current = 1"),
+        ),
+    )
 
 
 class Event(TimestampMixin, Base):

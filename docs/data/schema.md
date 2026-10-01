@@ -57,13 +57,18 @@
 | `created_at` | REAL | NOT NULL DEFAULT (unixepoch('now','subsec')) | 创建时间 | — |
 | `abandoned_at` | REAL | NULL | 废弃时间（status=abandoned 时填充） | §12 双轨存档 |
 | `rng_state` | TEXT | NULL | **0009，裁 27-B b2**：本分支承接的**随机流状态包**（`sim/core/rng_state.capture_rng_state` 的 JSON，≈198 B/流：`RngRegistry` 快照 + 每流 PCG64 抽签进度）。读档 = 分叉时在 **fork 事务内**原子落库 ⇒ 分支自带状态、**可连续分叉**。`NULL` = 未承接过（根分支 / 调用方未提供 ⇒ 随机流从头开始，fork 会发 warning） | m5-fork-archive §6.3 |
+| `is_current` | BOOLEAN | NOT NULL DEFAULT 0 | **0012，R-4.3 方案 A**：本分支是不是**当前活跃世界线**（真源，见 `m5-r4-active-branch-contract.md` R-4.1）。读路径经 `SqlEventStore.current_branch_id()`；**查不到即报错，禁回退 `'main'`**。**否决 recency**：读档子线故意与父线并存且可能更晚被触碰，按时间戳选会静默换线 | R-4 契约 |
 
 **索引**：
 - `idx_branches_status` ON `(status)` — 查询活跃分支
+- `ux_branches_current` ON `(is_current)` **WHERE `is_current = 1`** — **部分唯一索引**：索引值恒为 1 ⇒ 第二个当前行撞唯一约束，「至多一个当前」由**数据库层**保证（应用层检查会被并发绕过）
 
 **约束**：
 - `forked_from_seq` 为 NULL 当且仅当 `forked_from_branch` 为 NULL（根分支）
 - 废弃分支不可重新激活（应用层保证）
+- **至多一个当前分支**（0012，`ux_branches_current`）。读档子线可以多条并存（`is_current=0`），与本约束不矛盾（R-4.4）
+- **当前行交接必须同事务**：head-fork 的「父清 0 + 子置 1」若不在同一事务内先后执行，第二步直接 IntegrityError ⇒ 整批回滚（钉子 `test_switch_without_clearing_hits_index`；交接本身属 `fork.py` 的 R-4 施工单）
+- **按需开线只在无当前行时允许**（R-4.2.1，`store.py::_assert_branch_writable`）：已有当前行时向别分支 append ⇒ `CurrentBranchConflictError`（`InactiveBranchError` 子类），不留分支行、不吃 seq 号
 
 ---
 
