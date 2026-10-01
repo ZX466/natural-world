@@ -84,6 +84,53 @@ WHITELIST_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
 )
 
 # ---------------------------------------------------------------------------
+# 戏外面词表钩子（M5-S6，裁 30 §B；CR 稿 m5-s5-meta-lexicon-and-budget-cr.md §2）
+# ---------------------------------------------------------------------------
+#: **判层模型**（四层，见 m5-s5-meta-lexicon-and-budget-cr.md §2.2）：
+#: 1. Agent 叙事面（prompt/记忆/独白/感知帧）→ ``BANNED_WORDS``（上表，不变）；
+#: 2. 锚点 name 跨界字段（→ D-6 告知帧/story_label）→ 仍 ``BANNED_WORDS``
+#:    （F-6 维持，裁 29-A③——跨界 fail-closed，不接本钩子）；
+#: 3. **纯戏外面**（错误 title/覆盖层/面板文案，不进任何 WS 戏内帧）→
+#:    ``BANNED_WORDS 减去 BANNED_WORDS_META_SHELL``（见 ``scan_meta_shell``）；
+#: 4. 权力判据键级面 → ``AUTHORITY_FORBIDDEN_KEYS``（S3，键级与本词级互补）。
+#:
+#: **本表当前为空**（结构先行，裁 30 §B「空表先建结构」）。首批 8 词候选
+#: （游戏行为词，双面成立才入——Agent 面必须拦 ∧ 戏外语境正常）以批注留存，
+#: **填值随首个真实戏外消费方 CR**（YAGNI，裁 30 §B 已裁「空函数先行」）：
+#: {重开, 读档, 存档, 快照, 回放, 游戏, 模拟, 玩家}
+#: 「AI/模型/prompt」等元信息词**不入**本表——戏外出现仍破坏沉浸契约第一观感。
+#:
+#: **纪律（CR-1 负钉锁死，见 test_t4_probes.py::TestMetaShellLexicon）**：
+#: - 本表**不是 Agent 面豁免源**——``scan()`` 的 Agent 面分派永不读它；
+#: - 只增不减同 CR；减 = 放松戏外面。
+BANNED_WORDS_META_SHELL: frozenset[str] = frozenset()
+
+
+def scan_meta_shell(text: str) -> ScanResult:
+    """戏外面扫描：Agent 面词表减去戏外合法集（面宽于 Agent 面，非无扫描）。
+
+    语义 = ``BANNED_WORDS`` 中未被 ``BANNED_WORDS_META_SHELL`` 覆盖的词仍拦。
+    与 ``scan()`` 同为纯函数、无状态；**本函数不是 Agent 面的豁免路径**——
+    Agent 叙事面（prompt/记忆/独白）一律走 ``scan()``。
+    """
+    hits: list[Hit] = []
+    for word in BANNED_WORDS:
+        if word in BANNED_WORDS_META_SHELL:
+            continue
+        if word.isascii():
+            for m in re.finditer(rf"(?i)(?<![0-9A-Za-z_]){re.escape(word)}(?![0-9A-Za-z_])", text):
+                kind = "persist" if word in BANNED_WORDS_PERSIST else "meta"
+                hits.append(Hit(word=word, start=m.start(), end=m.end(), kind=kind))
+        else:
+            for m in re.finditer(re.escape(word), text):
+                kind = "persist" if word in BANNED_WORDS_PERSIST else "meta"
+                if _in_whitelisted_span(text, m.start(), m.end()):
+                    continue
+                hits.append(Hit(word=word, start=m.start(), end=m.end(), kind=kind))
+    return ScanResult(hits=tuple(sorted(hits, key=lambda h: (h.start, h.end))))
+
+
+# ---------------------------------------------------------------------------
 # 改写映射表（memory-scan.md §3：词面级机械替换，不做语义重写）
 # ---------------------------------------------------------------------------
 
