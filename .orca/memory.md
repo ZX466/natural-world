@@ -960,14 +960,30 @@ uv run pyright sim/
   K3 批次 B 四面 `a149bb9`（**已收编 main `9f0852f`**）→ K4 批次 C 预研 `74d8029` → K5 兼容审计 `ddbbaed` →
   K6 C-2 契约合入 + S-7 + GAP-F `fe2ea78` → K7 CRUD 复验/代码审查 `a677d14` → K8 快照对齐 + 四钉 + 禁词条款 `aca9d3f`。
   **K6/K7/K8 待 Claude 收编。**
+- **✅ M5-K9 已交 `68b5c9c`（origin+gitee 已推，待 Claude 收编）**——**零代码零 schema**：
+  R-4 条款合入 `anchors-api.md` **新增 §1.6**（日期化 2026-10-01，依据＝裁 30-D；R-4.1~R-4.7
+  编号措辞与 A4 原件逐字可对）+ **R-4.1-S 状态码裁定**（A4 原件把「409/503」悬给 kilo，我给死为
+  **0 行与 ≥2 歧义一律 `400 /errors/world-not-ready`**，detail 区分 ⇒ **零新增 code / 零快照变更**；
+  明确**不选 409/503** 的理由，并把「`500 /errors/branch-ambiguous`」登记为**须另立快照单**的待升级项）
+  + R-4.7 六钉写成「施工单须写死」段、**落点文件名写死** `sim/tests/test_m5_anchors_branch_source.py`
+  （入 `test_m5_*.py` glob⇒自动进 CI M5 步）+ A4「取 seq :274 与建档 :345 必须同改」警告抄进正文
+  + §1.2 两处交叉引用 + §6.7 备忘两行状态同步。R-5（裁 30-B①②）落定于 §1.2：**META_SHELL 8 词**集合、
+  **判层模型订正**（本表**不是** `scan()` 豁免源，只服务 `scan_meta_shell = BANNED_WORDS − META_SHELL`）、
+  **锚点 name 维持 F-6 不接钩子**、**接线＝空函数先行 YAGNI**。
+  **门禁**：`gen-protocol --check` 过（`shared/` 零 diff）／pytest 锚点三文件 **62 passed**／
+  改动文件 `w/lf`。**prettier 处置**：`docs/**` 不在 CI 门禁（`working-directory: client` +
+  `.prettierignore` 含 `*.md`）且 **HEAD 版 anchors-api.md 本就红**（基线 134 行表格对齐 drift）⇒
+  **未跑 `--write`**（纪律 12），只修掉自己引入的唯一真缺陷（§1.6 前多一个空行），新表按本文件
+  既有风格写（不按 prettier CJK 宽度补空格）。**非本次引入**：本树
+  `sim/tests/test_m5_monologue_s2c.py` `i/lf w/crlf`（自检期望计数 0、实测 1），下轮重签出时清。
 - **新对话第一动作**：`git fetch origin main && git merge origin/main` → 读 `.orca/talking.txt`
   （有没有新派单／上一轮回执）→ 回这里。**不要**从历史快照开始读。
-- **⚡ 在途单（2026-09-30 派，尚未开工）**：**M5-K9**＝①把 opencode A4 的
-  `docs/data/m5-r4-active-branch-contract.md` 条款 R-4.1~R-4.7 合入 `anchors-api.md` §1.5 增补
-  （日期化、依据＝裁 30-D），并把 **R-4.7 的 6 条钉子**抄成「施工单须写死」段（同 §1.5 V 三件事体例）；
-  ②R-5 集合条款落定（裁 30-B①）：§1.2 档名禁词小节补「戏外词表钩子」预告
-  （`BANNED_WORDS_META_SHELL` 8 词草案已裁、接线时机＝空函数先行 YAGNI、锚点 name **维持 F-6 不接钩子**）。
-  门禁：prettier 过＋条款编号与 A4 原件逐字可对＋双推。
+- **⚡ 在途单（2026-10-01 起）**：**无**（M5-K9 已交 `68b5c9c`）。下一个 M5-K 单由 Claude 派。
+  上一轮派单原文留档：M5-K9＝①A4 的 R-4.1~R-4.7 合入 `anchors-api.md`（日期化、依据＝裁 30-D）
+  ＋R-4.7 六钉抄成「施工单须写死」段；②R-5 集合落定（META_SHELL 8 词、接线＝空函数先行、
+  锚点 name 维持 F-6 不接钩子）。门禁：prettier 过＋条款编号与 A4 原件逐字可对＋双推。
+  **⚠ 门禁口径订正**：「prettier 过」对 `docs/**` **不成立**（不在 CI 门禁 + HEAD 本就红）——
+  正确口径＝**先测基线**，红了就保持最小 diff 不 `--write`（纪律 12），并回报基线数字。
 
 **② 接口域现状（一句话）**
 协议面＝`shared/openapi.json`（唯一真相源）→ `npm run gen-protocol` → `shared/protocol.ts`（**禁手写**）→
@@ -976,12 +992,13 @@ uv run pyright sim/
 批次 C 权力面按裁 27-C/D-10「权力完全不可见」＝**协议零新增**。CRITICAL（G-1 plan 越界、R-1 读档挂死）与全部 HIGH 已清零。
 
 **③ 下一步**
-- **在途：M5-K9（派单在 `.orca/talking.txt`，等我开工）**——R-4 条款合入 `anchors-api` §1.5 增补
-  （A4 的 R-4.1~R-4.7 逐字合入＋R-4.7 六钉抄成「施工单须写死」段）＋R-5 戏外词表钩子条款落定。
-  **背景**：现 `anchors.py` 游标 `branch_id` 硬编码 `'main'` ⇒ 分叉后 POST 记的档指向 main 线、
-  读档载入**错误世界线**（R-4，分叉可用即触发）。我域只出**条款**，施工归 Claude。
-- 之后的等派项：pi 的 M5-P2 thresholds 落地后复核快进钉仍绿；codex 豁免表 CR 落地后接 §1.2 钩子；
-  任何新增/变更协议面。
+- ~~**在途：M5-K9**~~ **✅ 已交 `68b5c9c`（见上）**。K9 之后的**等派项**：
+  ①**R-4 取值施工的复验**（Claude 域 `anchors.py` 两处同改 + 新建
+  `sim/tests/test_m5_anchors_branch_source.py` 六钉）——收编后我照 §1.6 R-4.7 表逐条核；
+  ②**A5 的 0012 落地后**核过渡期→`is_current` 切换无双源（§1.6 R-4.3）；
+  ③若要 `500 /errors/branch-ambiguous`（歧义机器码级区分）＝**我另立快照单**（ext + 快照 +
+  gen-protocol，**禁**在 R-4 施工单里顺手做）；④pi 的 M5-P2 thresholds 落地后复核快进钉仍绿；
+  ⑤任何新增/变更协议面。
 - 我可主动做（**不接未派的施工单**）：协议面审计与对表、live↔快照对账、契约草案、钉子补齐、复验评审。
 
 **④ 未修债（本树域内，分级）**
