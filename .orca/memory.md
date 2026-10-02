@@ -61,17 +61,40 @@
   语句内逐行校验唯一约束）；同事务两步两种次序都过，取「先清父」只为失败模式可读。
   ⇒ 交接判据 = **只在「父就是当前行」时发生**（从读档线分叉不抢当前行）。
 
-<!-- ===== 新对话快速恢复卡（Claude 主树，2026-10-01 第三十八轮交接态）===== -->
-<!-- 0. 本会话状态：main `5b0bcbc`，2013 passed/121 skipped，双远程推齐；台账零 ⏳ -->
-<!-- 1. M0-M4 全收官；M5 ≈80%：批次B✅ CRUD链✅ 性能治理✅；批次A≈85%（chaos.py `6211c87` +
-     R-4 数据面全备）；批次C/D/E 待开工（前置全备：判据8钉/0011/0012/R-4契约§1.6 全在 main） -->
-<!-- 2. 在途 = 零：K9/S6/P8/A5 已全收编（第三十八轮快照）；cline 待命（候选单：T4 接线口径待用户定） -->
-<!-- 3. 我域下轮：R-4 施工（anchors.py :274取seq+:345建档 同改接branches真源=is_current，
-     六钉落 test_m5_anchors_branch_source.py，opencode 配合出数据面钉）→批次A收口（world循环
-     inject 接线+chaos 消费点）→批次C机制施工；挂账：P5 婉辞生成载体 -->
+<!-- ===== 新对话快速恢复卡（Claude 主树，2026-10-02 第三十九轮交接态）===== -->
+<!-- 0. 本会话状态：main `9d20d75`，2019 passed/126 skipped，双远程推齐；⏳ 全文档清零 -->
+<!-- 1. M0-M4 全收官；M5 ≈85%：批次B✅ CRUD链✅ 性能治理✅；批次A≈90%（chaos.py+0012+R-4
+     契约/对表/钉/预算案全备，只剩我施工）；批次C/D/E 待开工（S7 安规钉+P9 红线已给约束） -->
+<!-- 2. 在途 = 零：K10/S7/P9/C7/A6 已全收编（第三十九轮快照）。用户待裁两项：T4 口径（甲=本地
+     探针 vs 乙=GitHub secret）、仓根 world.db 陈旧债（裁 28-B：删或 upgrade head） -->
+<!-- 3. 我域下轮：**R-4 施工开工**——anchors.py :274/:345 接 branches 真源（A6 六锁钉解锁转
+     门禁+K10 §5.2 对表照抄+P9 接法红线）→fork.py 当前行交接（关 K10 钉 5+A6 口径稿六步）
+     →批次A收口（inject 接线+chaos 消费点）→批次C机制施工；挂账：P5 婉辞生成载体 -->
 <!-- 4. 恢复序：talking.txt（在途单卡）→本文件①节顶部最新快照→workflow.txt+agent-registry.md
      →git fetch+merge origin/main。坑与教训全在各轮快照内联（stamp纪律/正向钉/行替换先打印） -->
 <!-- ============ 恢复卡结束，以下为 ①节正文 ============ -->
+
+【2026-10-02 第三十九轮｜派单五单全收编（main 9d20d75，R-4 施工面备齐）】
+①**五单收编零冲突**：kilo K10（`1d01d24`，§5.2 六钉验收对表+§2.1
+branch-ambiguous 登记单——钉 1 seq 刻意不等/钉 3 歧义 fixture=is_current 全 0
++白盒负钉锁 main 字面量/钉 5 阻塞项=fork.py 交接；M5-K10-R4 命名避让历史标签）
+→ codex S7（`1361783`，三面威胁盘点 W-A/W-D/W-C，无 CRITICAL/HIGH，7 缺口
+全建议钉）→ pi P9（`8176e30`，**红线=接法不是数字**：禁扰动进 PathCache 键/
+喂 A*；CHAOS_TICK_LIMIT_MS=0.05 提案 advisory；抽签 9.3µs vs 冷 A*
+494–647µs=53–70x）→ cline C7（`ef6d938`，workflow 审计 172 行——**派单里
+codex 两条提醒已过期**，env 早已 Deepseek-v4-flash/全仓零 TODO；T4 两口径
+甲=本地探针推荐/乙=GitHub secret 须同注 T4_RUN=1 防假绿灯，**文档层双真相源
+待用户裁**）→ opencode A6（`19ce397`，**11 钉=5 绿+6 skip-locked**，锁信号=
+anchors.py 出现 current_branch_id/is_current；**单语句 CASE 换手 SQLite 必撞
+部分唯一索引 ⇒ 两步+同事务+先清父**；chdir(tmp_path) 不碰 world.db 老债）。
+②**台账**：K10/S7/P9 新增三行+A6/C7 翻转（`9d20d75`/`23a241a`）+**M4-D2
+历史漏翻行补翻**（⏳ 在途→✅ `c719171`）⇒ 全文档 ⏳ 清零。③门禁
+**2019 passed / 126 skipped**（+6=A6 五绿钉生效）、ruff/pyright 0、
+gen-protocol EXIT 0（codex 树 node_modules 缺由主树补跑）。④双远程推送。
+**我域下轮=R-4 施工开工**：anchors.py :274/:345 接 branches 真源——A6 六锁钉
+解锁转门禁+K10 对表照抄+P9 接法红线遵守；随后 fork.py 当前行交接（同单关
+K10 钉 5 阻塞项+opencode 口径稿六步清单）→批次 A 收口（inject 接线+消费点，
+P9 红线落位）。
 
 【2026-10-01 第三十八轮｜在途四单全收编（main 5b0bcbc，台账零 ⏳）】
 ①**四单收编零冲突**（预警机制再生效）：kilo K9（`68b5c9c`，R-4 条款合入
