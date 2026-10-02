@@ -1618,6 +1618,16 @@ uv run ruff check . && uv run pyright <改动文件>
   - 坑：新增 docs 节用 ruff RUF003 视角避全角符号（−＝→文字）；插入节后重排
     节序勿手滑（§10 插 §9 前导致 10→9 倒序，rename 收口）。
 
+- **M5-S8（权力安规威胁模型）✅ `e4aafed`**（2026-10-02，双推）
+  新文件 `docs/security/m5-power-threatmodel.md`。现状实测：authority 目录/
+  0013 迁移均不存在（机制零实现，本稿是前置）。W-A1=机制自建词面过滤即第二套判梯
+  （白盒源码级钉）；W-A2=直改 UtilityDecision 绕意愿管线（白盒 + 正向可证伪
+  「同输入换权力档 willingness band 必须变」）。**施工级钉 17 条**归两组
+  （kilo K-1..K-7 API 面 / opencode O-1..O-7 数据面），每钉一句可证伪判据+
+  建议落点。**D-10 相容论证**：不可见=最小攻击面；「不可见的是状态，可测的是
+  行为」；构造隔离（X2 体例）是最强钉（干净样本测剥除会假绿）。
+  - 坑：裁 31 当时未入库（m5-rulings.md 无该裁），按派单卡面执行；权威是卡+树。
+
 ## 下一步 / 待派（不在本单范围）
 - **T4 nightly 接线未闭合 → 需派 cline**：`.github/workflows/t4-nightly.yml` 探针 step
   仍是 TODO 注释态 + env 仍写 claude-sonnet-5；须接到
