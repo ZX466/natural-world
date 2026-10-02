@@ -1538,6 +1538,16 @@ uv run ruff check . && uv run pyright <改动文件>
   坑：RUF003 全角「−」必炸——文档注释用「减去」不用符号；SIM300 Yoda 条件
   ruff --fix 可清。
 
+- **M5-S7（三面威胁盘点）✅ `1361783`**（2026-10-01，双推）
+  m5-security-preplan.md 新增 §9：权力（W-A1 词面 CR 引用/W-A2 意愿管线旁路禁）、
+  火灾生态（W-D1 蔓延逐步事件化/W-D2 T3 破坏类样本/W-D3 事件预算同混沌判据）、
+  混沌流（W-C1 rng_state 零出站递归扫/W-C2 chaotic 输出禁字符串内插进叙事，
+  X2 体例）——每钉一句可证伪判据+归属。三条硬边界（§19.1/§19.3/D-10/裁 21-C②）
+  交叉核对表落 §9.4。**环境缝**：gen-protocol --check 需 client/node_modules
+  （cline npm ci 步骤），本树未装跑不了——收编轮主树跑。
+  - 坑：新增 docs 节用 ruff RUF003 视角避全角符号（−＝→文字）；插入节后重排
+    节序勿手滑（§10 插 §9 前导致 10→9 倒序，rename 收口）。
+
 ## 下一步 / 待派（不在本单范围）
 - **T4 nightly 接线未闭合 → 需派 cline**：`.github/workflows/t4-nightly.yml` 探针 step
   仍是 TODO 注释态 + env 仍写 claude-sonnet-5；须接到

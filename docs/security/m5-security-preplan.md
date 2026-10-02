@@ -128,7 +128,63 @@ M4 批次 A 的 `impulse_gate` 三扫是**入站即扫**，与分支无关。分
 - `agent_override` 的可审计性：override 不是事件 ⇒ 不进重放；跨分支物化态
   `fold(父前缀, F) + override + fold(子分支事件)` 缺可重放证据链。登记不施工（裁 7 维持）。
 - `*.written` 事件：给语料表造事件会触事件白名单封闭集 + T2 重放口径。登记不施工。
-## 9. 变更纪律
+## 9. M5 剩余三面威胁盘点（2026-10-01，M5-S7；权力/火灾生态/混沌流）
+
+> 背景：批次 B/C 数据与判据面已收官（R-E 系钉 + authority 8 钉），批次 A 混沌流
+> `sim/world/chaos.py` 已落（11 钉），批次 D 火灾生态/批次 E 未开工。本节把三面的
+> 威胁清单、既有守卫复用点、缺口与建议钉一次盘完，避免机制施工时补丁式追赶。
+> 约束：零代码零 schema；不扩既有词表（META_SHELL 8 词填值仍待首个戏外消费 CR）；
+> D-10 权力不可见不可破。
+
+### 10.1 面①：批次 C 权力机制（D-10 不可见红线下的可观测面边界）
+
+| 威胁 | 触发场景 | 既有守卫（复用） | 缺口与建议钉 |
+|---|---|---|---|
+| 权力值/位阶经叙事面泄出 | 机制让 Agent 独白提及位阶数值 | `assemble_prompt` 出站终扫 + `banned_words.scan`（数值/元信息词）+ 权力键级 `AUTHORITY_FORBIDDEN_KEYS` 递归扫 | **W-A1**：权力术语词面（「位阶」「权威值」类戏内自称）若机制引入新词，须走词表 CR 而非机制内自带过滤——判据：机制 PR diff 含词表外新词即需 CR 引用 |
+| 操纵感措辞借权力语义回归 | 「我位阶高所以听我的」 | S9 `judge_hard` `manipulation` 码（权力语境零豁免，S3 红线 C 已钉） | 无缺口——`TestManipulationRedline` 已锁，机制施工时沿用 |
+| 权力影响下 Agent 行为偏差绕过意愿系统 | 机制直改 utility 而不经 `willingness_conflict` | M4 `will.py` 四档 + `test_m4_willingness`（数值/band 不进文本） | **W-A2**：机制新增的决策偏差必须走意愿管线产 verdict，不得旁路——判据：`authority` 生产代码不得直接改 `UtilityDecision` 字段（白盒扫描，同 X2 体例） |
+| 机制数据面新列经 anchors/HTTP 出站 | 持久化位阶列被放进 payload | `AnchorListItem` 五键白名单 + 递归禁键扫 | 无缺口——加字段即 `test_anchors_payload_recursive_clean` 红 |
+
+### 10.2 面②：批次 D 火灾生态（物质/事件面新增写入方的输入信任边界）
+
+| 威胁 | 触发场景 | 既有守卫（复用） | 缺口与建议钉 |
+|---|---|---|---|
+| 蔓延引擎绕过 C4 直接改 matter/structure 投影 | 蔓延以「批量物理模拟」为名直写表 | C4 唯一写路径 + `PAYLOAD_MODELS` 闭合枚举 + `store.append` 闸门（裁 5） | **W-D1**：蔓延/生态每一步状态变更必须产事件（`fire.spread`/`eco.shift` 类新 kind 须登记白名单+payload 模型，走 0006/0007 同款迁移+钉子体例）——判据：新增写表 SQL 不经 `store.append` 即红 |
+| 玩家念头间接纵火/滥砍的入站边界 | 玩家直填「去烧了那片林子」 | `impulse_gate` 三扫已接线（`ws.py` M4-A2 段）+ T3 门禁 69 条 | 无新缺口——但 **W-D2**：T3 建议补「破坏类指令」样本（现 69 条缺火灾/生态题面，机制施工时随语料 CR 加，不预扩） |
+| 事件风暴烧成本 | 蔓延每 tick 产事件 | 混沌流注入判据（DESIGN §11「能否成段故事」事件驱动非 per-tick；20-150 条/游戏日） | **W-D3**：蔓延事件预算沿用混沌注入判据同款「事件驱动非 per-tick」——判据：连续 10 tick 同因事件 >N（定标机定）即实现偏差 |
+| 物质守恒被蔓延破坏 | 烧毁的物质凭空消失/复制 | T1 材料守恒（`test_assertions_conservation` 6 例）+ 材料守恒 | 无缺口——蔓延必须走 damage/collapse 既有事件族（payload 域约束 `test_t1_m4_structure_payloads` 52 面已锁） |
+
+### 10.3 面③：混沌流（rng_state 不出网关；chaos 输出进叙事面时的暴露）
+
+| 威胁 | 触发场景 | 既有守卫（复用） | 缺口与建议钉 |
+|---|---|---|---|
+| rng_state 包经 WS/HTTP 出站 | 读档接口把 `ForkResult.rng_state` 透传前端 | ws-protocol §4.3 零原始数值条款 + `session_state` 实测键集（本机递归扫无 rng/seed/entropy）+ `AnchorListItem` 五键白名单（无 rng_state 键） | **W-C1**：未来任何读档相关路由（HTTP 化）须保持 rng_state **服务端内**——判据：`_iter_keys` 递归扫所有路由响应体零 `rng_state` 命中（白盒钉，建议随 HTTP 读档路由单落） |
+| chaotic 输出值进叙事面带熵材料 | 蔓延/生态把 float 直接嵌文案 | `chaotic` 返回纯 float 标量（`test_returns_plain_float_scalar`，不携带材料/seed 面）+ 出站终扫 | **W-C2**：chaos 输出**只能经事件流消费**（进 payload 数值字段），不得字符串内插进 narrative/monologue——判据：生产代码 `f"...{chaotic(...)}"`/`str(chaotic(...))` 进叙事文本即红（X2 构造隔离体例） |
+| rng_state 漏传导致读档接缝跳变（可用性非泄漏） | fork 漏传 → warning + 新分支流从头 | `fork.py:372-377` warning 在位 + `rng_state_persisted` 显式布尔 | 无缺口——已在 ForkResult 显式化，orchestration 接线单复核 |
+| 混沌被用作「运气回答」进对话 | Agent 被问概率/运气时拿 chaotic 值当答案 | P4/P5 探针（概率/运气词面零容忍）+ §14 因果未知「不给概率」 | 无缺口——chaotic 是内核机制面，Agent 语义面仍走因果未知措辞；P4/P5 已锁输出 |
+
+### 10.4 三条硬边界交叉核对（DESIGN §19/裁 21-C②/D-10）
+
+| 硬边界 | 面①权力 | 面②火灾生态 | 面③混沌 |
+|---|---|---|---|
+| §19.1 事件唯一写路径 | 机制偏差须产事件（W-A2 旁路禁） | 蔓延逐步事件化（W-D1） | chaotic 不落事件=设计（不违规） |
+| §19.3 戏内零元信息 | 数值/位阶名零出站（红线 B 已钉） | 蔓延度数不出叙事面（W-C2 同款） | 熵值/seed/材料零出站（W-C1/C2） |
+| D-10 权力不可见 | 判据本体（三红线 8 钉在位） | — | — |
+| 裁 21-C② 可砍性 | 权力=序位 5 | 火灾=序位 2 / 生态=序位 1 | —（混沌非可砍项） |
+
+### 10.5 缺口钉汇总（全部为「建议钉」，施工归属见 §6；本单零代码）
+
+| 钉 | 一句可证伪判据 | 归属 | 时点 |
+|---|---|---|---|
+| W-A1 | 机制 PR 引入新戏内词面必附词表 CR 引用 | Claude/Claude 评审 | 权力机制开工单 |
+| W-A2 | authority 生产代码零 `UtilityDecision` 直改（白盒） | codex 出钉 / Claude 施工 | 权力机制开工单 |
+| W-D1 | 蔓延写表 SQL 必经 `store.append`（grep 白盒） | codex 出钉 / opencode 施工 | 火灾生态开工单 |
+| W-D2 | T3 补破坏类指令样本（随语料 CR，不预扩） | codex | 火灾生态开工单 |
+| W-D3 | 连续 10 tick 同因蔓延事件 >N 即实现偏差（定标机定 N） | pi 定标 / codex 出钉 | 火灾生态开工单 |
+| W-C1 | 全路由响应体递归扫零 `rng_state` 键 | codex 出钉 / kilo 施工 | HTTP 读档路由单 |
+| W-C2 | 生产代码零 `chaotic()` 输出字符串内插进叙事文本（X2 体例） | codex 出钉 / Claude 施工 | 混沌消费点接线单 |
+
+## 10. 变更纪律
 - 本文件只增安规面与断言口径；数据面/schema 归 `docs/data/m5-fork-archive-preplan.md`。
 - 裁 6/7 若被主树推翻，本文件 §1 与 §7 R-1/R-2 须同步重写。
 - 断言一律写成可证伪形式（禁止「应当安全」类不可证伪表述——§16/§18 明写）。
