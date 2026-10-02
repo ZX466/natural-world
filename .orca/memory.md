@@ -1223,12 +1223,32 @@ uv run pyright sim/
   `Set-Content` 回写会**吞掉换行**（注释与下一行粘连）⇒ 改完 Python 文件一律用
   `uv run python -c "...p.write_bytes(text.encode('utf-8'))"` 规范化（BOM 去 + CRLF→LF + 补尾换行），
   **别用 Set-Content**。另 `Write` 工具建新文件会注入 CRLF（同纪律 13，需规范化）。
+- **✅ M5-K12 已交 `98d6293`（origin+gitee 已推）——批次 D 火灾生态 API/事件面预研**（零代码零 schema，
+  新文件 163 行）。**判定**：起火/蔓延/扑灭＝**新增** `fire.ignited`/`fire.spread`/`fire.extinguished`
+  （既有 19 kind 无「火势存在性」语义；codex **W-D1** 已指定新 kind 合法路径）；**烧毁＝既有族**
+  `structure.collapsed{cause:"damage"}`＋`matter.damage`（codex §10.2 面②末行已定「蔓延必须走
+  damage/collapse 既有事件族」＋守恒折叠器零改动＋**零枚举扩展**）。**WS/HTTP 出站面零变更三论证**
+  （复用 K11 体例）：新 kind 是事件流非帧 type（白名单投影无 fire 位）／火光走既有 `Light.kind`
+  （**自由 string**，`openapi_ext.py:122`）／HTTP 零新路由 ⇒ `shared/` 与 `protocol.ts` 零 diff。
+  **两条事实裁定（有代码依据）**：①**不要扩 `Structure.phase`**（`:145` 是
+  `enum ["built","collapsing","rubble"]` ⇒ 那才是快照变更面，须 versioning §7 minor 登记）；
+  ②**不要新造烧毁事件**（会让 T1 材料守恒折叠失配）。**D-10 边界核查**：风险只在**归因**，封堵三条＝
+  事件层 payload **零归因键**／叙事层归因须过既有扫描＋「自我怀疑」纪律（禁指向外部命令源）／
+  K11 咽喉闸兜底；交叉引用 W-D1/D2/D3/W-C2（混沌值禁内插叙事文本）。**对 opencode 五条 F1–F5**：
+  签名假设（`upsert_fire`/`set_fire_end`/`active_fires`）／禁直写表＋**禁内存态火势**（火势必须是事件
+  纯函数投影，否则读档回来火没了违 C6）／kind 登记**同 commit**（K11 P3）／守恒走 `matter.damage`／
+  **0014** 迁移（0013 已占）且 `create_all` 与 alembic 两路径列集一致。**待裁 6 点**已写死推荐
+  （命名过去式分词／烧毁走既有族／不扩 phase／不扩 `AUTHORITY_FORBIDDEN_KEYS`（键集是 codex 资产，
+  payload 白名单已够）／W-D3 的 N 待 pi 定标但口径＝状态变更驱动／`ignited` 不设 `cause` 归因）。
+  **门禁**：ruff 全过／pyright 0／`gen-protocol --check` EXIT 0（`shared/` 零 diff）／`w/lf`／
+  **prettier check 通过**——**新文件首次按 prettier 落盘**（7 处表格对齐、39+/37-，新文件无噪声
+  ⇒ 结论：新 docs 文件照 prettier 写，既有文件仍按纪律 12 保持最小 diff）。
 - **新对话第一动作**：`git fetch origin main && git merge origin/main` → 读 `.orca/talking.txt`
   （有没有新派单／上一轮回执）→ 回这里。**不要**从历史快照开始读。
-- **⚡ 在途单（2026-10-01 起）**：**无**（K9 `68b5c9c`、K10 `1d01d24` 均已交）。下一个 M5-K 单由 Claude 派。
-  上一轮派单原文留档：M5-K9＝①A4 的 R-4.1~R-4.7 合入 `anchors-api.md`（日期化、依据＝裁 30-D）
-  ＋R-4.7 六钉抄成「施工单须写死」段；②R-5 集合落定（META_SHELL 8 词、接线＝空函数先行、
-  锚点 name 维持 F-6 不接钩子）。门禁：prettier 过＋条款编号与 A4 原件逐字可对＋双推。
+- **⚡ 在途单（2026-10-02 起）**：**无**（K9 `68b5c9c`、K10 `1d01d24`、K11 `e317566`、K12 `98d6293` 均已交）。
+  下一个 M5-K 单由 Claude 派。上一轮派单留档：M5-K9＝R-4 条款合入＋R-5 集合落定；
+  M5-K10＝六钉验收对表＋branch-ambiguous 登记单；M5-K11＝批次 C 权力 API 面**施工**（裁 31-1 下放，
+  我第一个施工单）；M5-K12＝批次 D 火灾**预研**（零代码）。
   **⚠ 门禁口径订正**：「prettier 过」对 `docs/**` **不成立**（不在 CI 门禁 + HEAD 本就红）——
   正确口径＝**先测基线**，红了就保持最小 diff 不 `--write`（纪律 12），并回报基线数字。
   **K10 派单门禁口径**同（另加「零代码单也跑 ruff/pyright/gen-protocol 三件套」）。
@@ -1244,17 +1264,21 @@ uv run pyright sim/
 批次 C 权力面按裁 27-C/D-10「权力完全不可见」＝**协议零新增**。CRITICAL（G-1 plan 越界、R-1 读档挂死）与全部 HIGH 已清零。
 
 **③ 下一步**
-- ~~**在途：M5-K9 / K10 / K11**~~ **✅ 均已交（见上）**。**等派项**：
+- ~~**在途：M5-K9 / K10 / K11 / K12**~~ **✅ 均已交（见上）**。**等派项**：
   ①**R-4 取值施工的复验**（Claude 域 `anchors.py` 两处同改）——**注**：`test_m5_anchors_branch_source.py`
   已由 opencode 以「RED + skip 待施工转绿」形态落库（`19ce397`），R-4 施工转绿后我照 **§5.2 六钉对表**
   逐条核（含「两分支 seq 刻意不等」「歧义＝两条 active+全 0」「`main` 字面量白盒负钉」三条构造，
   **别用自己想象的 fixture 复核**）；②**`fork.py` 当前行交接**是否随施工单落地（0012 已知缺口；
   不落地则 head-fork 后读档侧报「无当前分支」＝§5.2 钉 5 红）；③若要 `500 /errors/branch-ambiguous`
   ＝**我另立快照单**（规格已写好在 §2.1：必同改四处 + 三条禁忌）；④**opencode 0013 合入后核 P2/P5**
-  （store 返回 dict 不得含禁键；`create_all` 与 alembic 两路径都有列）；⑤批次 D/E 若落到 API 面。
+  （store 返回 dict 不得含禁键；`create_all` 与 alembic 两路径都有列）；⑤**批次 D/E 施工后的复验**
+  （火灾事件族落地后核：kind 是否登记 `PAYLOAD_MODELS`、payload 是否零归因键、烧毁是否走既有族、
+  WS 构造点是否仍零 fire 投影——预研稿 §1/§3/§4 即验收面）；⑥若 `Structure.phase` 真要扩 `"burning"`
+  ＝**versioning §7 minor 登记单**（我域，三处同提交）。
   **另可主动做（不接未派单）**：协议面审计与对表、live↔快照对账、契约草案、钉子补齐、复验评审。
-  **K11 后新增的可做项**：把 `m5-power-api.md` §6 的 P1~P5 变成**可机检钉**（例如断言 0012/0013 迁移后
-  `create_all` 与 alembic 两路径列集一致），但需先确认 doc/迁移同步测试的既有落点约定。
+  **K11/K12 后新增的可做项**：把 `m5-power-api.md` §6 的 P1~P5 与 `m5-fire-api-prestudy.md` §4 的
+  F1~F5 变成**可机检钉**（例如断言迁移后 `create_all` 与 alembic 两路径列集一致；断言事件 payload
+  白名单零归因键），但需先确认 doc/迁移同步测试的既有落点约定。
 
 **④ 未修债（本树域内，分级）**
 - **P1（我域，等派单）**：`sim/api/ws.py` 驱动层只有 `if moved:` 才广播 `state_delta`
