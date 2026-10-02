@@ -1149,6 +1149,32 @@ uv run pyright sim/
   **门禁**：ruff 全过／pyright 0／`gen-protocol --check` EXIT 0／`w/lf`／全量 **1945 passed /
   119 skipped / 0 failed / 4 errors**（errors 全是陈旧 `world.db` 缺 `branches.is_current` 的 teardown，
   `git stash` 清树对照同样复现 ⇒ 环境债非回归；**台账第三个实例**，前两个 `rng_state`/`protected`）。
+- **✅ M5-K11 已交 `e317566`（origin+gitee 已推）——批次 C 权力机制 API 面施工**（裁 31-1 下放
+  施工权，**我第一次做施工单而非提案**）。599+/0-，**零 schema**（`shared/` 零 diff）：
+  ①**契约稿 `docs/api/m5-power-api.md`（新 156 行，施工级）**：D-10 三硬边界（零新增/零数值/零旁路）；
+  **HTTP 零新路由三论证**（D-10 已裁／K4 四候选面全否决／全 13 条 `/api` 路由声明 `response_model`
+  ⇒ FastAPI 序列化即结构密封）；表达面只走既有三面（`monologue`/`perception.narrative`/
+  `state_delta.plan`，**禁** K4 候选面 C 的顶层数组）；闸门行为规约表；错误码面零新增。
+  ②**施工**：`sim/api/outbound_guard.py`（新：禁键集同源 codex 红线 B、`find_authority_keys`/
+  `find_authority_paths`/`strip_authority_fields`（**纯函数不就地改**）/`assert_outbound_clean`
+  （抛 `OutboundAuthorityLeak`，**仅开发期自检、禁注册成错误码**）/`record_outbound_leak` 留痕）
+  ＋ `ws.py::ConnectionManager._send_to` 接线（**+7 行**）：广播/定向/订阅者三面共用的**唯一咽喉**，
+  递归剥除＋`structlog` warning＋留痕；**HTTP 侧零代码**（不装中间件，理由入契约稿 §3.2）。
+  ③**钉子 `sim/tests/test_m5_power_api.py`（新）18 例五组**：纯函数 7（含**跨域键集对拍**＝与
+  `test_m5_authority_surface.py` 的 `AUTHORITY_FORBIDDEN_KEYS` 必须逐字同源，漂移即红）／咽喉实测 3／
+  **白盒负钉** 3（禁键字面量在 `sim/api/` 只许出现在闸门模块＝防第二真相源；`_send_to` 源码须含
+  `strip_authority_fields`＝防闸被摘）／错误码 3（WS 11 项闭合零权力族、快照 responses 零权力码、
+  `_TYPE_TITLE` 仍 6 项）／HTTP 密封 2。**与 codex S3 的 8 钉分工不重复**（他测帧构造层，我测咽喉层）。
+  **对 opencode 的五条接口要求**（契约稿 §6，收编时对齐）：P1 API 零依赖＋禁直接 import 表模型；
+  P2 store 返回 dict 不得含禁键（含了算违规改显式列清单，**闸门只是第三道**防线：第一道白名单式
+  投影、第二道 `response_model`）；P3 事件 kind 须登记 `PAYLOAD_MODELS` 且 API 侧零投影；
+  P4 0013 **不经 ext 注入**（要注入/加端点＝推 D-10，先停）；P5 `create_all` 与 alembic 两路径都要有列。
+  **门禁**：K11 钉 18 passed／ruff 全过／format 干净／pyright 0／`gen-protocol --check` EXIT 0／
+  全量 **1968 passed / 125 skipped / 0 failed / 0 errors**（**上轮那 4 个陈旧 `world.db` error 已消失**）。
+  **⚠ 施工期坑（PowerShell）**：`Set-Content -Encoding UTF8` 会写 **BOM**，且 `-Raw` 读 CJK 后
+  `Set-Content` 回写会**吞掉换行**（注释与下一行粘连）⇒ 改完 Python 文件一律用
+  `uv run python -c "...p.write_bytes(text.encode('utf-8'))"` 规范化（BOM 去 + CRLF→LF + 补尾换行），
+  **别用 Set-Content**。另 `Write` 工具建新文件会注入 CRLF（同纪律 13，需规范化）。
 - **新对话第一动作**：`git fetch origin main && git merge origin/main` → 读 `.orca/talking.txt`
   （有没有新派单／上一轮回执）→ 回这里。**不要**从历史快照开始读。
 - **⚡ 在途单（2026-10-01 起）**：**无**（K9 `68b5c9c`、K10 `1d01d24` 均已交）。下一个 M5-K 单由 Claude 派。
@@ -1158,6 +1184,10 @@ uv run pyright sim/
   **⚠ 门禁口径订正**：「prettier 过」对 `docs/**` **不成立**（不在 CI 门禁 + HEAD 本就红）——
   正确口径＝**先测基线**，红了就保持最小 diff 不 `--write`（纪律 12），并回报基线数字。
   **K10 派单门禁口径**同（另加「零代码单也跑 ruff/pyright/gen-protocol 三件套」）。
+  **⚡ 在途单（2026-10-02 起）**：**无**（K9 `68b5c9c`、K10 `1d01d24`、K11 `e317566` 均已交）。
+  下一轮 M5-K 单由 Claude 派。**K11 是我第一个施工单**（裁 31-1 下放）——注意施工单的纪律差异：
+  钉先红后绿、**不越所有权**（K11 未碰 `sim/core/persistence`/`sim/npc`/`sim/world`/`shared`）、
+  **零 schema 单也要跑全量 pytest**（1968 基线）。
 
 **② 接口域现状（一句话）**
 协议面＝`shared/openapi.json`（唯一真相源）→ `npm run gen-protocol` → `shared/protocol.ts`（**禁手写**）→
@@ -1166,17 +1196,17 @@ uv run pyright sim/
 批次 C 权力面按裁 27-C/D-10「权力完全不可见」＝**协议零新增**。CRITICAL（G-1 plan 越界、R-1 读档挂死）与全部 HIGH 已清零。
 
 **③ 下一步**
-- ~~**在途：M5-K9 / M5-K10**~~ **✅ 均已交（见上）**。**等派项**：
-  ①**R-4 取值施工的复验**（Claude 域 `anchors.py` 两处同改 + 新建
-  `sim/tests/test_m5_anchors_branch_source.py`）——收编后我照 **§5.2 六钉对表**逐条核（含「两分支 seq
-  刻意不等」「歧义＝两条 active+全 0」「`main` 字面量白盒负钉」三条构造，**别用自己想象的 fixture 复核**）；
-  ②**`fork.py` 当前行交接**是否随施工单落地（0012 已知缺口；不落地则 head-fork 后读档侧报「无当前分支」＝§5.2 钉 5 红）；
-  ③若要 `500 /errors/branch-ambiguous`（歧义机器码级区分）＝**我另立快照单**（规格已写好在 §2.1：
-  必同改四处 + 三条禁忌，**禁**在 R-4 施工单里顺手做）；
-  ④pi 的 M5-P2 thresholds 落地后复核快进钉仍绿；⑤任何新增/变更协议面。
-  **另可主动做（不接未派单）**：把 §5.2 对表的可机检部分（白盒负钉、pipe 数一致性）做成
-  TestDocSync 族钉子——但需先确认 sim/tests 已有 doc 同步测试的落点约定。
-- 我可主动做（**不接未派的施工单**）：协议面审计与对表、live↔快照对账、契约草案、钉子补齐、复验评审。
+- ~~**在途：M5-K9 / K10 / K11**~~ **✅ 均已交（见上）**。**等派项**：
+  ①**R-4 取值施工的复验**（Claude 域 `anchors.py` 两处同改）——**注**：`test_m5_anchors_branch_source.py`
+  已由 opencode 以「RED + skip 待施工转绿」形态落库（`19ce397`），R-4 施工转绿后我照 **§5.2 六钉对表**
+  逐条核（含「两分支 seq 刻意不等」「歧义＝两条 active+全 0」「`main` 字面量白盒负钉」三条构造，
+  **别用自己想象的 fixture 复核**）；②**`fork.py` 当前行交接**是否随施工单落地（0012 已知缺口；
+  不落地则 head-fork 后读档侧报「无当前分支」＝§5.2 钉 5 红）；③若要 `500 /errors/branch-ambiguous`
+  ＝**我另立快照单**（规格已写好在 §2.1：必同改四处 + 三条禁忌）；④**opencode 0013 合入后核 P2/P5**
+  （store 返回 dict 不得含禁键；`create_all` 与 alembic 两路径都有列）；⑤批次 D/E 若落到 API 面。
+  **另可主动做（不接未派单）**：协议面审计与对表、live↔快照对账、契约草案、钉子补齐、复验评审。
+  **K11 后新增的可做项**：把 `m5-power-api.md` §6 的 P1~P5 变成**可机检钉**（例如断言 0012/0013 迁移后
+  `create_all` 与 alembic 两路径列集一致），但需先确认 doc/迁移同步测试的既有落点约定。
 
 **④ 未修债（本树域内，分级）**
 - **P1（我域，等派单）**：`sim/api/ws.py` 驱动层只有 `if moved:` 才广播 `state_delta`
