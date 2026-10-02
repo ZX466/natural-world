@@ -835,3 +835,34 @@ async def materialize_matter(
 | 不要在 LOD 降格时丢失 LLM 产生的结论 | npc_memories 持久化所有 LLM 输出的结论；降格压缩写回 source=reason（§15） |
 | 不要直接渲染 LLM 原始输出 | schema 不含渲染字段，只存原始数据 |
 | 自我未知：隐藏属性不得默认进入 LLM/戏内输出面 | npc_health.hidden + descriptors/trigger_conditions 标注（§13，触发才浮现） |
+
+## 21. npc_power（权力状态 — 批次 C 数据面，M5-A7 / 0013）
+
+设计稿 `m5-power-data-preplan.md`（裁 31-1：预研稿推荐案 = 施工案）；判据
+`docs/security/m5-authority-criteria-preplan.md`（D-10 权力不可见 / 红线 A 不新增 kind /
+红线 B 禁键集）。
+
+| 字段 | 类型 | 约束 | 说明 | 对齐 |
+|------|------|------|------|------|
+| `branch_id` | TEXT | NOT NULL，PK 前半 | 分支 id（世界线身份） | §2 / 0008 |
+| `npc_id` | TEXT | NOT NULL，PK 后半 | NPC id（分支内唯一） | §12 |
+| `power_level` | REAL | NOT NULL DEFAULT 0，CHECK ∈ [-1, 1] | 权势标量，**0 = 与玩家平权** | 批次 C 判据 §1 |
+| `updated_at_tick` | INTEGER | NOT NULL DEFAULT 0，CHECK ≥ 0 | 衰减游标（该行最后一次被写到的 tick） | `matter_state` 同款 |
+| `created_at` | REAL | NOT NULL | 行创建时刻 | 与既有表同口径 |
+
+**约束与语义**：
+
+- **无事件源**（红线 A：不新增 kind）⇒ 写面是**显式增量写**
+  （`power_store.py::PowerStore.apply/apply_batch`），**不是**事件投影；**不做隐式衰减**
+  （读一次表不得变成写操作——衰减由决策层按 `tick - updated_at_tick` 算完再写）。
+- **不设对外读口**（D-10）：只服务内部决策层，不进 WS 帧 / HTTP 响应 / prompt 产物。
+- **列名故意用禁键集内的 `power_level`**：codex 红线 B 的递归扫描按键名精确匹配 ⇒ 将来
+  任何意外序列化会被当场扫红，而不是靠 review 记忆。改名须先改 codex 禁键集（变更纪律）。
+- **量纲归一 [-1, 1]**：越界由 DB CHECK + 写面夹取（并如实上报 `clamped`）双重拦；机制若要
+  原始分 = 改三处同源常量 + 一支放宽 CHECK 的迁移（成本已知，见预研稿 §4 待裁点 1）。
+- **分叉语义** = 有界表（`fork.py::_BOUNDED_TABLES`，`INSERT…SELECT` 换 `branch_id`）：
+  子分支拿父分支**当前**值，逐字节；父分支行**不动**（C6：分叉只增不减）。
+- **地基分类**：属 A3「不可重建」族**第 4 张**（`m5-anchor-materialization-preplan.md`
+  §1.4）⇒ 快照 GC 后只剩当前值，**历史点读档（`kind="anchor"`）对本表仍 fail-closed**，
+  由批次 E 物化单收口。
+- **零索引**：主键前导列就是 `branch_id` ⇒ 分支查询走 PK 前缀，再加索引是纯冗余。

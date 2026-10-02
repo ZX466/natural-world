@@ -22,6 +22,11 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+#: `npc_power.power_level` 的量纲边界（与迁移 0013、`power_store.py` 同源三处一致）。
+#: 机制若要原始分：改这三处 + 一支放宽 CHECK 的迁移（成本已知）。
+POWER_MIN = -1.0
+POWER_MAX = 1.0
+
 
 class Base(DeclarativeBase):
     """所有 ORM 模型的基类。"""
@@ -583,4 +588,41 @@ class MaterialBalance(TimestampMixin, Base):
     __table_args__ = (
         PrimaryKeyConstraint("branch_id", "ref", "material_id"),
         Index("idx_material_branch_material", "branch_id", "material_id"),
+    )
+
+
+class NpcPower(TimestampMixin, Base):
+    """权力状态 — 批次 C 数据面（M5-A7 / 0013，设计稿 `m5-power-data-preplan.md`）。
+
+    **一个标量 + 一个衰减游标**，每个 NPC 每分支一行。`0` = 与玩家平权；量纲归一到
+    `[-1, 1]`（`POWER_MIN/POWER_MAX`，与 0013 迁移的 CHECK 同源）。
+
+    - **不是关系**：不表达 pair 之间的认知（M3 `relationships` 已有治理与传播语义），
+      只表达「该 NPC 面对玩家的权势标量」（codex 判据稿 §1）。
+    - **无事件源**（红线 A：不新增 kind）⇒ 写面是**显式增量写**
+      （`power_store.py::PowerStore.apply/apply_batch`），不是事件投影；**不做隐式衰减**
+      （读一次表不得变成写操作）。
+    - **不设对外读口**（D-10 权力不可见）：只服务内部决策层。
+    - **列名故意用禁键集内的 `power_level`**：codex 红线 B 的递归扫描按键名精确匹配 ⇒
+      将来任何意外序列化会当场扫红。改名须先改 codex 稿禁键集（变更纪律）。
+    - 分叉语义 = 有界表（`fork.py::_BOUNDED_TABLES`，`INSERT…SELECT` 换 `branch_id`）；
+      属 A3「不可重建」族**第 4 张**（登记见 `m5-anchor-materialization-preplan.md`）⇒
+      历史点读档拿不到本表值，由批次 E 物化单收口。
+    - **零索引**：主键前导列就是 `branch_id`，再加分支索引是纯冗余。
+    """
+
+    __tablename__ = "npc_power"
+
+    branch_id: Mapped[str] = mapped_column(String, nullable=False)
+    npc_id: Mapped[str] = mapped_column(String, nullable=False)
+    power_level: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    updated_at_tick: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("branch_id", "npc_id"),
+        CheckConstraint(
+            f"power_level >= {POWER_MIN} AND power_level <= {POWER_MAX}",
+            name="ck_npc_power_level_range",
+        ),
+        CheckConstraint("updated_at_tick >= 0", name="ck_npc_power_tick_nonneg"),
     )
