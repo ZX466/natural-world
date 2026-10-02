@@ -790,6 +790,12 @@ uv run pyright sim/
 - (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)
 
 ## ⑤ pi（性能域）
+- 【2026-10-02 第二十六轮快照｜**M5-P9：批次 A 混沌接线/消费点性能预算案（零代码提案，唯一交付=1 个 doc）**】任务书（Claude M5-P9，裁 30-F 后续）：inject 摊摊 + 消费点两笔账 + 红线建议；产出 `docs/perf/m5-batch-a-chaos-budget.md`（205 行，**sim/ 与 thresholds.py 零改动**）。
+  - **【inject 摊摊＝可忽略】** `EntropyMixer.mix` 实测 **6.6–7.1µs/次**（os.urandom 0.1 + reseed 2.9 + entropy_event 构造 2.7），频率按已定接法 `daily_reseed_due = tick % 86400 == 0`（1 次/游戏日）+ opencode 预研 20–150 条/日 ⇒ 摊到 **0.00008–0.011µs/tick**；对照 M2 风场冷键派生 0.018ms（m2-p4 §1.2）还轻一个量级。**不设红线**。
+  - **【真成本在抽签，不在注入/存储】** `chaotic()`/`chaotic_at()` 实测 **9.3µs/次**（PCG64 重建 6.8 占 73% + sha256 0.6 + _material 0.7），是缓存 `gen.random()`（0.30µs）的 **31x**——这是「纯函数可独立重算」（C5）的结构性代价。⇒ **对 A2 量级结论：采纳主体（事件/存储面噪声级成立），修正适用范围**：其「连摊还都不需要」只对事件面成立，**抽签面取决于消费点调用频率而非事件密度**，不可套用噪声级。
+  - **【消费点两笔账（任务书口径：寻路扰动拆两笔）】** ①**账一-a 抽样本身 9.3µs**（扰动作用于 `find()` 输出，缓存仍命中）；②**账一-b 扰动触发重算 494–647µs@64×64**（扰动写进缓存键/喂进 A* ⇒ 同 (start,goal) 出不同路 ⇒ PathCache 永不可复用 ⇒ 冷 A*；bench 口径图幅 soak=64×64，48×48 为 366–439µs、128×128 ~1ms，**~53–70x 账一-a**）——P=5 即 2.5–3.2ms/tick、P=50 顶穿整 tick 预算 16.6ms。**情绪回落**：慢变量按区间 N 摊，N=60 ⇒ 0.008ms/tick；每 tick 每 NPC（反模式）⇒ 0.465ms/tick = RNG/熵上限 4.65x。
+  - **【红线建议三层】** ①**最紧要的不是数字而是接法**：禁扰动走缓存失效/冷 A*（账一-b），扰动只作用于 `find()` 输出（须守「同 (材料,tick)→同扰动」保 T2）；②抽签聚合：混沌**并入既有 RNG/熵行**不另起炉灶，L1 常规 RNG 实测 0.045ms（200 draws）⇒ 混沌余量 ~0.055ms ≈ 5–6 次/tick，提案 `CHAOS_TICK_LIMIT_MS=0.05` + `RNG_TICK_LIMIT_MS=0.10` 总行兜底 + 契约常量 `CHAOS_EMOTION_REGRESS_INTERVAL_TICKS=60`；③**P6 纪律**：绝对阈值降频机必假红，未定标前仅 **advisory**（先 `throttle_probe` 后定标）。
+  - **【留痕】** not-bench **1945 passed/119 skipped/70 deselected**（116.9s）、bench **69 passed/1 skipped**（266.1s）、ruff/pyright 0。commit `8176e30` 双推 origin+gitee（e3027bd..8176e30）。**坑**：`git add .orca/memory.md` 会因 `.gitignore` 里 dot-folder 规则打「paths are ignored」警告并返回非零 ⇒ 用 `&&` 链会吞掉后续 `git commit`；tracked 文件其实已入暂存，直接补跑 `git commit -F` 即可。
 - 【2026-10-01 第二十五轮快照｜**M5-P8：willingness Δ 护栏口径评估（A4 偶发越界订正→改中位判据）+ Xeon 被动收集监控台账**】任务书（Claude M5-P8，裁 30-D）：①willingness Δ 护栏（0.02–2.0ms 窗口 CPU 争用脆弱）三选一评估，thresholds 值不动；②Xeon 被动收集监控（命中全绿即按 P7 §4 八步建 xeon8573c 基线）。产出 **3 文件**：`sim/tests/bench/test_bench_willingness.py`（改）+ `docs/perf/m5-p8-willingness-delta-guardrail.md`（新提案）+ `docs/perf/m5-p8-xeon-passive-monitoring.md`（新台账）。
   - **【护栏结论：改单调性判据（Option 2）——中位而非均值】** 根因 = **均值被单个多 ms 离群拖走**（GC/上下文切换只落 injected 侧）。实测（2026-10-01 本机暖态，throttle_ratio=1.652 健康）：逐对增量 **均值 0.47ms（max ~9.6ms 离群，>2.0 可到 3/60）** vs **中位稳定 ~0.21ms**；CPU 争用（核-1 满转）下中位仍 ~0.25ms。⇒ 窗口值没错（真实信号远离两端），错的是**估计量**；不选放宽（削弱「事件构造退化」判别）也不选维持（每提交 CI 硬断言会间歇堵门禁，A4 已实际受扰）。**实现**：`_paired_delta`（均值）→ `_paired_deltas`（逐对 list），护栏 `statistics.median(...)*1000`，窗口 0.02–2.0 **数值不变**；`import statistics`。**thresholds.py 零改动**（`WILLINGNESS_TICK_LIMIT_MS=0.35` 原样）。验证：护栏 10/10（干净）/5/5（争用）；willingness 整文件 17 passed；bench 非 bench 41 passed；ruff/pyright 0。
   - **【Xeon 台账：未预建基线】** 经 GitHub Actions API（`actions/runs`+`check-runs` 注释，无需 gh/token）核对 nightly：最近一次 `36793983148`（2026-10-01）**EPYC 7763**（「机型一致」notice）⇒ 未落 Xeon；自 P7 后无新的「落 Xeon 且全绿」run ⇒ **未预建 `baseline-xeon8573c.json`**。台账已建（`m5-p8-xeon-passive-monitoring.md`），登记 `36721350832`（EPYC 未命中→转被动）、`36670751263`（Xeon 全绿但回溯分析用、P7 已作 EPYC 基线 cross_check）、`36793983148`（EPYC）。**触发即按 P7 §4 八步建（需 gh/token 下载 artifact；本单仅能读 check 注释判机型）。**
@@ -1022,9 +1028,10 @@ uv run pyright sim/
 
 ## 当前任务
 
-（**M5-P8 已完成**（2026-10-01，见本节顶部第二十五轮快照：willingness Δ 护栏改中位判据
-+ Xeon 被动监控台账；`f32373f`/`cc4fa09` 双推 origin+gitee）。等 Claude/主树派下一单。
-历史：M3-P2 ①②、M4 P1-P4、M5-P6/P7 均已完成收编。）
+（**M5-P9 已完成**（2026-10-02，见本节顶部第二十六轮快照：批次 A 混沌接线/消费点性能预算案，
+零代码提案 `docs/perf/m5-batch-a-chaos-budget.md`，`8176e30` 双推 origin+gitee）。
+前单 M5-P8（2026-10-01，willingness Δ 护栏改中位判据 + Xeon 被动监控台账，`f32373f`/`cc4fa09`/`e3027bd`）。
+等 Claude/主树派下一单。历史：M3-P2 ①②、M4 P1-P4、M5-P6/P7 均已完成收编。）
 
 ## 进行中
 
