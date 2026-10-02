@@ -761,6 +761,7 @@ async def materialize_matter(
 | 6 | 治理指针重写 | 同上 | `superseded_by` → 子 `entry_id`；替换者未克隆（写在分叉点之后）则**置 NULL**（R-2：绝不悬空）；`source_knowledge_id` / `source_memory` 重映射，**悬空即 `ForkError` 整批回滚** |
 | 7 | 证据引用改写 | `knowledge` | `evidence_branch_id` 由 NULL（本分支）→ 父分支（事件不克隆；0008-d 裁 4 封 C4） |
 | 8 | 父分支封存 | `branches` | 仅当仍 `active`（已弃分支可再分叉，不重复盖时间戳） |
+| 8b | **当前行交接**（0012，R-4.4；**施工单未落**） | `branches` | head 模式且父就是当前行 ⇒ **同事务**先 `is_current=0`（父）再 `is_current=1`（子）；父非当前（从读档线再分叉）或 anchor 模式 ⇒ **不交接**，子 `is_current=0`。**禁止一条 UPDATE 换手**（SQLite 逐行校验 ⇒ 必然撞唯一索引）。口径与实测见 `m5-fork-current-handover.md` |
 | 9 | vec 行字节拷贝（提交后） | `npc_memory_vec` | `clone_branch_vectors`：按 rowid 映射**字节**拷贝，**零 LLM 调用**（V4；重新 embed 是红线禁）。未给 `vec_conn` → 结果 `vec_pending=True`（召回降级为空，**不泄漏**） |
 
 **不碰的表**：`events` / `entropy_log` / `snapshots` —— 读档只增不减（C6，§19 禁止事项）。
@@ -772,9 +773,11 @@ async def materialize_matter(
 物化/快照展开（M5 均未落）——**不用「近似重置治理列」糊过去**。详见
 `m5-fork-archive-preplan.md` §3.9。
 
-**写侧分支闸门（裁 5）**：`SqlEventStore.append` 写入前校验分支——不存在则**按需开线**
-（世界从第一条事件长出来），存在但 `status != 'active'` → 抛 `InactiveBranchError`。
-闸门在 seq 分配**之前**，故被拒的 append 不吃 seq 号、事件表零写。
+**写侧分支闸门（裁 5 + M5-A5 收紧）**：`SqlEventStore.append` 写入前校验分支——
+不存在则**按需开线**（世界从第一条事件长出来），**但仅当无当前行**（R-4.2.1：已有
+`is_current=1` 时向别分支开线 ⇒ `CurrentBranchConflictError`）；存在但 `status != 'active'`
+→ 抛 `InactiveBranchError`。闸门在 seq 分配**之前**，故被拒的 append 不吃 seq 号、
+事件表零写。收紧**只针对开线**：active 但非当前的读档子线照写不误（R-4.4）。
 
 **随机连续性（RNG）**：分叉点两侧的随机流必须**承接抽签进度**，否则接缝跳变（T2 破）。
 `RngRegistry` 只记 `world_seed` + 熵材料，**抽签进度在调用方持有的 PCG64 生成器里**
