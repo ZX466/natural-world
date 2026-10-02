@@ -6,6 +6,13 @@
 > （A3 地基分类）、`docs/security/m5-security-preplan.md` §9（W-A1/W-A2 三面威胁）。
 > **授权**：裁 31-1「预研稿内推荐案 = 施工案」——本文 §4 的推荐即本单施工内容，不等下一轮裁决。
 > **状态**：已实施（0013 + `models.py` + `power_store.py` + `fork.py` 克隆登记 + 钉子）。
+> **接口契约（kilo K11）**：`docs/api/m5-power-api.md` §6 的 **P1–P5** 是本稿施工的**上游约束**——
+> P1（API 零依赖：`sim/api` 不得直接 import 表模型）／P2（store 返回 dict 不得含禁键，否则改为
+> **显式列清单**投影）／P3（事件面：`PAYLOAD_MODELS` 闭合集 + 新增 kind 须同 CR；**本稿结论 =
+> 零新增权力 kind**）／P4（0013 只加 DB 列、不经 `openapi_ext` ⇒ 快照零变化）／P5（`create_all`
+> 与 alembic 两路径都必须有该列）。已落地核对：P1 ✓（API 零读方法）、P2 ✓（`PowerState` 显式列
+> 投影，非整行 dict）、P3 ✓（`npc_power` 不落事件流，钉 `test_no_power_values_in_events`）、
+> P4 ✓（gen-protocol 零漂移）、P5 ✓（模型与迁移同源，钉 `test_model_columns_match_migration_source`）。
 
 ---
 
