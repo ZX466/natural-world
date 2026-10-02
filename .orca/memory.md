@@ -853,6 +853,13 @@ uv run pyright sim/
 - (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)
 
 ## ⑤ pi（性能域）
+- 【2026-10-02 第二十七轮快照｜**M5-P10：批次 C 权力牙齿·性能预算案（零代码提案，唯一交付=1 个 doc）**】任务书（Claude M5-P10，裁 31-1 施工下放：你=预算案+定标轮）：权力每 tick 成本模型 + **间接成本推演（核心）** + 红线建议 + 契约常量复用；产出 `docs/perf/m5-power-budget.md`（147 行，**sim/ 与 thresholds.py 零改动**）。
+  - **【直接账＝噪声级，但接法差 186x】** 权力向量化更新 50 NPC/tick **2.8µs**（multiply+add+clip，本质＝效用矩阵多一列；对照 L1 满属性向量化全推 `tick_vectorized(50)` **18.1µs** ⇒ +15% 决策行）。**反模式对照**：逐人 `advance_needs` 循环 **175µs**（现状 needs 就是逐对象 Python！）/ `dataclasses.replace` ×50 **81µs** / 逐人 `chaotic_at` 抖动 **521µs**（P9 纯函数重建 31x 陷阱翻版，一次顶穿 P9 `CHAOS_TICK_LIMIT_MS=0.05` 的 10 倍）。
+  - **【间接账（本单核心）＝权力的等效「账一-b」】** 传导链：权力值 → utility 权重 → **动作选择分布漂移** → 点亮冷子系统。实测：打分矩阵路径基线 211.7µs，加权力广播列 **+3.05µs（+1.4%，几乎免费）**；但合成灵敏度曲线 flip_rate 0.18→0.46（偏置 0.1→1.0）、动作熵 2.52→1.80（分布坍缩）；真实精简形（真 `_GAIN`）request_chat **16→26**（+10/50 翻判）。冷路径单价：翻 `move`→冷 A* **0.53ms**@64×64（新目标 cache miss，P9 同源）；翻 `chat`→检索 常态 0.05 / 红线退化 0.30 / 全量扫描哨兵 0.86 ms·NPC⁻¹。**权力列自付 3µs 却触发 530µs ≈ 174x**（比 P9 的 53–70x 更极端，因权力直接成本≈0）。**事件条数不变**（`runtime.tick(50)` 恒 50 事件/tick，权力改类型不改密度，故存储/折叠侧不构成新风险）。
+  - **【P=5/P=50 推演】** 现实混合 3move+2chat ≈1.7ms/tick；全翻 move：P=5 2.64ms、**P=50 26.4ms→破 16.6ms 整 tick 预算**（等价 P9 账一-b 反模式）。
+  - **【红线（一句裁定 + 守卫）】** ①**不新建 `POWER_TICK_LIMIT_MS`**——直接成本**并入 L1_UTILITY 决策行**（`L1_UTILITY_TICK_LIMIT_MS=6.0`），与 P9 抽签并入 RNG/熵行同理，避免双算（M4-P1 §4.2 先例）；②间接成本**不设独立 tick 红线**（取决于内容偏置、测不准，且会被寻路/检索既有行自然吸收），改设**接法红线**：权力只作 utility 额外列（禁逐人 replace/chaotic_at），`POWER_MAX_BIAS≤0.2` 使 flip≤0.25 + 守 §4「被操纵感」（分布坍缩＝操纵感机器可测前兆，可与 codex 共用断言）；③契约常量 `POWER_REGRESS_INTERVAL_TICKS=60` 复用 P9 同族；④抖动走 chaotic → 计入 P9 RNG/熵行额度**不叠加**；⑤P6 未定标前 advisory。
+  - **【验证留痕】** not-bench **1950 passed/125 skipped/70 deselected**（122.1s）、bench **68 passed/2 skipped**（268.3s，两 skip 均环境门：7 日完整 soak 默认关 + **soak 自检因本机降频探针比值 2.055>2.0 自行 skip＝P6 降频门正常生效**，非回归）、ruff/pyright 0。基线 main `278b95b`（= 派单板所指），`git diff --stat e17944a..HEAD -- sim/tests/` 仅一个非 bench 新文件 ⇒ bench 计数 69→68 是**本机降频门**而非代码变更。**坑（续 P9）**：降频跑下 bench 计数会因 soak 自检自适应 skip 而浮动，留痕须跑 `throttle_probe` 并在表内注明比值，否则「少一个 pass」会被误读成回归。
+  - **【交付】** commit `32b141a`（doc）双推 origin+gitee（待执行确认）。**所有权**：只新增 `docs/perf/m5-power-budget.md` + 自树 memory；未碰 sim/、既有 bench、thresholds、docs/README。
 - 【2026-10-02 第二十六轮快照｜**M5-P9：批次 A 混沌接线/消费点性能预算案（零代码提案，唯一交付=1 个 doc）**】任务书（Claude M5-P9，裁 30-F 后续）：inject 摊摊 + 消费点两笔账 + 红线建议；产出 `docs/perf/m5-batch-a-chaos-budget.md`（205 行，**sim/ 与 thresholds.py 零改动**）。
   - **【inject 摊摊＝可忽略】** `EntropyMixer.mix` 实测 **6.6–7.1µs/次**（os.urandom 0.1 + reseed 2.9 + entropy_event 构造 2.7），频率按已定接法 `daily_reseed_due = tick % 86400 == 0`（1 次/游戏日）+ opencode 预研 20–150 条/日 ⇒ 摊到 **0.00008–0.011µs/tick**；对照 M2 风场冷键派生 0.018ms（m2-p4 §1.2）还轻一个量级。**不设红线**。
   - **【真成本在抽签，不在注入/存储】** `chaotic()`/`chaotic_at()` 实测 **9.3µs/次**（PCG64 重建 6.8 占 73% + sha256 0.6 + _material 0.7），是缓存 `gen.random()`（0.30µs）的 **31x**——这是「纯函数可独立重算」（C5）的结构性代价。⇒ **对 A2 量级结论：采纳主体（事件/存储面噪声级成立），修正适用范围**：其「连摊还都不需要」只对事件面成立，**抽签面取决于消费点调用频率而非事件密度**，不可套用噪声级。
@@ -1091,8 +1098,9 @@ uv run pyright sim/
 
 ## 当前任务
 
-（**M5-P9 已完成**（2026-10-02，见本节顶部第二十六轮快照：批次 A 混沌接线/消费点性能预算案，
-零代码提案 `docs/perf/m5-batch-a-chaos-budget.md`，`8176e30` 双推 origin+gitee）。
+（**M5-P10 已完成**（2026-10-02，见本节顶部第二十七轮快照：批次 C 权力牙齿性能预算案，
+零代码提案 `docs/perf/m5-power-budget.md`，`32b141a` 双推 origin+gitee）。
+前单 M5-P9（同日，批次 A 混沌接线预算案 `docs/perf/m5-batch-a-chaos-budget.md`，`8176e30`/`e17944a`）。
 前单 M5-P8（2026-10-01，willingness Δ 护栏改中位判据 + Xeon 被动监控台账，`f32373f`/`cc4fa09`/`e3027bd`）。
 等 Claude/主树派下一单。历史：M3-P2 ①②、M4 P1-P4、M5-P6/P7 均已完成收编。）
 
