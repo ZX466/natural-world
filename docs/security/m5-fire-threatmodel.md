@@ -64,12 +64,25 @@ M4 建造破坏数据面已收官（`0006_structures`/`0007_material_balances` +
 | --- | --- | --- | --- | --- |
 | ① 格级传播 | 火场强度逐格推进（`matter_state` 行或火场专表行） | **零事件**：传播步进是投影折叠产物，不产 `MATTER_*` 事件（否则格驱动事件风暴）；只在**状态跃迁**时产事件（点着/烧毁/熄灭） | 火场表若建则须 CHECK 强度域 [0,1] 与 `tick >= 0`（0013 同款两条 CHECK：`ck_npc_power_level_range`/`ck_npc_power_tick_nonneg`） | 每 tick 产 >1 条 `matter.*` 蔓延事件且无状态跃迁 ⇒ 格驱动实现 |
 | ② 烧毁物质 | `material_balances` 存量、`matter_state` 完整性、`structures` phase | **必须产 `MATERIAL_MOVED`**（燃烧消耗材料：from 结构 ref → to 灰烬/残骸 ref，quantity>0）＋ `MATTER_DAMAGE`/`MATTER_COLLAPSE`（既有族，不新增）；守恒折叠必须与投影逐位相等 | 成对不变式「from 减/to 加」进 CHECK 或钉（0005/0008 成对 CHECK 判据：可表达约束进 DB） | 只减存量不产 `MATERIAL_MOVED` ⇒ 折叠重放与投影不等（golden 逐位红） |
-| ③ 连带失效 | **不可重建 4 张表的火灾语义**（见 §3） | 蔓延**不得**新增事件 kind 去记录权力/关系/记忆的「火灾语义」（红线 A 同款纪律） | 「烧毁对不可重建表的影响」应落**显式列**而非事件源（0013 同款：无事件源 ⇒ 只有当前值） | 火灾状态靠事件重放 ⇒ 需新增 kind ⇒ 触发红线 A 与钉 D-5 |
+| ③ 连带失效 | **不可重建 4 张表：按 A8④ 一律不碰**（见 §3） | 蔓延**不得**新增 kind 记录这 4 张表的「火灾语义」，**也不得写这 4 张表**（含 `PowerStore`） | 负钉落**生产代码白盒**（不落 CHECK：这 4 张表无新增列 ⇒ 无可表达约束可进 DB） | 火/生态代码出现对 4 张表的任何写 ⇒ D-6 转红 |
 
 **建议的写入边界三句话（可直接写进 D 批施工单）**：
 1. 蔓延事件族每 tick **≤1 条**（状态跃迁/聚合事件），传播步进零事件；
 2. 烧毁的物质**只经既有 `matter.*`/`material.moved` 事件族**表达，新增 kind 一律走 CR（红线 A）；
-3. 火灾对不可重建 4 张表的语义落**显式列**（不回放），与 A7/A3 登记口径一致。
+3. 火灾**不碰**不可重建 4 张表（A8④ 已裁，钉只留负钉 D-6）——它们既不落显式列也不落事件；
+   火灾只动可重放 3 张表（`matter_state`/`structures`/`material_balances`）。
+
+### 2.1 与 K12/A8 两份预研的对齐（2026-10-02 留言板结论，防止施工方误读本稿）
+
+| 争点 | 本稿原措辞 | K12（kilo）+ A8（opencode）结论 | **本稿采信口径** |
+|---|---|---|---|
+| 是否新增 fire kind | 边界②「新增 kind 一律走 CR（红线 A）」 | **新增 2 个** `fire.ignited`/`fire.extinguished`（信号≠状态），蔓延/烧毁走既有 `matter.*`/`structure.collapsed` 族 | **不冲突**：红线 A 禁的是「新增 kind 承载**权力**」与「绕过 CR」；W-D1 从未禁火 kind。K12/A8 已同 CR 登记 `PAYLOAD_MODELS` ⇒ **边界②的 CR 条件已满足**，D-2 钉随之转绿 |
+| 每 tick 事件量 | 边界①「每 tick ≤1 条」 | A8「**按场聚合**发事件」（阈值交 pi） | **一致**：聚合即「一 tick 一条聚合事件」；N 值仍由 pi 定标（M5-P11），本稿不设新常量 |
+| 因果链载体 | 未涉及（只禁新增键于既有 kind） | A8③：因果走 0008 **谱系列**（`parent_seq`），**不给闭合 payload 加 `fire_id`** | **采信**：`parent_seq` + `parent_branch_id` 已是事件谱系真相源（0008 裁 3）；往 payload 塞关联 id ＝ 新增一个无约束的引用面，破坏重放闭包 |
+| 为何蔓延不另立新 kind | 边界②只说「走 CR」 | A8①：蔓延 kind「**不带新信息、只带第二套投影路径**」，撞 schema §19.3「两路径不得各写一套」铁律 | **采信 A8①**（比本稿的「CR 条件」更强）：蔓延→`matter.damage`、烧毁→`matter.collapse`/`structure.collapsed`；新 kind 只留给**信号≠状态**的起火/扑灭 |
+| 坍塌 cause 枚举 | 未涉及 | A8：坍塌 `cause="fire"`（**不混** `damage`） | **采信**：审计/叙事上「火焚」与「外力砸」必须可区分；这是**枚举成员扩展**非新 kind，不撞闭合集钉 |
+| 材料去向 | 边界② 烧毁须产 `material.moved`（to=灰烬） | A8：`reason="burned"` + `to_ref="world:burned"`，**不产 `to_ref` 则守恒凭空少一份** | **采信 A8**（与 D-3 同向）：D-3 的「from 减/to 加两侧非空」正是这条；`world:burned` 是 WorldSink 而非第二份账 |
+| 火场中间态 | 未涉及 | A8：火场中间态**不入库** ⇒ 不是第 5 张不可重建表，物化包不为火扩格式 | **采信**：与 §3 的 4 张表**不冲突**——§3 讲的是火烧**别的**表时的影响，火场自身不入库 |
 
 ## 3. 烧毁对 npc_power/material 状态的连带失效（不可重建 4 张表的火灾语义）
 
@@ -80,18 +93,25 @@ M4 建造破坏数据面已收官（`0006_structures`/`0007_material_balances` +
 | `npc_memories` | 治理列 `superseded_by`，无事件源 | 烧毁地点的记忆是否被清空？**禁**：清空 = 制造不可审计的历史空洞 | 蔓延不得 DELETE 记忆行；最坏是新增 `matter.*` 事件让记忆「记得这场火」（可重放） |
 | `knowledge` | told 链 + 源记忆指针 + 治理列 | 失火 NPC 是否失智（知识失效）？若**置空知识行**则跨分支证据链悬空（0008 `ck_knowledge_evidence_pair`） | 火灾语义落显式列/标记，不得物理清空；证据链 CHECK 不破 |
 | `relationships` | 累计值原地演进（无物化器/可比字段） | 火灾烧毁住所是否重置关系值？累计值**原地演进**语义要求「增量可追溯」 | 火灾影响走增量（`relationships` 累计值增量写）+ 事件留痕，不得整行覆写 |
-| `npc_power`（M5-A7/0013） | **无事件源**（红线 A 禁新增 kind，增量走显式写面，本表只有当前值） | 火场中 NPC 权力是否变化？**无事件源 ⇒ 不可重放**；只能走 `PowerStore.apply/apply_batch` 显式增量写面 | 火灾写权力**必须**经 `PowerStore`（fail-closed 四条 + 越界夹取如实上报）；批量火灾走 `apply_batch`（全批原子，批内任一非法整批零写） |
+| `npc_power`（M5-A7/0013） | **无事件源**（红线 A 禁新增 kind，增量走显式写面，本表只有当前值） | **A8④ 已裁：火场不改权力**——两案否决且各带理由：①删行否（破坏 A7「无行 = 未表态兜底 0」+ 与 C6 反向）；②失效标记否（`power_level=0` 与「平权」同值 = 语义塔塌） | 本稿原提「火灾经 `PowerStore` 显式增量写」**撤回**（无事件源 + 无判据 = 不可测的副作用）；钉只留**负钉**：火/生态生产代码零对 `npc_power` 的写（若将来真要火场权力语义，须先在本稿登记判据再施工） |
 
-**结论（安规闭环）**：火灾对 4 张不可重建表的语义**只能是显式写面增量**，不得靠事件重放，
-也不得物理清行——否则读历史点（`kind="anchor"`）时这 4 张表的「火灾后状态」永远拿不到，
-A3 §3.2 的「语料一致」条件当场说谎。**这一条同时是 D 批的施工级钉（D-5 零新增 kind + D-6 零物理清行）与 A7 的同款纪律**
-（0013 头注「无事件源 ⇒ 属不可重建第 4 张」，头注已把这条写死，D 批照抄即可）。
+**结论（安规闭环，按 A8 ④ 收敛）**：火灾对这 4 张表的连带失效**没有正面语义**——
+A8 已把唯一曾被讨论的一项（`npc_power`）裁为「原样保留」并给出否决理由 ⇒ **火灾不改这 4 张表**。
+因此本稿对它们的安规要求降为**纯负钉**（D-6）：蔓延/生态生产代码**零**对这 4 张表的
+`DELETE`/行覆写/整表重置（白盒负钉可抓）。这样做反而让锚点判据更干净：A8② 已论证
+**火灾只动可重放表**（`matter_state`/`structures`/`material_balances`，三者都在「可重放 5 张」
+且都有 fold 器）⇒ **物化包不为火扩格式**，A3 §3.2 的「语料一致」判据**不受火灾影响**
+（不需要为本批登记第 5 张不可重建表）。
+**若将来真要让火灾影响其中任一张**：须先在本稿登记判据（写什么、为什么不可测就等于不可做），
+再走 CR；**不得由施工方就地发明**（这正是 D-6 存在的理由）。
 
 ## 4. 施工级安规钉清单（按归属拆三组）
 
 **分组原则**（对齐 m5-plan 批次 D 负责域行）：opencode = 数据面（写路径 + 事件 kind 登记 +
-材料守恒 + 不可重建表写入）；kilo = API/出站面（WS 帧 + 出站递归扫 + 错误码）；机制面归我
-（威胁模型 / 意图闸语料 / 事件预算判据 / 施工后复验）。每钉一句可证伪判据 + 建议落点文件名。
+材料守恒 + 不可重建表**零触碰**负钉）；kilo = API/出站面（WS 帧 + 出站递归扫 + 错误码）；
+机制面归我（威胁模型 / 意图闸语料 / 事件预算判据 / 施工后复验）。每钉一句可证伪判据 + 建议落点文件名。
+**与 A8 的分工**：数据面 kind 方案已由 A8 预研定案（2 新 + 2 既有族），本组钉是**验收它的护栏**
+（登记闭合、守恒逐位、fork 克隆、零触碰），不重复 A8 的设计论证。
 
 ### 4.1 归 opencode（数据面）
 
@@ -102,7 +122,7 @@ A3 §3.2 的「语料一致」条件当场说谎。**这一条同时是 D 批的
 | D-3 | **材料守恒逐位相等**钉 | 燃烧消耗材料：一次蔓延事件族折叠后的 `material_balances` == 投影，**逐位相等不给浮差**（裁 17-1）；判据：烧毁结构后 from ref 减、to ref 加，两侧都非空且 quantity>0 | `sim/tests/test_t1_m4_material_balance.py::TestMaterialConservation`（+火案例，落 golden `conservation.py::assert_material_balances_conserved`） | T1 第 6 条既有 6 例 + `assert_material_balances_conserved` |
 | D-4 | **成对不变式进 DB**钉（0008 先例） | 「燃烧量 ≤ 该格存量」「from 减 == to 加」这类可表达约束落 CHECK 或钉；判据：火场表/材料转移的 DB CHECK 存在（与 `ck_npc_power_level_range`/`ck_npc_power_tick_nonneg` 同款）或钉死该不变式，**不得只靠 Python if** | `sim/tests/test_m5_fire_spread.py::TestDbChecks::test_burn_invariants_are_db_enforced` | 0008 四件 CHECK（`ck_events_parent_branch_pair`）判据「可表达约束进 DB」、0013 两条 CHECK |
 | D-5 | **零新增 kind 优先 / 火灾语义落显式列**钉 | 蔓延与生态**不新增事件 kind** 去承载「烧毁对 4 张不可重建表的影响」（红线 A 同款）；判据：`PAYLOAD_MODELS` 的 kind 集合在批次 D 后仍不含火/生态族（或新增须有同 CR 引用） | `sim/tests/test_m5_fire_spread.py::TestForbiddenSurface::test_no_event_kind_added_for_unrebuildable_state` | `test_event_kinds_unchanged_by_batch_c`（A7 红线 A 执行形态）、0013 头注 |
-| D-6 | **不可重建 4 表零物理清行**钉（负钉） | 蔓延不得 DELETE `npc_memories`/`knowledge`/`relationships`/`npc_power` 任一行；判据：白盒扫生产代码零 `delete(`/`query.delete()` 命中这 4 张表；火灾影响走增量/标记 | `sim/tests/test_m5_fire_spread.py::TestUnrebuildable::test_fire_never_deletes_unrebuildable_rows` | A3 §1.4 登记钉（`test_registered_as_fourth_unrebuildable_table`）、A6 分支隔离三钉 |
+| D-6 | **不可重建 4 表零触碰**钉（负钉·白盒；按 A8④ 收敛为纯负钉） | 蔓延/生态生产代码对这 4 张表零 `delete(`/`query.delete()`/行覆写/整表重置（含经 `PowerStore` 写权力——**A8 已裁「火场不改权力」**，本稿原「经 PowerStore 显式增量写」建议**撤回**）；判据：白盒扫零命中 | `sim/tests/test_m5_fire_spread.py::TestUnrebuildable::test_fire_never_touches_unrebuildable_rows` | A3 §1.4 登记钉（`test_registered_as_fourth_unrebuildable_table`）、A6 分支隔离三钉、A8 ④ 否决理由 |
 | D-7 | **fork 克隆完整**钉 | 火场/生态状态若进有界表，须进 `fork.py::_BOUNDED_TABLES`（逐字节克隆父值）且不跨分支污染；判据：分叉后火场行数与父分支相等 | `sim/tests/test_m5_fire_spread.py::TestForkClone::test_fire_state_cloned_byte_equal` | A7 `test_fork_clones_rows_byte_equal`、0008 克隆同款 |
 
 ### 4.2 归 kilo（API/出站面）
