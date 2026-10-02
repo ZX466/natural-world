@@ -15,7 +15,7 @@
 | 6 张**有界表**（可 `INSERT…SELECT` 克隆）：`npc_profiles`/`npc_health`/`relationships`/`matter_state`/`structures`/`material_balances` | `fork.py::_BOUNDED_TABLES` |
 | 2 张**语料表**（按分叉点截断克隆）：`npc_memories`（`event_seq`/`created_at_tick`）、`knowledge`（`evidence_seq`/`learned_at`） | `fork.py::_clone_memories/_clone_knowledge` |
 | 折叠/重放物化器只覆盖 5 张：`npc_health`(hidden)/`matter_state`/`structures`/`material_balances`/`npc_profiles`(lod) | `npc_store.py::materialize_*_replay`、`flush_tick` |
-| **无事件源、不可重建的 3 张**：`npc_memories`（`superseded_by` 治理列）、`knowledge`（told 链/源记忆指针 + 治理列）、`relationships`（累计值原地演进，`npc_store.py`/`fork_replay.py` 均无物化器/可比字段） | 预研稿 §3.7、`fork_replay.py::EXCLUDED_FIELDS` |
+| **无事件源、不可重建的 4 张**：`npc_memories`（`superseded_by` 治理列）、`knowledge`（told 链/源记忆指针 + 治理列）、`relationships`（累计值原地演进，`npc_store.py`/`fork_replay.py` 均无物化器/可比字段）、**`npc_power`（M5-A7 / 0013，批次 C 权力态：无事件源——红线 A 禁新增 kind，增量走显式写面，本表只有「当前值」）** | 预研稿 §3.7、`fork_replay.py::EXCLUDED_FIELDS`、`m5-power-data-preplan.md` |
 | 历史点分叉 fail-closed：`fork_seq < head_seq` 抛 `ForkError`（消息已指向本方案） | `fork.py:346-352` |
 | RNG 状态只存**分支当前值**，每次 fork 覆写 | `models.py::Branch.rng_state`（0009）、`fork.py:372-377` |
 | 存档写路径已同事务位（`create_item` 一个 session = A3 同事务）；`agent_override` 现硬编码 `"{}"` | `sim/api/anchors.py:192-210` |
@@ -23,7 +23,7 @@
 | 裁 A6：anchor 引用即热钉——被任一 anchor 指向的分支永不整分支冷归档 | 预研稿 §3.9/§4.1 |
 
 **分类结论（本稿的地基）**：世界态分两类——**可重放的 5 张**（有 fold 器，快照 + 事件窗口
-可重建）与**不可重建的 3 张语料/关系表**（只有「当前值」）。物化包必须同时兜住两类，
+可重建）与**不可重建的 4 张**（前 3 张语料/关系表 + M5-A7 新增 `npc_power`）（只有「当前值」）。物化包必须同时兜住两类，
 否则历史点分叉会把「回退前的当前值」当成「回退点的历史值」——那正是 fail-closed 要防的
 近似糊。
 
@@ -87,9 +87,9 @@
   写的是同一份 `capture_rng_state()` 输出 ⇒ 读档接缝逐位一致（可复用 A-DATA 的端到端
   逐位一致钉）。
 
-### 1.4 3 张不可重建表必须**进包**（否则 §3.2 条件永不满足）
+### 1.4 4 张不可重建表必须**进包**（否则 §3.2 条件永不满足）
 
-`npc_memories`/`knowledge`/`relationships` 无事件源 ⇒ 事件重放**永远**重建不出 anchor
+`npc_memories`/`knowledge`/`relationships`/`npc_power` 无事件源 ⇒ 事件重放**永远**重建不出 anchor
 时刻的值。可选路径只有两条：
 
 - **(A) 语料行值进包**（本稿建议）：`corpus_blob` 存 3 表行值（gzip JSON），克隆时**从包
@@ -99,6 +99,8 @@
   原地演进需记变更量或全量）。
 
 ⇒ **建议 (A) 先落地**（数据面可控、零事件面改动），(B) 作为长期演进。
+
+> **M5-A7 增补（0013 `npc_power` 已登记）**：批次 C 权力态同样无事件源（红线 A 禁新增 kind）⇔ 它是第 4 张「只有当前值」的表。本单只**登记**，不扩 `corpus_blob` 格式（归批次 E 物化单）；在扩包之前，**历史点读档（`kind="anchor"`）对本表仍然 fail-closed**（当下不误认：包内语料行集不含 `npc_power` ⇒ 不允许物化）。规模与保存口径见 `m5-power-data-preplan.md` §4 待裁点 6。
 
 ## 2. 问题二：与 0008/0009/0010 的接缝（要新迁移吗）
 

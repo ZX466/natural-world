@@ -17,6 +17,10 @@
    0008-d 裁 4 封 C4 跨分支悬空）；
 6. 父分支标 ``abandoned``（仅当仍 active；已弃分支可再分叉，不重复盖时间戳）。
 
+**批次 C 权力态**（0013 / M5-A7）走有界表克隆（``npc_power`` 在 ``_BOUNDED_TABLES`` 内）：
+子分支拿父分支**当前**权势值，逐字节。该表无事件源 ⇒ 它的值只能来自克隆/快照，
+历史点读档（anchor 物化）拿不到——A3「不可重建」族第 4 张，由批次 E 物化单收口。
+
 提交后（跨引擎，独立一步）：给了 ``vec_conn`` 就按**字节**重键拷贝 ``npc_memory_vec``
 行（V4：vec 表为准 → **零 LLM 调用**；重新 embed 是红线禁）。
 
@@ -143,6 +147,13 @@ _BOUNDED_TABLES: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "material_balances",
         ("ref", "material_id", "quantity", "updated_at_tick", "created_at"),
+    ),
+    (
+        # 批次 C 权力态（0013 / M5-A7）：有界表，克隆 = 父分支当前值逐字节。
+        # ⚠️ 本表**无事件源**（红线 A 不新增 kind）⇒ 子分支拿到的永远是父分支**当前**值，
+        # 与「投影表当前值 == 分叉点状态」的前提同源（分叉点只支持父分支头部，fail-closed）。
+        "npc_power",
+        ("npc_id", "power_level", "updated_at_tick", "created_at"),
     ),
 )
 

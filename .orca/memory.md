@@ -1,30 +1,46 @@
-<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-01 A6 已交）===== -->
+<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-02 A7 已交）===== -->
 <!-- 0. 工作树 E:\zxdevelop\.orca\worktrees\project7\opencode，分支 ZX466/opencode；
-      HEAD 19ce397（A6：R-4 施工数据面钉 + fork 交接口径稿，已双推 origin+gitee）；
-      基线 main 8c4f8a7（已收编我的 A5） -->
+      HEAD 9ceadea（A7：批次 C 权力数据面 0013 + PowerStore + 45 钉，已双推 origin+gitee）；
+      基线 main 278b95b（已收编我的 A5/A6） -->
 <!-- 1. 已交全景：M5-D1 预研 / D2 / D3-a 0008 / D3-b fork 事务+克隆 / D3-c R2+RNG /
-      A-DATA 0009 / A2 0010 / A3 物化设计 / A4 0011 + R-4 契约 + seq 判据 /
-      **A5 0012 is_current + 开线闸收紧 + current_branch_id（36 钉）** /
-      **A6 R-4 施工数据面钉（11 钉，5 绿 + 6 skip-locked）+ fork 交接口径稿** -->
-<!-- 2. 在途 = 无（等收编）。**我域下一单 = 配合 Claude 的 R-4 施工**：
-      ① anchors.py :274/:345 接真源（施工后我的 skip-locked 钉自动解锁变门禁）；
-      ② fork.py 当前行交接（口径稿 `docs/data/m5-fork-current-handover.md` 已把
-      「两步 + 同事务 + 先清父」定死，且实测单语句换手必撞唯一索引）。 -->
+      A-DATA 0009 / A2 0010 / A3 物化设计 / A4 0011 + R-4 契约 / A5 0012 is_current +
+      开线闸 / A6 R-4 施工数据面钉 + fork 交接口径 / **A7 批次 C 权力数据面（0013 npc_power）** -->
+<!-- 2. 在途 = 无（等收编）。**我域下一单**：等 Claude 的权力机制面接线（sim/npc/，不是我域）；
+      批次 E 物化单要收的口子 = `npc_power` 进 anchor 包（A3「不可重建」第 4 张）。 -->
 <!-- 3. 恢复序：git fetch+merge origin/main → 读 talking.txt（在途单卡）→ 读本卡 →
       需要细节再翻 ③ opencode 节各轮快照 / git log --oneline -- .orca/memory.md -->
-<!-- 4. 门禁（全绿基线 1950 passed / 125 skipped）：uv run pytest -m "not bench" -q；
-      uv run ruff check .；uv run pyright sim/；bench 单跑 `-q -m bench`；迁移往返必须
-      scratch DB + **全 revision id**（WORLD_DB_URL 指向 tmp 文件），**绝不用仓根
-      world.db**；autogenerate 零漂移 = `revision --autogenerate` 后 upgrade() 只剩 pass -->
+<!-- 4. 门禁（全绿基线 1995 passed / 125 skipped）：`uv run pytest -m "not bench" -q`；
+      `uv run ruff check .`；`uv run pyright sim/`；bench 单跑 `-q -m bench`；
+      **gen-protocol --check EXIT 0**（本树 client/node_modules 缺失 ⇒ 用 junction 挂主树那份：
+      `New-Item -ItemType Junction -Path client\node_modules -Target E:\zxdevelop\project7\client\node_modules`，
+      已 gitignore）；迁移往返 scratch DB + **全 revision id**，**绝不用仓根 world.db**；
+      autogenerate 零漂移（`revision --autogenerate` 后 upgrade() 只剩 pass） -->
 <!-- 5. 域内纪律（血泪）：① stamp 只改版本行不执行迁移；② 迁移往返钉钉**具体 revision id**
-      不钉 head；③ 回滚场景的测试证明不了原子性，必须正向读回；④ 改事务体内代码注意缩进；
-      ⑤ 文档门禁 prettier 只覆盖 client/；⑥ **收紧写路径前先跑全量找爆炸半径**；
-      ⑦ PowerShell 里写文件用 `write` 工具（`Set-Content -Encoding UTF8` 会塞 BOM；
-      **反引号是 PowerShell 转义符**——Markdown 行里的 `会被吃掉，要写文件就让工具写）；
-      ⑧ `edit` 工具会吃掉被替换块首行的缩进，改完必看 diff/跑一遍语法；
-      ⑨ **skip-locked 钉必须实测开锁**（把锁函数临时改成 True 跑一遍看真红，再字节还原）——
-      否则「沉睡的钉」和「没写的钉」无法区分。 -->
+      不钉 head；③ 回滚场景证明不了原子性，必须正向读回；④ 改事务体内代码注意缩进；
+      ⑤ 收紧写路径前先跑全量找爆炸半径；⑥ **PowerShell 写文件用 `write` 工具**
+      （`Set-Content -Encoding UTF8` 塞 BOM；**反引号是 PS 转义符**，Markdown 行会被吃掉）；
+      别在 shell 命令里打中文；`edit` 工具会吃掉被替换块首行缩进；⑦ **skip-locked 钉必须
+      实测开锁**（把锁函数临时改 True 跑一遍看真红再字节还原）；⑧ 把辅助函数改成 `async def`
+      后**逐个调用点补 `await`**（我漏了 6 处，pytest 报「coroutine 相等」的假象）；
+      ⑨ 文件写完查 U+FFFD 乱码替换符（write 工具偶尔吞字）。 -->
 
+【A7 完成记｜批次 C 权力数据面（2026-10-02 已交 9ceadea，45 钉）】
+- 预研稿 `docs/data/m5-power-data-preplan.md`（压缩版，**裁 31-1：推荐案即施工案**）。
+  核心裁决：**新表** `npc_power`；**否决并入 npc_profiles**——那张表在 A3 分类里算「可重放
+  5 张」，塞无事件源状态会让分类当场说谎（读档时退化成「快照里的当前值」= A3 反对的近似糊）。
+- 0013 = 纯 `create_table`（新建表直接带 CHECK ⇒ **不需 batch**，0011 同款）+ 复合 PK +
+  两条 CHECK（量纲 [-1,1] / tick>=0）+ **零索引**（PK 前导列即 branch_id，加索引纯冗余）。
+- **命名即绊线（可复用手法）**：状态列叫 `power_level`——**故意**落在 codex 红线 B 的
+  `AUTHORITY_FORBIDDEN_KEYS` 内 ⇒ 将来任何意外序列化会被递归禁键扫当场抓住（用命名把
+  review 记忆换成机器门禁）。改名须先改 codex 禁键集（变更纪律）。
+- 红线 A（不新增 kind）的执行形态 = 写面走**显式增量写**（`PowerStore.apply/apply_batch`）
+  而非事件投影；**不做隐式衰减**（读一次表不得变成写操作）。钉了「写完 events 行集零变化」。
+- fail-closed 四条（零写）：NaN/Inf（**必须显式查**，NaN 与任何值比较都返回 False）/ tick
+  倒流（会让衰减算错且不可复现）/ 非法 id / 分支非 active（复用 `InactiveBranchError`）；
+  批内一条非法 ⇒ **全批零写**；越界**夹取 + `clamped=True` 如实上报**（不抛，避免一次溢出
+  打断整 tick；DB CHECK 是第二道防线）。
+- 分叉 = `_BOUNDED_TABLES` 加项（**我域内可直接改**）⇒ 克隆逐字节 = 父分支**当前**值；
+  A3 已登记「不可重建」第 4 张（历史点读档对本表仍 fail-closed，批次 E 收口）。
 【A5 完成记｜0012 branches.is_current + 开线闸收紧（2026-10-01 已交 1eeb294，36 钉）】
 - 迁移 0012（`0012_branches_current.py`）：`is_current BOOLEAN NOT NULL DEFAULT 0`（纯
   add_column ⇒ 不需 batch）+ **部分唯一索引** `ux_branches_current ON branches(is_current)
@@ -638,6 +654,7 @@ schema.md §19.4/README/m3-plan 已同步已裁状态。实施放行 opencode「
 （各节由对应 agent 维护；快照纪律见 workflow §8：交付后在**自己节**顶部写一行快照 `【日期 轮次｜状态】`，旧快照压缩为 `git log --oneline -- .orca/memory.md` 指针，不无限堆积。）
 
 ## ③ opencode（数据 / 数据库域）
+- 【2026-10-02】**M5-A7 已交：批次 C 权力机制数据面施工（0013 `npc_power` + `power_store.py` + 45 钉，零事件 kind / 零协议面变更）**】预研稿 `docs/data/m5-power-data-preplan.md`（裁 31-1：推荐案 = 施工案）：**新表** `npc_power`（否决并入 `npc_profiles`——那张表在 A3 地基里算「可重放 5 张」，塞无事件源状态会让分类当场说谎）；量纲归一 [-1,1]（三处同源常量 + 两条 DB CHECK）；**零索引**（PK 前导列即 branch_id）。**命名即跱线**：状态列叫 `power_level`，故意落在 codex 禁键集内 ⇒ 意外序列化会被递归扫当场抓住。红线 A（不新增 kind）的执行形态 = **显式增量写**（不是事件投影）+ 不做隐式衰减；fail-closed 四条零写（NaN/Inf 必须显式查 / tick 倒流 / 非法 id / 分支非 active），越界夹取但 `clamped=True` 如实上报；`fork.py::_BOUNDED_TABLES` 加项（我域内可直接改）且 A3 已登记「不可重建」第 4 张。门禁：not-bench 1995 passed/125 skipped、**gen-protocol --check EXIT 0**、自生成零漂移、ruff/pyright 0。
 - 【2026-10-01】**M5-A6 已交：R-4 施工数据面钉（11 钉，5 绿 + 6 skip-locked）+ fork 当前行交接口径稿（零生产码）**】`sim/tests/test_m5_anchors_branch_source.py`：先红后绿口径选 **skip-locked**（锁信号 = `anchors.py` 代码里出现 `current_branch_id` 或 `is_current`，两种施工写法都认 → 合入后自动解锁；**反假绿灯钉**：锁信号与红线同向，删硬编码不接真源即红）；判别力做法 = 两条线头部 seq 设成不同值（7/3）⇒「只改一处必被抓」= A4 同改警告的可证伪版；fail-closed 钉只断言 ≥400 + 零落行（409/503 都放过）。`docs/data/m5-fork-current-handover.md`：交接 = **两步 + 同事务 + 先清父**，且**只在「父就是当前行」时发生**（从读档线分叉不抢当前行）；实测**单语句 CASE 换手在 SQLite 上必然撞唯一索引**（3/3）。门禁 1950 passed / 125 skipped / 0 failed、ruff/pyright 0。**已实测开锁 5 红/6 绿**（非沙睡钉）。
 - 【2026-10-01｜**M5-A5 已交：0012 `branches.is_current` 真源载体 + 开线闸收紧 + `current_branch_id` 读入口（36 钉）**】裁 30 §F 派单（R-4 数据面）。0012 = 列 + **部分唯一索引** `ux_branches_current … WHERE is_current = 1`（「至多一个当前」落 DB 层）+ 回填（唯一 active 置 1、**≥2 active 全 0 不 recency**、0 active 零行合法、幂等、downgrade 不撤销）；**模型必须同声明索引**（测试走 `create_all`）。`store.py::_assert_branch_writable` 收紧为「仅当无当前行才可开线」⇒ `CurrentBranchConflictError`（继承 `InactiveBranchError`，既有 except 零改动；不留分支行、不吃 seq）；**收紧只针对开线，读档子线（active+非当前）照写不误**。新增 `current_branch_id()`（查不到抛 `NoCurrentBranchError`，**禁回退 `'main'`**，刻意不加 status 过滤）。**未落**：fork.py 当前行交接（施工单，同事务先清父再置子，否则撞索引整批回滚）。**连带修**：4 个「两分支并存」钉改为先声明并存分支；0011 两个往返钉 head → 具体 revision id。门禁：36 钉绿 + 全 revision id 往返 + autogenerate 零漂移 + **1939 passed / 119 skipped / 0 failed** + bench 68 + ruff 0 + pyright 0。详见置顶恢复卡「A5 完成记」。
 - 【2026-09-30｜**M5-A4 已交：0011 `anchor_packages` + R-4 活跃分支真源契约 + `latest_snapshot(seq<=)` 判据（17 钉）**】新增 `0011_anchor_packages.py` + `models.py::AnchorPackage`（纯 create_table 无回填；快照引用两列同有同无 CHECK；rng_state 可空=禁 seed 兜底；1:1 不建 FK）+ `docs/data/m5-r4-active-branch-contract.md`（**独立文件**，未碰 anchors-api 防双写；真源=branches 表、禁 'main' fallback、`is_current`+部分唯一索引、**否决 recency**、取 seq 与建档必须同改）+ `store.py::latest_snapshot(..., *, max_seq=None)`（原只判 tick<= ⇒ 同 tick 多事件时窗口倒挂）。**自修**：0010 往返钉钉了 head 导致假红 ⇒ 改钉具体 revision id。**环境**：world.db 版本行说谎（A-DATA 轮 stamp 只改版本行未执行迁移）⇒ 备份后删库重建（0 玩家档）。详见置顶 opencode 恢复卡与本节下方 A4 段。
