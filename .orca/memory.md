@@ -2163,6 +2163,38 @@ uv run ruff check . && uv run pyright <改动文件>
     ② 本树基线 **2157 passed/120 skipped**（卡里写 2226/121 ＝ **主树口径**，含他人树
     新增用例；本树只作「绿」证据）。③ 引既有钉仍要先 grep（本次 9 个 token 全命中，
     其中 6 个是**文件名**不是函数名 ⇒ 脚本核对要分「文件路径」与「def/class 名」两档）。
+- **M5-S13（M6-P0 物化读档安规钉预研）✅ `dc788cb`**（2026-10-03，双推，基线 `2bd2bff`）
+  新文件 `docs/security/m6-materialization-security-pins.md`（205 行·零代码）。
+  **核心认知修正**：S12 §3.1 写的「物化失败**裸 500**」**已不成立**——A11 后 WS 侧降级
+  `load_failed` 帧（`ws.py:881-885`）、HTTP 侧 200+`ready=false`+原因码。**真缺口是「通道把
+  原因吞掉了」**：WS hook 契约是 `(anchor_id)->bool`（`ws.py:805-808`）⇒
+  `AnchorLoadUnavailable.reason`（六码含 `hooks_unavailable`）**在 hook 边界就被压成布尔**，
+  编排层六码**根本没有出站通道**。
+  **A11 已落骨架**（本稿只复跑不重建）：诊断路由 8 钉（`test_m5_materialization_api.py`
+  含 `test_payload_has_no_world_internals`/`test_route_payload_is_exactly_three_keys`/
+  `test_route_shape_matches_persistence_diagnosis`/`test_machine_code_still_absent_from_snapshot`）
+  + hooks 桩 3 钉 + E 系 6 钉；三件套实测 **116 passed**。
+  **本稿三钉**：M-1 MEDIUM=诊断路由**未进红线 B 递归扫**（`test_anchors_payload_recursive_clean`
+  只扫 `AnchorListItem`，`AnchorMaterializationStatus` 无覆盖）⇒ 加一钉到 `test_m5_authority_surface.py`
+  （红线 B 三面扫应聚一处，别拆文件）；M-2 LOW=hooks 桩不许降级（白盒「`_unavailable`
+  四步函数体零 return/None 早退」+ skip-locked 双态）；M-3 MEDIUM=物化产物
+  `corpus`/`world` 递归零权力键（E-4 只管 blob，**不管钩子产物** ⇒ 构造隔离该用在这里）。
+  **8 词 CR 预备案（实测判定，非推测）**：「这个档读不出来了。」「没这个档。」**scan() 零命中**
+  （「档」**不在**禁词表）；但「这个档回不去了（**快照**不存在）。」**命中 `快照`（kind=persist）**
+  ⇒ **任何带原因说明的文案必命中**。8 词全部已在 `BANNED_WORDS`，其中 `快照/回放` 属
+  `BANNED_WORDS_PERSIST`，5 个已在 `REWRITE_MAP`。
+  ⇒ **推荐案 A 终扫兜底（不填表）**；案 B 填表仅在「案 A 表达不了」时**逐词** CR（进
+  `META_SHELL` 不是 `BANNED_WORDS`，须双面成立）。**本稿未填任何词**。
+  **裁建议一句话**：**P0 物化面不需要 8 词 CR**（原因走 HTTP 机器码，前端按码映射）。
+  **D-10 复评**：物化链**未新增攻击面**；R-3 包面/R-4 机器码面已闭，R-1/R-2 是
+  「将来加字段无钉可抓」（当下结构性密封兜底）⇒ 不阻 M6 开工。
+  - 坑：① **`scan()` 实测必须落文件再读**——GBK console 会把中文输出糊成乱码，
+    本次先写 `scan_result.txt` 再 `Get-Content -Encoding UTF8` 才拿到可信结果；
+    ② **中文 here-string 里不能直接写中文再 `-replace`**（同 S10 反引号坑的同族：
+    PowerShell 单引号 here-string 不做转义，但**也别指望它做**）⇒ 探针脚本用
+    `\uXXXX` 转义写进临时 .py 再 `uv run`；③ 「A11 已实现」的派单描述要**逐条核实**——
+    本单派单说「{ready,reason} 零世界内部字段」，实测内部 `MaterializationDiagnosis`
+    其实带 `snapshot_seq`+`steps`（路由层已正确丢弃），**描述比实现窄**，照抄会写出错判据。
 ## 下一步 / 待派（不在本单范围）
 - ~~**T4 nightly 接线未闭合 → 需派 cline**~~ **已作废（第三十九轮 C7 实测推翻）**：探针 step 非 TODO，
   是裁定的长期注释态；env 已是 `Deepseek-v4-flash`（非 `claude-sonnet-5`，`d1940e4` 闭合）。**真实冲突在
