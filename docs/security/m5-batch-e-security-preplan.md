@@ -122,9 +122,23 @@ anchor 时刻的值），并给出两条包路径（(A) 行值进 `corpus_blob` 
 | 快照指针（`seq`/`tick`） | 有 | 不变 | 已封 |
 | `rng_state`（anchor 时刻捕获） | 有（本设计的核心） | 不变 | 已封（离线回归亦依赖它，见 §1.1 A 类） |
 | `agent_override`（玩家覆盖副本） | 有（现硬编码 `{}`） | 不变 | **待查**：覆盖副本若将来纳入任何状态，权力不得进 override（D-10） |
-| `corpus_blob`（3 张不可重建表行值） | 有 | **不变**（火场中间态不入库 ⇒ 火灾只动可重放表） | 已封 |
+| `corpus_blob`（3 张不可重建表行值） | 有 | **不变**（火场中间态不入库 ⇒ 火灾只动可重放表；A9 已施工 `0014 fires`，只存生命周期不存火势 ⇒ 仍属可重放族，见 §2.5） | 已封 |
 | `npc_power` | **无**（本稿裁决：保持无） | 不变 | **本稿裁决**：保持不进包 |
 
+### 2.5 与 A9 的交叉（2026-10-03 留言板，施工已落地：`0014 fires`）
+
+A9（opencode）已施工并推送 `395887a`，其结论与本稿一致但**粒度更细**，本稿采信并补记：
+
+- A9 建了 `fires` 表（`0014`），但**只存生命周期**（起火 tick/熄灭 tick/终止态），
+  **不存火势中间态**（强度/燃料/蔓延半径）⇒ A8「火场中间态不入库」的裁定**仍然成立**，
+  `fires` 属**可重放族**（有事件源 + `fold_fire`）⇒ **物化包不为火扩格式**的结论不变（§2.4 末行）。
+- A9 回报一处**与派单的偏差**（已在迁移头注自述）：派单要求「快照双列 CHECK」，
+  本表**无** `snapshot_seq`/`snapshot_tick`——理由是「加了是无人写入的**死列**（未来谎言）」。
+  **本稿采信该偏差**，并据此补一条批次 E 的前置条件（见 §3.1 E-13）。
+- **给批次 E 的一句话**：若真要给火势物化基准点，**随批次 E 加列 + 同款成对 CHECK**
+  （体例同 `fires` 的 `ck_fires_end_pair`）——但**先问 D 批施工单**：火势若已能由
+  「快照 + 事件窗口重放」逐位重建（A9 已钉「快照↔重放逐位相等」照妖镜），
+  则物化基准点是**重复表达**，不必加。
 ## 3. ③ 施工级安规钉清单（按归属拆四组）
 
 **分组原则**：数据面/物化器 → opencode；出站面 → kilo；演练面/复验 → 我；
@@ -138,7 +152,8 @@ anchor 时刻的值），并给出两条包路径（(A) 行值进 `corpus_blob` 
 | E-2 | **玩家档游标零前进**钉（正向） | 离线期推进后 `player_anchors.seq`/`tick` 逐字段不变；判据：推进前后该行逐字段相等 | `sim/tests/test_m5_offline_drill.py::TestDrillWritePath::test_player_cursor_frozen` | m5-plan §3 验收口径原句「玩家档游标未动」、A3 §0 事实表 |
 | E-3 | **事件不丢**钉（对照 C6） | 离线推进的 tick 数 == 事件行数增量（同事务同批）；判据：`store.append` 后 `events` 行数增量 == 推进 tick 数，缺任一即红 | `sim/tests/test_m5_offline_drill.py::TestDrillWritePath::test_offline_events_not_dropped` | C6 append-only、T1 材料守恒同款「计数相等」判据 |
 | E-4 | **物化包零权力**钉（负钉·白盒，本稿 §2.3 裁决） | `corpus_blob` 编解码零 `npc_power`/`power_level`；判据：白盒扫包编解码器零禁键字面量（复用 K11「禁键只允许在闸门模块」体例） | `sim/tests/test_m5_anchor_packages.py::TestPackageSeal::test_package_carries_no_power_state` | K11 `TestWhiteboxNails::test_forbidden_key_literals_only_in_guard_module`、A7 `test_state_columns_are_forbidden_key_tripwires`（命名即绊线） |
-| E-5 | **读档对权力表 fail-closed**钉 | 物化包不含权力 ⇒ `kind="anchor"` 读档后 `npc_power` 按「未表态兜底 0」处理且**不报错**（A7 口径）；判据：读档完成且 `materialize()` 返回空 dict（无行=兜底 0） | `sim/tests/test_m5_anchor_packages.py::TestPackageSeal::test_anchor_load_leaves_power_fallback_zero` | A7 头注「在扩包之前，历史点读档对本表仍然 fail-closed」、`test_materialize_filters_and_omits_unknown` |
+| E-5 | **读档对权力表 fail-closed**钉 | 物化包不含权力 ⇒ `kind="anchor"` 读档后 `npc_power` 按「未表态兜底 0」处理且**不报错**（A7 口径）；判据：读档完成且 `materialize()` 返回空 dict（无行=兜底 0） |
+| E-13 | **火势物化基准点按需再加列**钉（本轮**不落**） | 批次 E 若要给火势物化基准点，须随本单加列 + 同款成对 CHECK（`fires` 体例），**且先证明「快照 + 事件窗口重放」不能逐位重建**（A9 已钉照妖镜 ⇒ 若已能重建则加列＝重复表达＝未来谎言）；判据：无「快照↔重放逐位不等」的失败用例 ⇒ 不许加列 | `sim/tests/test_m5_fire_state.py::TestReplayMirror::test_replay_equals_snapshot_path`（A9 既有照妖镜钉，收编后复用，**本单不新增**） | A9 `0014_fires.py` 头注「死列 = 未来谎言」偏差自述、S9 D-4 成对不变式进 DB | `sim/tests/test_m5_anchor_packages.py::TestPackageSeal::test_anchor_load_leaves_power_fallback_zero` | A7 头注「在扩包之前，历史点读档对本表仍然 fail-closed」、`test_materialize_filters_and_omits_unknown` |
 
 ### 3.2 归 kilo（出站面）
 
