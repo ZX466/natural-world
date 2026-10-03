@@ -916,6 +916,15 @@ uv run pyright sim/
 - (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)
 
 ## ⑤ pi（性能域）
+- 【2026-10-03 第二十八轮快照｜**M5-P11：批次 D 火灾蔓延/生态性能预算案 + 定标准备清单（零代码，唯一交付=1 个 doc）**】任务书两度派发（10-02 首派、10-03 重派附三条已收敛输入）——**本域二次超期致歉**（纪律教训：预研单也须当日交付，「等实测数据」不构成缺席理由，本单的实测探针全用既有原语即可跑）。产出 `docs/perf/m5-fire-budget.md`（205 行，sim/ 与 thresholds.py 零改动）。
+  - **【W-D3 N=2（本单必交付项）】** 定标机复核采认 opencode A9 的 advisory N=2（非另裁）。判据沿用 codex S9 D-14「同因（parent_seq 指同一 fire.ignited）连续 10 tick >N 即实现偏差」；三条依据：①**反解约束式`2F ≤ 100 ⇒ F ≤ 50`**（F=同时活动火场数）——N=2 在 F≤50 假设下**恰好等于既有 `CASCADE_EVENT_BUDGET_PER_FRAME=100`，零新增预算轴**（M4-P1 先例）；若机制要 F>50 ⇒ 走「火灾与坍塌共用一条按帧摊还队列」而**不得调大 N**；②量纲分离：**常态速率**（1–4 条/场，A2 混沌「可讲述才一条」同源）≠ **判红天花板**（N=2/10tick=每场 0.2 条/tick，×F50=10 条/tick=稳态 20 事件的 50%）——**N 定的是异常检测门，不是常态成本上限**；③灵敏度：格驱动 10 tick 产 10×前沿格 ≫2 稳判红，N=1 会因同 tick 跨双阈值误红 ⇒ N=2 给 1 条余量。
+  - **【直接账从不破线】** 聚合 `matter.damage` 事件 construct 4.6µs、边际 ~4.9µs（construct+observe+invalidate），store 行 293B；**最坏格驱动全烧（1024 格铺满 32×32）也只 8.23ms/tick** ⇒ 与 opencode A8「零新增预算行」结论吻合，真风险全在间接账。
+  - **【间接账＝火灾的「账一-b」（本单核心，承 P9/P10 课）】** 烧毁（`structure.collapsed`+`matter.collapse`+`material_moved→world:burned` 3 事件=14µs）→ chunk 失效 → **K 个 NPC 冷 A* 重算**：K=1 **0.63ms**、K=5 6.6ms、**K=20 17.2ms（破 16.6ms 整 tick 预算）**、K=50 35.1ms。自成本 14µs 触发 K×~0.7ms ⇒ 约束点是「烧毁是否落共享通勤走廊 + 依赖它的 NPC 数」，不是烧毁事件本身。
+  - **【O(N²) 邻居查询判红】** 蔓延引擎若用**成对扫描**（每火格×全火格判相邻）：G=16 13µs、G=256 3.0ms、**G=1024 39.1ms（一次蔓延步即破线 2.4x）** vs **O(G) 四邻膨胀 174.5µs（224x 差）** ⇒ 红线：蔓延必须 O(格数)邻域膨胀/网格平流（M2 嗅觉 `np.roll`、M4 坍塌承重图同族），禁 O(G²) 成对扫描。
+  - **【红线三层】** ①两条**语义红线**（非数字）：烧毁→重算**按帧限流**（复用 `advance_cascade` 摊还手法，M4-D2c 已证单帧成本与级联规模解耦）+ O(G) 蔓延形态钉；②**不新建 `FIRE_TICK_LIMIT_MS`**——直接账并入既有 `APPLY_P99_LIMIT_MS=0.04`+`test_apply_50_events_batch`（thresholds.py:175 已注「走既有 apply 通路」），与 P9 并入 RNG/熵行、P10 并入 L1 决策行同一逻辑；③提案常量 `FIRE_AGGREGATE_EVENT_N_PER_10TICK=2`（语义钉可先落）、`FIRE_REPATH_BUDGET_PER_FRAME=100`、`FIRE_SPREAD_INTERVAL_TICKS=60`（P9/P10 regress 同族）；P6 未定标前 advisory。
+  - **【§D 定标准备清单（备好即用，§5）】** 统一口径=throttle_probe 比值≤2.0 + 暖态中位 + 实测×1.7 慢机余量；三案（CHAOS `CHAOS_TICK_LIMIT_MS=0.05` / POWER `POWER_MAX_BIAS≤0.2` / FIRE 摊还与区间常量）的 **advisory→硬断言翻转条件表**；skip-locked 钉解锁位（codex S9 D-1 随 `sim/world/fire*.py` 落盘自动生效；P9 `rng_state_persisted=False` 升硬错误随定标轮裁）；执行单模板（test_bench_fire 三钉 + thresholds + budget.md 批次 D 行）。
+  - **【留痕与两处计数对账（重要，防下轮误读）】** 本轮 **throttle_probe 比值 1.492 < 2.0（未降频，定标可用）**；not-bench **2013 passed/125 skipped/70 deselected**（135.6s）、bench **69 passed/1 skipped/2138 deselected**（复跑 3 次同值）、ruff All checks passed、pyright 0。①派单板「2081/127」与本单「2013/125」**用例总数恒等 2208**（2013+125+70 = 2081+127 = 69+1+2138）⇒ 同 HEAD 零增删，差的是全量含 bench 与分档口径；②**首跑曾报 66 passed/4 skipped，随后三次 69/1** ⇒ 那 4 个 skip 是 `test_bench_soak.py` 的 `_skip_if_throttled`**降频自检门级联自 skip**（该文件共 4 个 soak 测试挂此门），P6 门按设计工作、非回归。**P10 坑扩写为纪律：bench passed 数会随环境降频门浮动（浮动幅度可达 3 个用例），留痕必须同轮跑 throttle_probe 并记比值；passed 比基线少时先查是不是 soak 门级联 skip，再怀疑代码。**
+  - **【交付】** doc commit `a9813eb` + memory commit 双推 origin+gitee。所有权：只新增 `docs/perf/m5-fire-budget.md` + 自树 memory；未碰 sim/、既有 bench、thresholds、docs/README。
 - 【2026-10-02 第二十七轮快照｜**M5-P10：批次 C 权力牙齿·性能预算案（零代码提案，唯一交付=1 个 doc）**】任务书（Claude M5-P10，裁 31-1 施工下放：你=预算案+定标轮）：权力每 tick 成本模型 + **间接成本推演（核心）** + 红线建议 + 契约常量复用；产出 `docs/perf/m5-power-budget.md`（147 行，**sim/ 与 thresholds.py 零改动**）。
   - **【直接账＝噪声级，但接法差 186x】** 权力向量化更新 50 NPC/tick **2.8µs**（multiply+add+clip，本质＝效用矩阵多一列；对照 L1 满属性向量化全推 `tick_vectorized(50)` **18.1µs** ⇒ +15% 决策行）。**反模式对照**：逐人 `advance_needs` 循环 **175µs**（现状 needs 就是逐对象 Python！）/ `dataclasses.replace` ×50 **81µs** / 逐人 `chaotic_at` 抖动 **521µs**（P9 纯函数重建 31x 陷阱翻版，一次顶穿 P9 `CHAOS_TICK_LIMIT_MS=0.05` 的 10 倍）。
   - **【间接账（本单核心）＝权力的等效「账一-b」】** 传导链：权力值 → utility 权重 → **动作选择分布漂移** → 点亮冷子系统。实测：打分矩阵路径基线 211.7µs，加权力广播列 **+3.05µs（+1.4%，几乎免费）**；但合成灵敏度曲线 flip_rate 0.18→0.46（偏置 0.1→1.0）、动作熵 2.52→1.80（分布坍缩）；真实精简形（真 `_GAIN`）request_chat **16→26**（+10/50 翻判）。冷路径单价：翻 `move`→冷 A* **0.53ms**@64×64（新目标 cache miss，P9 同源）；翻 `chat`→检索 常态 0.05 / 红线退化 0.30 / 全量扫描哨兵 0.86 ms·NPC⁻¹。**权力列自付 3µs 却触发 530µs ≈ 174x**（比 P9 的 53–70x 更极端，因权力直接成本≈0）。**事件条数不变**（`runtime.tick(50)` 恒 50 事件/tick，权力改类型不改密度，故存储/折叠侧不构成新风险）。
@@ -1161,10 +1170,12 @@ uv run pyright sim/
 
 ## 当前任务
 
-（**M5-P10 已完成**（2026-10-02，见本节顶部第二十七轮快照：批次 C 权力牙齿性能预算案，
-零代码提案 `docs/perf/m5-power-budget.md`，`32b141a` 双推 origin+gitee）。
-前单 M5-P9（同日，批次 A 混沌接线预算案 `docs/perf/m5-batch-a-chaos-budget.md`，`8176e30`/`e17944a`）。
-前单 M5-P8（2026-10-01，willingness Δ 护栏改中位判据 + Xeon 被动监控台账，`f32373f`/`cc4fa09`/`e3027bd`）。
+（**M5-P11 已完成**（2026-10-03，见本节顶部第二十八轮快照：批次 D 火灾蔓延/生态预算案 + 定标准备清单，
+零代码提案 `docs/perf/m5-fire-budget.md`，**W-D3 N=2 已给**；`a9813eb` 双推 origin+gitee）。
+前单 M5-P10（2026-10-02，批次 C 权力牙齿预算案 `docs/perf/m5-power-budget.md`，`32b141a`/`201ceda`）；
+M5-P9（同日早，批次 A 混沌接线预算案 `docs/perf/m5-batch-a-chaos-budget.md`，`8176e30`/`e17944a`）；
+M5-P8（2026-10-01，willingness Δ 护栏改中位判据 + Xeon 被动监控台账，`f32373f`/`cc4fa09`/`e3027bd`）。
+**CHAOS/POWER/FIRE 三案数值红线全部 advisory，等批次 C/D 接线合入后由我跑定标轮（清单已备好在 fire-budget §5）。**
 等 Claude/主树派下一单。历史：M3-P2 ①②、M4 P1-P4、M5-P6/P7 均已完成收编。）
 
 ## 进行中
