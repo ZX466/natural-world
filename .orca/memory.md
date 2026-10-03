@@ -1460,6 +1460,28 @@ M5-P8（2026-10-01，willingness Δ 护栏改中位判据 + Xeon 被动监控台
   **⚠ 环境坑（新记，重要）**：PowerShell `Get-Content`/`Set-Content` 对本仓 CJK 文件**按系统代码页解码**
   ⇒ **乱码且行数偏少**（实测 `ws.py` 报 859 行、真实 1028 行）⇒ 改文件一律用 edit 工具或 python
   `read_text(encoding="utf-8")`/`write_bytes`；查行号用 `Select-String` 或 python，**不信 `Get-Content`**。
+- **✅ M5-K15 已交 `1470f90`（origin+gitee 已推）——F-1 出站补扫 + K12 稿 2-kind 订正**（收官轮两小件，
+  **F-1 已闭合**，Claude 收官轮可引用）。①**F-1**：`sim/api/outbound_guard.py` 禁键集扩为
+  **两层同一递归**——新增 `RANDOM_STATE_FORBIDDEN_KEYS`（**逐键真源派生**：`rng_state`＝0009
+  `branches` 列名／`rng_state_persisted`＝`ForkResult` 字段／`world_seed`+`materials`＝`RngRegistry`
+  字段／`bit_generator`+`has_uint32`+`uinteger`＝**实测** numpy PCG64 `state` 键）＋
+  `RANDOM_STATE_ALIAS_KEYS`（`seed`/`rng`/`entropy`/`entropy_state`＝W-C1 红线别名，与真源层**不相交**）；
+  **刻意排除**通用容器键 `v/registry/streams/key/state/inc`（剥合法字段＝**静默丢数据，比漏扫更坏**；
+  其内容已被特异叶子键兜住）。canonical 化（`find_forbidden_keys`/`strip_outbound_forbidden` 为准）
+  ＋**K11 旧名保留为别名**（不静默破坏 K13 守卫钉的导入——接口演进不许静默破坏既有钉），
+  `ws.py::_send_to` 改调 canonical；留痕与自检异常现在**带层**（`authority`/`random_state`）。
+  ②**K12 稿订正**（裁 35-1）：§0 加「⚠ 施工订正」块（3-kind→2-kind 映射表 + 理由 + 落地核对），
+  §1.1 蔓延行／§1.3 payload 块／§5 待裁 1 三处加订正标注，**原文全留**（决策链）。
+  **钉 +10**：`test_m5_power_api.py` 18→**24**（WS 咽喉实测随机流键剥除+留痕 8 条路径逐条对齐／
+  通用容器键**不剥**的取舍钉／**真源对拍**＝域内四文件文本 + **numpy 运行时键集**双对拍／
+  两层同一递归一次全剥 + 按层取证／异常报层／K11 别名同语义），白盒负钉覆盖面扩到**两层并集**；
+  新文件 `test_m5_fire_prestudy_correction.py` **4 例**（订正块存在且声明优先级／点名 2 kind 与
+  `parent_seq` 谱系／**代码事实与订正一致**（`EventKind` 恰为两项；若 opencode 加回 `fire.spread`
+  立即红）／原文 3-kind 表述必须仍在）。
+  **门禁**：K15 钉 10 passed（相关三文件 43）／ruff 全过／pyright 0／`gen-protocol --check` EXIT 0／
+  前端 21 passed／`w/lf`／fire 稿 prettier 过／全量 **2167 passed / 120 skipped / 0 failed**。
+  **注**：`ruff format --check sim/` 对 `sim/agent/impulse_gate.py`、`sim/api/ws.py` 的**既有代码段**
+  （非我改动行，其他树基线）报 unformatted ⇒ **未代改**（不越权；只对我碰过的文件做 format）。
 
 **② 接口域现状（一句话）**
 协议面＝`shared/openapi.json`（唯一真相源）→ `npm run gen-protocol` → `shared/protocol.ts`（**禁手写**）→
@@ -1468,6 +1490,14 @@ M5-P8（2026-10-01，willingness Δ 护栏改中位判据 + Xeon 被动监控台
 批次 C 权力面按裁 27-C/D-10「权力完全不可见」＝**协议零新增**。CRITICAL（G-1 plan 越界、R-1 读档挂死）与全部 HIGH 已清零。
 
 **③ 下一步**
+- ~~**在途：M5-K9 ~ K15**~~ **✅ 均已交（见上）**。收官轮**等派项**：
+  ①**批次 E 出站真缺口施工单**（`load_outcomes` 死账本 ⇒ 物化失败无出站通道；沿用 `load_failed`
+  ＋戏内文案，**不新增 code**；「先受理先发成功帧」的诚实态问题需主树裁）；
+  ②`info.version` 接同源常量（改 `main.py` app `version=` + 快照，**须另立快照单**）；
+  ③G2 补钉（anchor-fork 落父 + 另两种 0 行情形）——属 A6 文件范围，需派 CR；
+  ④任何收官后协议面变更（走 versioning §7 登记 + 跨树版本钉 `test_protocol_version.py`）。
+  **已闭合**：R-4 复验（A6 13 绿 + G1/G3）、fire 守卫钉转绿、protocol 1.1、K12 稿订正、F-1 补扫。
+  **另可主动做（不接未派单）**：协议面审计与对表、live↔快照对账、契约草案、钉子补齐、复验评审。
 - ~~**在途：M5-K9 ~ K14**~~ **✅ 均已交（见上）**。**等派项**：
   ①**K12 稿 fire.spread 订正**（opencode 已裁 2 kind，论证更强）+ 加 doc-sync 钉防两稿分叉；
   ②**批次 E 出站真缺口施工单**（`load_outcomes` 死账本 ⇒ 物化失败无出站通道；沿用 `load_failed` +
