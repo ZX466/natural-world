@@ -151,7 +151,7 @@ M5 期间派单板与本域留痕的用例数**看似冲突**，实为**同一 H
 |---|---|
 | `docs/perf/baseline-xeon8573c.json` | **不存在**（`ls docs/perf/` 实测：仅 `baseline-epyc7763.json` + `runner.txt`） |
 | Nightly Bench（workflow id `361944466`） | **21 个 run**；最近两次 `37067388197`(10-02) / `36932896240`(10-01) 均 `completed success` @ `main` |
-| 机型判定 | **本轮读不到**：无 `gh`、无 token；REST 实测 jobs 端点 `runner=null`、`commits/{sha}/check-runs` 的 `pytest-benchmark` 条目 `output.annotations=[]`、`title/summary=null` ⇒ **机型 notice 不可达**（P8 于 10-01 曾读到「机型一致：AMD EPYC 7763」，本轮同一手法不可得 ⇒ 只能记**未知**，**不得**记「已命中/已排除」） |
+| 机型判定 | ~~**本轮读不到**：无 `gh`、无 token~~ **【M5-P13 纠正（见 `docs/perf/m6-perf-preplan.md` §5）：此结论有误=端点用错，非能力缺口】** ①`GET /check-runs/{id}` 的 `output` 只有 `annotations_count`/`annotations_url`，`annotations` 恒空；正确三连（**匿名、无 gh**）：`actions/workflows/{id}/runs?per_page=8` → `commits/{head_sha}/check-runs?per_page=50` → **`check-runs/{id}/annotations`**。本机 2026-10-03 实测：近 4 次 nightly（37067388197/36932896240/36780592123/36721350832）**全部** `notice 机型一致：AMD EPYC 7763` ⇒ **未命中 Xeon，且此后台账可无凭据自转**。仍需凭据的只有 artifact 下载（建基线八步，实测 `artifacts/{id}/zip` 匿名 401）；边界：防漂 step 由 `f52858d`/`959ccaf`（09-30 16:04/16:07）引入，**更早的 run 无 annotation，不得读成「机型一致」**（`36670751263` 实测无 annotation） |
 | 策略（未变） | **被动为主**（裁 30-C）：nightly 自然轮询，**落 Xeon 且全绿即触发 P7 §4 八步预建**；**不再主动 dispatch**（P7 已实证 `36721350832` 落 EPYC ⇒ dispatch 不挑机位、命中率与被动相同，代价 3/4 轮白烧） |
 | 触发时执行 | P7 §4 八步（`gh run list/download` → **五字段核对**（ubuntu-latest / nproc 4 / **INTEL XEON PLATINUM 8573C** / py3.12.3 / uv 同锁）→ 落 `baseline-xeon8573c.json` + `runner` 注释块 → 本地 sanity `--benchmark-compare-fail=median:25%` → **不改 `nightly-bench.yml`**） |
 | 收益（若建成） | 恢复判别力：Xeon 快 20%+ 的档位差会吃掉 EPYC 基线的 25% 窗口 ⇒ 真回归在 Xeon 上表现为「恢复 EPYC 水平」、drift 为负**永不越线**（**漏报**，非假红） |
