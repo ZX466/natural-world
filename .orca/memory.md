@@ -1266,10 +1266,29 @@ uv run pyright sim/
   **门禁**：ruff 全过／pyright 0／`gen-protocol --check` EXIT 0（`shared/` 零 diff）／`w/lf`／
   **prettier check 通过**——**新文件首次按 prettier 落盘**（7 处表格对齐、39+/37-，新文件无噪声
   ⇒ 结论：新 docs 文件照 prettier 写，既有文件仍按纪律 12 保持最小 diff）。
+- **✅ M5-K13 已交 `02b331d`（origin+gitee 已推）——火灾出站面零变更守卫钉 + R-4 复验单预置**
+  （**生产码零改动**）。①**`sim/tests/test_m5_fire_outbound.py`（新）15 例＝10 即绿 / 5 skip-locked**
+  （锁信号 `EventKind.FIRE_` 出现，A6 同款口径）：①组快照零漂移（产物零 fire + 帧 type 闭合集 15 项 +
+  paths 零火灾路由）／②组 `Light.kind` 自由 string（**改 enum 即红**）+ `Structure.phase` 仍三项 +
+  `kind="fire"` 载荷过既有形状与 K11 咽喉闸／③组 fire kind 只在 `PAYLOAD_MODELS`、零进快照与帧判别器／
+  ④组**白盒负钉**（`sim/api/*.py` 字符串字面量零 fire，tokenize 级 + docstring 豁免 + **植入字面量反假绿
+  自测**）／⑤组归因键**双保险**（fire payload 零归因键 + `extra="forbid"` 封闭；＋键集决策锁＝归因键
+  **不进** K11 权力键集，K12 待裁 4）。**已预先跑通解锁路径**（用既有 kind `move` 验
+  `PAYLOAD_MODELS[EventKind(kind)]`/`model_fields`/`extra`/`__members__` 前缀扫描）——避免解锁那天才发现
+  查表写错。②**`docs/api/m5-r4-acceptance-checklist.md`（新）**：六钉逐条映射 A6 现有测试名/预期/判红
+  判据 + 前置三条（A6 skip 数须为 0；实测基线 **5 passed/6 skipped**）+ 跨钉总闸三条 + 命令速查 + 登记格式。
+  **⚠ 三处缺口（复验必看）**：**G1** A6 `TestFailClosed` 只断言 `≥400` 且 docstring 写「409/503 都可」，
+  **与 K10 R-4.1-S 已裁 `400 /errors/world-not-ready` 矛盾** ⇒ 复验须查响应体，不符**打回改施工别改契约**；
+  **G2** 钉 2（anchor-fork 落父）与另两种 0 行情形**无钉**（清单给了手测 fixture，长期自动化须走 CR）；
+  **G3** A6 `test_fork_from_current_line_keeps_single_current` 是**今天即绿**且断言现状「父仍当前」⇒
+  施工若含 fork 交接**该钉会红**（A6 现状断言过期，非施工回归），须 opencode 更新；不含则登记已知缺口。
+  **门禁**：K13 钉 10 passed/5 skipped／ruff 全过／format 干净／pyright 0／`gen-protocol --check` EXIT 0
+  （`shared/` 与 `sim/api/` 零改动）／两新文件 `w/lf` + prettier check 通过／全量
+  **2023 passed / 130 skipped / 0 failed / 0 errors**。
 - **新对话第一动作**：`git fetch origin main && git merge origin/main` → 读 `.orca/talking.txt`
   （有没有新派单／上一轮回执）→ 回这里。**不要**从历史快照开始读。
-- **⚡ 在途单（2026-10-02 起）**：**无**（K9 `68b5c9c`、K10 `1d01d24`、K11 `e317566`、K12 `98d6293` 均已交）。
-  下一个 M5-K 单由 Claude 派。上一轮派单留档：M5-K9＝R-4 条款合入＋R-5 集合落定；
+- **⚡ 在途单（2026-10-03 起）**：**无**（K9 `68b5c9c`、K10 `1d01d24`、K11 `e317566`、K12 `98d6293`、
+  K13 `02b331d` 均已交）。下一个 M5-K 单由 Claude 派。上一轮派单留档：M5-K9＝R-4 条款合入＋R-5 集合落定；
   M5-K10＝六钉验收对表＋branch-ambiguous 登记单；M5-K11＝批次 C 权力 API 面**施工**（裁 31-1 下放，
   我第一个施工单）；M5-K12＝批次 D 火灾**预研**（零代码）。
   **⚠ 门禁口径订正**：「prettier 过」对 `docs/**` **不成立**（不在 CI 门禁 + HEAD 本就红）——
@@ -1287,21 +1306,20 @@ uv run pyright sim/
 批次 C 权力面按裁 27-C/D-10「权力完全不可见」＝**协议零新增**。CRITICAL（G-1 plan 越界、R-1 读档挂死）与全部 HIGH 已清零。
 
 **③ 下一步**
-- ~~**在途：M5-K9 / K10 / K11 / K12**~~ **✅ 均已交（见上）**。**等派项**：
-  ①**R-4 取值施工的复验**（Claude 域 `anchors.py` 两处同改）——**注**：`test_m5_anchors_branch_source.py`
-  已由 opencode 以「RED + skip 待施工转绿」形态落库（`19ce397`），R-4 施工转绿后我照 **§5.2 六钉对表**
-  逐条核（含「两分支 seq 刻意不等」「歧义＝两条 active+全 0」「`main` 字面量白盒负钉」三条构造，
-  **别用自己想象的 fixture 复核**）；②**`fork.py` 当前行交接**是否随施工单落地（0012 已知缺口；
-  不落地则 head-fork 后读档侧报「无当前分支」＝§5.2 钉 5 红）；③若要 `500 /errors/branch-ambiguous`
-  ＝**我另立快照单**（规格已写好在 §2.1：必同改四处 + 三条禁忌）；④**opencode 0013 合入后核 P2/P5**
-  （store 返回 dict 不得含禁键；`create_all` 与 alembic 两路径都有列）；⑤**批次 D/E 施工后的复验**
-  （火灾事件族落地后核：kind 是否登记 `PAYLOAD_MODELS`、payload 是否零归因键、烧毁是否走既有族、
-  WS 构造点是否仍零 fire 投影——预研稿 §1/§3/§4 即验收面）；⑥若 `Structure.phase` 真要扩 `"burning"`
-  ＝**versioning §7 minor 登记单**（我域，三处同提交）。
+- ~~**在途：M5-K9 / K10 / K11 / K12 / K13**~~ **✅ 均已交（见上）**。**等派项**：
+  ①**R-4 取值施工的复验**——**复验单已就位**：`docs/api/m5-r4-acceptance-checklist.md`（合入即跑，
+  含六钉映射 + 总闸 + **三处缺口 G1/G2/G3**）；A6 钉 `test_m5_anchors_branch_source.py` 实测基线
+  **5 passed / 6 skipped**（skip 归零才算解锁）。**开跑前必读 G1**：A6 只断言 `≥400`，
+  与我 K10 R-4.1-S 已裁的 `400 /errors/world-not-ready` 不一致处**打回改施工**；
+  ②**`fork.py` 当前行交接**是否随施工落地（＝G3：若落地，A6 那条今天即绿的现状断言钉会红，须 opencode 更新）；
+  ③若要 `500 /errors/branch-ambiguous`＝**我另立快照单**（规格在 §2.1：必同改四处 + 三条禁忌）；
+  ④**opencode 0013/0014 合入后核 P2/P5 与 F2/F5**（store 返回 dict 不得含禁键；`create_all` 与 alembic
+  两路径都有列/表）；⑤**fire kind 登记后核我的守卫钉转绿**（`test_m5_fire_outbound.py` ③⑤ 组），
+  以及 WS 构造点是否仍零 fire 投影（负钉④ 会自动抓）；⑥若 `Structure.phase` 真要扩 `"burning"`
+  ＝**versioning §7 minor 登记单**（我域，三处同提交）；⑦缺口 G2 若要长期自动化 ⇒ 走 CR 加进 A6 钉组。
   **另可主动做（不接未派单）**：协议面审计与对表、live↔快照对账、契约草案、钉子补齐、复验评审。
-  **K11/K12 后新增的可做项**：把 `m5-power-api.md` §6 的 P1~P5 与 `m5-fire-api-prestudy.md` §4 的
-  F1~F5 变成**可机检钉**（例如断言迁移后 `create_all` 与 alembic 两路径列集一致；断言事件 payload
-  白名单零归因键），但需先确认 doc/迁移同步测试的既有落点约定。
+  **K11~K13 后新增的可做项**：把 `m5-power-api.md` §6 的 P1~P5 变成可机检钉（例如断言迁移后
+  `create_all` 与 alembic 两路径列集一致）——但需先确认 doc/迁移同步测试的既有落点约定。
 
 **④ 未修债（本树域内，分级）**
 - **P1（我域，等派单）**：`sim/api/ws.py` 驱动层只有 `if moved:` 才广播 `state_delta`
