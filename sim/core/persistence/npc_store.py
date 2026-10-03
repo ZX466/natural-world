@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from sim.core.events import EventKind, WorldEvent
 from sim.core.flush import flush_rows
+from sim.core.persistence.fire_store import FIRE_KINDS
 from sim.core.persistence.models import (
     MaterialBalance,
     MatterState,
@@ -603,7 +604,14 @@ class NpcStore:
 async def _project_events(
     session: AsyncSession, branch_id: str, events: Sequence[WorldEvent]
 ) -> None:
-    """事件 → 派生表投影（同一事务）：LOD、matter 熵态、structure 拓扑。"""
+    """事件 → 派生表投影（同一事务）：LOD、matter 熵态、structure 拓扑、火场生命周期。
+
+    **两条写路径同源**：机制面在 tick 批次里 flush 的 ``fire.*`` 事件走这里，
+    :class:`~sim.core.persistence.fire_store.FireStore` 的两次写走同一投影函数
+    （``fire_store.project_fire``）⇒ 世界循环与 store 门面**不可能**写出两套规则。
+    """
+    from sim.core.persistence.fire_store import project_fire
+
     for event in events:
         if event.event_type is EventKind.NPC_LOD_CHANGE:
             await _project_lod_change(session, branch_id, event)
@@ -613,6 +621,8 @@ async def _project_events(
             await _project_structure(session, branch_id, event)
         elif event.event_type is EventKind.MATERIAL_MOVED:
             await _project_material_moved(session, branch_id, event)
+        elif event.event_type in FIRE_KINDS:
+            await project_fire(session, branch_id, event)
 
 
 async def _project_lod_change(session: AsyncSession, branch_id: str, event: WorldEvent) -> None:

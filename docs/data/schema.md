@@ -866,3 +866,38 @@ async def materialize_matter(
   §1.4）⇒ 快照 GC 后只剩当前值，**历史点读档（`kind="anchor"`）对本表仍 fail-closed**，
   由批次 E 物化单收口。
 - **零索引**：主键前导列就是 `branch_id` ⇒ 分支查询走 PK 前缀，再加索引是纯冗余。
+
+## 22. fires（火场生命周期 — 批次 D 数据面，M5-A9 / 0014）
+
+设计稿 `m5-fire-data-preplan.md`（A8）；事件面判定 `docs/api/m5-fire-api-prestudy.md`（K12
+**F1-F5**）；安规钉 `docs/security/m5-fire-threatmodel.md`（S9 **D-1..D-7**）；裁 33 落地。
+
+| 字段 | 类型 | 约束 | 说明 | 对齐 |
+|------|------|------|------|------|
+| `branch_id` | TEXT | NOT NULL，PK 前半 | 分支 id（世界线身份） | §2 / 0008 |
+| `fire_id` | TEXT | NOT NULL，PK 后半 | 火场 id（分支内唯一；非重用） | 0014 |
+| `x` / `y` | INTEGER | NOT NULL DEFAULT -1，CHECK ∈ [-1, 4096) | 火场坐标（-1 = 未定位哨兵） | `MatterPayload` 同域 |
+| `ignited_tick` | INTEGER | NOT NULL DEFAULT 0，CHECK ≥ 0 | 起火 tick | 0013 同款 |
+| `ended_tick` | INTEGER | NULL，CHECK ≥ 0 | 熄灭 tick；NULL = 仍在燃烧 | — |
+| `end` | TEXT | NOT NULL DEFAULT '' | `out` / `fuel_out` / `doused`；空串 = 仍在燃烧 | `events.py::FireEnd` |
+| `created_at` | REAL | NOT NULL | 行创建时刻 | 与既有表同口径 |
+
+**约束与语义**：
+
+- **只存生命周期，不存火势中间态**（强度/燃料/蔓延半径不入库，A8 §1.2 + 裁 33）：一行 = 一场火。
+- **事件纯函数投影**（K12 F2 禁内存态火势）：行由 `fire.ignited` / `fire.extinguished` 投影，
+  可被 `fold_fire` 逐位重建 ⇒ 读档回来火不会凭空消失。
+- **成对不变式进 DB**（0008 四件 CHECK 先例 + S9 D-4）：`ck_fires_end_pair`
+  （`ended_tick` 与 `end` 同有同无）、`ck_fires_xy_domain`、`ck_fires_tick_nonneg`。
+- **蔓延/烧毁不在本表**：走既有 `matter.damage` / `matter.collapse` /
+  `structure.collapsed{cause:"fire"}` + `material.moved{reason:"burned",
+  to_ref:"world:burned"}`（保 T1 材料守恒：烧毁的材料**搬运**到 `world:burned`，不凭空消失）。
+- **零归因**（K12 §3 / D-10）：无 actor / igniter / culprit 之类键。
+- **零索引**：主键前导列即 `branch_id`（0013 同款判据）。
+- **分叉语义** = 有界表（`fork.py::_BOUNDED_TABLES`，`INSERT…SELECT` 换 `branch_id`）。
+- **地基分类**：fires **有事件源 + fold 器** ⇒ 属 A3「可重放」那一族（**不**进物化包）；
+  与 `npc_power`（无事件源、第 4 张不可重建表）正相反，两者不可混谈。
+
+⚠️ **无快照双列**（与派单的一处偏差，已回执）：本表**没有** `snapshot_seq`/`snapshot_tick`
+——火场是事件纯函数投影，重建靠「快照 + 事件窗口重放」，加了就是无人写入的死列。批次 E
+真要给火势物化基准点时随那一单加列 + 同款成对 CHECK（体例不变）。

@@ -626,3 +626,50 @@ class NpcPower(TimestampMixin, Base):
         ),
         CheckConstraint("updated_at_tick >= 0", name="ck_npc_power_tick_nonneg"),
     )
+
+
+class Fire(TimestampMixin, Base):
+    """火场生命周期 — 批次 D 数据面（M5-A9 / 0014，设计稿 `m5-fire-data-preplan.md`）。
+
+    **一行 = 一场火**（`fire_id` 分支内唯一），只存**生命周期**（起火 → 熄灭），**不存
+    火势中间态**（强度/燃料/蔓延半径不入库，A8 §1.2 已裁：火场中间态不入库 ⇒ 不进
+    A3 任何一类、**不是**第 5 张不可重建表）。
+
+    - **事件纯函数投影**（K12 F2 禁内存态火势）：行由 ``fire.ignited`` /
+      ``fire.extinguished`` 投影而来，可被 fold 器逐位重建 ⇒ 读档回来火不会凭空消失。
+    - **蔓延/烧毁不在本表**：走既有 ``matter.damage`` / ``matter.collapse`` /
+      ``structure.collapsed``（W-D1「必须产事件」由既有族满足；新增蔓延 kind 只会带来
+      第二套投影路径）。
+    - **零归因**（K12 §3 + D-10）：无 actor/igniter/cause_human/culprit 之类键。
+    - **成对不变式进 DB**（0008 四件 CHECK 先例 + S9 D-4）：``ended_tick`` 与 ``end``
+      同有同无（``ck_fires_end_pair``）、坐标域（``ck_fires_xy_domain``）、tick 非负
+      （``ck_fires_tick_nonneg``）。
+    - **零索引**：主键前导列即 ``branch_id``（与 0013 ``npc_power`` 同款判据）。
+    - 分叉语义 = 有界表（``fork.py::_BOUNDED_TABLES``，``INSERT…SELECT`` 换 ``branch_id``）。
+    """
+
+    __tablename__ = "fires"
+
+    branch_id: Mapped[str] = mapped_column(String, nullable=False)
+    fire_id: Mapped[str] = mapped_column(String, nullable=False)
+    x: Mapped[int] = mapped_column(Integer, nullable=False, default=-1)
+    y: Mapped[int] = mapped_column(Integer, nullable=False, default=-1)
+    ignited_tick: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    #: NULL = 仍在燃烧（活跃火场）。
+    ended_tick: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: ``FireEnd`` 值域；空串 = 仍在燃烧（与 ``ended_tick`` 成对，见 CHECK）。
+    end: Mapped[str] = mapped_column(String, nullable=False, default="")
+
+    __table_args__ = (
+        PrimaryKeyConstraint("branch_id", "fire_id"),
+        CheckConstraint("x >= -1 AND x < 4096 AND y >= -1 AND y < 4096", name="ck_fires_xy_domain"),
+        CheckConstraint(
+            "ignited_tick >= 0 AND (ended_tick IS NULL OR ended_tick >= 0)",
+            name="ck_fires_tick_nonneg",
+        ),
+        CheckConstraint(
+            "(ended_tick IS NULL AND end = '')"
+            " OR (ended_tick IS NOT NULL AND end IN ('out', 'fuel_out', 'doused'))",
+            name="ck_fires_end_pair",
+        ),
+    )
