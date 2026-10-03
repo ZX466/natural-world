@@ -29,21 +29,50 @@
 ``knowledge`` 的**治理列**与 ``relationships`` 的**累计值**已被父分支的「未来」改写，
 而这三张表**没有事件源**（F2）⇒ 历史状态不可重建。修法需裁 7 的 ``*.written`` 事件或
 anchor 世界态物化/快照展开（M5 均未落）——**不用「近似重置治理列」糊过去**。
+
+**批次 E 物化单（M5-A10）：``kind`` 参数化 + 语料克隆源切包**（A3 §3.2）
+
+``kind="head"``（现行，默认，行为**逐字不变**）= 读**当前档**：父分支已封存、语料按分叉点
+截断克隆、权力态随有界表克隆。``kind="anchor"``（**历史点读档**）= 回退旧档：
+
+- 分叉点**允许** ``fork_seq < head_seq``（历史点正是为此解锁的）；
+- **必须**带 ``package``（物化器产物，缺包 ⇒ :class:`ForkError`，不静默近似）；
+- 语料（``npc_memories`` / ``knowledge`` / ``relationships``）行值**以包为权威**，
+  **无截断判据**（包是锚点时刻的全量行集）；id 仍显式分配 + ``entry_id`` 仍走确定性
+  重映射 + R-2 指针重写照旧（治理完整性不因切包而放松）；
+- 火场（``fires``，可重放族）行值取**包里的重放结果**，不是父分支当前行；
+- 权力态**零克隆**（第 4 张无事件源表按 S10 §2.3 裁决**不进包** ⇒ 子分支该表零行 =
+  「未表态兜底 0」，读档**不报错**）；
+- 父分支**不封存**（保持 active，子线只是又一条并存线）——回退旧档不得封存玩家正在跑的
+  世界线；当前行的移交归 R-4 施工单（0012 头注 + 双态钉已就位）。
 """
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TypedDict
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from sim.core.persistence.anchor_package import Materialization
 from sim.core.persistence.vector import clone_branch_vectors
+
+if TYPE_CHECKING:
+    from sim.core.persistence.fire_store import FireRow
+
+#: 分叉形态：``head`` = 读当前档（封存父、截断克隆）；``anchor`` = 历史点读档（父不封存、
+#: 语料取包、权力态零克隆）。**禁止靠 ``fork_seq == head_seq`` 隐式区分**——那是本模块
+#: 曾经（现在仍保留给 head 态）的 fail-closed 位置，不是形态判据。
+ForkKind = Literal["head", "anchor"]
+
+#: 权力态表名（批次 E：``kind="anchor"`` 时**跳过**克隆——S10 §2.3 裁决它不进包）。
+_POWER_TABLE = "npc_power"
 
 #: 重映射 `entry_id` 的命名空间（uuid5 派生 → 确定性，T2 逐位一致需要）。
 ENTRY_ID_NAMESPACE: uuid.UUID = uuid.UUID("6f9619ff-8b86-d011-b42d-00c04fc964ff")
@@ -252,7 +281,18 @@ class ForkResult:
     #: 状态是否真落库了。`rng_state is None` ⇒ 该分支 `NULL`（未承接）+ warning，
     #: 此时为 ``False``（**不是**「已持久化」——避免把「没传」误读成「传了空的」）。
     rng_state_persisted: bool = False
+    #: 分叉形态（``head`` / ``anchor``；批次 E 参数化，head 态语义不变）。
+    kind: str = "head"
+    #: 档的 agent 覆盖副本（批次 E：**包是权威**，原样透传给读档编排；head 态无包 ⇒ ``{}``）。
+    agent_override: str = "{}"
     warnings: tuple[str, ...] = ()
+
+
+def _as_int(value: object) -> int:
+    """包内行的 id 列（JSON ⇒ ``object``）转 int；非法即 ``ValueError``（fail-closed）。"""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ForkError(f"包内行 id 必须是 int: {value!r}")
+    return value
 
 
 def derive_child_entry_id(parent_entry_id: str, child_branch_id: str) -> str:
@@ -294,6 +334,8 @@ async def fork_from_anchor(
     vec_conn: sqlite3.Connection | None = None,
     rng_state: str | None = None,
     warn: Callable[[str], None] | None = None,
+    kind: ForkKind = "head",
+    package: Materialization | None = None,
 ) -> ForkResult:
     """从 ``(parent_branch_id, fork_seq, fork_tick)`` 分叉出新分支（§12 读档 = 分叉）。
 
@@ -312,6 +354,12 @@ async def fork_from_anchor(
             **原样落进子分支行** `branches.rng_state`（0009，裁 27-B b2），与克隆
             **同事务** ⇒ 分支自带状态、可连续分叉。缺省 ``None`` ⇒ 该列留 NULL +
             发 warning（漏传 = 读档接缝跳变风险）。
+        kind: 分叉形态（批次 E，M5-A10）。``"head"``（默认，**现行行为逐字不变**）：
+            读当前档 ⇒ 必须 ``fork_seq == 父分支头部``、父分支封存、语料按分叉点截断克隆。
+            ``"anchor"``：**历史点读档** ⇒ ``package`` 必填（缺则 :class:`ForkError`），
+            语料行值取包、``fires`` 取包里的重放结果、权力态零克隆、父分支**不封存**。
+        package: 物化器产物（``kind="anchor"`` 必填；``kind="head"`` 给了则**拒绝**
+            ——「传了包却被静默忽略」等于无声降级）。游标三元组必须与分叉参数逐项相符。
         warn: 警告收集回调（缺省并入返回值 ``warnings``）。
 
     Returns:
@@ -361,18 +409,54 @@ async def fork_from_anchor(
                 f"分叉点越界: seq={fork_seq} > 父分支头部 seq={head_seq}"
                 f"（分支 {parent_branch_id!r}）"
             )
-        if fork_seq < head_seq:
+        if kind == "anchor":
+            # 历史点读档：游标必须**逐项**对上物化包，否则「拿 A 档的世界态分叉 B 点」。
+            if package is None:
+                raise ForkError(
+                    f"kind='anchor' 必须带物化包: 分叉点 seq={fork_seq}（分支 "
+                    f"{parent_branch_id!r}）。历史点分叉的语料/关系没有事件源，包是"
+                    "唯一权威——缺包就 fail-closed，不用近似重置治理列糊"
+                )
+            if (
+                package.branch_id != parent_branch_id
+                or int(package.seq) != fork_seq
+                or int(package.tick) != fork_tick
+            ):
+                raise ForkError(
+                    "物化包游标与分叉参数不符: "
+                    f"包=({package.branch_id!r}, tick={package.tick}, seq={package.seq}) "
+                    f"分叉=({parent_branch_id!r}, tick={fork_tick}, seq={fork_seq})"
+                )
+            if rng_state is not None and rng_state != package.rng_state:
+                raise ForkError(
+                    "rng_state 与包内 rng_state 不一致：锚点时刻的随机流状态以**包**为权威"
+                    "（分支列是当前值、每次 fork 覆写，读时取会重掷混沌，A2 §3 修正 2）"
+                )
+        else:
+            if package is not None:
+                raise ForkError(
+                    "kind='head' 不接受物化包：读当前档的语料走截断克隆；"
+                    "传了包却被静默忽略 = 无声降级"
+                )
+            if fork_seq < head_seq:
+                raise ForkError(
+                    f"分叉点不在父分支头部: seq={fork_seq} < head={head_seq}"
+                    f"（分支 {parent_branch_id!r}）。历史点分叉需要语料/关系的事件源"
+                    "（裁 7 的 *.written）或 anchor 世界态物化路径（kind='anchor'）——"
+                    "投影表当前值 ≠ 分叉点状态，故 fail-closed（不用近似重置治理列糊）"
+                )
+            if fork_tick < head_tick:
+                raise ForkError(
+                    f"分叉点 tick={fork_tick} < 分支头部 tick={head_tick}（锚点数据不自洽）"
+                )
+        if kind == "anchor" and fork_tick > head_tick:
             raise ForkError(
-                f"分叉点不在父分支头部: seq={fork_seq} < head={head_seq}"
-                f"（分支 {parent_branch_id!r}）。历史点分叉需要语料/关系的事件源"
-                "（裁 7 的 *.written）或 anchor 世界态物化路径，M5 未落——"
-                "投影表当前值 ≠ 分叉点状态，故 fail-closed（不用近似重置治理列糊）"
-            )
-        if fork_tick < head_tick:
-            raise ForkError(
-                f"分叉点 tick={fork_tick} < 分支头部 tick={head_tick}（锚点数据不自洽）"
+                f"分叉点 tick={fork_tick} > 分支头部 tick={head_tick}（锚点数据不自洽："
+                "分叉点不可能比父分支头部还晚）"
             )
 
+        # 锚点时刻的随机流状态以**包**为权威（A3 §1.3）：分支列是当前值、每次 fork 覆写。
+        effective_rng = rng_state if kind == "head" or package is None else package.rng_state
         await session.execute(
             text(
                 "INSERT INTO branches"
@@ -383,11 +467,11 @@ async def fork_from_anchor(
                 "cid": child_id,
                 "pid": parent_branch_id,
                 "fseq": fork_seq,
-                "rng": rng_state,
+                "rng": effective_rng,
                 "now": time.time(),
             },
         )
-        if rng_state is None:
+        if effective_rng is None:
             _warn(
                 f"未提供 rng_state：新分支 {child_id!r} 的随机流将从头开始"
                 "（读档接缝跳变风险；预研稿 §6.3）。落库形态 = branches.rng_state"
@@ -396,16 +480,31 @@ async def fork_from_anchor(
 
         cloned: dict[str, int] = {}
         for table, columns in _BOUNDED_TABLES:
+            if kind == "anchor" and table == _POWER_TABLE:
+                # 批次 E 裁决：权力态**不进包** ⇒ 历史点读档不克隆（子分支该表零行 =
+                # 「未表态兜底 0」，读档不报错）。克隆父分支当前值等于拿未来糊过去。
+                continue
+            if kind == "anchor" and table == "fires":
+                # 火场是**可重放族**：取包里的重放结果，不是父分支当前行。
+                assert package is not None
+                cloned[table] = await _clone_fires_from_rows(
+                    session, list(package.fires.values()), child_id
+                )
+                continue
+            if kind == "anchor" and table == "relationships":
+                continue  # 语料块按包写（累计值属锚点时刻，不是父分支当前值）
             cloned[table] = await _clone_bounded(
                 session, table, columns, parent_branch_id, child_id
             )
 
+        corpus = None if package is None else dict(package.corpus)
         mem = await _clone_memories(
             session,
             parent_branch_id=parent_branch_id,
             child_id=child_id,
             fork_seq=fork_seq,
             fork_tick=fork_tick,
+            rows=None if corpus is None else list(corpus.get("npc_memories", ())),
         )
         cloned["npc_memories"] = int(mem["cloned"])
         know = await _clone_knowledge(
@@ -414,10 +513,17 @@ async def fork_from_anchor(
             child_id=child_id,
             fork_seq=fork_seq,
             fork_tick=fork_tick,
+            rows=None if corpus is None else list(corpus.get("knowledge", ())),
         )
         cloned["knowledge"] = int(know["cloned"])
+        if corpus is not None:
+            # 语料第三张：包是权威（父分支的「未来」不该渗进历史点子线）。
+            cloned["relationships"] = await _clone_relationships_from_rows(
+                session, list(corpus.get("relationships", ())), child_id
+            )
 
-        if parent_status == "active":
+        # 父分支封存**只对 head 态**：回退旧档不得封存玩家正在跑的世界线（批次 E）。
+        if parent_status == "active" and kind == "head":
             await session.execute(
                 text(
                     "UPDATE branches SET status = 'abandoned', abandoned_at = :now"
@@ -462,9 +568,70 @@ async def fork_from_anchor(
         evidence_rewritten=know["evidence_rewritten"],
         vec_rows_copied=vec_copied,
         vec_pending=vec_pending,
-        rng_state=rng_state,
-        rng_state_persisted=rng_state is not None,
+        rng_state=effective_rng,
+        rng_state_persisted=effective_rng is not None,
+        kind=kind,
+        agent_override="{}" if package is None else json.dumps(package.agent_override),
         warnings=tuple(collected),
+    )
+
+
+async def _clone_fires_from_rows(
+    session: AsyncSession, rows: Sequence[FireRow], child_id: str
+) -> int:
+    """火场生命周期：按**物化重放结果**写子分支行（可重放族 ⇒ 不从父分支当前行克隆）。
+
+    判别力：父分支在锚点之后又起的新火**不得**进子线（那正是「投影表当前值 ≠ 分叉点
+    状态」的病）。写的只是生命周期事实，火势中间态不入库（A8 §1.2）。
+    """
+    if not rows:
+        return 0
+    await session.execute(
+        text(
+            "INSERT INTO fires"
+            " (branch_id, fire_id, x, y, ignited_tick, ended_tick, `end`, created_at)"
+            " VALUES (:cid, :fid, :x, :y, :itick, :etick, :end, :now)"
+        ),
+        [
+            {
+                "cid": child_id,
+                "fid": row.fire_id,
+                "x": row.x,
+                "y": row.y,
+                "itick": row.ignited_tick,
+                "etick": row.ended_tick,
+                "end": row.end,
+                "now": time.time(),
+            }
+            for row in rows
+        ],
+    )
+    return await _scalar_int(
+        session, "SELECT COUNT(*) FROM fires WHERE branch_id = :cid", {"cid": child_id}
+    )
+
+
+async def _clone_relationships_from_rows(
+    session: AsyncSession, rows: Sequence[Mapping[str, object]], child_id: str
+) -> int:
+    """``relationships``：按**包内行值**写子分支（``branch_id`` 换成子分支，余列逐字节）。
+
+    复合主键 ``(branch_id, owner_id, other_id)`` ⇒ 无 id 重映射；累计值（trust/affection/
+    fear/debt/face）原样落包内值 ⇒ 不被父分支的「未来」改写（A3 §1.4 路径 A）。
+    """
+    if not rows:
+        return 0
+    columns = [name for name in rows[0] if name != "branch_id"]
+    cols = ", ".join(columns)
+    marks = ", ".join(f":{name}" for name in columns)
+    await session.execute(
+        text(f"INSERT INTO relationships (branch_id, {cols}) VALUES (:cid, {marks})"),
+        [{name: row.get(name) for name in columns} | {"cid": child_id} for row in rows],
+    )
+    return await _scalar_int(
+        session,
+        "SELECT COUNT(*) FROM relationships WHERE branch_id = :cid",
+        {"cid": child_id},
     )
 
 
@@ -503,19 +670,39 @@ async def _clone_memories(
     child_id: str,
     fork_seq: int,
     fork_tick: int,
+    rows: Sequence[Mapping[str, object]] | None = None,
 ) -> _MemoryClone:
-    """`npc_memories` 截断克隆 + 显式分配 id + `entry_id` 重映射 + R-2 指针重映射。"""
-    where = _truncation_sql("p", "event_seq", "created_at_tick")
-    params = {"pid": parent_branch_id, "fseq": fork_seq, "ftick": fork_tick}
-    parent_rows = (
-        await session.execute(
-            text(
-                f"SELECT id, entry_id, superseded_by FROM npc_memories p"
-                f" WHERE p.branch_id = :pid AND {where} ORDER BY p.id"
-            ),
-            params,
-        )
-    ).all()
+    """`npc_memories` 克隆 + 显式分配 id + `entry_id` 重映射 + R-2 指针重映射。
+
+    ``rows`` 给定（**包路径**，``kind="anchor"``）⇒ 行集来自物化包（锚点时刻的全量行值，
+    **无截断判据**：包是权威）；给 ``None``（head 路径）⇒ 从父分支表按分叉点截断克隆。
+    两条路的 id 分配 / entry_id 派生 / R-2 重写**同源**，切包不放松治理完整性。
+    """
+    if rows is None:
+        where = _truncation_sql("p", "event_seq", "created_at_tick")
+        params: dict[str, object] = {
+            "pid": parent_branch_id,
+            "fseq": fork_seq,
+            "ftick": fork_tick,
+        }
+        parent_rows: Sequence[Sequence[object]] = (
+            await session.execute(
+                text(
+                    f"SELECT id, entry_id, superseded_by FROM npc_memories p"
+                    f" WHERE p.branch_id = :pid AND {where} ORDER BY p.id"
+                ),
+                params,
+            )
+        ).all()
+        blob_rows: Sequence[Mapping[str, object]] = ()
+    else:
+        where = ""
+        params = {"pid": parent_branch_id}
+        parent_rows = [
+            (_as_int(row.get("id")), str(row.get("entry_id")), row.get("superseded_by"))
+            for row in rows
+        ]
+        blob_rows = rows
 
     entry_id_map = {
         str(eid): derive_child_entry_id(str(eid), child_id) for _rid, eid, _sb in parent_rows
@@ -547,17 +734,40 @@ async def _clone_memories(
         )
 
         cols = ", ".join(_MEMORY_COLUMNS)
-        selects = ", ".join(f"p.{c}" for c in _MEMORY_COLUMNS)
-        await session.execute(
-            text(
-                "INSERT INTO npc_memories"
-                f" (id, branch_id, entry_id, superseded_by, {cols})"
-                f" SELECT k.dst_id, :cid, k.dst_entry, p.superseded_by, {selects}"
-                " FROM npc_memories p JOIN fork_mem k ON k.src_id = p.id"
-                f" WHERE p.branch_id = :pid AND {where}"
-            ),
-            {**params, "cid": child_id},
-        )
+        if blob_rows:
+            # 包路径：逐行写（值取包内行，id/entry_id/branch_id 由本函数决定）。
+            marks = ", ".join(f":{c}" for c in _MEMORY_COLUMNS)
+            await session.execute(
+                text(
+                    "INSERT INTO npc_memories"
+                    f" (id, branch_id, entry_id, superseded_by, {cols})"
+                    f" VALUES (:did, :cid, :dent, :sb, {marks})"
+                ),
+                [
+                    {
+                        "did": base_id + i,
+                        "cid": child_id,
+                        "dent": entry_id_map[str(eid)],
+                        "sb": _sb,
+                        **{c: row.get(c) for c in _MEMORY_COLUMNS},
+                    }
+                    for i, (row, (_rid, eid, _sb)) in enumerate(
+                        zip(blob_rows, parent_rows, strict=True)
+                    )
+                ],
+            )
+        else:
+            selects = ", ".join(f"p.{c}" for c in _MEMORY_COLUMNS)
+            await session.execute(
+                text(
+                    "INSERT INTO npc_memories"
+                    f" (id, branch_id, entry_id, superseded_by, {cols})"
+                    f" SELECT k.dst_id, :cid, k.dst_entry, p.superseded_by, {selects}"
+                    " FROM npc_memories p JOIN fork_mem k ON k.src_id = p.id"
+                    f" WHERE p.branch_id = :pid AND {where}"
+                ),
+                {**params, "cid": child_id},
+            )
 
         # R-2：指针重映射到子行；替换者未随克隆进入子分支（含「写在分叉点之后」）
         # → 落 NULL（该分支时间线里它确实还没被取代），**绝不留下悬空指针**。
@@ -614,16 +824,34 @@ async def _clone_knowledge(
     child_id: str,
     fork_seq: int,
     fork_tick: int,
+    rows: Sequence[Mapping[str, object]] | None = None,
 ) -> _KnowledgeClone:
-    """`knowledge` 截断克隆 + 显式分配 id + told 链/源记忆指针重写 + 证据分支改写。"""
-    where = _truncation_sql("p", "evidence_seq", "learned_at")
-    params = {"pid": parent_branch_id, "fseq": fork_seq, "ftick": fork_tick}
-    parent_rows = (
-        await session.execute(
-            text(f"SELECT id FROM knowledge p WHERE p.branch_id = :pid AND {where} ORDER BY p.id"),
-            params,
-        )
-    ).all()
+    """`knowledge` 克隆 + 显式分配 id + told 链/源记忆指针重写 + 证据分支改写。
+
+    ``rows`` 给定（**包路径**，``kind="anchor"``）⇒ 行集来自物化包；``None``（head 路径）
+    ⇒ 父分支表按分叉点截断克隆。指针悬空一律**整批拒绝**（两条路同款）。
+    """
+    if rows is None:
+        where = _truncation_sql("p", "evidence_seq", "learned_at")
+        params: dict[str, object] = {
+            "pid": parent_branch_id,
+            "fseq": fork_seq,
+            "ftick": fork_tick,
+        }
+        parent_rows = (
+            await session.execute(
+                text(
+                    f"SELECT id FROM knowledge p WHERE p.branch_id = :pid AND {where} ORDER BY p.id"
+                ),
+                params,
+            )
+        ).all()
+        blob_rows: Sequence[Mapping[str, object]] = ()
+    else:
+        where = ""
+        params = {"pid": parent_branch_id}
+        parent_rows = [(_as_int(row.get("id")),) for row in rows]
+        blob_rows = rows
     if not parent_rows:
         return {"cloned": 0, "id_map": {}, "evidence_rewritten": 0}
 
@@ -637,20 +865,46 @@ async def _clone_knowledge(
     )
 
     cols = ", ".join(_KNOWLEDGE_COLUMNS)
-    selects = ", ".join(f"p.{c}" for c in _KNOWLEDGE_COLUMNS)
-    await session.execute(
-        text(
-            "INSERT INTO knowledge"
-            f" (id, branch_id, source_knowledge_id, source_memory, evidence_branch_id, {cols})"
-            " SELECT k.dst_id, :cid, p.source_knowledge_id, p.source_memory,"
-            "   CASE WHEN p.evidence_seq IS NOT NULL AND p.evidence_branch_id IS NULL"
-            "        THEN :pid ELSE p.evidence_branch_id END,"
-            f"  {selects}"
-            " FROM knowledge p JOIN fork_know k ON k.src_id = p.id"
-            f" WHERE p.branch_id = :pid AND {where}"
-        ),
-        {**params, "cid": child_id},
-    )
+    if blob_rows:
+        marks = ", ".join(f":{c}" for c in _KNOWLEDGE_COLUMNS)
+        await session.execute(
+            text(
+                "INSERT INTO knowledge"
+                f" (id, branch_id, source_knowledge_id, source_memory, evidence_branch_id, {cols})"
+                f" VALUES (:did, :cid, :skid, :smem, :ebid, {marks})"
+            ),
+            [
+                {
+                    "did": base_id + i,
+                    "cid": child_id,
+                    "skid": row.get("source_knowledge_id"),
+                    "smem": row.get("source_memory"),
+                    "ebid": (
+                        parent_branch_id
+                        if row.get("evidence_seq") is not None
+                        and row.get("evidence_branch_id") is None
+                        else row.get("evidence_branch_id")
+                    ),
+                    **{c: row.get(c) for c in _KNOWLEDGE_COLUMNS},
+                }
+                for i, row in enumerate(blob_rows)
+            ],
+        )
+    else:
+        selects = ", ".join(f"p.{c}" for c in _KNOWLEDGE_COLUMNS)
+        await session.execute(
+            text(
+                "INSERT INTO knowledge"
+                f" (id, branch_id, source_knowledge_id, source_memory, evidence_branch_id, {cols})"
+                " SELECT k.dst_id, :cid, p.source_knowledge_id, p.source_memory,"
+                "   CASE WHEN p.evidence_seq IS NOT NULL AND p.evidence_branch_id IS NULL"
+                "        THEN :pid ELSE p.evidence_branch_id END,"
+                f"  {selects}"
+                " FROM knowledge p JOIN fork_know k ON k.src_id = p.id"
+                f" WHERE p.branch_id = :pid AND {where}"
+            ),
+            {**params, "cid": child_id},
+        )
 
     # told 链指针：teller 不在克隆集（被截断或本就是悬空）= 完整性违规 → 整批拒绝
     dangling = await _scalar_int(

@@ -211,6 +211,44 @@ def _branch_flags(db: Path) -> dict[str, bool]:
     return {str(r[0]): bool(r[1]) for r in _query(db, "SELECT id, is_current FROM branches")}
 
 
+def _branch_state(db: Path) -> dict[str, tuple[bool, str]]:
+    return {
+        str(r[0]): (bool(r[1]), str(r[2]))
+        for r in _query(db, "SELECT id, is_current, status FROM branches")
+    }
+
+
+#: 交接施工面（本单只读、不改）：`fork.py` 里当前行的移交归 R-4 施工单。
+FORK_PY = Path(__file__).resolve().parents[1] / "core" / "persistence" / "fork.py"
+
+#: 0012 迁移（只读）：头注须留「本迁移不移动当前行」+ 双态钉指针。
+M0012_PY = (
+    Path(__file__).resolve().parents[1]
+    / "core"
+    / "persistence"
+    / "alembic"
+    / "versions"
+    / "0012_branches_current.py"
+)
+
+
+def _handover_landed() -> bool:
+    """交接是否已落：``fork.py`` 的**代码**里出现 ``is_current``（本单选定的锁信号）。
+
+    口径与理由：只扫**代码**（跳过注释与 docstring），因为 ``fork.py`` 的口径说明需要
+    反复谈「当前行」而那些字样不是实现；留下的是真正的读写载体（``UPDATE … SET
+    is_current`` / ``.values(is_current=…)`` / 查询）。今日 ``fork.py`` 代码里该记号
+    **零出现** ⇒ 信号为假，本组钉停在「交接前现状」态；R-4 施工合入后自动转「交接后」态。
+    """
+    src = FORK_PY.read_text(encoding="utf-8")
+    skip = _docstring_lines(src)
+    for tok in tokenize.generate_tokens(io.StringIO(src).readline):
+        if tok.type == tokenize.COMMENT:
+            skip.add(tok.start[0])
+    code = "\n".join(line for lineno, line in enumerate(src.splitlines(), 1) if lineno not in skip)
+    return "is_current" in code
+
+
 def _head_seq(db: Path, branch_id: str) -> int:
     rows = _query(db, f"SELECT COALESCE(MAX(seq), 0) FROM events WHERE branch_id = '{branch_id}'")
     return int(rows[0][0])
@@ -402,13 +440,66 @@ class TestGateAndTrueSource:
 
 class TestForkHandoverForm:
     def test_fork_from_current_line_keeps_single_current(self, world_db: Path) -> None:
-        """从当前线分叉后「至多一个当前」仍成立（DB 层保证，与交接实现无关）。"""
+        """从当前线分叉后：当前行**唯一**，且归属按 `fork.py` 交接施工落否**双态**。
+
+        - **不变量（与时序无关）**：分叉后至多一条当前行（部分唯一索引 `ux_branches_current`
+          兜底）——这是本钉的硬判据，任何形态下都必须成立。
+        - **锁信号（本单选定，写明）**：`sim/core/persistence/fork.py` 的**代码**里出现
+          ``is_current`` 记号（跳过注释与 docstring；赋值 / UPDATE SET / 查询皆算）即视为
+          「交接已落」。选它的理由：`is_current` 今日在 `fork.py` 的代码里**零出现**，
+          所以它是单一、可 grep、且不随实现写法（``.values(...)`` / 裸 SQL）漂移的信号；
+          只扫代码则让 `fork.py` 的口径说明可以照常谈「当前行」而不误触信号。
+        - **双态**：交接未落 ⇒「父仍持当前位 + 子非当前」（0012 时现状）；交接已落 ⇒
+          「子当前 + 父 `abandoned`」。两态都绿 ⇒ 施工合入前后本文件都不假红。
+
+        ⚠️ 反假绿灯：态 A 的断言在交接落地后会**主动变红**（不是被 skip 掉），所以「施工
+        落地却仍按旧态记账」这种假绿不可能发生。
+        """
         _seed_world(world_db, [(MAIN, MAIN_HEAD, True, "active")])
         _fork_now(world_db, parent=MAIN, fork_seq=MAIN_HEAD, fork_tick=MAIN_HEAD, child=CHILD)
-        flags = _branch_flags(world_db)
+        state = _branch_state(world_db)
+        flags = {bid: cur for bid, (cur, _st) in state.items()}
         assert sum(flags.values()) <= 1, f"分叉后出现两个当前世界线：{flags}"
-        assert flags[MAIN] is True and flags[CHILD] is False, (
-            f"交接前现状记录：父仍持当前位、子非当前（fork.py 交接属 R-4 施工单）：{flags}"
+
+        landed = _handover_landed()
+        if landed:
+            assert flags[CHILD] is True and flags[MAIN] is False, (
+                f"交接已落（fork.py 出现 is_current）却仍是旧归属：{state}"
+            )
+            assert state[MAIN][1] == "abandoned", (
+                f"交接已落但父未封存（子当前 + 父 abandoned 是交接后语义）：{state}"
+            )
+        else:
+            assert flags[MAIN] is True and flags[CHILD] is False, (
+                f"交接未落（fork.py 零 is_current）却已交出当前行：{state}"
+            )
+
+    def test_handover_dual_state_is_exhausted(self, world_db: Path) -> None:
+        """双态判据**穷尽**：分叉后当前行只能是父或子之一，且子行必存在。
+
+        判别力：若某天施工把当前行「复制」给子行（本该由唯一索引拦），或子行没建出来，
+        这里会先于具体归属断言报错——双态白名单外的第三种形态没有藏身处。
+        """
+        _seed_world(world_db, [(MAIN, MAIN_HEAD, True, "active")])
+        _fork_now(world_db, parent=MAIN, fork_seq=MAIN_HEAD, fork_tick=MAIN_HEAD, child=CHILD)
+        state = _branch_state(world_db)
+        assert CHILD in state, f"子分支行没建出来：{state}"
+        holders = [bid for bid, (cur, _st) in state.items() if cur]
+        assert holders in ([MAIN], [CHILD]), f"当前行归属落在双态白名单之外：{state}"
+
+    def test_0012_docstring_points_at_handover_unit(self) -> None:
+        """0012 迁移头注必须指着交接施工单 + 预置钉（本 G3 小单的零生产码契约）。
+
+        判别力：这段头注是「0012 只提供载体、交接归 R-4 施工单」的唯一书面线索；
+        少了它，后来者会把「当前行移交」当成 0012 的欠账去改迁移 ⇒ 本钉红。
+        """
+        src = M0012_PY.read_text(encoding="utf-8")
+        assert "本迁移不移动当前行" in src, "0012 头注丢了「本迁移不移动当前行」的声明"
+        pointer = [line for line in src.splitlines() if "TestForkHandoverForm" in line]
+        assert pointer, "0012 头注没有指向双态钉（TestForkHandoverForm）"
+        assert "R-4" in src and "fork.py" in src, "0012 头注没写明交接归属 fork.py / R-4"
+        assert _handover_landed() is False, (
+            "fork.py 代码里已出现 is_current ⇒ 交接已落，0012 头注的「交接待施工」段应更新"
         )
 
     def test_fork_from_archive_line_keeps_true_source(self, world_db: Path) -> None:

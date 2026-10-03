@@ -901,3 +901,91 @@ async def materialize_matter(
 ⚠️ **无快照双列**（与派单的一处偏差，已回执）：本表**没有** `snapshot_seq`/`snapshot_tick`
 ——火场是事件纯函数投影，重建靠「快照 + 事件窗口重放」，加了就是无人写入的死列。批次 E
 真要给火势物化基准点时随那一单加列 + 同款成对 CHECK（体例不变）。
+
+## 23. anchor_packages 的**包格式契约** + `kind` 分叉形态（批次 E 物化单，M5-A10）
+
+施工单（数据面 `sim/core/persistence/anchor_package.py` 新模块）；设计稿
+`m5-anchor-materialization-preplan.md`（A3 §1.1/§1.2/§1.4/§3.2，预研稿即施工案）；安规钉
+`docs/security/m5-batch-e-security-preplan.md`（S10 **E-1..E-5 + E-13**、§2.3 包内容边界
+裁决）。表结构本身仍是 0011（A4 建的），本节只固化**格式与读档形态**。
+
+### 23.1 零迁移（与派单预留的 0015 不同）
+
+派单预留 0015 给「若需新列/新表」。实测**不需要**：`anchor_packages` 已由 **0011**
+（M5-A4）按 A3 §1.1 建好（含 `ck_anchor_packages_snapshot_pair`），模型与
+`create_all`/alembic 双路径列集一致由 A4 的 8 钉钉死 ⇒ 本单**不占号、不落空迁移**（空迁移
+是噪声，还会给 alembic 链塞一个无信息节点）。若将来确要加列（例如火势物化基准点），
+随那一单加并配同款成对 CHECK（体例同 `0014 fires` 的 `ck_fires_end_pair`）。
+
+### 23.2 `corpus_blob` 格式（gzip JSON，`schema_version=1`）
+
+```json
+{"schema_version": 1,
+ "tables": {"npc_memories": [行…], "knowledge": [行…], "relationships": [行…]}}
+```
+
+- **白名单 = 3 张无事件源表**（`CORPUS_TABLES`）：`npc_memories` / `knowledge` /
+  `relationships`。编码侧过滤 + **解码侧再过滤**（未知表键一律丢弃）⇒ 包内容边界是
+  **构造性**的，不靠「记得别写」。
+- **二进制列**（记忆向量 `LargeBinary`）走带标签载体 `{__bytes_b64__: "..."}`，解码还原
+  `bytes`；标量列直通。行序按各表主键（`relationships` 用复合主键）⇒ **同世界态编出同一
+  份字节**（`mtime=0` + `sort_keys`，R-2 对账/回归要可比 blob）。
+- **采集面** = `SELECT * WHERE branch_id = ?`（不维护列清单：既有克隆清单与包格式各改一处
+  就会漂移）。
+
+### 23.3 包内**没有**的东西（S10 §2.3 裁决，构造性落实）
+
+- **批次 C 的权力态不进包**（`npc_power`）：它是第 4 张「只有当前值」的表；进包等于给权力值
+  造出第一个持久载体，而包是玩家档（将来极可能接诊断/出站面）⇒ D-10 的「攻击面收敛为 0」
+  被削弱。落地形态：`kind="anchor"` 分叉**零克隆**该表 ⇒ 子分支零行 = 「未表态兜底 0」，
+  读档**不报错**。
+- **火场不进包**：fires 是**可重放族**（有事件源 + `fold_fire`）⇒ 物化时经
+  `FireStore.materialize_fires_replay(upto_seq=锚点 seq)` 从「快照 + 事件窗口」重建，
+  包内**零火相关列**、语料白名单里也**零火表**（E-13 判「不加火势基准列」：A9 照妖镜已证
+  可逐位重建，再加列＝重复表达＝未来谎言）。
+
+### 23.4 读档应用次序（铁律，由 `materialize_anchor` 亲自执行）
+
+1. `expand_world(快照 payload, 窗口事件 (snapshot_seq, seq])`；
+2. **再** `apply_override(world, 包内 agent_override)`（快照里可能存着旧 override ⇒
+   先套会被覆盖；它不参与 fold、不写事件，只在 resume 前生效一次）；
+3. `load_corpus(解码后的三表行值)`；
+4. `restore_rng(pkg.rng_state)`（**最后**）；
+5. 然后才 resume 第一个 tick。
+
+实际执行序记进 `Materialization.steps` ⇒ 次序本身**可被钉子观测**，不是口头约定。世界态
+展开与 override 的**语义实现**归 ws 层（`MaterializationHooks` 注入），本层只立序与
+fail-closed 判据，不越域重建 `WorldState`。
+
+### 23.5 fail-closed 五判据（`AnchorMaterializationError`，零副作用）
+
+| 原因码 | 触发 | 落地判据 |
+| --- | --- | --- |
+| `no_package` | 该档无包行（老档典型） | `anchor_packages` 无此 anchor |
+| `rng_unavailable` | `rng_state` NULL/空串 | **禁止**用 `Branch.seed` 派生兜底（seed 不含 PCG64 进度 ⇒ 抽签必然跳变，A2 已实测） |
+| `snapshot_missing` | 库内无 ≤锚点 seq 的快照 **且** 全前缀 `[1, seq]` 不连续 | `COUNT != MAX` 或 `MIN != 1` |
+| `event_gap` | 有快照，但窗口 `(snapshot_seq, seq]` 内有洞 | `COUNT != seq-snap_seq` 或 `MIN != snap_seq+1` |
+| `corpus_mismatch` | `corpus_blob` 结构损坏/不可解 | 坏包不能被当成「空语料」糊过去 |
+
+五判据都在**任何钩子被调用之前**判定 ⇒ 失败时零副作用（不套 override、不灌语料、不碰
+RNG）。**返回部分包 = 禁止**。语料「行集与包不一致」这条判据**不存在**（包即权威 ⇒ 无失配
+可判；死码不用）。ProblemDetail 机器码 `anchor-materialization-unavailable` 的**唯一真源**
+在本层，出站登记在 `sim/api/`（kilo 域）⇒ 本单协议零漂移。
+
+### 23.6 `fork.py` 的 `kind` 参数化（A3 §3.2 解锁条件 3/4）
+
+| | `kind="head"`（默认，**现行行为逐字不变**） | `kind="anchor"`（历史点读档） |
+| --- | --- | --- |
+| 分叉点 | 必须 `fork_seq == 父分支头部` | 允许 `fork_seq < head_seq`（`> head` 仍拒） |
+| 包 | 给了就**拒绝**（传了却被静默忽略＝无声降级） | **必填**，缺则 `ForkError`；游标三元组须逐项相符 |
+| 语料 | 父分支表按分叉点**截断**克隆 | **以包为权威**（无截断判据）；id 显式分配 + `entry_id` 确定性重映射 + R-2 指针重写照旧 |
+| `relationships` | 有界表克隆 | 按**包内累计值**写（父分支的「未来」不渗进子线） |
+| `fires` | 有界表克隆（当前值＝分叉点状态） | 按**包里的重放结果**写 |
+| `npc_power` | 随有界表克隆 | **零克隆**（未表态兜底 0） |
+| 父分支 | 标 `abandoned` | **不封存**（保持 active；子线照写不误） |
+| RNG | 调用方传入 | **以包为准**（分支列是当前值、每次 fork 覆写 ⇒ 读时取会重掷混沌，A2 §3 修正 2） |
+
+治理完整性**不因切包而放松**：包内指针悬空（`source_knowledge_id` / `source_memory`）依旧
+**整批拒绝**（宁可不读档，不留治理断链）；`superseded_by` 重映射不到的行落 NULL（绝不悬空）。
+当前行的移交仍归 **R-4 施工单**（0012 头注 + `TestForkHandoverForm` 双态钉，锁信号 =
+`fork.py` 代码里出现 `is_current`）。

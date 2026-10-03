@@ -227,3 +227,35 @@
    （与现行 head-fork 同阶）、不进 tick 热路径；存储上快照是可弃缓存（丢了退化为 1.28s
    全前缀重放，设上限），语料+rng 是不可重建资产必须内联 ⇒ 每 anchor O(语料行数)，
    需 10% 配额 + LRU。**
+
+---
+
+## 6. 施工落地记（M5-A10 / 批次 E 物化单，2026-10-03）
+
+本稿「预研稿即施工案」（裁 31-1）⇒ 批次 E 的数据面施工**照本稿落**，落地形态记在此，
+供下一轮接手时对照「设计 vs 实际」：
+
+| 本稿条目 | 落地形态 | 位置 |
+| --- | --- | --- |
+| §1.1 表形态 | **零迁移**：表已由 0011 建好（含成对 CHECK），本单不占号、不落空迁移 | `schema.md` §23.1 |
+| §1.1 `corpus_blob` 格式契约（本稿留白） | gzip JSON + `__bytes_b64__` 带标签二进制载体 + 按主键定序（确定性字节） | `schema.md` §23.2 |
+| §1.2 展开判据收紧（`snapshot.seq <= anchor.seq`） | 已由 A2 落地（`latest_snapshot(max_seq=…)`）；物化器**必传** `max_seq=锚点 seq` | `anchor_package.py::_resolve_package` |
+| §1.2 应用次序铁律 | 由 `materialize_anchor` **亲自按序调钩子**，执行序进 `Materialization.steps`（可被钉子观测） | `schema.md` §23.4 |
+| §1.2 fail-closed 四条 | 五条（多一条 `corpus_mismatch`＝blob 结构损坏）；全在钩子之前判定 ⇒ 零副作用 | `schema.md` §23.5 |
+| §1.3 存档时一次物化 | 写面 `write_anchor_package()`（存档事务内一次；不进 tick 热路径）+ `collect_corpus_rows()` | `anchor_package.py` |
+| §1.4 (A) 语料进包 | 3 张表进包（`CORPUS_TABLES` 白名单）；**第 4 张（权力态）按 S10 §2.3 不进包** ⇒ 构造性边界 | `schema.md` §23.3 |
+| §2 迁移接缝 | 表已在 0011 ⇒ 本单零迁移；老档三类处置落到五判据（`no_package` / `rng_unavailable` / `snapshot_missing`） | `schema.md` §23.1 / §23.5 |
+| §2 只读诊断面 | `diagnose_anchor_materialization()`（纯读、不抛异常、回原因码）；**出站路由登记归 kilo 域** | `anchor_package.py` |
+| §3.2 条件 1/2/5 | 物化器 + 包读写面 + E 系钉（含照妖镜体例：锚点后事件逐位零影响） | `sim/tests/test_m5_materialization_package.py` |
+| §3.2 条件 3 `kind` 参数化 | `fork_from_anchor(kind="anchor", package=…)`：父不封存、缺包/游料不符即 `ForkError` | `fork.py` |
+| §3.2 条件 4 语料克隆源切包 | `_clone_memories/_clone_knowledge` 增 `rows=` 包路径 + `_clone_relationships_from_rows`；R-2 重写同源 | `fork.py` / `schema.md` §23.6 |
+| §3.3 改动面归属 | 本单只做 `sim/core/persistence/`（物化器 + 读写面 + fork）+ 钉 + `docs/data/`；`sim/api/anchors.py`（`create_item` 同事务写包、诊断路由）与 `fork_orchestration.py`（读档编排）**归 kilo / Claude**，本单提供 API 与事实清单 | — |
+
+**批次 E 与火的交叉（E-13 判据落码）**：fires 属可重放族 ⇒ 物化时经
+`materialize_fires_replay(upto_seq=锚点 seq)` 重建、包内零火列；**不加火势物化基准列**（A9
+照妖镜已证「快照 ↔ 重放」可逐位重建，再加列＝重复表达）。**历史点读档不还原火场**：
+产出只有生命周期表行值，机制面读档后无火对象（火势中间态是纯运行态，每 tick 现抽）。
+
+**读档编排调用点（留给上层，本单不越域）**：`diagnose → materialize_anchor → fork(kind="anchor",
+package=…)`；`MaterializationHooks` 由 ws 层注入（世界态展开 / override / 灌语料 /
+restore_rng 四步的语义实现）。
