@@ -1,80 +1,55 @@
-<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-03 A11 已交）===== -->
+<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-03 A12 已交）===== -->
 <!-- 0. 工作树 E:\zxdevelop\.orca\worktrees\project7\opencode，分支 ZX466/opencode；
-      HEAD 见 `git log -1`（M5-A11：批次 E 出站编排收官件，已双推 origin+gitee）；
-      基线 main 8491659（R-4 施工已落地并入：anchors 两处接 branches.is_current 真源 +
-      fork.py 当前行交接 ⇒ **我的 G3 双态钉已在 B 态**），迁移链 head=0014（连续两单零迁移） -->
+      HEAD 见 `git log -1`（M5-A12：soak 计数数据面核实 + 物化诊断文案缝确认，**零生产码**，
+      已双推 origin+gitee）；基线 main 2bd2bff（M5 收官波全并入 + M6 开题三件套就绪），
+      迁移链 head=0014（连续三单零迁移） -->
 <!-- 1. 已交全景：M5-D1 预研 / D2 / D3-a 0008 / D3-b fork 事件+克隆 / D3-c R-2+RNG /
       A-DATA 0009 / A2 0010 / A3 物化设计 / A4 0011 + R-4 契约 / A5 0012 is_current +
       开线闸 / A6 R-4 钉 + fork 交接口径 / A7 0013 npc_power + 45 钉 / A8 火灾预研 /
-      A9 0014 fires + FireStore + 43 钉 / A10 批次 E 物化数据面（anchor_package 物化器 +
-      fork kind 参数化 + 语料切包 + 72 钉）/ **A11 批次 E 出站编排（编排链 + hooks 缝 +
-      同步写面 + 诊断路由 + 46 钉）** -->
-<!-- 2. 在途 = 无（等收编）。**我域已全交，批次 E 只剩他域接线**（见下方挂账）。挂账：
-      ① **上游阻塞缺陷（已回执 Claude）**：driver 跑起来时连发 POST 会长期占住 world.db
-      写锁（`database is locked`，R-4 基线同样复现 ⇒ 非我引入），根治在
-      `run_world_driver`/lifespan 侧；② **hooks 四步语义待 Claude 注入**（展开/override/
-      语料/restore_rng 的 world 函数，缺「快照 dict → WorldState」反向函数）；
-      ③ **RNG 捕获待混沌流侧暴露** registry+抽签 cache（`app.state.rng_capture` 接缝已留）；
-      ④ 诊断路由未进 `shared/openapi.json`（shared/ 非我域）⇒ 前端类型面登记归 kilo
-      （届时走 versioning §7 minor + 升版）；⑤ ProblemDetail 机器码出站登记归 kilo。 -->
+      A9 0014 fires + FireStore + 43 钉 / A10 批次 E 物化数据面（物化器 + fork kind + 72 钉）/
+      A11 批次 E 出站编排（编排链 + hooks 缝 + 同步写面 + 诊断路由 + 46 钉）/
+      **A12 soak 计数核实 + 诊断文案缝确认（零生产码 + 12 钉）** —— **M5 我域已全交** -->
+<!-- 2. 在途 = 无（等收编）。**M6 待派**。挂账（全部已回执，等他域接线）：
+      ① **上游阻塞缺陷**：driver 跑起来时连发 POST 会长期占住 world.db 写锁（R-4 基线同样
+      复现 ⇒ 非我引入），根治在 `run_world_driver`/lifespan 侧（谁开的事务谁收口）；
+      ② **hooks 四步语义待注入**（展开/override/语料/restore_rng；缺「快照 dict → WorldState」
+      反向函数）；③ **RNG 捕获待混沌流侧暴露** registry+抽签 cache（`app.state.rng_capture`
+      接缝已留，不挂 ⇒ 存档诊断 `rng_unavailable`）；④ 诊断路由未进 `shared/openapi.json`
+      （前端类型面登记归 kilo，走 versioning §7 minor + 升版）；⑤ ProblemDetail 机器码出站
+      登记归 kilo；⑥ **8 词填值 CR**：玩家面只一档文案（8 词未触发，reason 是英文裸 slug）。 -->
 <!-- 3. 恢复序：git fetch+merge origin/main → 读 talking.txt（在途单卡）→ 读本卡 →
       需要细节再翻 ② opencode 节各轮快照 / git log --oneline -- .orca/memory.md -->
-<!-- 4. 门禁（全绿基线 2203 passed / 120 skipped；**主树留言板标的数字与实测不一致，
-      以实测为准**——A10 我实测 2071 vs 标 2136；A11 实测 2157 vs 标 2226）：
+<!-- 4. 门禁（全绿基线 2225 passed / 120 skipped；**主树留言板标的数字与实测连续三轮不一致，
+      一律以实测为准**——A10 标 2136/实测 2071；A11 标 2226/实测 2157；A12 标 2278/实测 2213）：
       `uv run pytest -m "not bench" -q`；`uv run ruff check .`；`uv run pyright sim/`；
       **gen-protocol --check EXIT 0**（脚本在 **`tools/gen-protocol.ts`**，从 client/ 跑
       `npx tsx ../tools/gen-protocol.ts --check`；client/node_modules 缺失 ⇒ junction 挂
-      主树那份，已 gitignore）；autogenerate 零漂移；format drift 38（基线值，不增） -->
+      主树那份，已 gitignore）；autogenerate 零漂移；format drift **37**（基线值，不增） -->
 <!-- 5. 域内纪律（血脉）：① stamp 只改版本行不执行迁移；② 往返钉钉**具体 revision id**
       不钉 head；③ 回滚场景证明不了原子性，必须正向读回；④ 收紧写路径前先跑全量找
       爆炸半径；⑤ PowerShell 写文件用 `write` 工具（`Set-Content -Encoding UTF8` 塞 BOM，
       反引号是转义符）；`edit` 工具吃掉被替换块首行缩进；⑥ skip-locked 钉必须实测开锁；
       ⑦ 改 `async def` 辅助函数后**逐个调用点补 `await`**；⑧ 写完查 U+FFFD 乱码替换符；
       ⑨ **BOM 会污染 commit subject**（commit message 一律用 `write` 工具落文件）；
-      ⑩ **Python 补丁脚本要「整体断言 + 最后写」**（中途 assert 失败若已分步写 ⇒ 留半改）；
-      ⑪ 测试里别自己 gzip（`write_snapshot` 自己压缩）；`store.append` 收 store 行 dict；
-      锚点是**事件 seq** 不是 tick；⑫ **变异探针要先验证变异真的落到文件上**（字符串
-      手术失败会静默变「未红」假象）；subprocess 跑 pytest **必须带 `sys.executable`**。 -->
+      ⑩ **Python 补丁脚本要「整体断言 + 最后写」**；⑪ 测试里别自己 gzip（`write_snapshot` 自己
+      压缩）；`store.append` 收 store 行 dict；锚点是**事件 seq** 不是 tick；⑫ 变异探针要先验证
+      变异真落到文件上；subprocess 跑 pytest 必须带 `sys.executable`；
+      ⑬ **FastAPI 路由断言读 live OpenAPI**（include_router 被包成 `_IncludedRouter`）；
+      ⑭ **SQLite writer-first**（读后升级为写不吃 busy 重试）；有界重试治不了持久锁；
+      ⑮ **同事务钉要「结构 + 行为」两条**；⑯ 别人的未收口事务会伪装成你的钉 flaky ⇒ 先做
+      「基线是否同样复现」的对照实验；⑰ 派单给的**钉子落点建议可偏离**，但要在回执说明理由；
+      ⑱ **`TickLoop.enqueue` 是立即 apply**（写事件即刻改状态，不排队等 tick）——写涉 tick
+      时序的断言时别假设「下一个 tick 才生效」。 -->
 
-（A8-A11 四轮新经验，本轮零正确化）：
-- **API 路由断言要读 live OpenAPI，不是 `app.routes`**：本版 FastAPI 把
-  `include_router` 的路由包成 `_IncludedRouter`（`path=None`）⇒ 按 path 过滤 `app.routes`
-  会得到「路由不存在」的假象。
-- **fail-closed 桩要逐步钉**：只钉「四步全缺」的话，把某一步改成静默空实现照样全绿 ⇒
-  加「只有这一步是桩」的参数化钉（并断言该步之前的允许跑、之后的不许跑）。
-- **SQLite writer-first 铁律**：「先读后写」的事务升级为写者时**不吃 busy 重试** ⇒ 读
-  （语料/快照引用）必须在写事务之外的只读会话里先取完。
-- **有界重试治不了持久锁**：driver 侧有写事务没收口时，重试只会把 40s 的失败拉长 ⇒ 如实
-  报上游 + 夹具层面隔离（取消 driver），**不要用重试把缺陷藏起来**。
-- **同事务钉要有「结构 + 行为」两条**：行为钉（写包炸 ⇒ 档行也回滚）盖不住「把写包挪到
-  commit 之后」的漂法；补一条 AST 顺序钉（写包调用行号 < commit 行号）才闭合。
-- **别人的未收口事务会伪装成你的钉 flaky**：先做「R-4 基线是否同样复现」的对照实验，再决定
-  是自己的锅还是上游的锅（本轮据此定位到 driver 侧）。
-【A10 完成记｜批次 E 物化数据面（2026-10-03 已交 70ceaa7，72 钉）】① **G3 小单**（A6 现状断言
-双态化）：`test_m5_anchors_branch_source.py::TestForkHandoverForm` 三钉 —— 不变量「当前行唯一」
-+ 双态（未落=父当前/子非当前；已落=子当前/父 abandoned）+ 双态穷尽 + 0012 头注指针钉；
-**锁信号（选定并写明）= `fork.py` 的代码里出现 `is_current`**（跳过注释与 docstring；今日代码
-零出现 ⇒ 停在交接前态；选它因为它是单一可 grep、不随 `values(...)`/裸 SQL 写法漂移的信号）。
-② **批次 E 主体**：新模块 `anchor_package.py`（写面 `write_anchor_package`/`collect_corpus_rows`
-+ 物化器 `materialize_anchor` 次序铁律亲自执行 + `diagnose_anchor_materialization` 只读诊断 +
-`AnchorMaterializationError` 五判据 + `corpus_blob` gzip JSON 编解码，白名单
-`CORPUS_TABLES=("npc_memories","knowledge","relationships")` 编解码两侧都过滤 ⇒ 权力态那张
-**构造性**进不了包也读不出）+ `fork.py` `kind` 参数化（head 逐字不变 / anchor 解锁历史点）
-与语料克隆源切包（`_clone_memories/_clone_knowledge` 增 `rows=`、`_clone_relationships_from_rows`、
-`_clone_fires_from_rows`）、`npc_power` 零克隆、父不封存、RNG 以包为准。③ **零迁移**：表已由
-0011 建好（autogenerate 0 ops 佐证），派单预留的 0015 不占号。④ 门禁：not-bench
-**2143 passed / 126 skipped / 0 failed**（基线 d2d95c0 实测 2071 ⇒ +72 全为本单）、
-`gen-protocol --check` EXIT 0（脚本在 `tools/gen-protocol.ts`）、ruff 0、pyright 0、
-autogenerate 零漂移、format drift 38 不增；**变异探针 5 处破坏 → 5 处变红**（判别力自证）。
-⑤ **偏差三处**（已回执）：① 包编解码零权力键字面量 ⇒ ProblemDetail 机器码
-`anchor-materialization-unavailable` 只在数据层有真源，**出站登记归 kilo/Claude**（协议零漂移）；
-② 快照指针**以库内 ≤锚点 seq 的最新快照**为准，不以包内记录为准（指针只是存档时刻的记录，
-快照被 GC 就该退化为全前缀重放）—— 判据码因此是「库内有无快照」而非「包内指针是否为空」；
-③ 只做 `sim/core/persistence/`（物化器 + 读写面 + fork）+ 钉 + `docs/data/`：
-`sim/api/anchors.py` 的 `create_item` 同事务写包与诊断路由、`fork_orchestration.py` 的
-`diagnose → materialize → fork` 编排**归 kilo/Claude**，本单只提供 API 与事实清单。
-⑥ 文档：`schema.md` §23（包格式契约 + 五判据 + kind 对照表 + 零迁移）、A3 稿 §6 施工落地记。
-
+（A8-A12 五轮新经验，本轮零正确化）：
+- **核实类答问要把「我原来的猜测」也写进钉子**：本轮我以为「app 形态 start 会是 0（create 在
+  tick 1 落）」，钉子一跑就证伪（enqueue 立即 apply ⇒ start=1）——**猜的东西要能被自己的钉打脸**。
+- **回答契约类问题时给「形状建议」而不只是「事实」**：pi 要的是「死亡语义选行删除还是列翻转
+  才让契约成立」，事实是「今天两者都不存在载体」；把事实推到形状（`end ≤ start` 且偏差=本窗
+  死亡数，可与死亡事件对账）+ 指出数据面泄漏**不在这个计数器覆盖内**，才是可执行的答复。
+- **给下游域的清单要带「不进文案」的一档**：kilo 要 reason 文案覆盖清单时，除了逐码归属，
+  还要明说「玩家面只一档、reason 留运维」，否则文案面会自己长出五种玩家可见差异——
+  那正是 META_SHELL 8 词填值的触发风险。
 【A11 完成记｜批次 E 出站编排收官件（2026-10-03 已交，46 钉：编排 24 + API 22）】① **编排链**
 （`fork_orchestration.py`）：`locate → diagnose → materialize → fork(kind="anchor") →
 register_child`；诊断先于分叉 ⇒ 不可物化的档**零副作用**被拒（`AnchorLoadUnavailable(reason)`，
@@ -94,6 +69,26 @@ register_child`；诊断先于分叉 ⇒ 不可物化的档**零副作用**被�
 **2203 passed / 120 skipped / 0 failed**（基线 `8491659` 实测 2157 ⇒ +46 全为本单）、
 `gen-protocol --check` EXIT 0、ruff/pyright 0、format drift 38 不增、alembic head 仍 0014；
 **变异探针 6 处破坏 → 6 处变红**（其中「包写挪到 commit 之后」把 5 条钉打红）。
+
+【A12 完成记｜soak 计数数据面核实 + 物化诊断文案缝确认（2026-10-03 已交，零生产码 + 12 钉）】
+① **答 pi 两问**：`entity_count` = `len(WorldState.entities)`（soak.py:312/335，**零表查询**，
+不是 `npc_profiles` 行数、不含 `matter_state`）；`EntityState` 只有 `entity_id/pos/path`
+⇒ **无 lod 列、无生死列、今天无删除 handler** ⇒ `end == start` 恒真是「无删除路径」而非
+「死亡不计数」；LOD 与计数**毫无关系**（`npc.lod_change` 默认总线未注册；`lod>0` 过滤只在
+`sim/npc/runtime.py:103` 的 L1 决策层）⇒ LOD 0 照计、不会让 BOUND 档位失真。**形状建议**：
+M6 须选「行删除」（新增死亡 kind + handler `entities.pop()`）契约才成立；若选「状态列翻转」，
+`end == start` / `end ≤ start` 都恒真 ⇒ 契约成空断言，且 dead-but-counted 实体仍会被 tick 移动
+与感知遍历。② **顺带纠正**：`_apply_world_create` 只许作用于空白世界 ⇒ **窗内新增结构上不可能**
+⇒ 计数只可能持平或下降（方向与契约一致）；且 `enqueue` 是立即 apply（我原以为 app 形态 start=0，
+被自己的钉证伪）。③ **答 kilo**：HTTP 面 reason ∈ **5 码**（`no_package` / `rng_unavailable` /
+`snapshot_missing` / `event_gap` / `corpus_mismatch`，ready 时为 `None` 且与之互斥），
+另有编排层码 `hooks_unavailable` **不进 HTTP**；**玩家面只一档**文案、reason 留运维
+（`no_package` 是唯一可安全差异化的玩家面码；其余四个是配置缺口/数据完整性事故）；
+8 词**当前未被触发**（detail 不带词、reason 是英文裸 slug、机器码未进快照错误表）。④ 钉 12
+（新文件 `sim/tests/test_m5_soak_entity_count.py`，只读 bench 不改 pi 域；未放派单建议的
+`test_m5_materialization_*.py`——与物化面无关，另立文件）。⑤ 门禁：not-bench
+**2225 passed / 120 skipped / 0 failed**（基线 `2bd2bff` 实测 2213 ⇒ +12 全为本单）、
+ruff/pyright 0、drift 37 不增、**零生产码零迁移**（head 仍 0014）、gen-protocol EXIT 0。
 【A5 完成记｜0012 branches.is_current + 开线闸收紧（2026-10-01 已交 1eeb294，36 钉）】
 - 迁移 0012（`0012_branches_current.py`）：`is_current BOOLEAN NOT NULL DEFAULT 0`（纯
   add_column ⇒ 不需 batch）+ **部分唯一索引** `ux_branches_current ON branches(is_current)
