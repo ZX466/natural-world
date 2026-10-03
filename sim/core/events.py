@@ -46,6 +46,14 @@ class EventKind(StrEnum):
     #: 进事件日志）→ WS 侧 `ws.monologue_events_to_frames` 投影成独立 monologue
     #: 帧，按 form 路由（bubble/plan 广播；thought 定向本人，见 ws.py 投递面契约）。
     NPC_MONOLOGUE = "npc.monologue"
+    # ---- M5（批次 D 火灾生态，裁 33；K12 事件面判定 + A8 数据面预研）----
+    #: 起火：火场诞生（**信号≠状态**：起火那一刻没有任何物质变更，故既有族表达不了）。
+    #: 「蔓延」与「烧毁」**不新增 kind**：走既有 ``matter.damage`` / ``matter.collapse`` /
+    #: ``structure.collapsed``（codex W-D1「必须产事件」由既有族满足；新增蔓延 kind 只会
+    #: 带来第二套投影路径，撞 schema §19.3「两路径不得各写一套」铁律）。
+    FIRE_IGNITED = "fire.ignited"
+    #: 熄灭：火场终结（物理终止态，**不记是谁灭的**——归因键零容忍，见 K12 §3）。
+    FIRE_EXTINGUISHED = "fire.extinguished"
 
 
 # ---------------------------------------------------------------------------
@@ -218,14 +226,18 @@ _POSITIVE_FLOAT = Annotated[
     Field(gt=0.0, allow_inf_nan=False),
 ]
 
-StructureCollapseCause = Literal["decay", "damage", "support_lost"]
+StructureCollapseCause = Literal["decay", "damage", "support_lost", "fire"]
 StructureRemoveReason = Literal["demolished", "cleanup"]
 MaterialMoveReason = Literal[
     "build_reserved",
     "build_consumed",
     "build_refunded",
     "demolish_yield",
+    "burned",
 ]
+
+#: 火灾熄灭的**物理终止态**（K12 §1.3 逐字；`doused` 只表示「火灭了」，**不记谁灭的**）。
+FireEnd = Literal["out", "fuel_out", "doused"]
 
 
 class StructureStartedPayload(BaseModel):
@@ -345,6 +357,43 @@ class MaterialMovedPayload(BaseModel):
             msg = "材料转移来源与去向不得相同"
             raise ValueError(msg)
         return self
+
+
+# ---- M5 批次 D（火灾生态）：火场生命周期 payload（裁 33 + K12 §1.3 形态） ----
+
+#: 坐标域与 `MatterPayload` 同哨兵语义：-1 = 未定位，4096 = 寻路界（`gate.out_of_bounds` 同源）。
+_FIRE_COORD = Annotated[int, Field(ge=-1, lt=4096)]
+
+
+class FireIgnitedPayload(BaseModel):
+    """起火：火场诞生（``fire.ignited``）。
+
+    **零归因键**（K12 §3 + codex D-10）：只有几何坐标，**禁** ``actor_id``/``igniter``/
+    ``cause_human``/``culprit``/``authority_*``——「谁点的火」是意图归因，写进事件层就等于
+    把权力位阶投影进可重放面。``payload`` 是 ``extra="forbid"`` 封闭形状 ⇒ 夹带键在
+    构造与落库两关都被拒（`validate_store_row` 复用本模型）。
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    fire_id: _ID
+    x: _FIRE_COORD = -1
+    y: _FIRE_COORD = -1
+
+
+class FireExtinguishedPayload(BaseModel):
+    """熄灭：火场终结（``fire.extinguished``）。
+
+    ``end`` 是**物理终止态**（燃料耗尽 / 自然烧尽 / 被扑灭），**不是「被谁扑灭」**——
+    归因零字段同 :class:`FireIgnitedPayload`。
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    fire_id: _ID
+    x: _FIRE_COORD = -1
+    y: _FIRE_COORD = -1
+    end: FireEnd
 
 
 class WorldEvent(BaseModel):
@@ -752,5 +801,45 @@ def material_moved_event(
         branch_id=branch_id,
         tick=tick,
         event_type=EventKind.MATERIAL_MOVED,
+        payload=payload.model_dump(mode="json"),
+    )
+
+
+# ---- M5 批次 D 工厂（裁 33；A8 §2 + K12 §1.3 形态） ----
+
+
+def fire_ignited_event(
+    tick: int,
+    *,
+    fire_id: str,
+    x: int = -1,
+    y: int = -1,
+    branch_id: str = "main",
+) -> WorldEvent:
+    """起火事件（``fire.ignited``）：只带几何，**不收**任何归因参数（签名即防线）。"""
+    payload = FireIgnitedPayload(fire_id=fire_id, x=x, y=y)
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.FIRE_IGNITED,
+        payload=payload.model_dump(mode="json"),
+    )
+
+
+def fire_extinguished_event(
+    tick: int,
+    *,
+    fire_id: str,
+    end: FireEnd,
+    x: int = -1,
+    y: int = -1,
+    branch_id: str = "main",
+) -> WorldEvent:
+    """熄灭事件（``fire.extinguished``）：``end`` 是物理终止态，不是「被谁扑灭」。"""
+    payload = FireExtinguishedPayload(fire_id=fire_id, x=x, y=y, end=end)
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.FIRE_EXTINGUISHED,
         payload=payload.model_dump(mode="json"),
     )

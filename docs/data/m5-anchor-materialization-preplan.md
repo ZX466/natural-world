@@ -12,9 +12,9 @@
 | 快照 = gzip 压缩全量状态；`snapshots(branch_id, seq, tick, snapshot_data, is_cold, schema_version)`；`seq` = 该点事件流最大 `events.seq` | `models.py::Snapshot`、`store.py::write_snapshot` |
 | 快照选取 = `tick <= before_tick` 按 `(tick DESC, seq DESC) LIMIT 1`，**不过滤 `is_cold`、不判分支状态** | `store.py::latest_snapshot` |
 | 快照 cadence = 每 1000 tick；同分支留最近 8 份 + 每日首份；单份 ≤5MB gzip（预算）/ 实测 ~7KB（50 实体 pos-only 代理） | `docs/perf/budget.md:90`、`m5-time-scale-fork-budget.md:168` |
-| 6 张**有界表**（可 `INSERT…SELECT` 克隆）：`npc_profiles`/`npc_health`/`relationships`/`matter_state`/`structures`/`material_balances` | `fork.py::_BOUNDED_TABLES` |
+| 8 张**有界表**（可 `INSERT…SELECT` 克隆）：`npc_profiles`/`npc_health`/`relationships`/`matter_state`/`structures`/`material_balances`/**`npc_power`（0013）**/**`fires`（0014）** | `fork.py::_BOUNDED_TABLES` |
 | 2 张**语料表**（按分叉点截断克隆）：`npc_memories`（`event_seq`/`created_at_tick`）、`knowledge`（`evidence_seq`/`learned_at`） | `fork.py::_clone_memories/_clone_knowledge` |
-| 折叠/重放物化器只覆盖 5 张：`npc_health`(hidden)/`matter_state`/`structures`/`material_balances`/`npc_profiles`(lod) | `npc_store.py::materialize_*_replay`、`flush_tick` |
+| **新增（0014 / M5-A9）**：`fires`（火场生命周期）有事件源 + fold 器 ⇒ **属可重放族，不进包**（它与 `npc_power` 正相反：后者无事件源 ⇒ 第 4 张不可重建）；| 折叠/重放物化器覆盖 6 张：`npc_health`(hidden)/`matter_state`/`structures`/`material_balances`/`npc_profiles`(lod) | `npc_store.py::materialize_*_replay`、`flush_tick` |
 | **无事件源、不可重建的 4 张**：`npc_memories`（`superseded_by` 治理列）、`knowledge`（told 链/源记忆指针 + 治理列）、`relationships`（累计值原地演进，`npc_store.py`/`fork_replay.py` 均无物化器/可比字段）、**`npc_power`（M5-A7 / 0013，批次 C 权力态：无事件源——红线 A 禁新增 kind，增量走显式写面，本表只有「当前值」）** | 预研稿 §3.7、`fork_replay.py::EXCLUDED_FIELDS`、`m5-power-data-preplan.md` |
 | 历史点分叉 fail-closed：`fork_seq < head_seq` 抛 `ForkError`（消息已指向本方案） | `fork.py:346-352` |
 | RNG 状态只存**分支当前值**，每次 fork 覆写 | `models.py::Branch.rng_state`（0009）、`fork.py:372-377` |
@@ -22,8 +22,8 @@
 | 冷热分层**尚未实现**：全仓无任何代码把 `is_cold` 置 1，`latest_snapshot` 也不按它过滤 | `store.py:252`、`models.py:119` |
 | 裁 A6：anchor 引用即热钉——被任一 anchor 指向的分支永不整分支冷归档 | 预研稿 §3.9/§4.1 |
 
-**分类结论（本稿的地基）**：世界态分两类——**可重放的 5 张**（有 fold 器，快照 + 事件窗口
-可重建）与**不可重建的 4 张**（前 3 张语料/关系表 + M5-A7 新增 `npc_power`）（只有「当前值」）。物化包必须同时兜住两类，
+**分类结论（本稿的地基）**：世界态分两类——**可重放的 6 张**（原 5 张 + M5-A9 `fires`）（有 fold 器，快照 + 事件窗口
+可重建）与**不可重建的 4 张**（前 3 张语料/关系表 + M5-A7 新增 `npc_power`）（只有「当前值」）。【**`fires` 不进包**（0014 / M5-A9）：它有事件源（`fire.ignited`/`fire.extinguished`）且有 fold 器 ⇒ 属可重放族，读档靠「快照 + 事件窗口重放」即可重建 ⇒ **物化包不为火扩格式**；火场中间态（强度/燃料）一律不入库。】物化包必须同时兜住两类，
 否则历史点分叉会把「回退前的当前值」当成「回退点的历史值」——那正是 fail-closed 要防的
 近似糊。
 

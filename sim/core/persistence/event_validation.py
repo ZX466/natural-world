@@ -26,6 +26,8 @@ from sim.core.events import (
     CombatScaleChangePayload,
     EntropyInjectPayload,
     EventKind,
+    FireExtinguishedPayload,
+    FireIgnitedPayload,
     HiddenEmergePayload,
     MaterialMovedPayload,
     MatterPayload,
@@ -61,6 +63,10 @@ PAYLOAD_MODELS: dict[EventKind, type[BaseModel]] = {
     EventKind.MATTER_DAMAGE: MatterPayload,
     EventKind.MATTER_BUILD: MatterPayload,
     EventKind.MATTER_COLLAPSE: MatterPayload,
+    # M5 批次 D（裁 33）：火场生命周期两个信号型 kind（信号≠状态）。
+    # 　蔓延/烧毁**不**新增 kind（走既有 matter.*/structure.*）——避开第二套投影路径。
+    EventKind.FIRE_IGNITED: FireIgnitedPayload,
+    EventKind.FIRE_EXTINGUISHED: FireExtinguishedPayload,
     EventKind.NPC_HIDDEN_EMERGE: HiddenEmergePayload,
     EventKind.STRUCTURE_STARTED: StructureStartedPayload,
     EventKind.STRUCTURE_CHECKPOINT: StructureCheckpointPayload,

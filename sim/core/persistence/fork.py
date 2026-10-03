@@ -155,6 +155,13 @@ _BOUNDED_TABLES: tuple[tuple[str, tuple[str, ...]], ...] = (
         "npc_power",
         ("npc_id", "power_level", "updated_at_tick", "created_at"),
     ),
+    (
+        # 批次 D 火场生命周期（0014 / M5-A9）：有界表，克隆 = 父分支当前值逐字节。
+        # 与 npc_power 不同：fires **有事件源**（fire.ignited/fire.extinguished）⇒ 它的
+        # 当前值可被 fold 器逐位重建（物化靠「快照 + 事件窗口重放」，不需要快照指针列）。
+        "fires",
+        ("fire_id", "x", "y", "ignited_tick", "ended_tick", "end", "created_at"),
+    ),
 )
 
 #: `npc_memories` 克隆列（`id` 显式分配、`branch_id`/`entry_id`/`superseded_by` 另处理）。
