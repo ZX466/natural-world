@@ -35,6 +35,14 @@
   fold 分支），事件 kind 是**协议级闭合集**（要登记 `PAYLOAD_MODELS` + payload 模型 + 钉子体例）。
   两者都不撞 codex 红线 A③（该钉禁的是 authority 族 kind）。
 - 顺手：`m5-power-data-preplan.md` 补 K11 §6（P1–P5）指针 + 已落地逐条核对。
+【A9 完成记｜批次 D 火灾数据面施工（2026-10-03 已交 395887a，43 钉）】
+- 0014 `fires`：复合 PK + 坐标域 + `ignited_tick`/`ended_tick`/`end`（`FireEnd`）+ **三条 CHECK**（
+  `ck_fires_end_pair` 是真正的成对不变式）+ 零索引。**快照双列未落**（无语义→死列，已回执报备）。
+- 2 新 kind + 两枚举成员（`cause="fire"` / `reason="burned"`）；蔓延/烧毁**不新增 kind**（走既有族）。
+- **命名/形状作防线**：状态列名 `power_level`（禁键集内）、火场 payload **零归因键**、工厂**不收归因参数**——
+  把「记得谁点的火」从事件层取掉（K12 §3 / D-10）。
+- **A3 分类：`fires` 属可重放族**（有事件源 + fold 器）→ 物化包不为火扩格式；与 `npc_power`（无事件源、
+  第 4 张不可重建）正相反。这对“哪些表要进包」是实质性的判定。
 【A5 完成记｜0012 branches.is_current + 开线闸收紧（2026-10-01 已交 1eeb294，36 钉）】
 - 迁移 0012（`0012_branches_current.py`）：`is_current BOOLEAN NOT NULL DEFAULT 0`（纯
   add_column ⇒ 不需 batch）+ **部分唯一索引** `ux_branches_current ON branches(is_current)
@@ -698,6 +706,7 @@ schema.md §19.4/README/m3-plan 已同步已裁状态。实施放行 opencode「
 （各节由对应 agent 维护；快照纪律见 workflow §8：交付后在**自己节**顶部写一行快照 `【日期 轮次｜状态】`，旧快照压缩为 `git log --oneline -- .orca/memory.md` 指针，不无限堆积。）
 
 ## ③ opencode（数据 / 数据库域）
+- 【2026-10-03】**M5-A9 已交：批次 D 火灾数据面施工（0014 `fires` + `fire_store.py` + 2 新 kind + 43 钉，裁 33 落卡）**】事件面：`EventKind.FIRE_IGNITED`/`FIRE_EXTINGUISHED` + 两个封闭 payload（零归因键）+ 工厂（不收归因参数）+ `PAYLOAD_MODELS` 同 commit；枚举成员 `cause="fire"` / `reason="burned"`；**蔓延/烧毁零新增 kind**（走既有族）。数据面：`fires` 复合 PK + 坐标域 + 三条 CHECK（成对不变式进 DB）+ 零索引；`FireStore.upsert_fire`/`set_fire_end`/`active_fires` + `materialize_fires_replay`（与投影共用 `fold_fire`）；两条写路径（FireStore / NpcStore.flush_tick）共用同一 `project_fire`；fail-closed 零写。针子 43：S9 **D-1..D-7 全落** + 迁移往返（含 **create_all/alembic 双路径列集一致**）+ 照妖镜钉（`anchor.seq` 后的火灾事件对读档窗口零影响）。门禁：not-bench 2056 passed/126 skipped、gen-protocol EXIT 0、自生成零漂移、ruff/pyright 0。
 - 【2026-10-02｜**M5-A8 已交：批次 D 火灾生态数据面预研（零代码）+ 物化单扩界**】`docs/data/m5-fire-data-preplan.md`：① 物质状态**零新表零新列**（损伤全落既有列，`MatterPayload` 字段已够用 ⇒ 新 kind 不带新信息、只带第二套投影路径，撞 §19.3 铁律）；**A3 判定：火灾损伤属可重放，火场中间态不入库 ⇒ 不进 A3 任何一类 ⇒ 物化包不为火扩格式**；② 四类 kind = 2 新（`fire.ignited`/`fire.extinguished`）+ 2 走既有族，因果走 0008 谱系列，按场聚合发事件（W-D3）；③ 烧毁对 `npc_power` 原样保留（删行/失效标记各有一票否决）；④ 物化四问增量（包格式/原因码不变 + 一条「不还原火场」fail-closed 声明 + 一条照妖镜钉形态）；⑤ 6 待裁点推荐（含两个**枚举成员**扩展：坍塌 `cause="fire"`、材料 `reason="burned"`+ `to_ref="world:burned"` 保 T1 守恒）。顺手补 K11 §6 P1–P5 指针与逐条核对。门禁：ruff/pyright 0、gen-protocol EXIT 0、**零代码零迁移**。
 - 【2026-10-02】**M5-A7 已交：批次 C 权力机制数据面施工（0013 `npc_power` + `power_store.py` + 45 钉，零事件 kind / 零协议面变更）**】预研稿 `docs/data/m5-power-data-preplan.md`（裁 31-1：推荐案 = 施工案）：**新表** `npc_power`（否决并入 `npc_profiles`——那张表在 A3 地基里算「可重放 5 张」，塞无事件源状态会让分类当场说谎）；量纲归一 [-1,1]（三处同源常量 + 两条 DB CHECK）；**零索引**（PK 前导列即 branch_id）。**命名即跱线**：状态列叫 `power_level`，故意落在 codex 禁键集内 ⇒ 意外序列化会被递归扫当场抓住。红线 A（不新增 kind）的执行形态 = **显式增量写**（不是事件投影）+ 不做隐式衰减；fail-closed 四条零写（NaN/Inf 必须显式查 / tick 倒流 / 非法 id / 分支非 active），越界夹取但 `clamped=True` 如实上报；`fork.py::_BOUNDED_TABLES` 加项（我域内可直接改）且 A3 已登记「不可重建」第 4 张。门禁：not-bench 1995 passed/125 skipped、**gen-protocol --check EXIT 0**、自生成零漂移、ruff/pyright 0。
 - 【2026-10-01】**M5-A6 已交：R-4 施工数据面钉（11 钉，5 绿 + 6 skip-locked）+ fork 当前行交接口径稿（零生产码）**】`sim/tests/test_m5_anchors_branch_source.py`：先红后绿口径选 **skip-locked**（锁信号 = `anchors.py` 代码里出现 `current_branch_id` 或 `is_current`，两种施工写法都认 → 合入后自动解锁；**反假绿灯钉**：锁信号与红线同向，删硬编码不接真源即红）；判别力做法 = 两条线头部 seq 设成不同值（7/3）⇒「只改一处必被抓」= A4 同改警告的可证伪版；fail-closed 钉只断言 ≥400 + 零落行（409/503 都放过）。`docs/data/m5-fork-current-handover.md`：交接 = **两步 + 同事务 + 先清父**，且**只在「父就是当前行」时发生**（从读档线分叉不抢当前行）；实测**单语句 CASE 换手在 SQLite 上必然撞唯一索引**（3/3）。门禁 1950 passed / 125 skipped / 0 failed、ruff/pyright 0。**已实测开锁 5 红/6 绿**（非沙睡钉）。
