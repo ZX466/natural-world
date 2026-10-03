@@ -1923,6 +1923,34 @@ uv run ruff check . && uv run pyright <改动文件>
     `E:\zxdevelop\project7\.orca\talking.txt`，跨盘写入用同款 here-string（BOM/CRLF 已查）。
     ④ **恢复卡（memory L74-82）归 Claude 主树所有** —— merge main 会覆盖它（S9 那次我改过
     恢复卡，下一轮 merge 76dd14a 就冲掉了）⇒ **我树只改 ③ 节快照**（本次行 1781），别改恢复卡。
+- **M5-S11（M5 收官安规预审）✅ `f07ce6d`**（2026-10-03，双推，基线 `04e4220`）
+  新文件 `docs/security/m5-closure-preaudit.md`（229 行·零代码·同 M3/M4 静态预审体例）。
+  **①D-10 全链 14 项证据链闭合**（十三项有可跑钉 + 第 14 项 W-A 四钉 ⛔BLOCKED 属
+  **机制面未落**而非 D-10 载体面破线——数据面/出站面/包面已全覆盖）。
+  **②词表**：META_SHELL 实测 `frozenset()` 空表 + `test_meta_shell_lexicon.py` **6 钉全绿**
+  + 8 词填值挂账如实登记（不阻收官：M5 无戏外消费方）。
+  **③三硬边界四面实测全闭**：`rng_state` 在 protocol.ts/openapi.json/ws.py/anchors.py
+  **零出现**（且 authority 键集不含 rng ⇒ 记 F-1）；分叉可见性**零实现**；
+  `rate_change` 唯一命中=`ws.py:27` 注释。
+  **④53 钉总账**（脚本抽四稿**定义行**核对，零悬空）：S7 7 + **S8 18** + S9 15 + S10 13。
+  ⚠ **派单/台账写「S8 17 钉 =52」有误**：S8 §2 定义行实为 **18**（K7+O7+WA4）⇒ 记 **F-5**
+  （**记账口径差非缺钉**，建议台账按 18 订正，不追改历史）。
+  状态分布：✅已落码 35 / ⏳随施工落 7 / 🔒skip-locked 2 / ⛔BLOCKED 3 / 边界达成 2。
+  **⑤发现：零 CRITICAL、零 HIGH，2 MEDIUM + 3 LOW**——F-1 MEDIUM=**W-C1 有判据无钉执行**
+  （`rng_state` 递归扫不在 `AUTHORITY_FORBIDDEN_KEYS` 里 ⇒ 将来 HTTP 化读档路由漏检；
+  判 LOW 而非 HIGH 的依据=当下零流量 + `AnchorListItem` `extra="forbid"` 五键白名单结构性密封）；
+  F-2 MEDIUM=幂等语料重建缺失（A3 路径 B 未做，已由 A10 路径 A 绕开）；
+  F-3/4/5 LOW=W-A BLOCKED / D-1·D-13 skip-locked / 台账口径差。
+  **⑥T1 守恒六环节对账闭合**（既有 7 例 + A9 烧毁「move 非 delete」+ `to_ref="world:burned"` +
+  坍塌 `cause="fire"` + A10 写包零吞事件）。
+  **收官门判定：✅ 可放行**（五判据全绿；两 MEDIUM 均不阻收官，附三条放行后动作）。
+  - 坑：① **预审稿最容易犯的错是把「提案钉名」当「已落钉名」写进证据链** —— 本次
+    `test_no_bypass_of_c4_write_path`（我在 S9 提的**建议名**）在仓不存在，A9 实际叫
+    `test_fire_engine_files_have_no_bypass` ⇒ 脚本核对（grep `def|class`）当场抓住。
+    **总账里的每个测试名都要核，不能凭印象**；② §8 动态清单的**数字必须实跑**（我先写
+    「火灾两文件 59 passed」，实跑 **58 passed + 1 skipped**，已改；skip 数会被
+    skip-locked 双态影响，别按收集数写）；③ 本树基线 **2149 passed/120 skipped**
+    （skip 比卡里 131 少 11 = R-4 施工解锁了 skip-locked 钉）。
 ## 下一步 / 待派（不在本单范围）
 - ~~**T4 nightly 接线未闭合 → 需派 cline**~~ **已作废（第三十九轮 C7 实测推翻）**：探针 step 非 TODO，
   是裁定的长期注释态；env 已是 `Deepseek-v4-flash`（非 `claude-sonnet-5`，`d1940e4` 闭合）。**真实冲突在
