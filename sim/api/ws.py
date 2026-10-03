@@ -46,7 +46,7 @@ import structlog
 from fastapi import WebSocket
 
 from sim.agent.impulse_gate import impulse_gate
-from sim.api.outbound_guard import record_outbound_leak, strip_authority_fields
+from sim.api.outbound_guard import record_outbound_leak, strip_outbound_forbidden
 from sim.core.calendar import TICKS_PER_GAME_HOUR, game_time
 from sim.core.clock import MAX_CATCHUP_REAL_SECONDS
 from sim.core.events import EventKind, WorldEvent
@@ -317,10 +317,11 @@ class ConnectionManager:
         await self._send_to(targets, payload)
 
     async def _send_to(self, targets: list[WebSocket], payload: dict[str, Any]) -> None:
-        # M5-K11（D-10 权力不可见）：**全部** WS 出站帧的唯一咽喉——广播/定向/订阅者
-        # 三面都走这里，故闸接在此处即全覆盖。禁键（权力数值/档位/位阶名）递归剥除并
-        # 留痕：出站面出现禁键本身就是缺陷，剥除只是止血（m5-power-api.md §3.1）。
-        payload, stripped = strip_authority_fields(payload)
+        # M5-K11（D-10 权力不可见）+ M5-K15（S11 F-1 随机流补扫）：**全部** WS 出站帧的
+        # 唯一咽喉——广播/定向/订阅者三面都走这里，故闸接在此处即全覆盖。两层禁键
+        # （权力 9 键 + 随机流状态键）**同一递归**剥除并留痕：出站面出现禁键本身就是缺陷，
+        # 剥除只是止血（m5-power-api.md §3.1 / S11 F-1）。
+        payload, stripped = strip_outbound_forbidden(payload)
         if stripped:
             record_outbound_leak(stripped)
         dead: list[WebSocket] = []

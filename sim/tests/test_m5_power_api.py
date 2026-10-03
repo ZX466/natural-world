@@ -19,18 +19,25 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
+import numpy as np
 import pytest
 from fastapi import WebSocket
 
 from sim.api.errors import _TYPE_TITLE
 from sim.api.outbound_guard import (
     AUTHORITY_FORBIDDEN_KEYS,
+    OUTBOUND_FORBIDDEN_KEYS,
+    RANDOM_STATE_ALIAS_KEYS,
+    RANDOM_STATE_FORBIDDEN_KEYS,
     OutboundAuthorityLeak,
     assert_outbound_clean,
     find_authority_keys,
+    find_forbidden_keys,
+    find_random_state_keys,
     leak_events,
     reset_leak_events,
     strip_authority_fields,
+    strip_outbound_forbidden,
 )
 from sim.api.ws import ConnectionManager
 
@@ -94,7 +101,7 @@ class TestForbiddenKeyScanner:
     def test_strip_is_pure_and_deep(self) -> None:
         """剥除**不改入参**（纯函数）：调用方的原对象必须逐字保持。"""
         before = json.dumps(_DIRTY, sort_keys=True, ensure_ascii=False)
-        clean, stripped = strip_authority_fields(_DIRTY)
+        clean, stripped = strip_outbound_forbidden(_DIRTY)
         assert json.dumps(_DIRTY, sort_keys=True, ensure_ascii=False) == before, (
             "剥除函数就地改了入参——出站构造点会拿到被掏空的 dict"
         )
@@ -102,27 +109,27 @@ class TestForbiddenKeyScanner:
         assert not (set(_keys_recursive(clean)) & AUTHORITY_FORBIDDEN_KEYS)
 
     def test_strip_keeps_siblings_and_scalars(self) -> None:
-        clean, _ = strip_authority_fields(_DIRTY)
+        clean, _ = strip_outbound_forbidden(_DIRTY)
         assert clean["keep_me"] == "原样保留"
         assert clean["actors"][0]["rtoken"] == "ab12cd34", "同层非禁键字段被误删"
         assert clean["meta"]["nested"]["keep"] == 1, "嵌套层非禁键字段被误删"
         assert clean["rows"][0][0] == {}, "列表套 dict 的深层禁键未被剥除"
 
     def test_strip_is_idempotent_and_clean_noop(self) -> None:
-        clean, _ = strip_authority_fields(_DIRTY)
-        again, stripped_again = strip_authority_fields(clean)
+        clean, _ = strip_outbound_forbidden(_DIRTY)
+        again, stripped_again = strip_outbound_forbidden(clean)
         assert stripped_again == [], "二次剥除仍有命中：剥除不完整"
         assert json.dumps(again, sort_keys=True, ensure_ascii=False) == json.dumps(
             clean, sort_keys=True, ensure_ascii=False
         )
-        passthrough, stripped = strip_authority_fields(_CLEAN)
+        passthrough, stripped = strip_outbound_forbidden(_CLEAN)
         assert stripped == []
         assert passthrough == _CLEAN
 
     def test_keys_are_case_insensitive(self) -> None:
         dirty = {"Authority": 1, "POWER": 2}
         assert set(find_authority_keys(dirty)) == {"authority", "power"}
-        clean, _ = strip_authority_fields(dirty)
+        clean, _ = strip_outbound_forbidden(dirty)
         assert clean == {}
 
     def test_key_set_matches_codex_redline_b(self) -> None:
@@ -196,9 +203,10 @@ class TestOutboundStrip:
 
 class TestWhiteboxNails:
     def test_forbidden_key_literals_only_in_guard_module(self) -> None:
-        """禁键字面量在 `sim/api/` 生产代码里**只允许出现在闸门模块**。
+        """两层禁键的字面量在 `sim/api/` 生产代码里**只允许出现在闸门模块**。
 
-        别处硬写 'authority'/'power_level' 之类 = 第二个真相源，扩键时必漏一处。
+        别处硬写 'authority'/'power_level'/'rng_state'/'world_seed' 之类 = 第二个真相源，
+        扩键时必漏一处。（K15 起覆盖面从权力 9 键扩到**两层并集**。）
         """
         api_dir = Path("sim/api")
         allowed = {"outbound_guard.py"}
@@ -207,15 +215,21 @@ class TestWhiteboxNails:
             if path.name in allowed:
                 continue
             text = path.read_text(encoding="utf-8")
-            for key in AUTHORITY_FORBIDDEN_KEYS:
+            for key in OUTBOUND_FORBIDDEN_KEYS:
                 if f'"{key}"' in text or f"'{key}'" in text:
                     offenders.append(f"{path.name}:{key}")
         assert offenders == [], f"禁键字面量散落在闸门之外：{offenders}"
 
     def test_send_path_wires_the_guard(self) -> None:
-        """咽喉接线在位（白盒）：`_send_to` 源码必须调用剥除函数。"""
+        """咽喉接线在位（白盒）：`_send_to` 源码必须调用剥除函数。
+
+        两个函数名都认（K15 起 canonical 名为 `strip_outbound_forbidden`，
+        `strip_authority_fields` 是保留的 K11 别名）——**认函数不认文件名**，
+        防的是「闸被摘掉」，不是「改了名」。
+        """
         source = inspect.getsource(ConnectionManager._send_to)
-        assert "strip_authority_fields" in source, "WS 出站咽喉未接剥离闸——新帧可绕过构造层直发"
+        wired = "strip_outbound_forbidden" in source or "strip_authority_fields" in source
+        assert wired, "WS 出站咽喉未接剥离闸——新帧可绕过构造层直发"
 
     def test_no_authority_exception_leaks_into_http_errors(self) -> None:
         """自检异常不得注册成 HTTP 机器码（否则「权力存在」有了对外错误信号）。"""
@@ -283,3 +297,125 @@ class TestHttpSurfaceSeal:
         paths = app.openapi().get("paths", {})
         offenders = [p for p in paths if "authority" in p or "power" in p]
         assert offenders == [], f"出现了权力面路由：{offenders}"
+
+
+# ---------------------------------------------------------------------------
+# ⑥ 随机流状态层（S11 F-1，K15）：与权力层**同一递归**剥除，键名**以真源为准**
+# ---------------------------------------------------------------------------
+
+#: 含随机流状态的出站载荷（照 `sim/core/rng_state.py` 的包形状与 0009 列名构造）。
+_RNG_DIRTY: dict[str, Any] = {
+    "type": "session_state",
+    "channel": "session",
+    "notice": "你回到了先前的那段日子",
+    "anchor": {"name": "第一日", "story_label": "开春"},
+    "rng_state": '{"v":1,"registry":{},"streams":{}}',
+    "world_seed": 20260919,
+    "materials": {"npc": "9f2c…"},
+    "streams": {"npc": {"bit_generator": "PCG64", "has_uint32": 0, "uinteger": 128}},
+    "rng_state_persisted": True,
+    "seed": 7,
+}
+
+
+class TestRandomStateOutboundStrip:
+    @pytest.mark.asyncio
+    async def test_rng_state_keys_stripped_at_ws_throat(self) -> None:
+        """随机流状态键出站即剥 + 留痕（WS 咽喉实测，对照权力键钉体例）。"""
+        mgr = ConnectionManager()
+        ws = _FakeWS()
+        mgr.register(cast("WebSocket", ws))
+        await mgr.broadcast_json(_RNG_DIRTY)
+        assert len(ws.sent) == 1
+        sent = ws.sent[0]
+        leaked = sorted(set(_keys_recursive(sent)) & RANDOM_STATE_FORBIDDEN_KEYS)
+        assert not leaked, f"出站帧仍带随机流键：{leaked}"
+        assert find_random_state_keys(sent) == []
+        assert find_authority_keys(sent) == []
+        # 合法字段逐字保留（闸门不得顺手掏空叙事面）
+        assert sent["notice"] and sent["anchor"]["story_label"] == "开春"
+        assert leak_events() == [
+            "$.rng_state",
+            "$.world_seed",
+            "$.materials",
+            "$.streams.npc.bit_generator",
+            "$.streams.npc.has_uint32",
+            "$.streams.npc.uinteger",
+            "$.rng_state_persisted",
+            "$.seed",
+        ], f"随机流键剥除留痕与实际不符：{leak_events()}"
+
+    def test_generic_rng_container_keys_are_not_stripped(self) -> None:
+        """**刻意不剥**通用容器键（`streams`/`state`/`registry`/`key`/`v`）。
+
+        剥掉一个叫 `state` 的合法字段=静默丢数据，比漏扫更坏；而这些容器的内容已被
+        特异叶子键（`bit_generator`/`world_seed`/`rng_state`）兜住。本钉把这个取舍钉住，
+        防后人「补全面」时把它们加进去。
+        """
+        payload = {"streams": {"a": 1}, "state": "running", "registry": "npc", "key": "k", "v": 1}
+        clean, stripped = strip_outbound_forbidden(payload)
+        assert stripped == [] and clean == payload
+
+    def test_random_state_keys_trace_to_source_of_truth(self) -> None:
+        """**以真源为准，防第二套**：非别名键必须能在真源里逐键找到出处。
+
+        真源分两类，各自对拍：
+        1. **域内真源**（文本可查）：`sim/core/rng_state.py`（包结构与字段名）、
+           `sim/core/rng.py`（`RngRegistry.world_seed` / `.materials`）、
+           0009 迁移（`branches.rng_state` 列名）、`fork.py`（`ForkResult.rng_state_persisted`）；
+        2. **numpy 真源**（运行时可查）：`bit_generator.state` 的键集——断言**所有非通用键
+           都被本层覆盖**（numpy 哪天加键，本钉会报出来，不靠人记得补）。
+        """
+        sources = "\n".join(
+            Path(p).read_text(encoding="utf-8")
+            for p in (
+                "sim/core/rng_state.py",
+                "sim/core/rng.py",
+                "sim/core/persistence/alembic/versions/0009_branches_rng_state.py",
+                "sim/core/persistence/fork.py",
+            )
+        )
+        numpy_state = np.random.default_rng(7).bit_generator.state
+        numpy_keys = set(numpy_state) | set(numpy_state["state"])
+        generic = {"state", "inc"}  # 通用容器键，刻意不剥（见另一钉的理由）
+        derived = RANDOM_STATE_FORBIDDEN_KEYS - RANDOM_STATE_ALIAS_KEYS - numpy_keys
+        untraceable = sorted(key for key in derived if key not in sources)
+        assert untraceable == [], f"这些键不在真源里（自造第二套？）：{untraceable}——补出处或删键"
+        uncovered = sorted(numpy_keys - generic - RANDOM_STATE_FORBIDDEN_KEYS)
+        assert uncovered == [], f"numpy 抽签状态新增了键但本层未覆盖：{uncovered}"
+        # 别名层必须**显式登记**且与真源层不相交（防别名层悄悄膨胀）
+        assert not (RANDOM_STATE_ALIAS_KEYS & RANDOM_STATE_FORBIDDEN_KEYS), (
+            "别名键与真源键重叠——同一键登记两遍"
+        )
+        assert RANDOM_STATE_ALIAS_KEYS <= OUTBOUND_FORBIDDEN_KEYS
+
+    def test_two_layers_share_one_recursion(self) -> None:
+        """两层**同一递归**（不分两套扫描）：一次调用两层键全被剥，按层取证也可用。"""
+        payload = {"authority": 0.7, "rng_state": "{}", "ok": 1}
+        clean, stripped = strip_outbound_forbidden(payload)
+        assert stripped == ["$.authority", "$.rng_state"]
+        assert clean == {"ok": 1}
+        assert find_authority_keys(payload) == ["authority"]
+        assert find_random_state_keys(payload) == ["rng_state"]
+        assert find_forbidden_keys(payload) == ["authority", "rng_state"]
+
+    def test_assert_outbound_clean_reports_rng_layer(self) -> None:
+        """自检异常必须**报出层**（否则排障时分不清是权力漏还是随机流漏）。"""
+        with pytest.raises(OutboundAuthorityLeak) as exc:
+            assert_outbound_clean(_RNG_DIRTY)
+        message = str(exc.value)
+        assert "random_state" in message and "rng_state" in message, f"异常未指明层与键：{message}"
+
+    def test_k11_alias_still_strips_both_layers(self) -> None:
+        """K11 别名 `strip_authority_fields` **保留且同语义**（含随机流层）。
+
+        别名存在的理由：`sim/tests/test_m5_fire_outbound.py`（K13 守卫钉）仍按 K11 的名字
+        导入；删别名会让别人的钉变红——**接口演进不许静默破坏既有钉**。
+        """
+        payload = {"authority": 1, "rng_state": "{}", "keep": 2}
+        aliased_clean, aliased_stripped = strip_authority_fields(payload)
+        canonical_clean, canonical_stripped = strip_outbound_forbidden(payload)
+        assert aliased_clean == canonical_clean
+        assert aliased_stripped == canonical_stripped == ["$.authority", "$.rng_state"]
+        assert find_authority_keys(payload) == ["authority"]
+        assert find_random_state_keys(payload) == ["rng_state"]
