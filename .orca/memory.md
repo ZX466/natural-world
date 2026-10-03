@@ -966,6 +966,16 @@ uv run pyright sim/
 - (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)
 
 ## ⑤ pi（性能域）
+- 【2026-10-03 第二十九轮快照｜**M5-P12：M5 性能收官台账（零代码+只读汇总，唯一交付=1 个 doc）**】任务书（收官前置，基线 main `d2d95c0`）：三案红线终局表 + 定标 runbook 终版 + 机器观察汇总 + M6 预告 + Xeon 挂账确认。产出 `docs/perf/m5-closure-perf-ledger.md`（199 行，**性能面单一入口**——新对话读此一档即可接手三案定标）。
+  - **【最重要结论：三案全 advisory、零条进 thresholds——不是遗漏，是前置未满足（逐项实证）】** 混沌：生产循环不调 `EntropyMixer.mix`（只 weather.py docstring 描述接法）；权力：`grep power sim/npc/*.py` 零命中=决策层未消费（数据面 0013+出站闸已在 main）；火灾：`sim/world/fire*.py` 不存在，`test_m5_fire_state.py:196` 实测 skip（D-1 白盒随落盘自动生效）。⇒ **现在跑定标=给不存在的代码定红线**；定标轮必须排批次 A 收口/C 接线/D 机制面后。**唯一可立即执行项 = 裁 34 采认 N=2 → 落 `test_bench_fire.py::test_fire_tick_event_budget`**（纯判据钉不需机器）。
+  - **【裁 31–34 落库缺口（只报不改，归架构域）】** 实测 `grep 裁决 3[1-4] docs/arch/` **零命中**——rulings 正文止于裁 30，31–34 只存主树 memory 转述（裁 33 **执行面**可实证：FIRE kind/枚举在 main）。⇒ 台账「采况」栏只能标推断，建议收官前把 31–34 落进 `m5-rulings.md`（与 C10 的 versioning §7 缺行同类：**事实与登记面分离**）。
+  - **【定标 runbook 终版（§2，M6 开工即派）】** 步骤 0 探针门（≤2.0 才开跑、跑完才算数）+ 统一口径（暖态中位禁均值 ×1.7 余量 `_record_proposal` 观察态起步）+ 三案断言映射 8 行（CHAOS 聚合抽签/区间常量/缓存键白盒；POWER flip+熵共用 codex S10 §5.3 定稿口径；FIRE N=2 语义钉/O(G) 形态/烧毁摊还 K 档）+ **翻转五步顺序不可换** + skip-locked 解锁位表（S9 D-1 自动/K13 已全绿/T3 需 key）。
+  - **【机器观察沉淀（§3，读性能留痕必读）】** throttle 时间线（时序）09-29 机理 6.6x → 09-30 P7 8.393 → 10-01 P8 1.652 → 10-02 P10 2.055（恰越门，soak 自 skip 属正确）→ 10-03 P11 1.492：两簇（1.2–1.7 / 6.6–8.4）门 2.0 落空隙=判据可靠。**P11 级联 skip 判例机理结案**：4 个 soak 测试各挂**体内**探针（:262/:280/:348/:387），外层读数与体内不是同一时刻 ⇒ 瞬时降频一次跳 3 个。**计数恒等式手法**：总数=passed+skipped+deselected（P11 时点 2208 三口径恒等；本时点 **2267**，+59=`git diff --stat` 实证=仅两新增测试文件）。纪律：**留痕=bench 结果+同轮探针比值+skip 明细三件套，缺一即不可比；passed 少禁止直接写回归**。
+  - **【M6 预告（§4）】** 批次 E 物化读档 ≈20–40ms（A3 拼装：展开 0.4+重放 ≤14.8+灌入 6.1+克隆）⇒ 裁定建议：**新增`MATERIALIZE_LIMIT_MS=50.0` 一次性操作档**（比照 SNAPSHOT_LIMIT_MS=500 体例，**不进 tick 预算**——P6 anchors 同结论「不进 _tick_once ⇒ 不加 tick 行」），配「异步卸载不阻塞 tick」接法红线；断线重放唯一关注=禁每 tick 全量重放（1.28s/23x，P2 钉）。
+  - **【Xeon 如实登记（§5）】** `baseline-xeon8573c.json` 不存在；最近 2 次 nightly（37067388197/36932896240）success@main；**本轮无法判机型**（无 gh/token；实测 jobs 端点 `runner=null`、bench check-run `annotations=[]` ⇒ 机型 notice 不可达，P8 10-01 同法曾读到「机型一致：EPYC 7763」）⇒ **记「未知」不记「已排除」**（诚实口径）。触发即走 P7 八步；M6 前置依赖=一次 gh/token 授权（与 T4 等 key 同类）。
+  - **【P1–P11 对账（§6）+ M5 性能域最大结论】** **间接成本比直接成本高 1–2 个数量级 ⇒ 红线首先卡「接法/形态」不是「数值」**：P9 抽样 9.3µs vs 冷 A* 494–647µs（53–70x）→ P10 权力列 3.05µs 触发 530µs（≈174x）→ P11 烧毁 14µs 触发 K×0.7ms（K=20 破整 tick）+ O(G²) 39.1ms vs O(G) 174.5µs（**224x**）。⇒ M6 任何新机制预算案第一段问「它的等效冷路径是什么」。（P3 行注记修正：thresholds.py:197 署 M5-P3/P5 共担；SOAK_* 行属 M2-P2 ⇒ M5 进库的只有 fast_forward 一组两行。）
+  - **【验证】** 零代码 ⇒ 无 pytest/bench 重跑（卡片明令只读）；取证跑 `-k fire/authority/chaos/power` **370 passed/56 skipped/0 failed**；collect-only 2267；ruff All checks passed / pyright 0。**坑（新）**：curl 经 cmd 的 `-w %{http_code}` 需 `%%` 双写转义；GitHub REST 无 token 时 check-run 单条可取但 annotations 恒空 ⇒ 被动机型台账要注明**可达性**。
+  - **【交付】** doc commit `b573712` + memory commit，双推 origin+gitee。所有权：只新增台账一文件 + 自树 memory；未碰 sim/、bench、thresholds、docs/README。
 - 【2026-10-03 第二十八轮快照｜**M5-P11：批次 D 火灾蔓延/生态性能预算案 + 定标准备清单（零代码，唯一交付=1 个 doc）**】任务书两度派发（10-02 首派、10-03 重派附三条已收敛输入）——**本域二次超期致歉**（纪律教训：预研单也须当日交付，「等实测数据」不构成缺席理由，本单的实测探针全用既有原语即可跑）。产出 `docs/perf/m5-fire-budget.md`（205 行，sim/ 与 thresholds.py 零改动）。
   - **【W-D3 N=2（本单必交付项）】** 定标机复核采认 opencode A9 的 advisory N=2（非另裁）。判据沿用 codex S9 D-14「同因（parent_seq 指同一 fire.ignited）连续 10 tick >N 即实现偏差」；三条依据：①**反解约束式`2F ≤ 100 ⇒ F ≤ 50`**（F=同时活动火场数）——N=2 在 F≤50 假设下**恰好等于既有 `CASCADE_EVENT_BUDGET_PER_FRAME=100`，零新增预算轴**（M4-P1 先例）；若机制要 F>50 ⇒ 走「火灾与坍塌共用一条按帧摊还队列」而**不得调大 N**；②量纲分离：**常态速率**（1–4 条/场，A2 混沌「可讲述才一条」同源）≠ **判红天花板**（N=2/10tick=每场 0.2 条/tick，×F50=10 条/tick=稳态 20 事件的 50%）——**N 定的是异常检测门，不是常态成本上限**；③灵敏度：格驱动 10 tick 产 10×前沿格 ≫2 稳判红，N=1 会因同 tick 跨双阈值误红 ⇒ N=2 给 1 条余量。
   - **【直接账从不破线】** 聚合 `matter.damage` 事件 construct 4.6µs、边际 ~4.9µs（construct+observe+invalidate），store 行 293B；**最坏格驱动全烧（1024 格铺满 32×32）也只 8.23ms/tick** ⇒ 与 opencode A8「零新增预算行」结论吻合，真风险全在间接账。
@@ -1220,12 +1230,11 @@ uv run pyright sim/
 
 ## 当前任务
 
-（**M5-P11 已完成**（2026-10-03，见本节顶部第二十八轮快照：批次 D 火灾蔓延/生态预算案 + 定标准备清单，
-零代码提案 `docs/perf/m5-fire-budget.md`，**W-D3 N=2 已给**；`a9813eb` 双推 origin+gitee）。
+（**M5-P12 已完成**（2026-10-03，见本节顶部第二十九轮快照：M5 性能收官台账 = 性能面**单一入口**，
 前单 M5-P10（2026-10-02，批次 C 权力牙齿预算案 `docs/perf/m5-power-budget.md`，`32b141a`/`201ceda`）；
 M5-P9（同日早，批次 A 混沌接线预算案 `docs/perf/m5-batch-a-chaos-budget.md`，`8176e30`/`e17944a`）；
 M5-P8（2026-10-01，willingness Δ 护栏改中位判据 + Xeon 被动监控台账，`f32373f`/`cc4fa09`/`e3027bd`）。
-**CHAOS/POWER/FIRE 三案数值红线全部 advisory，等批次 C/D 接线合入后由我跑定标轮（清单已备好在 fire-budget §5）。**
+**CHAOS/POWER/FIRE 三案数值红线全部 advisory（前置=批次 A 收口/C 接线/D 机制面落盘），定标 runbook 终版见 `m5-closure-perf-ledger.md` §2；裁 34 若采认 N=2，可立即执行项=test_bench_fire N 钉（不需机器）。**
 等 Claude/主树派下一单。历史：M3-P2 ①②、M4 P1-P4、M5-P6/P7 均已完成收编。）
 
 ## 进行中
