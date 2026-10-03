@@ -61,6 +61,18 @@ client ◄──hello_ack── { "v": "1.1", "server_versions": ["1.0","1.1"], 
 | 版本 | 变更 | 影响端 | 日期 |
 |---|---|---|---|
 | 1.0 | 协议基线（ws-protocol.md 全量消息 + rtoken/时间口径裁决） | client+sim | 2026-09-19 |
+| 1.1 | **M5 三个 minor 级变更合入**（逐项 commit 见右侧登记）：① `a149bb9` M5-K3 批次 B——`fast_forward` action（`SetControlMessage.action` 扩枚举）+ `session_state` 首帧（SessionAnchor 游标指针 `name`/`story_label`）+ `GET /api/anchors/current`（末梢档读路径）；② `f7f6e1b` M5-K7——`GET /api/anchors/{anchor_id}` 单档读端点（响应 `AnchorListItem`，五键白名单）+ `state_delta.plan` 字段（**顶层可选数组**）；③ `7dc8d69` M5-K10——`PlanDelta` **封闭 schema** 补齐（裁 19 CRITICAL：`state_delta.plan` 越界冻结，`additionalProperties:false`） | client+sim | 2026-10-03 |
+
+> **1.1 升版说明（裁 34-1 甲案）**：三个变更均为 **minor**（新增可选 action / 新增可选字段 / 新增端点与响应模型；**无 major 语义反转、无既有字段改型**），故只升 minor 位。
+> **零物理快照变更**：本次升版**不动** `shared/openapi.json` 与 `shared/protocol.ts` 的任何字段
+> （那三个变更在 1.0 期间就已随各自的 commit 落进快照），本次只补**登记**与**信封版本号**
+> ⇒ `gen-protocol --check` 保持 EXIT 0。
+> **版本号两落点**：真相源 = `sim/api/ws.py::_PROTOCOL_VERSION`；前端 `client/src/net/ws.ts::PROTOCOL_VERSION`
+> 是第二落点，**必须逐字相等**（历史上漂移过一次），现由 `sim/tests/test_protocol_version.py` 的
+> 跨树钉 + §7 登记同步钉（防回退、防硬写 `v` 字面量）锁死。
+> **已知缺口**：`shared/openapi.json` 的 `info.version` 仍是 FastAPI 默认 `1.0.0`——§5 说「双处记录」，
+> 但 HTTP 侧**未接同源常量**（接它要改 `main.py` 的 app `version=` 并改快照，不属本轮）⇒
+> 只断言 major 一致，待办登记在 `sim/tests/test_protocol_version.py` 文件末尾。
 
 > 2026-09-27（裁 21-A / M5-K2）：rtoken 生命周期口径**文档订正**，**协议形态与版本号均不变**（仅 `RToken.description` 描述文字修订，走 §5 生成管线），见 §8-4。
 

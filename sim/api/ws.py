@@ -57,7 +57,13 @@ from sim.world.pathfinding import Pathfinder
 
 logger = structlog.get_logger(__name__)
 
-_PROTOCOL_VERSION = "1.0"  # versioning.md §1 基线 1.0（major.minor）；与前端 net/ws.ts 同步
+#: WS 信封 `v` 的**唯一真相源**（versioning.md §1：major.minor）。
+#: 前端 `client/src/net/ws.ts` 的 `PROTOCOL_VERSION` 是第二落点，必须与本值逐字相等
+#: ——历史上两处各写各的（sim 0.1 / client 0.1）漂移过一次，现由
+#: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
+#: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
+#: PlanDelta 封闭），登记见 versioning.md §7。
+_PROTOCOL_VERSION = "1.1"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 
 # K4 提案 §2.2/§3.2：五类 C→S 消息在此与 _CHANNEL_FOR **成对**注册
