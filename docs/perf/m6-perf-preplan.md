@@ -84,6 +84,7 @@ A3 预估 ≈20–40ms 是**部件拼装的量纲**（展开 0.4 + 窗口重放 
 > **红线归位建议**：**不新建 `ANIMAL_PERCEPTION_LIMIT_MS`**——并入 `PERCEPTION_TICK_LIMIT_MS=3.6` 同一行（同 P9/P10/P11 的「不新造预算轴」裁定；扩实体数=同一条线的负载变量）。
 
 ### 3.2 生命始终（P3）——**⚠ 契约冲突，本轮最有价值的发现**
+> **⚠ M5-P14 收窄（先读）**：本节的「必红」是**条件性**判定——①DESIGN §11 L339 明写「**Agent 永不死**，只失能+时间跳跃」，②「生命始终」属 §13 可砍六项 / §18 可砍序倒数第三 ⇒ **只有「死亡＝把 id 移出 `WorldState.entities`」才必红**；若走「保留 id 加失能标志」或「LOD 降格」（实测 `runtime.py:103` 不动 `entities`）⇒ 计数不变、不撞。**施工级改法（两侧各一界 + id 集合 + 映射一致，阶段 A 零风险可先落）见 `docs/perf/m6-soak-contract-preplan.md`。**
 实测代码事实（`sim/tests/bench/test_bench_soak.py`）：
 - `:146–147`（nightly 30k `_assert_no_runaway`）与 `:163–164`（CI 冒烟 `_assert_smoke`）**都硬断言实体数不漂移**：
   `实体数漂移 {entity_count_start} → {entity_count_end}` 即红。这条断言**诞生时 M0–M5 世界里 NPC 不会死**，所以恒等成立。
