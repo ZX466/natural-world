@@ -21,7 +21,27 @@ from fastapi.testclient import TestClient
 
 from sim.api import anchors as anchors_mod
 from sim.api.ws import _ANCHOR_IDS, _ANCHOR_LABELS, reset_anchor_registry
-from sim.core.persistence.models import PlayerAnchor
+from sim.core.persistence.models import Branch, PlayerAnchor
+
+
+def _seed_main_branch(db_path: str) -> None:
+    """给 anchors.db 开「main」当前线（R-4 后 POST 读 branches.is_current 真源）。
+
+    旧夹具只建 player_anchors 表（AnchorStore create_all）——当时 POST 硬编码
+    branch_id='main' 无需分支行；R-4 施工后游标/建档走 branches.is_current
+    （fail-closed：零行 ⇒ 400），正常态测试须先有当前行。
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    from sim.core.persistence.models import Base
+
+    Base.metadata.create_all(engine)
+    with sessionmaker(engine)() as s:
+        s.add(Branch(id="main", status="active", is_current=True))
+        s.commit()
+    engine.dispose()
 
 
 @pytest.fixture(autouse=True)
@@ -38,6 +58,7 @@ def client(tmp_path, monkeypatch) -> Iterator[TestClient]:
 
     get_profile_store().__init__(f"sqlite:///{tmp_path}/settings.db")
     anchors_mod.get_anchor_store().__init__(f"sqlite:///{tmp_path}/anchors.db")
+    _seed_main_branch(f"{tmp_path}/anchors.db")
     from sim.api.main import app
 
     with TestClient(app) as c:

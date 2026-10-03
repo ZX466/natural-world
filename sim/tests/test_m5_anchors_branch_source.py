@@ -343,7 +343,7 @@ class TestCursorTripleCoherence:
         """
         spec = [(CHILD, CHILD_HEAD, True, "active"), (MAIN, MAIN_HEAD, False, "active")]
         with _seeded_app(world_db, spec) as client:
-            r = client.post("/api/anchors", json={"name": "读档后第一档"})
+            r = client.post("/api/anchors", json={"name": "溪畔回声"})
             assert r.status_code == 201, r.text
             item = _anchors(world_db)[-1]
             assert item.branch_id == CHILD, "档的 branch 指向错误世界线（R-4）"
@@ -354,7 +354,7 @@ class TestCursorTripleCoherence:
         spec = [(CHILD, CHILD_HEAD, True, "active"), (MAIN, MAIN_HEAD, False, "active")]
         with _seeded_app(world_db, spec) as client:
             before = _branch_flags(world_db)
-            client.post("/api/anchors", json={"name": "只读档"})
+            client.post("/api/anchors", json={"name": "溪畔低语"})
             assert _branch_flags(world_db) == before
 
 
@@ -492,15 +492,23 @@ class TestForkHandoverForm:
 
         判别力：这段头注是「0012 只提供载体、交接归 R-4 施工单」的唯一书面线索；
         少了它，后来者会把「当前行移交」当成 0012 的欠账去改迁移 ⇒ 本钉红。
+        **双态**：交接未落 ⇒ 头注必须仍是「交接待施工」口径（未落标记）；
+        交接已落 ⇒ 头注必须补「交接已落」注记（否则后来者仍当欠账）。
         """
         src = M0012_PY.read_text(encoding="utf-8")
         assert "本迁移不移动当前行" in src, "0012 头注丢了「本迁移不移动当前行」的声明"
         pointer = [line for line in src.splitlines() if "TestForkHandoverForm" in line]
         assert pointer, "0012 头注没有指向双态钉（TestForkHandoverForm）"
         assert "R-4" in src and "fork.py" in src, "0012 头注没写明交接归属 fork.py / R-4"
-        assert _handover_landed() is False, (
-            "fork.py 代码里已出现 is_current ⇒ 交接已落，0012 头注的「交接待施工」段应更新"
-        )
+        if _handover_landed():
+            assert "交接已落" in src, (
+                "fork.py 已实现交接，但 0012 头注没有「交接已落」注记"
+                "——后来者会把交接当成 0012 的欠账"
+            )
+        else:
+            assert "交接已落" not in src, (
+                "交接未落但 0012 头注已写「交接已落」=假记账"
+            )
 
     def test_fork_from_archive_line_keeps_true_source(self, world_db: Path) -> None:
         """从**读档线**分叉：不碰当前行（子只是又一条并存线）。

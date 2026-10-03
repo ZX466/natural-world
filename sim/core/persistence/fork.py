@@ -457,11 +457,33 @@ async def fork_from_anchor(
 
         # 锚点时刻的随机流状态以**包**为权威（A3 §1.3）：分支列是当前值、每次 fork 覆写。
         effective_rng = rng_state if kind == "head" or package is None else package.rng_state
+        # 当前行交接（R-4.4，裁 30-D；双态钉锁信号 = 本文件代码出现 is_current）：
+        # head-fork（读当前档）把「当前世界线」交给子分支——**仅当父就是当前行**；
+        # anchor-fork（历史点读档）不交接——子线是读档线（is_current=0）。
+        # 父非当前（从读档线再分叉）也不交接：子只是又一条并存线，抢当前位
+        # 会把玩家正在跑的线悄悄换掉（K9 §1.6 R-4.4/钉 test_fork_from_archive_line）。
+        # **次序铁律（A6 口径稿）**：部分唯一索引 ux_branches_current 是**语句级**校验
+        # （非提交级）——「先清父（UPDATE is_current=0）→ 再插子（is_current=1）」，
+        # 单语句 CASE 换手或先插后清都会在语句边界撞 UNIQUE（实测 3/3）。
+        # 两步同事务：中途抛异常整批回滚，无「两个 1」或「零个 1」的半交接。
+        parent_is_current = (
+            await session.execute(
+                text("SELECT is_current FROM branches WHERE id = :pid"),
+                {"pid": parent_branch_id},
+            )
+        ).scalar_one_or_none()
+        handover = bool(kind == "head" and parent_status == "active" and parent_is_current)
+        if handover:
+            await session.execute(
+                text("UPDATE branches SET is_current = 0 WHERE id = :pid AND is_current = 1"),
+                {"pid": parent_branch_id},
+            )
         await session.execute(
             text(
                 "INSERT INTO branches"
-                " (id, forked_from_branch, forked_from_seq, status, rng_state, created_at)"
-                " VALUES (:cid, :pid, :fseq, 'active', :rng, :now)"
+                " (id, forked_from_branch, forked_from_seq, status, rng_state, created_at,"
+                "  is_current)"
+                " VALUES (:cid, :pid, :fseq, 'active', :rng, :now, :is_current)"
             ),
             {
                 "cid": child_id,
@@ -469,6 +491,7 @@ async def fork_from_anchor(
                 "fseq": fork_seq,
                 "rng": effective_rng,
                 "now": time.time(),
+                "is_current": 1 if handover else 0,
             },
         )
         if effective_rng is None:

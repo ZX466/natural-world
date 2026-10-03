@@ -261,17 +261,46 @@ class AnchorStore:
             return "ok"
 
 
-def get_current_seq() -> int:
-    """当前活跃分支 events 表最大 seq（POST 游标用；无事件 → 0）。
+def _current_branch_id_or_400() -> str:
+    """当前分支真源读入口（同步侧）：零行/歧义 ⇒ 400 world-not-ready（R-4.1-S）。
 
-    直接走 anchor store 的 engine（同一 world.db；轻查询不进驱动热路径）。
+    fail-closed：查不到当前行**不猜**（禁 'main' 兜底——记档指向错误世界线
+    比拒绝更坏，R-4.1）。detail 与无活跃 loop 同码不同文（0 行=「无当前世界线」，
+    歧义不可能——部分唯一索引保证至多一个当前）。
     """
     from sqlalchemy import text
 
     store = get_anchor_store()
     with store._session_local() as s:
         row = s.execute(
-            text("SELECT COALESCE(MAX(seq), 0) FROM events WHERE branch_id = 'main'")
+            text("SELECT id FROM branches WHERE is_current = 1 LIMIT 1")
+        ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(
+            status_code=400,
+            detail="/errors/world-not-ready: 无当前世界线（branches.is_current 全 0；"
+            "世界尚未开线或读档交接未完成）",
+        ) from None
+    return str(row)
+
+
+def get_current_seq() -> int:
+    """当前活跃分支 events 表最大 seq（POST 游标用；无事件 → 0）。
+
+    分支真源 = ``store.current_branch_id()``（R-4.1，branches.is_current 列；
+    A4/K9「同改警告」执行处之一）。同步轻查询走 anchor store 的 engine
+    （同一 world.db；不进驱动热路径）。
+    """
+    from sqlalchemy import text
+
+    store = get_anchor_store()
+    with store._session_local() as s:
+        row = s.execute(
+            text(
+                "SELECT COALESCE(MAX(e.seq), 0) FROM events e"
+                " JOIN branches b ON b.id = e.branch_id"
+                " WHERE b.is_current = 1"
+            )
         ).scalar()
     return int(row or 0)
 
@@ -342,7 +371,11 @@ async def create_anchor(payload: AnchorCreate, request: Request) -> dict[str, An
     _assert_name_clean(payload.name)  # R-9：先世界就绪(400)后词表(422)，错误序对齐契约表
     tick = loop.state.tick
     seq = get_current_seq()
-    item = get_anchor_store().create_item(payload.name, branch_id="main", tick=tick, seq=seq)
+    # 分支真源 = branches.is_current（R-4.1；A4/K9「同改警告」执行处之二）。
+    # 零行（无当前行/歧义库全 0）⇒ fail-closed 400 world-not-ready（R-4.1-S 裁定：
+    # 不用 409/503，0 行与歧义同码、detail 区分）；禁 'main' 字面量兜底。
+    branch_id = _current_branch_id_or_400()
+    item = get_anchor_store().create_item(payload.name, branch_id=branch_id, tick=tick, seq=seq)
     return _item_payload(item)
 
 

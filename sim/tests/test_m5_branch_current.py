@@ -493,7 +493,12 @@ class TestForkCurrentOwnership:
     async def test_head_fork_parent_sealed_child_writable(
         self, store: SqlEventStore, session: AsyncSession
     ) -> None:
-        """head-fork 的数据面归属：父封存（拒写）+ 子 active（可写）。"""
+        """head-fork 的数据面归属：父封存（拒写）+ 子 active（可写）。
+
+        R-4 交接落地（fork.py 施工，2026-10-03）：head-fork 交接当前行给子——
+        子 `is_current=1` + 父 `abandoned`（K9 §1.6 R-4.4 目标态；原断言
+        「父 True/子 False」是交接前现状，随施工更新）。
+        """
         await store.append(PARENT, [_lod_event(tick=1)])
         await fork_from_anchor(
             store.session_factory,
@@ -509,9 +514,9 @@ class TestForkCurrentOwnership:
         await store.append(CHILD, [_lod_event(tick=2)])
         session.expire_all()
         assert await _flags(session) == [
-            (CHILD, "active", False),
-            (PARENT, "abandoned", True),
-        ], "fork 后父子归属/当前位与 R-4.4 现状不符（交接由施工单落，本钉记录数据面现状）"
+            (CHILD, "active", True),
+            (PARENT, "abandoned", False),
+        ], "fork 后父子归属/当前位与 R-4.4 交接后语义不符（子当前 + 父 abandoned）"
 
     async def test_anchor_fork_parent_keeps_current_child_coexists(
         self, store: SqlEventStore, session: AsyncSession
