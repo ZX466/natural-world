@@ -1526,6 +1526,31 @@ uv run pyright sim/
   前端 21 passed／`w/lf`／fire 稿 prettier 过／全量 **2167 passed / 120 skipped / 0 failed**。
   **注**：`ruff format --check sim/` 对 `sim/agent/impulse_gate.py`、`sim/api/ws.py` 的**既有代码段**
   （非我改动行，其他树基线）报 unformatted ⇒ **未代改**（不越权；只对我碰过的文件做 format）。
+- **✅ M5-K16 已交 `fd725e8`（origin+gitee 已推）——G2 补钉 + load_outcomes 死账本审计**（**零生产码**）。
+  ①**G2 补钉闭合**（`test_m5_anchors_branch_source.py` 13→**18 例＝16 绿 + 2 skip-locked**）：
+  **anchor-fork 落父钉**用**真** `Materialization` 最小包 + `fork(kind="anchor")` 跑真实分叉（**不用 Mock**
+  ——Mock 会把校验与交接两段都绕过去），断言父仍当前/子非当前，且**子线头部 seq 更大**（recency 诱饵）
+  时记档仍落父；**0 行形态之二「全 abandoned」** 400 + 机器码 + 零落行；**0 行形态之三「空表」HTTP 面
+  不可观测**（起 app 即被开线闸补真）⇒ 改**真源层**钉（`SqlEventStore.current_branch_id()` 抛
+  `NoCurrentBranchError`）+ 起 app 后开线闸仍置真（**起 app 后要 `_await_until` 等 driver 首帧**，
+  开线是异步的）；**G1 口径收紧**＝两钉由 `>=400` 收紧为 **400 + `/errors/world-not-ready` + detail 文案**
+  （旧注「409/503 都可」作废）。
+  ②**⚠ G4 新发现（skip-locked 2 例，施工面待修）**：`anchors.py` 的 ProblemDetail 用**中文冒号**而非
+  `errors.py:63-65` 约定的 **`机器码|人读详情`（竖线）** ⇒ `type` 变整串人读文字、`title` 退化为
+  「请求错误」（非 `_TYPE_TITLE` 的「世界未就绪」）⇒ 前端按 `type` 精确匹配落空。锁信号＝`anchors.py`
+  代码出现 `'|'`（`tokenize` 级，跳注释/docstring），改后自动解锁转绿。
+  ③**审计稿 `docs/api/m5-load-outcomes-audit.md`（零代码）**：死账本是**症状**，**病根＝
+  `app.state.drain_pending_loads` 生产无调用方**（`main.py:156` 只注册；全仓唯一调用方是
+  `test_m5_anchors_crud.py:286` 手动跑）⇒ **读档只受理不执行**（成功帧已发、分叉从未发生），
+  物化失败只落 `fork.load_failed` 日志。**推荐案 B 最小形**：给 drain 生产调用点（flush 后 await
+  窗口）+ 失败落**既有** `error` 帧（`load_failed` **不扩 11 项词表**、detail 戏内口语零工程词、
+  `reason` 进日志固定集码）；**不推荐先删**（A9 死列判例治的是 DB 列；此处缺的是**调用链**，
+  顺序不可颠倒：先接线再删）。另列与 Claude 写锁根治的 5 条接缝（调用点位置／单帧执行上限／
+  **诚实态待主树裁**（受理乐观、失败帧收不回，我倾向 (c) 契约零改动）／异常不外溢／日志 reason）
+  与 3 条可先立的前置钉（其中「不手动跑 drain 也该分支数 +1」**今天必红**——那就是病根，别 skip-lock）。
+  **门禁**：A6 16 passed/2 skipped／全量 **2216 passed / 122 skipped / 0 failed**／ruff 全过／
+  pyright 0／`gen-protocol --check` EXIT 0／新稿 `w/lf`+prettier 过。
+  **注**：`ruff format --check` 对 A6 文件 1 处 unformatted，**HEAD 版本已红**（opencode 段）⇒ 未代改。
 
 **② 接口域现状（一句话）**
 协议面＝`shared/openapi.json`（唯一真相源）→ `npm run gen-protocol` → `shared/protocol.ts`（**禁手写**）→
@@ -1534,6 +1559,16 @@ uv run pyright sim/
 批次 C 权力面按裁 27-C/D-10「权力完全不可见」＝**协议零新增**。CRITICAL（G-1 plan 越界、R-1 读档挂死）与全部 HIGH 已清零。
 
 **③ 下一步**
+- ~~**在途：M5-K9 ~ K16**~~ **✅ 均已交（见上）**。**等派项**：
+  ①**G4 那一行**（`anchors.py` 的 ProblemDetail 分隔符改 `机器码|人读详情`）——需主树授权或
+  由主树改；改后我那 2 例 skip-locked 自动解锁转绿；
+  ②**审计稿 §4-3 诚实态决策**（读档受理乐观、失败帧收不回：改受理文案／延后成功帧／接受现状）
+  ——需主树点头；
+  ③**案 B 接线施工**（driver 侧给 `_drain_loads` 生产调用点 + 失败落既有 `error` 帧）——Claude
+  域；我出钉（审计稿 §5 的三条前置钉，其中「不手动跑 drain 也该分支数 +1」今天必红＝病根本体）；
+  ④G2 已闭合（anchor-fork 落父 + 0 行两形态 + G1 口径）；M6-P0 物化诊断面接线后我复核出站形状。
+  **已闭合**：R-4 复验、fire 守卫钉、protocol 1.1、K12 稿订正、F-1 补扫、G2 补钉。
+  **另可主动做（不接未派单）**：协议面审计与对表、live↔快照对账、契约草案、钉子补齐、复验评审。
 - ~~**在途：M5-K9 ~ K15**~~ **✅ 均已交（见上）**。收官轮**等派项**：
   ①**批次 E 出站真缺口施工单**（`load_outcomes` 死账本 ⇒ 物化失败无出站通道；沿用 `load_failed`
   ＋戏内文案，**不新增 code**；「先受理先发成功帧」的诚实态问题需主树裁）；
