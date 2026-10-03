@@ -273,8 +273,21 @@ def _await_until(predicate: Callable[[], bool], timeout: float = 10.0) -> bool:
     return predicate()
 
 
-def _fork_now(db: Path, *, parent: str, fork_seq: int, fork_tick: int, child: str) -> None:
-    """在测试进程里跑一次 fork（独立事件循环，不依赖 app 的 loop）。"""
+def _fork_now(
+    db: Path,
+    *,
+    parent: str,
+    fork_seq: int,
+    fork_tick: int,
+    child: str,
+    kind: str = "head",
+    package: Any = None,
+) -> None:
+    """在测试进程里跑一次 fork（独立事件循环，不依赖 app 的 loop）。
+
+    `kind`/`package` 是 M5-K16 补的 anchor-fork 入口（历史点读档必须带物化包，
+    `fork.py` 逐项校验 `branch_id/seq/tick`）；默认 `head` 保持原行为。
+    """
 
     async def _run() -> None:
         engine = create_async_engine(f"sqlite+aiosqlite:///{db}")
@@ -291,11 +304,63 @@ def _fork_now(db: Path, *, parent: str, fork_seq: int, fork_tick: int, child: st
                 fork_tick=fork_tick,
                 new_branch_id=child,
                 preflush=_preflush,
+                kind=kind,  # type: ignore[arg-type]
+                package=package,
             )
         finally:
             await engine.dispose()
 
     asyncio.run(_run())
+
+
+def _anchor_package(branch_id: str, seq: int, tick: int) -> Any:
+    """最小物化包（只为过 `fork.py` 的逐项校验；语料/火场留空 ⇒ 子线无附加写入）。
+
+    用真 `Materialization`（不是 Mock）——被测语义是「anchor-fork 走真实 fork 路径」，
+    Mock 会把校验与交接这两段都绕过去。
+    """
+    from sim.core.persistence.anchor_package import Materialization
+
+    return Materialization(
+        anchor_id=f"anc-{branch_id}-{seq}",
+        branch_id=branch_id,
+        tick=tick,
+        seq=seq,
+        snapshot_seq=None,
+        snapshot_tick=None,
+        replay_from_seq=seq,
+        payload={},
+        window=(),
+        fires={},
+        world=None,
+        corpus={},
+        rng_state="",
+        agent_override={},
+        state_hash=None,
+        steps=(),
+    )
+
+
+def _append_events(db: Path, branch_id: str, *, frm: int, to: int) -> None:
+    """给某条线追加事件（造「头部 seq 更大」的诱饵线用）。"""
+    engine = create_engine(f"sqlite:///{db}")
+    try:
+        with Session(engine) as session:
+            for seq in range(frm, to + 1):
+                session.add(
+                    Event(
+                        branch_id=branch_id,
+                        seq=seq,
+                        tick=seq,
+                        event_type="npc.lod_change",
+                        actor_id="",
+                        payload="{}",
+                        witnesses="[]",
+                    )
+                )
+            session.commit()
+    finally:
+        engine.dispose()
 
 
 # ---------------------------------------------------------------------------
@@ -366,24 +431,170 @@ class TestCursorTripleCoherence:
 @requires_r4_construction
 class TestFailClosed:
     def test_post_without_current_row_fails_closed(self, world_db: Path) -> None:
-        """无当前行 ⇒ 拒绝（≥400），**且不落任何档行**——绝不回退 'main'。
+        """无当前行 ⇒ **400 + `/errors/world-not-ready`**，且**不落任何档行**。
 
-        状态码不断言具体值（kilo 契约里 409/503 都可），只断言「拒绝 + 零落行」。
+        状态码口径已定（kilo K10 R-4.1-S，M5-K14 G1 复验确认施工照此实现）：0 行与歧义
+        **一律** 400 复用既有机器码 ⇒ 零快照变更。**旧注「409/503 都可」作废**
+        （那是没有裁定时写的，现在是契约）。
         """
         with _seeded_app(world_db, [(MAIN, MAIN_HEAD, False, "active")]) as client:
             r = client.post("/api/anchors", json={"name": "无当前线"})
-            assert r.status_code >= 400, "无当前世界线却记档成功 = 猜了分支（R-4.1）"
+            assert r.status_code == 400, f"无当前世界线却不是 400：{r.status_code}"
+            assert r.json()["type"].startswith("/errors/world-not-ready"), r.text
+            assert "无当前世界线" in r.json()["detail"], r.text
             assert _anchors(world_db) == [], "被拒的记档仍落了行"
 
     def test_post_with_ambiguous_active_rows_fails_closed(self, world_db: Path) -> None:
         """两条 active 但无当前行（0012 回填后的歧义库）⇒ 拒绝，**不 recency 兜底**。
 
         recency 兜底会把「玩家在跑的线」换成「最近被分叉出去的线」，且**静默错**。
+        状态码同为 400（同机器码，detail 区分「歧义」）。
         """
         with _seeded_app(world_db, [("a1", 2, False, "active"), ("a2", 5, False, "active")]) as c:
             r = c.post("/api/anchors", json={"name": "歧义库"})
-            assert r.status_code >= 400, "世界线状态歧义却记档成功"
+            assert r.status_code == 400, f"世界线状态歧义却不是 400：{r.status_code}"
+            assert r.json()["type"].startswith("/errors/world-not-ready"), r.text
             assert _anchors(world_db) == []
+
+    def test_all_abandoned_rows_reject_with_world_not_ready(self, world_db: Path) -> None:
+        """**0 行形态之二**：全 `abandoned`（读档线都被封存）⇒ 400 + 同机器码 + 零落行。
+
+        与上一条「有 active 但无当前行」的差别：这里连 active 行都没有——若有人把真源
+        改成「找任意 active 行」或「回退父线」，这一形态就会记档成功。
+        """
+        spec = [(MAIN, MAIN_HEAD, False, "abandoned"), ("arch-1", 5, False, "abandoned")]
+        with _seeded_app(world_db, spec) as client:
+            r = client.post("/api/anchors", json={"name": "全封存"})
+            assert r.status_code == 400, r.text
+            assert r.json()["type"].startswith("/errors/world-not-ready"), r.text
+            assert _anchors(world_db) == []
+
+    def test_empty_branch_table_shape_is_not_http_observable(self, world_db: Path) -> None:
+        """**0 行形态之三（空表）在 HTTP 面不可观测**——起 app 即被开线闸补上当前行。
+
+        所以它只能在**真源层**钉：空表 ⇒ `SqlEventStore.current_branch_id()` 抛
+        `NoCurrentBranchError`（fail-closed，不回退 `'main'`）。若将来开线闸改成
+        「无当前行也能起 app 且不置真」，本钉的红会提示你回来重判 HTTP 面口径。
+        """
+        import asyncio as _asyncio
+
+        from sim.core.persistence.store import NoCurrentBranchError, SqlEventStore
+
+        engine = create_engine(f"sqlite:///{world_db}")
+        Base.metadata.create_all(engine)
+        engine.dispose()
+
+        async def _probe() -> str:
+            aengine = create_async_engine(f"sqlite+aiosqlite:///{world_db}")
+            try:
+                store = SqlEventStore(async_sessionmaker(aengine, class_=AsyncSession))
+                return await store.current_branch_id()
+            finally:
+                await aengine.dispose()
+
+        with pytest.raises(NoCurrentBranchError):
+            _asyncio.run(_probe())
+
+        with _app() as client:
+            # 开线是 driver 首帧的**异步**动作 ⇒ 必须等（照 TestGateAndTrueSource 的写法）
+            assert _await_until(lambda: any(_branch_flags(world_db).values())), (
+                "起 app 后 driver 开线并置真未发生：空表形态从 HTTP 面也不可见了"
+            )
+            assert client.get("/api/anchors").status_code == 200
+
+
+def _problem_code_convention_landed() -> bool:
+    """K16 新增：**ProblemDetail 机器码分段约定**是否已按 `errors.py` 的写法落地。
+
+    `errors.py:63-65` 的约定是 `"/errors/<slug>|<人读详情>"`（**竖线**分段）：命中则
+    `type` 取机器码、`detail` 取人读段、`title` 命中 `_TYPE_TITLE`。
+
+    ⚠ **K16 发现的违约（G4，施工面）**：`anchors.py::_current_branch_id_or_400` 把 detail
+    写成 `"/errors/world-not-ready: 无当前世界线（…）"`——用**中文冒号 + 括号**而不是 `|` ⇒
+    `type` 变成整串人读文字、`title` 退化为通用「请求错误」。前端按 `type` 精确匹配会落空。
+
+    本钉 skip-locked：锁信号 = `anchors.py` 的**代码**里出现 `'|'` 分段符。施工改成约定写法
+    （或 kilo 授权改那一行）后自动解锁并转绿——届时请把上面那段 ⚠ 说明改成「已闭合」。
+    """
+    src = ANCHORS_PY.read_text(encoding="utf-8")
+    skip = _docstring_lines(src)
+    for tok in tokenize.generate_tokens(io.StringIO(src).readline):
+        if tok.type == tokenize.COMMENT:
+            skip.add(tok.start[0])
+        if tok.type == tokenize.STRING and tok.start[0] not in skip and "|" in tok.string:
+            return True
+    return False
+
+
+requires_problem_code_convention = pytest.mark.skipif(
+    not _problem_code_convention_landed(),
+    reason=(
+        "anchors.py 的 ProblemDetail 尚未按 errors.py 的 `机器码|人读详情` 约定分段"
+        "（K16 G4：type 混入人读文字、title 退化为「请求错误」）——施工改约定写法后自动解锁"
+    ),
+)
+
+
+@requires_problem_code_convention
+class TestProblemCodeShape:
+    """G4：`type` 必须是**干净机器码**、`title` 命中 `_TYPE_TITLE`（skip-locked）。"""
+
+    def test_current_branch_400_type_is_clean_machine_code(self, world_db: Path) -> None:
+        with _seeded_app(world_db, [(MAIN, MAIN_HEAD, False, "active")]) as client:
+            body = client.post("/api/anchors", json={"name": "无当前线"}).json()
+            assert body["type"] == "/errors/world-not-ready", body
+            assert body["title"] == "世界未就绪", body
+            assert body["detail"] != "/errors/world-not-ready", f"detail 与 type 未分段：{body}"
+
+    def test_all_abandoned_400_type_is_clean_machine_code(self, world_db: Path) -> None:
+        spec = [(MAIN, MAIN_HEAD, False, "abandoned")]
+        with _seeded_app(world_db, spec) as client:
+            body = client.post("/api/anchors", json={"name": "全封存"}).json()
+            assert body["type"] == "/errors/world-not-ready", body
+            assert body["title"] == "世界未就绪", body
+
+
+# ---------------------------------------------------------------------------
+# 3b. anchor-fork（历史点分叉）后的记档归属（R-4.4 核心分支，M5-K16 补钉）
+# ---------------------------------------------------------------------------
+
+
+class TestAnchorForkLineOwnership:
+    def test_post_after_anchor_fork_lands_on_parent_line(self, world_db: Path) -> None:
+        """**anchor-fork 后记档必须落父分支**（父保持当前，子线非当前）。
+
+        R-4.4 的核心分支：**历史点读档不把「当前世界线」交给子线**——父线才是玩家
+        正在跑的那条。一旦有人把交接逻辑从「仅父=当前行的 head-fork」扩到 anchor-fork，
+        玩家的新档就会记到一条**只读的历史线**上（读档线本不该继续长）。
+
+        判别力设计：子线头部 seq **故意更大**（`CHILD_HEAD=7` > 父 `3`）——若实现改成
+        「取最新/recency」或「落到子线」，本钉立刻红。
+        """
+        _seed_world(world_db, [(MAIN, MAIN_HEAD, True, "active")])
+        _fork_now(
+            world_db,
+            parent=MAIN,
+            fork_seq=MAIN_HEAD,
+            fork_tick=MAIN_HEAD,
+            child=CHILD,
+            kind="anchor",
+            package=_anchor_package(MAIN, MAIN_HEAD, MAIN_HEAD),
+        )
+        flags = _branch_flags(world_db)
+        assert flags.get(MAIN) is True, f"anchor-fork 后父不再是当前行：{flags}"
+        assert flags.get(CHILD) is False, f"anchor-fork 把当前行交给了子线：{flags}"
+        # 诱饵：子线头部 seq 更大 ⇒ 「取最新」的实现会跟着红
+        _append_events(world_db, CHILD, frm=CHILD_HEAD + 1, to=CHILD_HEAD + 4)
+        assert _head_seq(world_db, CHILD) > _head_seq(world_db, MAIN)
+
+        with _app() as client:
+            r = client.post("/api/anchors", json={"name": "第一天"})
+            assert r.status_code == 201, r.text
+            item = _anchors(world_db)[-1]
+            assert item.branch_id == MAIN, (
+                f"记档落在读档子线上（branch={item.branch_id}）——历史点读档后当前线仍是父"
+            )
+            assert item.seq != CHILD_HEAD + 4, "seq 取自子线头部 ⇒ 三元组跨线自相矛盾"
 
 
 # ---------------------------------------------------------------------------
