@@ -1,27 +1,36 @@
-<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-02 A8 已交）===== -->
+<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-03 A9 已交）===== -->
 <!-- 0. 工作树 E:\zxdevelop\.orca\worktrees\project7\opencode，分支 ZX466/opencode；
-      HEAD f17116a（A8：批次 D 火灾数据面预研，零代码，已双推 origin+gitee）；
-      基线 main 45fdd68（A7 已收编：0013 + 45 钉） -->
+      HEAD 395887a（M5-A9：批次 D 火灾数据面施工，已双推 origin+gitee）；
+      基线 main 76dd14a（A7/A8 已收编），迁移链 0014 -->
 <!-- 1. 已交全景：M5-D1 预研 / D2 / D3-a 0008 / D3-b fork 事务+克隆 / D3-c R2+RNG /
       A-DATA 0009 / A2 0010 / A3 物化设计 / A4 0011 + R-4 契约 / A5 0012 is_current +
-      开线闸 / A6 R-4 施工钉 + fork 交接口径 / A7 批次 C 权力数据面（0013 npc_power + 45 钉）/
-      **A8 批次 D 火灾数据面预研（零代码）** -->
-<!-- 2. 在途 = 无（等收编）。**我域下一单 = A8 预研的施工单**（预研案即施工案，待裁）：
-      2 个事件 kind（`fire.ignited`/`fire.extinguished`）+ 2 个枚举成员
-      （`StructureCollapseCause="fire"`、`MaterialMoveReason="burned"`）+ 钉子；
-      **零新表零列零迁移**（火场不入库 ⇒ A3「不可重建」不增第 5 张）。 -->
+      开线闸 / A6 R-4 施工钉 + fork 交接口径 / A7 批次 C 权力数据面
+      （0013 npc_power + 45 钉）/ A8 火灾数据面预研（零代码）/
+      **A9 批次 D 火灾数据面施工（0014 fires + FireStore + 2 新 kind + 43 钉）** -->
+<!-- 2. 在途 = 无（等收编）。**我域下一单 = 批次 E 物化单**（A3 四问）：
+      待收口子 = `npc_power` 进 anchor 包（第 4 张不可重建）；**`fires` 不进包**（有事件源
+      + fold 器 → 属可重放族）。另：D-14 事件预算 N 值等 pi（M5-P11）。 -->
 <!-- 3. 恢复序：git fetch+merge origin/main → 读 talking.txt（在途单卡）→ 读本卡 →
       需要细节再翻 ③ opencode 节各轮快照 / git log --oneline -- .orca/memory.md -->
-<!-- 4. 门禁（全绿基线 2082 passed / 126 skipped）：`uv run pytest -m "not bench" -q`；
+<!-- 4. 门禁（全绿基线 2056 passed / 126 skipped）：`uv run pytest -m "not bench" -q`；
       `uv run ruff check .`；`uv run pyright sim/`；**gen-protocol --check EXIT 0**（本树
       client/node_modules 缺失 ⇒ junction 挂主树那份，已 gitignore）；
-      迁移往返 scratch DB + **全 revision id**；autogenerate 零漂移（`upgrade()` 只剩 pass） -->
-<!-- 5. 域内纪律（血泪）：① stamp 只改版本行不执行迁移；② 迁移往返钉钉**具体 revision id**
-      不钉 head；③ 回滚场景证明不了原子性，必须正向读回；④ 收紧写路径前先跑全量找爆炸半径；
-      ⑤ PowerShell 写文件用 `write` 工具（`Set-Content -Encoding UTF8` 塞 BOM、反引号是转义符）；
-      `edit` 工具会吃掉被替换块首行缩进；⑥ skip-locked 钉必须实测开锁；⑦ 改 `async def`
-      辅助函数后逐个调用点补 `await`；⑧ 写完查 U+FFFD 乱码替换符。 -->
+      迁移往返 scratch DB + **全 revision id**；autogenerate 零漂移 -->
+<!-- 5. 域内纪律（血泪）：① stamp 只改版本行不执行迁移；② 往返钉钉**具体 revision id**
+      不钉 head；③ 回滚场景证明不了原子性，必须正向读回；④ 收紧写路径前先跑全量找
+      爆炸半径；⑤ PowerShell 写文件用 `write` 工具（`Set-Content -Encoding UTF8` 塞 BOM、
+      反引号是转义符）；`edit` 工具吃掉被替换块首行缩进；⑥ skip-locked 钉必须
+      实测开锁；⑦ 改 `async def` 辅助函数后**逐个调用点补 `await`**（漏了会报
+      「coroutine 相等」的假象）；⑧ 写完查 U+FFFD 乱码替换符。 -->
 
+（A8/A9 两轮新经验，本轮零正确化）：
+- **推荐案与施工单可以有偏差**：裁 33 要求落 `fires` 表，而 A8 预研写的是「零新表」——
+  对账后成为「表只存生命周期、**火势中间态仍不入库**」，A8 §1.2 的核心结论不变
+  （物化包不为火扩格式）。同理，对「死列」给出理由并在回执里报备。
+- **测试里断言投影要走世界循环路径**：`store.append(...)` 不带投影（投影在
+  `NpcStore.flush_tick` 里给）⇒ 材料守恒针一开始拿到空投影，误以为是守恒失败。
+- **事件与投影的接缝面要双写路径同源**：机制面产出事件后，必须能在**任一写路径**下投影
+  （FireStore 与 NpcStore 共用同一 `project_fire`），否则两条路径会长出两套不一致的行为。
 【A8 完成记｜批次 D 火灾数据面预研（2026-10-02 已交 f17116a，零代码）】
 - `docs/data/m5-fire-data-preplan.md` 五问 + 6 待裁点推荐。五条可复用的判定：
   ① **火灾损伤 = 可重放**（matter_state/structures/material_balances 三张都在 A3「可重放 5 张」
