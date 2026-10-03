@@ -13,6 +13,35 @@
 - F-6 注册侧 fail-closed（codex S2b §4.2）：name 过现行 `scan()`，命中 → 422
   `/errors/anchor-name-rejected`；不扩词表，只消费既有表。
 - 404 走 ProblemDetail（`sim/api/errors.py` 全局换形，detail=机器码）。
+
+**M5-A11（批次 E 收官件，2026-10-03）**：
+- `create_item` **同事务写包**（A10 移交项）：玩家档一落库就把锚点时刻的世界态物化一次
+  （快照指针 + 3 张无事件源表行值 + override + state_hash；RNG 见下）。**为什么必须同事务**：
+  跨引擎就跨事务，档与包会分裂成「有档没包」的半态——而半包比没有包更坏（诊断说不可回退，
+  玩家却以为能回退）。语料行值/快照引用用**同步面**（本模块是同步 Session），SQL 与
+  `anchor_package.py` 的 async 面**同一份**（跨面一致性有钉）。
+- **RNG 捕获是已知缺口**：`sim.core.rng_state.capture_rng_state` 需要 `RngRegistry` + 抽签
+  cache + 流清单，而这三样**今天没有挂在 `app.state` 上**（app 只有 loop/store/tile_map）。
+  ⇒ 存档拿不到 RNG 状态时 `rng_state=NULL`，该档在诊断面是 `rng_unavailable`
+  （fail-closed，**禁止**用 `Branch.seed` 派生兜底）。待混沌流侧暴露 registry 后，
+  `create_item(rng_state=...)` 一个参数即可接上，零改动数据面。
+- `GET /api/anchors/{anchor_id}/materialization` 只读诊断路由（返回 `ready` + 原因码）：
+  让产品显示「该档不可回退」而不是让人撞 500。**不可物化不是 HTTP 错误**（200 + ready=false）。
+  ⚠️ 该路由**未进** `shared/openapi.json`（mock 是 gen-protocol 的唯一源，shared/ 非我域）
+  ⇒ 前端类型面要等 kilo 登记（届时走 versioning §7 minor 流程）。
+
+**⚠️ 上游阻塞缺陷（非本单引入，M5-A11 实测并回执）**：driver 跑起来时，**连发几次 POST
+就会把 world.db 写锁长期占住** —— 同步写面提交时 `sqlite3.OperationalError: database is
+locked`，且锁**持续存在**（第三条连接 `BEGIN IMMEDIATE` 同样拿不到）。复现：起 lifespan
+（driver 在跑）后连发 5 次 POST，`201 / EXC / 201 / 201 / EXC`；把 `app.state.driver` 取消
+后再连发 ⇒ 全 201、锁自由。**同样的抖动在 R-4 基线（不含包写）上就能复现**
+（`201 / EXC / 201 / 201 / EXC`）⇒ 与物化包无关，是 async 驱动侧有写事务没有收口。
+本单对此的处置只有两条，都不是「绕过」：
+① 写事务 **writer-first**（语料/快照引用在只读会话先取）——这是 SQLite 唯一能吃到 busy
+   重试的形态，也顺带缩短持锁窗口；
+② 钉子层面对 driver 确定性（`test_m5_materialization_api.py` 的 `client` 夹具取消
+   `app.state.driver`）——**不把上游缺陷藏进重试里**（有界重试治不了持久锁，只会拖长失败）。
+根治在 `run_world_driver` / lifespan 侧（谁开的事务谁收口），归 Claude/kilo 面。
 """
 
 from __future__ import annotations
@@ -29,7 +58,15 @@ from sqlalchemy import create_engine, func
 from sqlalchemy.orm import Session, sessionmaker
 
 from sim.api.ws import register_anchor_id, unregister_anchor_id
+from sim.core.persistence.anchor_package import (
+    collect_corpus_rows_sync,
+    diagnose_anchor_materialization,
+    encode_corpus_blob,
+    latest_snapshot_ref_sync,
+    write_anchor_package_sync,
+)
 from sim.core.persistence.models import PlayerAnchor
+from sim.core.persistence.store import SqlEventStore
 from sim.llm.prompts.banned_words import scan
 
 router = APIRouter(prefix="/api/anchors", tags=["anchors"])
@@ -75,6 +112,23 @@ class AnchorRename(BaseModel):
     name: str = Field(min_length=1, max_length=64)
 
 
+class AnchorMaterializationStatus(BaseModel):
+    """§2 只读诊断面响应（批次 E）：该档**能不能回退**，以及不能的原因码。
+
+    形状固定 `{anchor_id, ready, reason}`：
+    - `ready=false` 时 `reason` ∈ `anchor_package.MATERIALIZATION_REASONS`（固定集）；
+    - `reason=None` ⇔ `ready=true`（**互斥**，不出现「ready 但带原因」的骗人组合）；
+    - **不含任何世界状态内容**（不返 seq/tick/branch_id/包内行值）——与本模块其余响应
+      同款出戏边界。
+    """
+
+    model_config = ConfigDict(extra="forbid", json_schema_extra={"description": ""})
+
+    anchor_id: str
+    ready: bool
+    reason: str | None = None
+
+
 #: 写路径进程锁（§6.1 A2：同步临界区互斥；单 worker 部署匹配——写方法是同步 SQL，
 #: 在事件循环线程内执行，threading.Lock 足够且避免 asyncio.Lock 的同步/异步混用问题）。
 _anchor_write_lock = threading.Lock()
@@ -115,9 +169,9 @@ class AnchorStore:
     def _rows(self) -> list[PlayerAnchor]:
         with self._session_local() as s:
             rows: list[PlayerAnchor] = list(
-                s.query(PlayerAnchor).order_by(
-                    PlayerAnchor.updated_at.desc(), PlayerAnchor.id.desc()
-                ).all()
+                s.query(PlayerAnchor)
+                .order_by(PlayerAnchor.updated_at.desc(), PlayerAnchor.id.desc())
+                .all()
             )
             s.expunge_all()
             return rows
@@ -188,17 +242,42 @@ class AnchorStore:
                 protected=bool(row.protected),
             )
 
-
     # ---- 写路径（A2 进程锁串行；每方法一个 session = A3 同事务）----
 
     def create_item(
-        self, name: str, *, branch_id: str, tick: int, seq: int
+        self,
+        name: str,
+        *,
+        branch_id: str,
+        tick: int,
+        seq: int,
+        rng_state: str | None = None,
+        state_hash: str | None = None,
     ) -> AnchorListItem:
-        """§1.2 POST：同事务写新档 protected=true + 清其余（§6.1 A3）。
+        """§1.2 POST：同事务写新档 protected=true + 清其余（§6.1 A3）**+ 写物化包**。
 
         updated_at 只写一次（INSERT default；此处显式赋值一次，后续永不改）。
         游标 (branch_id, tick, seq) 由路由层从世界态取（客户端不参与，D-16）。
+
+        物化包（M5-A11）：**同一个 session、同一个 commit** 里写（档 + 包 + 清位）⇒ 不存在
+        「有档没包」的半态。包内容 = 快照指针（引用，不复制 blob）+ 3 张无事件源表行值
+        + `agent_override` 副本 + `state_hash` 对账基线。
+        - `rng_state` 缺省 `None` ⇒ 该档诊断为 `rng_unavailable`（fail-closed；**禁止**
+          seed 派生兜底，见模块注的已知缺口）。
+        - `state_hash` 缺省 `None` ⇒ 可空列，R-2 对账基线待接入。
+
+        ⚠️ **writer-first 纪律**：语料/快照引用在**只读会话**里先取（见下方注释），写事务
+        随后才开嗓——SQLite 的「读后升级为写」不重试，与 driver 的 in-flight flush 相撞就是
+        硬 `database is locked`（实测连发两次 POST 必现）。
         """
+        # 语料行值 / 快照引用**先在只读会话里取**（下面写事务因此以写语句开嗓）。
+        # 纪律：SQLite 下「先读后写」的事务在升级为写者时**不重试**（busy handler 只对
+        # 开局就写的事务生效）⇒ 撞上 driver 的 in-flight flush 就直接 SQLITE_BUSY。写面
+        # 必须是 writer-first，这也是本方法原有形态（autoflush 先落 INSERT）。
+        with self._session_local() as read_s:
+            corpus_blob = encode_corpus_blob(collect_corpus_rows_sync(read_s, branch_id))
+            snapshot_ref = latest_snapshot_ref_sync(read_s, branch_id, seq)
+
         with _anchor_write_lock, self._session_local() as s:
             anchor_id = uuid.uuid4().hex[:12]
             now = time.time()
@@ -216,6 +295,19 @@ class AnchorStore:
             # 同事务清旧末梢（A3：两写一事务，SQLite 写串行兜底）
             s.query(PlayerAnchor).filter(PlayerAnchor.id != anchor_id).update(
                 {PlayerAnchor.protected: False}
+            )
+            # 同事务写物化包（A11）：语料行值/快照引用已在只读会话取好（writer-first，见上）。
+            write_anchor_package_sync(
+                s,
+                anchor_id=anchor_id,
+                branch_id=branch_id,
+                tick=tick,
+                seq=seq,
+                rng_state=rng_state,
+                agent_override=row.agent_override,
+                corpus_blob=corpus_blob,
+                state_hash=state_hash,
+                snapshot=snapshot_ref,
             )
             s.commit()
             return AnchorListItem(
@@ -375,8 +467,44 @@ async def create_anchor(payload: AnchorCreate, request: Request) -> dict[str, An
     # 零行（无当前行/歧义库全 0）⇒ fail-closed 400 world-not-ready（R-4.1-S 裁定：
     # 不用 409/503，0 行与歧义同码、detail 区分）；禁 'main' 字面量兜底。
     branch_id = _current_branch_id_or_400()
-    item = get_anchor_store().create_item(payload.name, branch_id=branch_id, tick=tick, seq=seq)
+    # 物化包的两个可空成分（M5-A11）：state_hash 取世界态现值（R-2 对账基线）；
+    # rng_state 缺省 None —— app.state 上还没有 registry+抽签 cache（模块注的已知缺口），
+    # 该档因此在诊断面是 `rng_unavailable`，**不猜、不用 seed 派生**。
+    item = get_anchor_store().create_item(
+        payload.name,
+        branch_id=branch_id,
+        tick=tick,
+        seq=seq,
+        rng_state=_rng_state_or_none(request),
+        state_hash=_world_state_hash(loop),
+    )
     return _item_payload(item)
+
+
+def _rng_state_or_none(request: Request) -> str | None:
+    """锚点时刻的 RNG 状态包；混沌流侧未暴露 registry ⇒ ``None``（fail-closed）。
+
+    上层把 `app.state.rng_capture` 挂成「零参可调用、返回 capture_rng_state 的 JSON 串」
+    即可接上（混沌流域），本模块零改动。
+    """
+    capture = getattr(request.app.state, "rng_capture", None)
+    if capture is None:
+        return None
+    blob = capture()
+    return blob if isinstance(blob, str) and blob.strip() else None
+
+
+def _world_state_hash(loop: Any) -> str | None:
+    """`WorldState.state_hash`（R-2 对账基线）；拿不到就 ``None``（可空列）。"""
+    state = getattr(loop, "state", None)
+    hasher = getattr(state, "state_hash", None)
+    if hasher is None:
+        return None
+    try:
+        value = hasher() if callable(hasher) else hasher
+    except Exception:  # 对账基线不值得让存档失败
+        return None
+    return value if isinstance(value, str) else None
 
 
 @router.patch("/{anchor_id}", response_model=AnchorListItem)
@@ -409,3 +537,27 @@ async def get_anchor(anchor_id: str) -> dict[str, Any]:
     if item is None:
         raise HTTPException(status_code=404, detail="/errors/anchor-not-found") from None
     return _item_payload(item)
+
+
+@router.get("/{anchor_id}/materialization", response_model=AnchorMaterializationStatus)
+async def anchor_materialization(anchor_id: str, request: Request) -> dict[str, Any]:
+    """M5-A11 只读诊断面：该档能不能回退（A3 §2「产品显示不可回退，而不是让人撞 500」）。
+
+    - **不可物化不是 HTTP 错误**：一律 200 + `ready=false` + 原因码（`no_package` /
+      `rng_unavailable` / `snapshot_missing` / `event_gap` / `corpus_mismatch`）；
+    - anchor 不存在才 404（`/errors/anchor-not-found`，与其余读路由同码）；
+    - 无世界（app.state.store 缺位 ⇒ 没有事件库）⇒ 400 `world-not-ready`（fail-closed，
+      **不新建引擎去猜**哪个库才是真的）；
+    - 路径两段 vs `/{anchor_id}` 一段 ⇒ 无遮蔽顺序风险（仍按就近声明放最后）。
+    """
+    if get_anchor_store().get_item(anchor_id) is None:
+        raise HTTPException(status_code=404, detail="/errors/anchor-not-found") from None
+    store = getattr(request.app.state, "store", None)
+    if not isinstance(store, SqlEventStore):
+        raise HTTPException(status_code=400, detail="/errors/world-not-ready") from None
+    diagnosis = await diagnose_anchor_materialization(store, anchor_id)
+    return {
+        "anchor_id": anchor_id,
+        "ready": bool(diagnosis.ready),
+        "reason": diagnosis.reason,
+    }

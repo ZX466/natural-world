@@ -989,3 +989,61 @@ RNG）。**返回部分包 = 禁止**。语料「行集与包不一致」这条�
 **整批拒绝**（宁可不读档，不留治理断链）；`superseded_by` 重映射不到的行落 NULL（绝不悬空）。
 当前行的移交仍归 **R-4 施工单**（0012 头注 + `TestForkHandoverForm` 双态钉，锁信号 =
 `fork.py` 代码里出现 `is_current`）。
+
+### 23.7 出站编排与 HTTP 面（M5-A11，批次 E 收官件）
+
+数据面（A10，见 §23.2-§23.6）之上补三件：**编排链**、**同步写面**、**诊断路由**。
+
+#### 23.7.1 编排链（`fork_orchestration.py`）
+
+```text
+locate_anchor → diagnose（只读，拿原因码） → materialize（次序铁律） → fork(kind="anchor")
+                                                                          → register_child
+```
+
+- **诊断先于分叉**：不可物化的档（`no_package` / `rng_unavailable` / `snapshot_missing` /
+  `event_gap` / `corpus_mismatch`）在分叉**之前**被拒 ⇒ 不产生子分支行、父分支不动
+  （抛 `AnchorLoadUnavailable(reason=…)`，是 `RuntimeError` ⇒ 上层 `main.py::_drain_loads`
+  既有的 `except Exception → load_failed` 降级体例自然接管，**不新增消息类型**）。
+- **`hooks=None` = 现行 head 分叉**（读当前档，行为逐字不变）；给了 `hooks` 才走物化链
+  （显式优于隐式：悄悄换语义比报错更坏）。
+- **hooks 注入缝**：`set_materialization_hooks()` / `get_materialization_hooks()`（进程级，
+  与 `ws.py::set_anchor_load_hook` 同款注册缝）。**缺省是 fail-closed 桩**——四步都抛
+  `hooks_unavailable`，**不假装能展开世界态**（仓内今天没有「快照 dict → WorldState」的反向
+  函数，`snapshot_payload` 只写不读）。四步语义归属与「待注入清单」见该模块 docstring。
+
+#### 23.7.2 同步写面（`anchor_package.py`）
+
+玩家档落库是**同步事务**（`threading.Lock` + 同步 Session），包必须与之**同事务** ⇒ 写面
+提供 `write_anchor_package_sync()` / `collect_corpus_rows_sync()` / `latest_snapshot_ref_sync()`。
+**三个同步面与 async 面共用同一份 SQL / 参数构造**（`_PACKAGE_UPSERT_SQL`、
+`_corpus_select()`、`_package_upsert_params()`）⇒ 两面不可能写出不同的包；跨面一致性由
+`test_m5_materialization_api.py::TestSyncAsyncParity` 三钉钉住。
+
+- **writer-first 纪律**（SQLite）：语料行值/快照引用在**只读会话**里先取，写事务随后才开嗓
+  ——「读后升级为写」的事务**不吃 busy 重试**，撞上 in-flight flush 就是硬 `SQLITE_BUSY`。
+
+#### 23.7.3 诊断路由（`GET /api/anchors/{anchor_id}/materialization`）
+
+- 响应固定 `{anchor_id, ready, reason}`；**不可物化不是 HTTP 错误**（200 + `ready=false`
+  + 原因码），档不存在才 404 `/errors/anchor-not-found`，无世界（`app.state.store` 缺位）
+  才 400 `/errors/world-not-ready`（**不新建引擎去猜**哪个库才是真的）。
+- **零世界内部字段**（不返 seq/tick/branch_id/包内容），与其余读路由同款出戏边界。
+- **RNG 捕获是已知缺口**：`capture_rng_state` 需要 `RngRegistry` + 抽签 cache + 流清单，
+  三样**今天没挂在 `app.state` 上** ⇒ 存档拿不到 ⇒ `rng_state=NULL`，该档诊断为
+  `rng_unavailable`（fail-closed，**禁止** seed 派生兜底）。接缝已留：上层把
+  `app.state.rng_capture` 挂成零参可调用即可，数据面零改动。
+- **协议面零变更**：该路由**未进** `shared/openapi.json`（mock 是 gen-protocol 的唯一源，
+  `shared/` 非数据面所有）⇒ `gen-protocol --check` 保持 EXIT 0；前端类型面登记归 kilo
+  （届时走 versioning §7 minor 流程 + 升版）。
+
+#### 23.7.4 ⚠️ 上游阻塞缺陷（M5-A11 实测并回执，非本单引入）
+
+driver 跑起来时，**连发几次 POST 会把 `world.db` 写锁长期占住**：同步写面提交拿到
+`sqlite3.OperationalError: database is locked`，且锁**持续存在**（第三条连接
+`BEGIN IMMEDIATE` 同样拿不到）。复现：起 lifespan（driver 在跑）后连发 5 次 POST ⇒
+`201 / EXC / 201 / 201 / EXC`；取消 `app.state.driver` 后连发 ⇒ 全 201、锁自由。
+**R-4 基线（不含包写）同样复现** ⇒ 与物化包无关，是 async 驱动侧有写事务没收口。
+本单的处置只有两条，都不是绕过：写事务 **writer-first**（顺带缩短持锁窗口）；钉子夹具
+**取消 driver** 求确定性（不把别人的缺陷藏进重试里——有界重试治不了持久锁，只会拖长失败）。
+根治在 `run_world_driver` / lifespan 侧（谁开的事务谁收口），归 Claude / kilo 面。

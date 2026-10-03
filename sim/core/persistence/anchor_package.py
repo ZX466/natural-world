@@ -85,6 +85,7 @@ from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from sim.core.persistence.fire_store import FireRow, FireStore
 from sim.core.persistence.store import SnapshotData, SqlEventStore, decompress_snapshot
@@ -99,6 +100,19 @@ _CORPUS_ORDER_BY: Mapping[str, str] = {
     "knowledge": "id",
     "relationships": "owner_id, other_id",
 }
+
+#: 包 upsert SQL（**async/sync 两个写面共用一份**；幂等覆盖见函数 doc）。
+_PACKAGE_UPSERT_SQL = (
+    "INSERT INTO anchor_packages"
+    " (anchor_id, branch_id, tick, seq, snapshot_seq, snapshot_tick, rng_state,"
+    "  agent_override, corpus_blob, state_hash, schema_version, created_at)"
+    " VALUES (:aid, :bid, :tick, :seq, :sseq, :stick, :rng, :override, :blob, :hash, 1, :now)"
+    " ON CONFLICT(anchor_id) DO UPDATE SET"
+    "  branch_id = excluded.branch_id, tick = excluded.tick, seq = excluded.seq,"
+    "  snapshot_seq = excluded.snapshot_seq, snapshot_tick = excluded.snapshot_tick,"
+    "  rng_state = excluded.rng_state, agent_override = excluded.agent_override,"
+    "  corpus_blob = excluded.corpus_blob, state_hash = excluded.state_hash"
+)
 
 #: blob 内层结构版本（外层还有 ``schema_version`` 列，A3 §1.1）。
 _BLOB_SCHEMA_VERSION = 1
@@ -230,23 +244,35 @@ def decode_corpus_blob(blob: bytes | None) -> dict[str, list[dict[str, Any]]]:
     return out
 
 
+def _corpus_select(table: str) -> str:
+    """语料采集 SQL（**编解码两侧共用**的单真源；表名/排序列来自白名单常量）。"""
+    return f"SELECT * FROM {table} WHERE branch_id = :bid ORDER BY {_CORPUS_ORDER_BY[table]}"
+
+
 async def collect_corpus_rows(
     session: AsyncSession, branch_id: str
 ) -> dict[str, list[dict[str, Any]]]:
-    """采一份分支当前的语料行值（存档时物化的**唯一**采集面）。
+    """采一份分支当前的语料行值（存档时物化的**唯一**采集面，async 面）。
 
     用 ``SELECT *`` + 表主键排序：不维护列清单 ⇒ 既有克隆清单（``fork.py``）与包格式
     各改一处就会漂移；行序确定 ⇒ blob 字节可比。
     """
     out: dict[str, list[dict[str, Any]]] = {}
     for table in CORPUS_TABLES:
-        order = _CORPUS_ORDER_BY[table]
-        rows = (
-            await session.execute(
-                text(f"SELECT * FROM {table} WHERE branch_id = :bid ORDER BY {order}"),
-                {"bid": branch_id},
-            )
-        ).mappings()
+        rows = (await session.execute(text(_corpus_select(table)), {"bid": branch_id})).mappings()
+        out[table] = [dict(row) for row in rows]
+    return out
+
+
+def collect_corpus_rows_sync(session: Session, branch_id: str) -> dict[str, list[dict[str, Any]]]:
+    """同步面（``sim/api/anchors.py`` 的 ``create_item`` 同事务写包走这条）。
+
+    与 :func:`collect_corpus_rows` **同一份 SQL**（:func:`_corpus_select`）⇒ 两个面不会
+    漂移；跨面一致性由钉子（`test_m5_materialization_api.py`）钉住。
+    """
+    out: dict[str, list[dict[str, Any]]] = {}
+    for table in CORPUS_TABLES:
+        rows = session.execute(text(_corpus_select(table)), {"bid": branch_id}).mappings()
         out[table] = [dict(row) for row in rows]
     return out
 
@@ -308,32 +334,102 @@ async def write_anchor_package(
     - 幂等：同一 ``anchor_id`` 重复存档 ⇒ 覆盖为最新（``ON CONFLICT``），不留半包。
     """
     await session.execute(
-        text(
-            "INSERT INTO anchor_packages"
-            " (anchor_id, branch_id, tick, seq, snapshot_seq, snapshot_tick, rng_state,"
-            "  agent_override, corpus_blob, state_hash, schema_version, created_at)"
-            " VALUES (:aid, :bid, :tick, :seq, :sseq, :stick, :rng, :override,"
-            " :blob, :hash, 1, :now)"
-            " ON CONFLICT(anchor_id) DO UPDATE SET"
-            "  branch_id = excluded.branch_id, tick = excluded.tick, seq = excluded.seq,"
-            "  snapshot_seq = excluded.snapshot_seq, snapshot_tick = excluded.snapshot_tick,"
-            "  rng_state = excluded.rng_state, agent_override = excluded.agent_override,"
-            "  corpus_blob = excluded.corpus_blob, state_hash = excluded.state_hash"
+        text(_PACKAGE_UPSERT_SQL),
+        _package_upsert_params(
+            anchor_id=anchor_id,
+            branch_id=branch_id,
+            tick=tick,
+            seq=seq,
+            rng_state=rng_state,
+            agent_override=agent_override,
+            corpus_blob=corpus_blob,
+            state_hash=state_hash,
+            snapshot=None if snapshot is None else (int(snapshot.seq), int(snapshot.tick)),
         ),
-        {
-            "aid": anchor_id,
-            "bid": branch_id,
-            "tick": tick,
-            "seq": seq,
-            "sseq": None if snapshot is None else int(snapshot.seq),
-            "stick": None if snapshot is None else int(snapshot.tick),
-            "rng": rng_state,
-            "override": agent_override,
-            "blob": corpus_blob,
-            "hash": state_hash,
-            "now": time.time(),
-        },
     )
+
+
+def _package_upsert_params(
+    *,
+    anchor_id: str,
+    branch_id: str,
+    tick: int,
+    seq: int,
+    rng_state: str | None,
+    agent_override: str,
+    corpus_blob: bytes | None,
+    state_hash: str | None,
+    snapshot: tuple[int, int] | None,
+) -> dict[str, Any]:
+    """包 upsert 的绑定参数（**async/sync 两个写面的单真源**）。"""
+    return {
+        "aid": anchor_id,
+        "bid": branch_id,
+        "tick": tick,
+        "seq": seq,
+        "sseq": None if snapshot is None else snapshot[0],
+        "stick": None if snapshot is None else snapshot[1],
+        "rng": rng_state,
+        "override": agent_override,
+        "blob": corpus_blob,
+        "hash": state_hash,
+        "now": time.time(),
+    }
+
+
+def write_anchor_package_sync(
+    session: Session,
+    *,
+    anchor_id: str,
+    branch_id: str,
+    tick: int,
+    seq: int,
+    rng_state: str | None,
+    agent_override: str,
+    corpus_blob: bytes | None,
+    state_hash: str | None = None,
+    snapshot: tuple[int, int] | None = None,
+) -> None:
+    """同步写面（存档 CRUD 的**同事务**位置：`sim/api/anchors.py::create_item`）。
+
+    与 :func:`write_anchor_package` 共用 SQL 与参数构造 ⇒ 两面不可能写出不同的包。
+    同步面存在的**唯一**理由：玩家档落库是同步事务（``threading.Lock`` + 同步 Session），
+    包必须与「写档行 + 清其余 protected」**同事务**，跨引擎就跨事务了。
+    """
+    session.execute(
+        text(_PACKAGE_UPSERT_SQL),
+        _package_upsert_params(
+            anchor_id=anchor_id,
+            branch_id=branch_id,
+            tick=tick,
+            seq=seq,
+            rng_state=rng_state,
+            agent_override=agent_override,
+            corpus_blob=corpus_blob,
+            state_hash=state_hash,
+            snapshot=snapshot,
+        ),
+    )
+
+
+def latest_snapshot_ref_sync(
+    session: Session, branch_id: str, upto_seq: int
+) -> tuple[int, int] | None:
+    """同步取「库内 ≤锚点 seq 的最新快照」引用 ``(seq, tick)``（无则 ``None``）。
+
+    与 :meth:`SqlEventStore.latest_snapshot` 的 ``max_seq`` 判据同口径（A2 收紧：只按
+    tick 选会挑到 seq 已越过锚点的快照 ⇒ 窗口倒挂）。**只取引用，不复制 blob**。
+    跨面一致性由钉子钉住（同一库上与 async 面逐位相等）。
+    """
+    row = session.execute(
+        text(
+            "SELECT seq, tick FROM snapshots"
+            " WHERE branch_id = :bid AND seq <= :useq"
+            " ORDER BY seq DESC LIMIT 1"
+        ),
+        {"bid": branch_id, "useq": upto_seq},
+    ).first()
+    return None if row is None else (int(row[0]), int(row[1]))
 
 
 # ---------------------------------------------------------------------------
