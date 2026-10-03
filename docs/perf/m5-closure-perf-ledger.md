@@ -12,7 +12,7 @@
 | 3 | 三案「并入既有行」的裁定都被采了吗？ | **裁决文本层面：三案一条都没有可核对的落库文字**（`docs/arch/m5-rulings.md` **正文止于裁 30**，31–34 只存于主树 memory 转述，实测 `grep 裁决 3[1-4] docs/arch/` 零命中）。可核实的只有两条**间接证据**：POWER 行归属——主树 memory 裁 32 待落项写「**采 pi 建议=并入 L1 行**」（**期望而非已落**）；FIRE 两枚举成员 + 2 新 kind **确已进 main**（`EventKind.FIRE_IGNITED/EXTINGUISHED`、`StructureCollapseCause` 含 `"fire"` ⇒ 裁 33 **已执行**，但其文字同样不在库内）。CHAOS 并入 RNG/熵行**无任何裁决记录**。⇒ **建议收官轮把裁 31–34 落进 `m5-rulings.md` 正文**（否则性能台账的「采况」栏只能标推断）。 |
 | 4 | 机器观察能沉淀成什么？ | 一条硬纪律：**「性能留痕 = bench 结果 + 同轮 `throttle_probe` 比值」，缺一即不可比**。M5 外层探针时间线（时序，§3.1 全表）**09-29 机理 6.6x → 09-30 P7 8.393 → 10-01 P8 1.652 → 10-02 P10 2.055 → 10-03 P11 1.492**：两簇分明（健康 1.2–1.7 / 降频 6.6–8.4），门 2.0 落在空隙里 ⇒ **判据可靠**（无健康/降频误判记录；P10 读数 2.055 恰越门 ⇒ 该轮 soak 自 skip 属正确行为）。级联 skip 判例 + **计数恒等式（2208→2267）** 一并沉淀 §3。 |
 | 5 | M6 需要什么？ | 批次 E 物化读档 ≈20–40ms ⇒ **建议新增 1 条「一次性操作档」红线 `MATERIALIZE_LIMIT_MS=50.0`，不进 tick 预算**（比照 `SNAPSHOT_LIMIT_MS=500.0` 先例，A3 自给 50ms 口径）；断线演练重放窗口唯一关注点 = **禁每 tick 全量重放**（10 日 1.728M 事件 × 0.74µs ≈ **1.28s**，P2 已钉）。§4 |
-| 6 | Xeon 挂账？ | **未命中、未建基线，且本轮无法判机型**（如实登记：`gh`/token 皆无，jobs 端点 `runner=null`、check-runs `annotations=[]` ⇒ 读不到机型 notice；P8 当时能读到「机型一致：AMD EPYC 7763」的那条注释体本轮不可达）。最近两次 nightly（`37067388197` 10-02 / `36932896240` 10-01）均 **success/main**，机型**未知**。§5 |
+| 6 | Xeon 挂账？ | ~~未命中、未建基线，且本轮无法判机型~~ **【已由 M5-P13 §5 纠正：判机型不需要凭据，系本档用错端点】** 实测近 4 次 nightly（10-02/10-01/09-30×2）**全部** `notice 机型一致：AMD EPYC 7763` ⇒ **未命中 Xeon、基线未建，但被动台账可匿名自转**（三连 GET，见 §5）；仍需 `gh`/token 的只有 **artifact 下载**（建基线八步第 2 步，匿名 401 实测）。§5 |
 
 ---
 
@@ -146,16 +146,16 @@ M5 期间派单板与本域留痕的用例数**看似冲突**，实为**同一 H
 
 ---
 
-## 5. Xeon 基线挂账（如实登记：**未命中、未建、本轮无法判机型**）
+## 5. Xeon 基线挂账（如实登记：**未命中、未建**；「本轮无法判机型」一条**已由 M5-P13 §5 撤回**——判机型无需凭据）
 | 项 | 现状（2026-10-03 实测） |
 |---|---|
 | `docs/perf/baseline-xeon8573c.json` | **不存在**（`ls docs/perf/` 实测：仅 `baseline-epyc7763.json` + `runner.txt`） |
 | Nightly Bench（workflow id `361944466`） | **21 个 run**；最近两次 `37067388197`(10-02) / `36932896240`(10-01) 均 `completed success` @ `main` |
-| 机型判定 | **本轮读不到**：无 `gh`、无 token；REST 实测 jobs 端点 `runner=null`、`commits/{sha}/check-runs` 的 `pytest-benchmark` 条目 `output.annotations=[]`、`title/summary=null` ⇒ **机型 notice 不可达**（P8 于 10-01 曾读到「机型一致：AMD EPYC 7763」，本轮同一手法不可得 ⇒ 只能记**未知**，**不得**记「已命中/已排除」） |
+| 机型判定 | ~~**本轮读不到**：无 `gh`、无 token~~ **【M5-P13 纠正（见 `docs/perf/m6-perf-preplan.md` §5）：此结论有误=端点用错，非能力缺口】** ①`GET /check-runs/{id}` 的 `output` 只有 `annotations_count`/`annotations_url`，`annotations` 恒空；正确三连（**匿名、无 gh**）：`actions/workflows/{id}/runs?per_page=8` → `commits/{head_sha}/check-runs?per_page=50` → **`check-runs/{id}/annotations`**。本机 2026-10-03 实测：近 4 次 nightly（37067388197/36932896240/36780592123/36721350832）**全部** `notice 机型一致：AMD EPYC 7763` ⇒ **未命中 Xeon，且此后台账可无凭据自转**。仍需凭据的只有 artifact 下载（建基线八步，实测 `artifacts/{id}/zip` 匿名 401）；边界：防漂 step 由 `f52858d`/`959ccaf`（09-30 16:04/16:07）引入，**更早的 run 无 annotation，不得读成「机型一致」**（`36670751263` 实测无 annotation） |
 | 策略（未变） | **被动为主**（裁 30-C）：nightly 自然轮询，**落 Xeon 且全绿即触发 P7 §4 八步预建**；**不再主动 dispatch**（P7 已实证 `36721350832` 落 EPYC ⇒ dispatch 不挑机位、命中率与被动相同，代价 3/4 轮白烧） |
 | 触发时执行 | P7 §4 八步（`gh run list/download` → **五字段核对**（ubuntu-latest / nproc 4 / **INTEL XEON PLATINUM 8573C** / py3.12.3 / uv 同锁）→ 落 `baseline-xeon8573c.json` + `runner` 注释块 → 本地 sanity `--benchmark-compare-fail=median:25%` → **不改 `nightly-bench.yml`**） |
 | 收益（若建成） | 恢复判别力：Xeon 快 20%+ 的档位差会吃掉 EPYC 基线的 25% 窗口 ⇒ 真回归在 Xeon 上表现为「恢复 EPYC 水平」、drift 为负**永不越线**（**漏报**，非假红） |
-| 需要的能力 | **一次 `gh`/token 授权**（下载 artifact `bench-result`）——本域无凭据 ⇒ **列为 M6 开工前置的一个外部依赖**，与 T4 真跑等 key 同类 |
+| 需要的能力 | **仅「建基线」需要一次 `gh`/token 授权**（下载 artifact `bench-result`，P7 八步第 2 步）⇒ 列 M6 开工前置外部依赖，与 T4 等 key 同类。**「判机型」不再需要凭据**（M5-P13 §5.2 三连 GET 匿名实测通过；替代巡检方案见 `docs/perf/m6-perf-preplan.md` §5.4 甲案，归 cline 执行） |
 
 ---
 
@@ -191,7 +191,7 @@ P9 抽样 9.3µs vs 冷 A* 494–647µs（53–70x）→ P10 权力列 3.05µs �
 | `ls sim/world/fire*.py` + 实跑 `-k "fire or authority or chaos or power" -rs` | 无 `fire*.py`；**370 passed / 56 skipped**（skip 明细：`test_m5_fire_state.py:196` 机制面未落盘 1 例 + `test_t3_live_fire.py` 47+8 例「无联网权限/语料无判定」）⇒ 零 failed，**与三案「前置未满足」结论一致**（此跑为**只读现状取证**，非 bench 重跑） |
 | `--collect-only`（两口径） | **2267 总数**（not-bench 2197+70 deselected / bench 70+2197 deselected）⇒ §3.3 新基准 |
 | `git diff --stat 76dd14a..d2d95c0 -- sim/tests/` | 仅 2 个新增测试文件（+1135 行）⇒ +59 来源结案 |
-| GitHub REST（无 token） | workflows 4 个；Nightly Bench 21 runs，最近 2 次 success/main；**机型 annotations 不可达**（§5） |
+| GitHub REST（无 token） | workflows 4 个；Nightly Bench 21 runs，最近 2 次 success/main；~~机型 annotations 不可达~~ **【M5-P13 纠正：当时只查了 `check-runs/{id}` 与 `.../jobs`，漏了 `check-runs/{id}/annotations` 子端点 ⇒ 实为可达，§5】** |
 | `uv run ruff check .` | **All checks passed** |
 | `uv run pyright .` | **0 errors, 0 warnings, 0 informations** |
 
