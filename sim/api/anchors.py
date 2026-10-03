@@ -368,9 +368,11 @@ def _current_branch_id_or_400() -> str:
             text("SELECT id FROM branches WHERE is_current = 1 LIMIT 1")
         ).scalar_one_or_none()
     if row is None:
+        # ProblemDetail 分段约定（errors.py §3.2）：detail = "机器码|人读详情"——
+        # type 进机器码、title 落 _TYPE_TITLE；G4 双态钉（K16）锁此写法。
         raise HTTPException(
             status_code=400,
-            detail="/errors/world-not-ready: 无当前世界线（branches.is_current 全 0；"
+            detail="/errors/world-not-ready|无当前世界线（branches.is_current 全 0；"
             "世界尚未开线或读档交接未完成）",
         ) from None
     return str(row)
