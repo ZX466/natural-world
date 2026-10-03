@@ -1386,7 +1386,8 @@ M5-P8（2026-10-01，willingness Δ 护栏改中位判据 + Xeon 被动监控台
 - **⚡ 在途单（2026-10-03 起）**：**无**（K9 `68b5c9c`、K10 `1d01d24`、K11 `e317566`、K12 `98d6293`、
   K13 `02b331d` 均已交）。下一个 M5-K 单由 Claude 派。上一轮派单留档：M5-K9＝R-4 条款合入＋R-5 集合落定；
   M5-K10＝六钉验收对表＋branch-ambiguous 登记单；M5-K11＝批次 C 权力 API 面**施工**（裁 31-1 下放，
-  我第一个施工单）；M5-K12＝批次 D 火灾**预研**（零代码）。
+  我第一个施工单）；M5-K12＝批次 D 火灾**预研**（零代码）；M5-K13＝火灾守卫钉＋R-4 复验单；
+  M5-K14＝**versioning 1.1 甲案**（§7 三行登记＋升 1.1＋前端同步＋8 钉）＋批次 E 出站核对单。
   **⚠ 门禁口径订正**：「prettier 过」对 `docs/**` **不成立**（不在 CI 门禁 + HEAD 本就红）——
   正确口径＝**先测基线**，红了就保持最小 diff 不 `--write`（纪律 12），并回报基线数字。
   **K10 派单门禁口径**同（另加「零代码单也跑 ruff/pyright/gen-protocol 三件套」）。
@@ -1394,6 +1395,35 @@ M5-P8（2026-10-01，willingness Δ 护栏改中位判据 + Xeon 被动监控台
   下一轮 M5-K 单由 Claude 派。**K11 是我第一个施工单**（裁 31-1 下放）——注意施工单的纪律差异：
   钉先红后绿、**不越所有权**（K11 未碰 `sim/core/persistence`/`sim/npc`/`sim/world`/`shared`）、
   **零 schema 单也要跑全量 pytest**（1968 基线）。
+- **✅ M5-K14 已交 `0fe7170`（origin+gitee 已推）——versioning §7 甲案（1.1）＋批次 E 出站核对**。
+  ①**协议升 1.1**：`ws.py:60` `_PROTOCOL_VERSION` 1.0→1.1（**唯一真相源**，注释写明前端
+  `client/src/net/ws.ts:19` 是第二落点必同值）＋前端同步 1.1＋§7 三行 minor 登记（真 commit：
+  `a149bb9` fast_forward+session 首帧+anchors current／`f7f6e1b` `GET /{anchor_id}`+`state_delta.plan`／
+  `7dc8d69` `PlanDelta` 封闭）＋新钉 `sim/tests/test_protocol_version.py` **8 例**（防回退／major.minor
+  形态／**跨树防漂移**（白盒读 ws.ts 常量逐字相等——历史上 sim 0.1 / client 0.1 漂过）／信封禁硬写
+  `"v": "…"` 字面量／快照 `info.version` major 一致／§7 登记三钉）。**零物理快照变更**。
+  ②**批次 E 核对单**（`docs/api/m5-batch-e-outbound-check.md`，零代码）：**物化错误不进 `_TYPE_TITLE`**
+  （三论证：`sim/api` 对物化零引用＝HTTP 零触点／常量 `anchor-materialization-unavailable` 是**裸 slug**
+  而表内 6 键皆 `/errors/*` URI 形／生产路径先撞 `main.py:133 except Exception` ⇒ 到不了 HTTP 处理器）；
+  **告知帧＝载体已有、落点缺一行**（已有 `session_state.notice` + `fork_notice()` 的 `scan()` 终扫兜底
+  + 客户端重连首帧语义 + `ControlState` 连接级；缺：`_handle_sync_request`（`ws.py:569`）**只回
+  `full_snapshot`** ⇒ 离线回归无 notice 落点，需加一处、零 schema）。
+  **⚠ 需裁偏差（我未擅自改）**：K12 我建议 **3** 个 fire kind（含 `fire.spread`），opencode 已落 **2** 个
+  （蔓延走 `matter.damage` + `parent_seq` 谱系指回 `fire.ignited`）——**他们论证更强**（免第二套投影
+  路径、归因不进 payload 合 D-10）⇒ **K12 稿 §1.1/§1.3/§5-待裁 1 应订正**，待主树派单（K14 所有权不含该稿）。
+  **✅ R-4 复验（廉价部分）**：A6 **13 例全绿、skip 归零**；**G1 通过**（`_current_branch_id_or_400()` 回
+  **400 + `/errors/world-not-ready`**，与 R-4.1-S 一致 ⇒ A6 那句「409/503 都可」注释已被覆盖、契约未破）；
+  **G3 由 opencode 双态化自行解掉**；**G2 未做**（属 A6 文件范围，需派 CR）。
+  **登记的真缺口**：`load_outcomes` 是**死账本**（只被 main.py 追加、只被一个测试读）⇒ 物化失败
+  **无任何出站通道**，而 `load_anchor` 已先发成功帧 ⇒ 玩家侧沉默；正确形态＝沿用 `load_failed` ＋戏内
+  文案（reason 落日志），**不新增 code**。另：`info.version` 仍 FastAPI 默认 `1.0.0`（§5 说双处记录但
+  HTTP 侧未接同源；接它要改 `main.py` app `version=` 且改快照 ⇒ 超红线，只断言 major 一致）。
+  **门禁**：K14 钉 8 passed／ruff 全过／format 干净／pyright 0／`gen-protocol --check` EXIT 0／
+  前端 `npm run test` 21 passed／新文件 `w/lf`+prettier 过（`versioning.md` 既有红文件，只增 12 行不
+  `--write`）／全量 **2157 passed / 120 skipped / 0 failed**（skip 130→120＝A6 六锁＋fire 五锁解锁）。
+  **⚠ 环境坑（新记，重要）**：PowerShell `Get-Content`/`Set-Content` 对本仓 CJK 文件**按系统代码页解码**
+  ⇒ **乱码且行数偏少**（实测 `ws.py` 报 859 行、真实 1028 行）⇒ 改文件一律用 edit 工具或 python
+  `read_text(encoding="utf-8")`/`write_bytes`；查行号用 `Select-String` 或 python，**不信 `Get-Content`**。
 
 **② 接口域现状（一句话）**
 协议面＝`shared/openapi.json`（唯一真相源）→ `npm run gen-protocol` → `shared/protocol.ts`（**禁手写**）→
@@ -1402,6 +1432,15 @@ M5-P8（2026-10-01，willingness Δ 护栏改中位判据 + Xeon 被动监控台
 批次 C 权力面按裁 27-C/D-10「权力完全不可见」＝**协议零新增**。CRITICAL（G-1 plan 越界、R-1 读档挂死）与全部 HIGH 已清零。
 
 **③ 下一步**
+- ~~**在途：M5-K9 ~ K14**~~ **✅ 均已交（见上）**。**等派项**：
+  ①**K12 稿 fire.spread 订正**（opencode 已裁 2 kind，论证更强）+ 加 doc-sync 钉防两稿分叉；
+  ②**批次 E 出站真缺口施工单**（`load_outcomes` 死账本 ⇒ 物化失败无出站通道；沿用 `load_failed` +
+  戏内文案，不新增 code；「先受理先发成功帧」的诚实态问题需主树裁）；
+  ③**G2 补钉**（anchor-fork 落父 + 另两种 0 行情形）——属 A6 文件范围，需主树派 CR；
+  ④`info.version` 接同源常量（改 `main.py` app `version=` + 快照，**须另立快照单**）；
+  ⑤任何新增/变更协议面（走 versioning §7 登记 + 跨树版本钉）。
+  **已闭合**：R-4 复验（A6 13 绿 + G1/G3）、fire 守卫钉转绿、protocol 版本 1.1。
+  **另可主动做（不接未派单）**：协议面审计与对表、live↔快照对账、契约草案、钉子补齐、复验评审。
 - ~~**在途：M5-K9 / K10 / K11 / K12 / K13**~~ **✅ 均已交（见上）**。**等派项**：
   ①**R-4 取值施工的复验**——**复验单已就位**：`docs/api/m5-r4-acceptance-checklist.md`（合入即跑，
   含六钉映射 + 总闸 + **三处缺口 G1/G2/G3**）；A6 钉 `test_m5_anchors_branch_source.py` 实测基线
