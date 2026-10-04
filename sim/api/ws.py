@@ -897,13 +897,14 @@ def _handle_load_anchor(
 
 def _load_failed_frame() -> dict[str, Any]:
     """构造物化失败的玩家帧，并在最终文案边界执行案 A 终扫。"""
-    message = "这个档读不出来了。"
-    if not scan(message).hits:
-        return _error_frame("load_anchor", _ERROR_LOAD_FAILED, message)
+    primary = "这个档读不出来了。"
+    message = scan(primary)
+    if message.ok:
+        return _error_frame("load_anchor", _ERROR_LOAD_FAILED, primary)
 
     logger.warning("ws.anchor_load_message_degraded", reason="banned_message_outbound")
     for fallback in ("档打不开。", "读不了。", "打不开。"):
-        if not scan(fallback).hits:
+        if scan(fallback).ok:
             return _error_frame("load_anchor", _ERROR_LOAD_FAILED, fallback)
 
     logger.error("ws.anchor_load_message_fallback_invalid")

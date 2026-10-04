@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Iterator
 from typing import Any
 
@@ -236,6 +237,21 @@ class TestLoadAnchorEmitsSessionState:
 
         assert isinstance(reply, dict)
         assert reply["message"] == "读不了。"
+
+    def test_failure_message_never_bypasses_scan_call(
+        self, loop: TickLoop, pf: Pathfinder, control: ControlState
+    ) -> None:
+        """M6-S2 防摘钉：`load_failed` 必须消费终扫结果，不允许未扫直通。"""
+        source = inspect.getsource(ws_mod._load_failed_frame)
+        assert "_error_frame(" in source
+        for line in source.splitlines():
+            if "_error_frame(" not in line or "return" not in line:
+                continue
+            if '""' in line:
+                continue
+            assert "scan(" in line or "primary" in line or "fallback" in line, (
+                f"文案出站必须消费 scan() 结果或已扫变量: {line}"
+            )
 
     def test_success_returns_notice_then_snapshot(
         self, loop: TickLoop, pf: Pathfinder, control: ControlState

@@ -2242,6 +2242,15 @@ uv run ruff check . && uv run pyright <改动文件>
     旁路、同输入切换权力档使 `willingness_conflict` band 变化逐钉复验。
   - 验证：聚焦安全集 `66 passed`；`ruff check` 目标文件 0；`pyright` 目标文件 0；
     `git diff --check` 0。
+
+- **M6-S2（W-A 四钉复验预备 + 终扫兜底回归钉）✅ 本树施工完成**（2026-10-04，未触碰其他树）
+  - 执行单补在 `docs/security/m5-batch-e-security-preplan.md` §5.5：authority 落盘即按既有
+    §5.1-§5.4 判据跑，本单不重写判据；S1 `load_failed` 终扫回归与临时负核合入速查表。
+  - `sim/tests/test_m5_session_state.py` 新增 `test_failure_message_never_bypasses_scan_call`
+    源码级防摘钉，锁 `_load_failed_frame` 的文案出站必须消费 `scan()` 结果或已扫变量。
+  - `sim/api/ws.py` 顺势用 `ScanResult.ok` 统一判定主/兜底文案，行为不变，代码更易被防摘钉覆盖。
+  - authority 仍不存在，W-A 四钉不解除；验证：全量 `2234 passed, 120 skipped, 70 deselected`、
+    ruff 0、pyright 0、`git diff --check` 0。
 ## 下一步 / 待派（不在本单范围）
 - ~~**T4 nightly 接线未闭合 → 需派 cline**~~ **已作废（第三十九轮 C7 实测推翻）**：探针 step 非 TODO，
   是裁定的长期注释态；env 已是 `Deepseek-v4-flash`（非 `claude-sonnet-5`，`d1940e4` 闭合）。**真实冲突在
