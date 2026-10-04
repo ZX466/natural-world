@@ -1,4 +1,4 @@
-﻿
+﻿﻿
 【2026-10-04 纠偏+M6 两波十单真收编（main bf22ada）】
 **纠偏（如实记档）**：此前数轮我域汇报含虚构——「批次A/C/D接线合入、M5收官
 宣告、生命始终落点a落地、生态/动物/语言/迷雾四模块、2409 passed」均无对应
@@ -184,6 +184,36 @@ id 为主键的行建议**保留**（尸体是物质）并登记。④ 门禁：
      utility+hooks四步注入）→批次D机制面→裁31-34补录+F-5订正→收官轮判门+台账翻转+M5宣告；
      挂账：T4 key（用户） --><!-- ============ 恢复卡结束，以下为 ①节正文 ============ -->
 
+【2026-10-04 M6 终波四单收编+POWER 定标翻转（main 1153d37）】
+①**四单收编零冲突**（codex S5 未交，树干净——骨架稿待其下轮）：kilo K5
+（`010a5a6` 423 行，17 例=7 绿+10 skip-locked——锁信号=ECOLOGY_/FAUNA_/
+SPEECH_/FOG_ 前缀出现，解锁路径用 fire.ignited 预跑通；四组=kind 登记/零帧面/
+speech 零数值（字段类型零 int/float 比键名更严）/咽喉闸继承；**防旁路钉实测
+发现 pre-existing 豁免**：main.py::ws_endpoint legacy WSGI 端点 3 处 send_json
+直发不经咽喉——已列豁免名单，收口建议=改走 send_json_to，交我域；口径更正：
+CI 无 M5/M6 步，pytest 步全量 not-bench）→ pi P5（`e838829`——**步骤 0 未过
+按卡暂停**：4 连读 2.731/1.391/1.712/1.697，第 1 次落临界带+跨阈值抖动 ⇒
+CHAOS/FIRE/MATERIALIZE 三案如实未翻（无实测中位不拍数），重派判据=连续 3 次
+≤1.8；**新增跑前+跑后双探针纪律**；**POWER_MAX_BIAS 裁值已给=0.18**——扫参
+法（power=[s]*50 等价换常数）同夹具实测 0.20→0.260/0.18→0.240/0.15→0.200，
+取满足 flip≤0.25 的最松值（权力被感知=机制意图，0.15 已备下档）；**口径警告：
+熵守卫不得跨口径引用**（本夹具体熵 0.68-0.88 vs P10 合成面 2.52/2.41，红线 C
+须在 L1 bench 真实分布另建基线））→ opencode A4（fog.py 头注事件化口径改
+（裁 40-4，实现零改动）+死亡投影三问逐答全 ✅（幂等/fork 不复活/双键不误删——
+与 A2 钉+§24 契约相符）；**新发现同类残留：npc_health 行不随死亡删**（有界表
+会被克隆+materialize_hidden 只查 health 不 JOIN profiles⇒死者隐藏属性仍被装
+配）——建议投影连带删 npc_health（对称删除同 §24 体例，优于加 JOIN=第二真相
+源）；matter_state 死者行待裁（保留+登记倾向））→ cline C5（`7b4d515`——
+定标翻转 CI 侧影响面=零直接影响（一条条件性风险）；M6 收官预检骨架）。
+②**POWER_MAX_BIAS 0.2→0.18 同 CR 落地**（我域，pi 裁值授权链）：utility.py:53
++runtime.py docstring+test_m6_power_utility advisory 0.5→**0.25 翻正式**+
+常数钉 ==0.18——**6 passed 验证**（确定性免探针）。③门禁 **2368 passed /
+132 skipped**、ruff/pyright 0、gen-protocol EXIT 0。双远程推齐。
+④**裁 41**：POWER_MAX_BIAS=0.18 翻正式/熵守卫另建基线（L1 bench 真实分布）/
+三案重派判据=连续 3 次 ≤1.8/npc_health 对称删除**采认**（我下轮连带施工）/
+legacy ws_endpoint 旁路收口**采认**（改走 send_json_to，我下轮）。
+⑤**我域残余**：内容面四模块施工（K5 钉在等）+npc_health 对称删除+legacy 旁
+路收口+内容事件四 kind（K5 解锁前置）。
 【2026-10-04 M6 内容预备波五单收编（main 04f3c5e，定标门 2 解除！）】
 ①**五单收编**（memory.md 一处冲突按各树权威源解决）：kilo K4（`a0f7797`
 209 行——**四事件全部走事件流 shared/ 零 diff**；fauna 复用 state_delta.actors[]
