@@ -33,6 +33,7 @@ from sim.core.events import (
     MatterPayload,
     MovePayload,
     NpcActPayload,
+    NpcDeathPayload,
     NpcLodChangePayload,
     NpcMonologuePayload,
     StructureCheckpointPayload,
@@ -67,6 +68,8 @@ PAYLOAD_MODELS: dict[EventKind, type[BaseModel]] = {
     # 　蔓延/烧毁**不**新增 kind（走既有 matter.*/structure.*）——避开第二套投影路径。
     EventKind.FIRE_IGNITED: FireIgnitedPayload,
     EventKind.FIRE_EXTINGUISHED: FireExtinguishedPayload,
+    # M6 生命始终（落点 a）：死亡 = 事件（可重放），投影同步删 npc_profiles 行。
+    EventKind.NPC_DEATH: NpcDeathPayload,
     EventKind.NPC_HIDDEN_EMERGE: HiddenEmergePayload,
     EventKind.STRUCTURE_STARTED: StructureStartedPayload,
     EventKind.STRUCTURE_CHECKPOINT: StructureCheckpointPayload,

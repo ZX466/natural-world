@@ -319,9 +319,15 @@ class TestDaySwitchHook:
         loop = _tick_loop_at(86_399)
         days_seen: list[int] = []
 
+        jumped = False
+
         async def on_flush(events: list) -> None:
-            if events:
-                # 白盒：单帧内状态再跳 2 天（clock 不可达，防御分支专用）
+            nonlocal jumped
+            # 白盒：单帧内状态再跳 2 天（clock 不可达，防御分支专用）。
+            # 批次 A 接线后日界 tick 也会产 inject 事件 ⇒ on_flush 每帧都触发——
+            # **只跳一次**（原语义=一次跳变制造 2/3/4 三日补发；不锁会滚出 5/6 天）。
+            if events and not jumped:
+                jumped = True
                 loop.state = loop.state.model_copy(update={"tick": loop.state.tick + 86_400 * 2})
 
         loop.issue_move("chenmo", [(1, 1)])

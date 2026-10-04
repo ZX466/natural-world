@@ -54,6 +54,12 @@ class EventKind(StrEnum):
     FIRE_IGNITED = "fire.ignited"
     #: 熄灭：火场终结（物理终止态，**不记是谁灭的**——归因键零容忍，见 K12 §3）。
     FIRE_EXTINGUISHED = "fire.extinguished"
+    # ---- M6（生命始终，落点 a）：死亡 = 事件（可重放），不是内存悄悄删除 ----
+    #: NPC 死亡（DESIGN §17「生命始终」批次的落点 a 裁定）：从 `WorldState.entities`
+    #: 移除 + `npc_profiles` 投影同步删行（schema §24「对称删除」，防读档子分支
+    #: 「库里有、内存无」）。**零归因键**（死因/致死者是意图归因，不入事件层）——
+    #: 只有 entity_id；重复死亡 fail-closed（投影层幂等语义见 fold/handler）。
+    NPC_DEATH = "npc.death"
 
 
 # ---------------------------------------------------------------------------
@@ -394,6 +400,18 @@ class FireExtinguishedPayload(BaseModel):
     x: _FIRE_COORD = -1
     y: _FIRE_COORD = -1
     end: FireEnd
+
+
+class NpcDeathPayload(BaseModel):
+    """NPC 死亡（M6 生命始终，落点 a）。
+
+    **零归因键**：只有 `entity_id`——死因/致死者是意图归因（D-10 同源纪律），
+    payload 是 ``extra="forbid"`` 封闭形状（夹带键构造即拒）。
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    entity_id: _ID
 
 
 class WorldEvent(BaseModel):
@@ -842,4 +860,28 @@ def fire_extinguished_event(
         tick=tick,
         event_type=EventKind.FIRE_EXTINGUISHED,
         payload=payload.model_dump(mode="json"),
+    )
+
+
+# ---- M6 生命始终工厂（落点 a；schema §24「对称删除」的事件载体） ----
+
+
+def npc_death_event(
+    tick: int,
+    *,
+    entity_id: str,
+    branch_id: str = "main",
+) -> WorldEvent:
+    """NPC 死亡事件（``npc.death``）：只带 entity_id，**不收**任何归因参数（签名即防线）。
+
+    状态层语义（`_apply_npc_death`）：从 `entities` 移除 + fail-closed（未知实体/
+    重复死亡——同 `_apply_move`「未知实体」纪律）；`npc_profiles` 行删除走投影
+    （schema §24 对称删除，防读档子分支「库里有、内存无」）。
+    """
+    p = NpcDeathPayload(entity_id=entity_id)
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.NPC_DEATH,
+        payload=p.model_dump(mode="json"),
     )

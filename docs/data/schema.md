@@ -1095,11 +1095,15 @@ handler 归架构/Claude 域（红线 A：新增 kind 需授权）；**本节只
 即「**库里有、内存无**」的行数为 **0**。钉子落在
 `sim/tests/test_m6_death_profiles_contract.py`（落点 a 未落时 skip-locked，落即转绿）。
 
-### 24.3 今天的事实（落地前的现状登记）
+### 24.3 现状（2026-10-04 落点 a 已落地，本节取代「落地前」登记）
 
-- 仓内**没有死亡载体**：`EventKind` 无 `death`/`died`/`despawn`；`build_default_bus()` 的
-  handler 里没有一个会删实体（M6-A1 A 组钉）。
-- 因此 §24.1 的「同步删行」目前是**未实现的要求**，不是现状描述；本节的钉子分两组：
-  **今天即绿**（本节不许被删、三张表的关系必须写清）+ **skip-locked**（落地即转绿的行为钉）。
-- soak 契约前提（M5-A12）：死亡要影响 `entity_count`，就必须落在这张字典上；本节不动
-  soak 口径（性能域），只保证**数据面两侧一致**。
+- `EventKind.NPC_DEATH = "npc.death"` 已注册进**默认总线**（`build_default_bus` →
+  `_apply_npc_death`：未知实体/重复死亡 fail-closed）；工厂 `npc_death_event`，
+  payload `NpcDeathPayload` 只带 `entity_id`（**零归因键**），已入 `PAYLOAD_MODELS`
+  闭合集（红线 A 恒等式保持）。
+- **同步投影删行已实现**：状态层 `_apply_npc_death`（未知实体/重复死亡 fail-closed）+
+  投影层 `_project_npc_death`（落库事务内删 `npc_profiles` 行，幂等 no-op）两侧同时
+  （§24.1 契约兑现），读档子分支「库里有、内存无」的不对称**为零**。
+- skip-locked 钉（A1 B 组 6 例 + A2 B 组）已随落地**全部转绿**；soak 契约前提
+  （M5-A12）确认：死亡影响 `entity_count` 的路径就是 `entities` 字典，阶段 B 的
+  `SOAK_ENTITY_LOSS_PER_GAME_DAY` 提值随生命机制同 CR（性能域口径不动）。

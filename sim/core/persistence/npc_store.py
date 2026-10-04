@@ -615,6 +615,8 @@ async def _project_events(
     for event in events:
         if event.event_type is EventKind.NPC_LOD_CHANGE:
             await _project_lod_change(session, branch_id, event)
+        elif event.event_type is EventKind.NPC_DEATH:
+            await _project_npc_death(session, branch_id, event)
         elif event.event_type in _MATTER_KINDS:
             await _project_matter(session, branch_id, event)
         elif event.event_type in _STRUCTURE_KINDS:
@@ -623,6 +625,24 @@ async def _project_events(
             await _project_material_moved(session, branch_id, event)
         elif event.event_type in FIRE_KINDS:
             await project_fire(session, branch_id, event)
+
+
+async def _project_npc_death(session: AsyncSession, branch_id: str, event: WorldEvent) -> None:
+    """NPC_DEATH → npc_profiles **删行**（schema §24「对称删除」，M6 生命始终落点 a）。
+
+    **为什么必须删行**（A1 事实基座④⑤）：`entities`（内存世界态）不参与 fork 克隆，
+    `npc_profiles` 走有界表整表克隆——若死亡只删内存不删行，读档子分支会出现
+    「库里有、内存无」的 NPC。删行 = 状态层 `_apply_npc_death` 的对称落库半。
+    行不存在 ⇒ **幂等 no-op**（重放路径下死亡事件重放第二次，行已删）。
+    """
+    payload = event.payload
+    npc_id = str(payload.get("entity_id", ""))
+    if not npc_id:
+        raise NpcStoreError(f"NPC_DEATH payload 缺 entity_id: {payload!r}")
+    row = await session.get(NpcProfile, {"branch_id": branch_id, "id": npc_id})
+    if row is None:
+        return  # 幂等：行已删（重放第二遍）或本分支本就没有
+    await session.delete(row)
 
 
 async def _project_lod_change(session: AsyncSession, branch_id: str, event: WorldEvent) -> None:

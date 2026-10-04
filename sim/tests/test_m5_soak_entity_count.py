@@ -171,13 +171,15 @@ class TestBenchAssertionShape:
         assert src.count("_assert_entity_stable(result, label=label, profile_ids=profile_ids)") == 2
 
     def test_event_kind_registry_has_no_removal_kind(self) -> None:
-        """事件白名单里**没有**任何「删除实体/死亡」类 kind ⇒ 死亡语义在 M6 之前无载体。
+        """死亡载体已落（M6 落点 a 兑现，退役版前提钉）：`npc.death` 是唯一死亡类 kind。
 
-        判别力：pi 的契约改法依赖「M6 会让计数下降」；而下降必须有一条**可重放**的删除路径
-        （红线 A：新增 kind 需授权）。这条钉把「载体还不存在」钉成事实，避免契约先行。
+        原「载体不存在」前提随落点 a 落地失效——本钉转为**收窄**：死亡类 kind 恰好
+        一个（防将来随手加第二个死亡语义 kind 分散计数口径），且它已登记 payload
+        （红线 A）。pi 契约的「计数会降」路径由它承载；阶段 B 提值随生命机制同 CR。
         """
         names = {kind.value for kind in EventKind}
-        # `structure.removed` 是**结构**生命周期事件（批次 D 火灾域），与实体删除无关 ⇒
-        # 这里只查「死亡/退场」语义的 kind。
         death_like = {n for n in names if any(w in n for w in ("death", "dead", "despawn", "kill"))}
-        assert death_like == set(), f"已有死亡类 kind：{death_like}（契约前提要重算）"
+        assert death_like == {"npc.death"}, f"死亡类 kind 应恰为 npc.death：{death_like}"
+        from sim.core.persistence.event_validation import PAYLOAD_MODELS
+
+        assert EventKind.NPC_DEATH in PAYLOAD_MODELS, "npc.death 未登记 payload（红线 A）"

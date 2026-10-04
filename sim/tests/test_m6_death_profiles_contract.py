@@ -87,10 +87,17 @@ class TestSchemaRegistration:
         )
 
     def test_registration_states_current_facts(self) -> None:
-        """登记要写明**今天还没有死亡载体**（否则读者会以为契约已实现）。"""
+        """登记要写明**实现现状**（退役版「要求而非现状」钉）。
+
+        落点 a 落地后，§24 现状段必须写明「同步投影删行**已实现**」并给出处
+        （handler/投影函数名）——读者不会再把契约误当未实现，也不会误信未实现。
+        """
         section = SCHEMA_MD.read_text(encoding="utf-8").split("## 24. ", 1)[1]
-        assert "没有死亡载体" in section or "未实现" in section, (
-            "§24 登记必须声明这是**要求**而非现状（今天仓内无死亡 kind/handler）"
+        assert "已实现" in section or "已落地" in section, (
+            "§24 现状段未随落点 a 落地更新（仍停在「要求而非现状」口径）"
+        )
+        assert "_apply_npc_death" in section and "_project_npc_death" in section, (
+            "§24 现状段未给两侧实现出处（状态层 handler + 投影删行函数）"
         )
 
     def test_npc_profiles_is_bounded_and_entities_is_not(self) -> None:
@@ -106,9 +113,13 @@ class TestSchemaRegistration:
         assert "entities" not in tables
         assert "npc_profiles" in FORK_PY.read_text(encoding="utf-8")
 
-    def test_no_death_kind_today(self) -> None:
-        """现状钉：今天**零死亡载体**（落地后本钉该退役，登记段才从「要求」变「现状」）。"""
-        assert _death_kind() is None, f"死亡类 kind 已出现：{_death_kind()}（请更新 §24 的现状段）"
+    def test_death_kind_registered_and_profiles_named(self) -> None:
+        """落点 a 已落（退役版「现状钉」）：死亡 kind 在默认总线，且 §24 现状段已更新。"""
+        kind = _death_kind()
+        assert kind is not None, "死亡类 kind 未注册（落点 a 回退？）"
+        text = SCHEMA_MD.read_text(encoding="utf-8")
+        # 现状段必须从「今天无载体」更新为「已落地=同步投影删行」的口径
+        assert "同步投影删" in text or "同步删" in text, "§24 现状段未更新（仍是「落地前」口径）"
 
 
 # ===========================================================================

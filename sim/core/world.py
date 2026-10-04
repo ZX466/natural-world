@@ -144,6 +144,25 @@ def _apply_entropy_inject(state: WorldState, event: WorldEvent, ctx: TickContext
     return ApplyResult(state=state)
 
 
+def _apply_npc_death(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    """NPC 死亡（M6 生命始终，落点 a）：从 `entities` 移除（**事件化**，非内存悄悄删）。
+
+    - **未知实体 fail-closed**（同 `_apply_move` 的「未知实体」纪律——不静默忽略）；
+    - **重复死亡 fail-closed**（不复活即可；幂等no-op 与 raise 皆合格，选 raise
+      = fail-closed 口径一致）；
+    - `npc_profiles` 行删除不在状态层——投影（schema §24 对称删除）在落库事务内做；
+    - C5：同事件序列两遍 ⇒ `state_hash` 逐位相等（本 handler 纯函数、无随机）。
+    """
+    from sim.core.events import NpcDeathPayload
+
+    p = NpcDeathPayload.model_validate(event.payload)
+    if p.entity_id not in state.entities:
+        msg = f"未知实体: {p.entity_id}（死亡只对在场实体成立）"
+        raise ValueError(msg)
+    entities = {k: v for k, v in state.entities.items() if k != p.entity_id}
+    return ApplyResult(state=state.model_copy(update={"entities": entities}))
+
+
 def _apply_tile_changed(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
     """M3 预留：M0 地图静态，收到即拒绝。"""
     msg = "tile_changed 在 M0 未启用（可变地图底座是 M3）"
@@ -158,4 +177,5 @@ def build_default_bus() -> EventBus:
     bus.register(EventKind.COMBAT_SCALE_CHANGE, _apply_combat_scale)
     bus.register(EventKind.ENTROPY_INJECT, _apply_entropy_inject)
     bus.register(EventKind.TILE_CHANGED, _apply_tile_changed)
+    bus.register(EventKind.NPC_DEATH, _apply_npc_death)
     return bus

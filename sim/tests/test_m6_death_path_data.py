@@ -115,8 +115,16 @@ def _loop(state: WorldState) -> TickLoop:
 
 class TestDeathPathAbsentToday:
     def test_no_death_kind_registered(self) -> None:
-        """事实基座①：今天**没有任何死亡类 kind**（契约先行 ⇒ 前提钉成事实）。"""
-        assert _death_kind() is None, f"死亡类 kind 已出现：{_death_kind()}（本钉该退役）"
+        """事实基座①（**退役版**）：死亡 kind 已落（落点 a 兑现）且进默认总线。
+
+        原「今天无死亡载体」前提随落点 a 落地而失效——本钉转为正向：
+        kind 存在、在默认总线注册、且在 PAYLOAD_MODELS 闭合集内（红线 A）。
+        """
+        kind = _death_kind()
+        assert kind is not None, "死亡类 kind 消失（落点 a 回退？）"
+        from sim.core.persistence.event_validation import PAYLOAD_MODELS
+
+        assert kind in PAYLOAD_MODELS, f"死亡 kind 未登记 payload 模型（红线 A）：{kind}"
 
     def test_default_bus_registers_no_removal_handler(self) -> None:
         """事实基座②：默认总线的五个 handler 里**没有一个会删实体**。"""
