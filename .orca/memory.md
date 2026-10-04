@@ -1606,6 +1606,30 @@ uv run pyright sim/
   ⇒ **路由面断言一律走 `app.openapi()` 的 `paths`**（M6-K1 已按此写）。
   **门禁**：M6-K1 钉 7 passed/5 skipped／全量 **2237 passed / 125 skipped / 0 failed**／ruff 全过／
   format 干净／pyright 0／`gen-protocol --check` EXIT 0／新文件 `w/lf`。
+- **✅ M6-K2 已交 `bdf8ea7`（origin+gitee 已推）——诊断路由进协议快照（§7 minor 1.2）+ K11 假绿修复**。
+  ①`shared/openapi.json` **手工注入**诊断路由 `GET /api/anchors/{anchor_id}/materialization` ＋
+  `AnchorMaterializationStatus`（三键 + `additionalProperties:false`），**保序最小 diff 31 行**；
+  `shared/protocol.ts` 重生成同提交（纯新增 `getAnchorMaterialization` 操作与类型）；
+  `sim/api/openapi_ext.py` 手工登记该路由 400/404 Problem 响应（§3.3 坑）。
+  ②**versioning §7 新增 1.2 行**（新增端点+schema = **minor**）；**版本影响**：WS 信封 `v` 与
+  `client/src/net/ws.ts` **一并升 1.2**（单一版本号语义）、**HTTP 不引 URL 版本前缀**（§4）、
+  前端可见变化为纯新增。
+  ③**K11 假绿修复**：`test_every_http_route_declares_response_model` 从 `app.routes` 改走
+  **live spec 的 `paths`**（`_IncludedRouter` 包装 ⇒ `app.routes` 只见 9 条、旧钉只查了 2 条路由），
+  判据＝「200 段是否带 content schema」＋「live 至少一条 anchors 路径」自检断言。
+  **⚠ 两条重要口径（下次改快照前必读）**：
+  - **`shared/openapi.json` 是手工维护的 mock**，`prettier --check` 对它**本就不绿** ⇒ **禁止全量
+    重排/重新序列化**（会产生 1400 行噪声淹没实质 diff）。改法＝**外科式文本插入**（路径键 4 空格缩进、
+    schema 键 6 空格缩进、`{ "$ref": ... }` 单行折叠照抄邻居），插完 `json.loads` 自检。
+  - **live ↔ 快照的差异是「设计」不是「漂移」**：operationId（live 是 FastAPI 自动名，快照是 camelCase
+    ——**前端类型名由它派生**）、summary 文案、live 侧多 `description`/`tags`、422 与 Problem 码分工。
+    ⇒ parity 钉只能做**结构对拍**（响应码 snapshot ⊆ live ＋ 400/404 都在 ＋ 200 的 `$ref` ＋ operationId），
+    **逐字段相等不可能成立**。
+  ④**动了 opencode 一个钉（按其自身 docstring 嘱咐）**：`test_m5_materialization_api.py::
+  test_route_exists_in_app_but_not_in_mock_snapshot` 是它的**挂账事实钉**，明写「若有人补进快照，
+  要同时走 §7 登记 + 升版，别静默补」⇒ 我做完三件后把它**结清**为「防静默补登记」守卫。
+  **门禁**：全量 **2240 passed / 123 skipped / 0 failed**／ruff 全过／pyright 0／
+  `gen-protocol --check` EXIT 0／前端 21 passed + typecheck 干净／10 文件 `w/lf` 无 BOM。
 
 **② 接口域现状（一句话）**
 协议面＝`shared/openapi.json`（唯一真相源）→ `npm run gen-protocol` → `shared/protocol.ts`（**禁手写**）→
@@ -1614,6 +1638,13 @@ uv run pyright sim/
 批次 C 权力面按裁 27-C/D-10「权力完全不可见」＝**协议零新增**。CRITICAL（G-1 plan 越界、R-1 读档挂死）与全部 HIGH 已清零。
 
 **③ 下一步**
+- ~~**在途：M5-K9 ~ K16、M6-K1 ~ K2**~~ **✅ 均已交（见上）**。**等派项**：
+  ①**案 B 接线后**核 drain 失败帧钉解锁（Claude driver 面；锁信号＝`_drain_loads` 有生产调用方）；
+  ②`info.version` 接同源常量（改 `main.py` app `version=` + 快照，**须另立快照单**）；
+  ③任何 M6 新协议面（走 §7 登记 + 跨树版本钉 `test_protocol_version.py`；快照改法见 K2 的两条口径）。
+  **已闭合**：R-4 复验、fire 守卫钉、protocol 1.1/1.2、K12 稿订正、F-1、G2、G4、M-1 诊断面、
+  live↔快照漂移、K11 路由面假绿。
+  **另可主动做（不接未派单）**：协议面审计与对表、live↔快照对账、契约草案、钉子补齐、复验评审。
 - ~~**在途：M5-K9 ~ K16、M6-K1**~~ **✅ 均已交（见上）**。**等派项**：
   ①**诊断路由补快照**（live↔快照对拍；须动 `shared/`——我出钉已就位，补完自动解锁）；
   ②**案 B 接线后**核 drain 失败帧钉解锁（Claude driver 面）；
