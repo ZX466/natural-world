@@ -184,6 +184,17 @@ HTTP 侧诊断路由返 200 + `ready=false` + 原因码。
 都是「**将来加字段时无钉可抓**」，当下**零泄漏面**（结构性密封：白名单响应模型 ＋
 `extra="forbid"` ＋ blob 白名单）⇒ **不阻 M6 开工**，建议随 P0 施工一并落 M-1/M-3。
 
+## 5.1 M6-S1 执行记录（codex）
+
+- **案 A 已落**：`sim/api/ws.py` 的 `load_anchor` `load_failed` 玩家文案在最终出站边界调用
+  现有 `scan()`；命中时记录 `ws.anchor_load_message_degraded` warning，并按固定候选序退化为
+  零命中文案。主文案与每个兜底候选均复扫，所有候选再次命中才 fail-closed 为空文案并记录 error。
+- **8 词纪律保持**：未修改 `BANNED_WORDS` 或 `META_SHELL`；`META_SHELL` 继续为空。
+- **W-A 四钉状态**：`sim/world/authority/` 当前尚未落盘，因此 W-A1-1、W-A1-2、W-A2-1、
+  W-A2-2 均保持 `BLOCKED`，不将缺失实现误报为通过。authority 落盘后逐钉执行：
+  白盒扫内建词面过滤、核对词表与用例同步、拒绝 `UtilityDecision`/`Intent` 旁路引用，并以同一
+  输入切换权力档验证 `willingness_conflict` 的 band 发生变化。
+
 ## 6. 钉号总账（本稿 3 条 ＋ 归属）
 
 | 钉 | 描述 | 分级 | 归属 | 状态 |

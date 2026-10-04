@@ -880,9 +880,9 @@ def _handle_load_anchor(
     except Exception:
         # 重放中世界状态损坏等执行异常：降级 load_failed，连接保持（§3.3）
         logger.warning("ws.anchor_load_failed", reason="hook_exception")
-        return _error_frame("load_anchor", _ERROR_LOAD_FAILED, "这个档读不出来了。")
+        return _load_failed_frame()
     if not ok:
-        return _error_frame("load_anchor", _ERROR_LOAD_FAILED, "这个档读不出来了。")
+        return _load_failed_frame()
     # 短期同步路径（§3.4）：复用 snapshot_payload；长期 driver 化后本分支由广播接替。
     pointer = anchor_pointer(anchor_id)
     ctrl = control if control is not None else _LEGACY_CONTROL
@@ -893,6 +893,21 @@ def _handle_load_anchor(
         notice=fork_notice(pointer.get("name", "") if pointer else ""),
     )
     return [notice_frame, snapshot_payload(loop, pf.tile_map)]
+
+
+def _load_failed_frame() -> dict[str, Any]:
+    """构造物化失败的玩家帧，并在最终文案边界执行案 A 终扫。"""
+    message = "这个档读不出来了。"
+    if not scan(message).hits:
+        return _error_frame("load_anchor", _ERROR_LOAD_FAILED, message)
+
+    logger.warning("ws.anchor_load_message_degraded", reason="banned_message_outbound")
+    for fallback in ("档打不开。", "读不了。", "打不开。"):
+        if not scan(fallback).hits:
+            return _error_frame("load_anchor", _ERROR_LOAD_FAILED, fallback)
+
+    logger.error("ws.anchor_load_message_fallback_invalid")
+    return _error_frame("load_anchor", _ERROR_LOAD_FAILED, "")
 
 
 def session_state_payload(
