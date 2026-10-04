@@ -1585,6 +1585,27 @@ uv run pyright sim/
   **门禁**：A6 16 passed/2 skipped／全量 **2216 passed / 122 skipped / 0 failed**／ruff 全过／
   pyright 0／`gen-protocol --check` EXIT 0／新稿 `w/lf`+prettier 过。
   **注**：`ruff format --check` 对 A6 文件 1 处 unformatted，**HEAD 版本已红**（opencode 段）⇒ 未代改。
+- **✅ M6-K1 已交 `30b8674`（origin+gitee 已推）——M-1 诊断路由面 + drain 失败帧体例**（零生产码，
+  M6 开题首单）。新文件 `sim/tests/test_m5_diagnosis_outbound.py` **12 例＝7 即绿 + 5 skip-locked**：
+  ①`TestDiagnosticRouteSeal`（今天即绿，M-1 本体）：诊断路由
+  `GET /api/anchors/{anchor_id}/materialization` 须声明**封闭**响应模型（live spec 断三键 +
+  `additionalProperties:false`），响应体**逐键过 `outbound_guard` 递归扫 = 零命中**（`ready=true` 与
+  `ready=false` 两态都扫）；三态走一遍验原因码固定集与互斥（**新存档天然 `rng_unavailable`** ⇒ 要拿到
+  `ready=true` 须补包的 `rng_state`，再删包得 `no_package`）＋模型层零禁键。
+  ②`TestDiagnosisSurfaceParity`（**skip-locked，M6-K1 实测缺口**）：诊断路由**不在
+  `shared/openapi.json`** ⇒ **live↔快照漂移**（前端类型面缺该路由）；而 `gen-protocol --check`
+  **只校生成物↔快照、不校 live↔快照** ⇒ 至今不红。补快照要动 `shared/`（非我域）。
+  ③`TestWsErrorVocabulary`（今天即绿）：11 项闭合集 + `load_failed` 仍在 + `error` 帧形状不变。
+  ④`TestDrainFailureFrame`（skip-locked 3 例）：失败分支须引用既有 `_ERROR_LOAD_FAILED`；玩家可见文本
+  须是**字面量**（AST 查帧构造第三参，禁 f-string/变量）；字面量零工程词。锁信号＝`_drain_loads` 有
+  **生产调用方**（今天为假）。**为什么源码级而非端到端**：本仓**无 `pytest-timeout`**，TestClient
+  websocket 是**阻塞式** `receive_json()` ⇒ 投递机制猜错会**挂死 CI**；端到端钉留给施工方同提交。
+  **⚠ 自查发现（我自己的 K11 钉假绿，待修）**：`test_m5_power_api.py::test_every_http_route_declares_response_model`
+  遍历 **`app.routes`**，但本仓 anchors/world 路由挂在 **`_IncludedRouter`** 包装里 ⇒ `app.routes` 只有
+  **9 条**、看不到任何 `/api/anchors/*` ⇒ 该钉实际只查了 `/api/health` 与 `/api/world/map`。
+  ⇒ **路由面断言一律走 `app.openapi()` 的 `paths`**（M6-K1 已按此写）。
+  **门禁**：M6-K1 钉 7 passed/5 skipped／全量 **2237 passed / 125 skipped / 0 failed**／ruff 全过／
+  format 干净／pyright 0／`gen-protocol --check` EXIT 0／新文件 `w/lf`。
 
 **② 接口域现状（一句话）**
 协议面＝`shared/openapi.json`（唯一真相源）→ `npm run gen-protocol` → `shared/protocol.ts`（**禁手写**）→
@@ -1593,6 +1614,15 @@ uv run pyright sim/
 批次 C 权力面按裁 27-C/D-10「权力完全不可见」＝**协议零新增**。CRITICAL（G-1 plan 越界、R-1 读档挂死）与全部 HIGH 已清零。
 
 **③ 下一步**
+- ~~**在途：M5-K9 ~ K16、M6-K1**~~ **✅ 均已交（见上）**。**等派项**：
+  ①**诊断路由补快照**（live↔快照对拍；须动 `shared/`——我出钉已就位，补完自动解锁）；
+  ②**案 B 接线后**核 drain 失败帧钉解锁（Claude driver 面）；
+  ③**修我自己的 K11 假绿钉**（`test_every_http_route_declares_response_model` 改走
+  `app.openapi()` 的 `paths`）——待主树派单或授权；
+  ④`info.version` 接同源常量（须另立快照单）；⑤任何 M6 新协议面（走 versioning §7 登记 +
+  跨树版本钉 `test_protocol_version.py`）。
+  **已闭合**：R-4 复验、fire 守卫钉、protocol 1.1、K12 稿订正、F-1 补扫、G2 补钉、G4、M-1 诊断面。
+  **另可主动做（不接未派单）**：协议面审计与对表、live↔快照对账、契约草案、钉子补齐、复验评审。
 - ~~**在途：M5-K9 ~ K16**~~ **✅ 均已交（见上）**。**等派项**：
   ①**G4 那一行**（`anchors.py` 的 ProblemDetail 分隔符改 `机器码|人读详情`）——需主树授权或
   由主树改；改后我那 2 例 skip-locked 自动解锁转绿；
