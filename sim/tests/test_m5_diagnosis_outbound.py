@@ -98,14 +98,29 @@ def _string_literals(path: Path) -> list[str]:
 def _drain_wired_in_production() -> bool:
     """锁信号：`_drain_loads` 在生产代码里**被调用**（注册/定义不算）。
 
-    今天为假——`main.py:156` 只把它挂到 `app.state`，driver 循环从不调用
-    （全仓唯一调用方是 `test_m5_anchors_crud.py` 的手动 drain）。案 B 落地后自动为真。
+    K16 时为假——`main.py` 只把它挂到 `app.state`，driver 循环从不调用。
+    案 B 接线后的**生产调用点 = `run_world_driver` 循环**（ws.py：flush 写事务
+    收口后 `drain_loads()`）——所以本锁认两处调用点任一：
+    ①`main.py` 里 `drain_pending_loads()` 被调用（≥3 次出现，K16 原口径）；
+    ②`ws.py::run_world_driver` 里有 `drain_loads()` 调用 + `main.py` 把
+    `_drain_loads` 传进了 `run_world_driver(...)`（传参即调用链落地）。
+
+    ⚠ `_code_only` 保留 token 间空格（`drain_loads = _drain_loads`）——
+    判定前先剥空格再做子串对拍（K16 原口径对「词内无空格」的假设在此不成立）。
     """
-    code = _code_only(MAIN_PY)
-    if "drain_pending_loads()" not in code:
-        return False
-    # 定义 + 注册已占两处；再出现即「被调用」
-    return code.count("drain_pending_loads") >= 3
+
+    def _tight(code: str) -> str:
+        return code.replace(" ", "").replace("\n", "")
+
+    main_code = _code_only(MAIN_PY)
+    if "drain_pending_loads()" in main_code and main_code.count("drain_pending_loads") >= 3:
+        return True
+    ws_tight = _tight(_code_only(WS_PY))
+    driver_call = "drain_loads()" in ws_tight
+    main_passes = "_drain_loads" in _tight(main_code) and "drain_loads=_drain_loads" in _tight(
+        main_code
+    )
+    return driver_call and main_passes
 
 
 requires_drain_wiring = pytest.mark.skipif(
@@ -246,8 +261,9 @@ class TestDiagnosticRouteSeal:
     def test_diagnosis_reason_follows_fixed_set_and_exclusion(self, client_db: Any) -> None:
         """三态走一遍：原因码 ∈ 固定集，且 `ready=true ⇒ reason is None`（互斥不骗人）。
 
-        ①新存档天然 `rng_unavailable`（拿不到随机流状态 ⇒ 不可回退，批次 E 的真实语义）；
-        ②补上 `rng_state` ⇒ `ready=true` + `reason=None`；
+        ①新存档 `ready=true`（rng 缺口已由批次 A 接线关闭：app.state.rng_capture
+        挂了真实 capture——S13/M6 批次 A 兑现）；
+        ②抹掉 `rng_state` 列值 ⇒ `rng_unavailable`（fail-closed 不 seed 派生）；
         ③删包 ⇒ `no_package`。
         """
         client, db = client_db
@@ -255,12 +271,14 @@ class TestDiagnosticRouteSeal:
         anchor_id = created["id"]
 
         fresh = client.get(f"/api/anchors/{anchor_id}/materialization").json()
-        assert fresh["ready"] is False and fresh["reason"] == "rng_unavailable", fresh
+        assert fresh["ready"] is True and fresh["reason"] is None, (
+            f"rng 接线后新存档仍不可物化（批次 A 接线缺半？）：{fresh}"
+        )
 
-        _set_rng_state(db, anchor_id)
-        ready_body = client.get(f"/api/anchors/{anchor_id}/materialization").json()
-        assert ready_body["ready"] is True and ready_body["reason"] is None, (
-            f"ready=true 却带原因码（骗人组合）：{ready_body}"
+        _set_rng_state(db, anchor_id, blob="")
+        unavailable = client.get(f"/api/anchors/{anchor_id}/materialization").json()
+        assert unavailable["ready"] is False and unavailable["reason"] == "rng_unavailable", (
+            f"ready=false 却不带 rng_unavailable（骗人组合）：{unavailable}"
         )
 
         _drop_package_row(db, anchor_id)
@@ -381,15 +399,36 @@ class TestDrainFailureFrame:
         )
 
     def test_failure_frame_message_is_a_literal_no_engineering_words(self) -> None:
-        """玩家可见文本必须是**字面量**（戏内口语）；工程词只能进 `logger` 的字段。
+        """玩家可见文本必须是**字面量或字面量别名**；工程词只能进 `logger` 的字段。
 
-        白盒判据：帧构造调用的第三个参数（message）若不是常量（f-string / 变量 /
-        属性 / 调用），则 `reason`/异常串会漏到玩家眼前。`reason=str(exc)` 这种写法
-        只允许出现在 `logger.*(...)` 的参数里。
+        白盒判据：帧构造调用的第三个参数（message）——
+        - `ast.Constant`：字面量本体 ✔；
+        - `ast.Name`：**别名**，仅当同名变量在**同一函数内**被赋值为 `ast.Constant`
+          （`fallback = returned` 里 returned 逐候选来自字面量元组，此处再验
+          「别名不是动态串」——`str(exc)`/f-string 的赋值不是 Constant，照红）；
+        - 其余形态（f-string / 属性 / 调用 / 裸下标）：一律红——`reason`/异常串
+          会漏到玩家眼前。`reason=str(exc)` 只允许进 `logger.*(...)`。
+        （M6 裁：S2 防摘钉要求返回行消费 scan 结果（变量名记号），与「值恒字面量」
+        由本判据的别名规则合成——机制本质=文案源是静态字面量集，不弱化。）
         """
         offenders: list[str] = []
         for path in (MAIN_PY, WS_PY):
-            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            # 函数作用域内的「名字 → 是否字面量（含传递别名）」表：
+            # 直接 Constant 赋值 ✔；别名赋值（`b = a`）沿链传递 ✔；
+            # 其余（Call/f-string/Name-of-loop-var 等）不进表（照红）。
+            literal_alias: set[str] = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(
+                    node.targets[0], ast.Name
+                ):
+                    name = node.targets[0].id
+                    value = node.value
+                    is_const = isinstance(value, ast.Constant)
+                    is_alias = isinstance(value, ast.Name) and value.id in literal_alias
+                    if is_const or is_alias:
+                        literal_alias.add(name)
+            for node in ast.walk(tree):
                 if not isinstance(node, ast.Call):
                     continue
                 name = getattr(node.func, "attr", "") or getattr(node.func, "id", "")
@@ -398,6 +437,8 @@ class TestDrainFailureFrame:
                 for arg in node.args[2:]:  # (ref, code, message)
                     if isinstance(arg, ast.Constant):
                         continue  # 字面量：戏内口语 ✔
+                    if isinstance(arg, ast.Name) and arg.id in literal_alias:
+                        continue  # 字面量别名：值恒为字面量（含传递别名）✔
                     kind = "f-string" if isinstance(arg, ast.JoinedStr) else type(arg).__name__
                     offenders.append(f"{path.name}:L{arg.lineno}: {kind} 进玩家可见文本")
         assert offenders == [], f"失败帧文本不是字面量（工程词会漏给玩家）：{offenders}"
@@ -407,6 +448,11 @@ class TestDrainFailureFrame:
 
         与上一钉互补：上一钉查「是不是字面量」，这一钉查「字面量干不干净」。
         机器码串（`/errors/...`）与日志事件名（`fork.load_failed`）不在此列。
+
+        扫描面 = **玩家帧可达**的字符串（`_error_frame` 的 ref/code/message 实参与
+        玩家文案候选元组）——基建配置字面量（如 `build_loop` 的 DB URL
+        `sqlite+aiosqlite:///world.db`：引擎连接串，不是帧文本）与 logger 事件名
+        不在帧路径上，不属本钉对象（K16 原口径扫全文件字面量在解锁后误伤基建）。
         """
         forbidden = (
             "no_package",
@@ -425,10 +471,31 @@ class TestDrainFailureFrame:
         )
         offenders: list[str] = []
         for path in (MAIN_PY, WS_PY):
-            for text in _string_literals(path):
-                if text.lstrip("/").startswith("errors/") or text.startswith("fork."):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
                     continue
-                hits = [w for w in forbidden if w in text]
-                if hits:
-                    offenders.append(f"{path.name}: {hits} in {text[:60]}")
+                fname = getattr(node.func, "attr", "") or getattr(node.func, "id", "")
+                is_frame = fname in {"_error_frame", "error_frame"}
+                candidate_elts: list[str] = []
+                if isinstance(node, ast.Tuple):
+                    for e in node.elts:
+                        if isinstance(e, ast.Constant) and isinstance(e.value, str):
+                            candidate_elts.append(e.value)
+                is_candidate_tuple = bool(candidate_elts) and not is_frame
+                if not is_frame and not is_candidate_tuple:
+                    continue
+                texts: list[str] = []
+                if is_candidate_tuple:
+                    texts = candidate_elts
+                else:
+                    for a in node.args:
+                        if isinstance(a, ast.Constant) and isinstance(a.value, str):
+                            texts.append(a.value)
+                for text in texts:
+                    if text.lstrip("/").startswith("errors/") or text.startswith("fork."):
+                        continue
+                    hits = [w for w in forbidden if w in text]
+                    if hits:
+                        offenders.append(f"{path.name}: {hits} in {text[:60]}")
         assert offenders == [], f"字符串字面量含工程词（会随帧/日志外泄）：{offenders}"

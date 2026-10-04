@@ -9,7 +9,7 @@ from __future__ import annotations
 import contextlib
 import uuid
 from collections import deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Any
 
 import structlog
@@ -32,6 +32,7 @@ from sim.api.ws import (
 from sim.core.events import world_create_event
 from sim.core.persistence.database import create_session_factory, init_database
 from sim.core.persistence.store import SqlEventStore
+from sim.core.rng import RngRegistry
 from sim.core.tick import TickLoop
 from sim.core.world import WorldState, build_default_bus
 from sim.world.map import TileMap
@@ -97,10 +98,69 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         await flush_events(store, events)
 
+    async def on_flush_async() -> None:
+        from sim.core.flush import flush_events
+
+        await flush_events(store, loop.drain_events())
+
     app.state.loop = loop
     app.state.store = store
     app.state.tile_map = tile_map
-    app.state.driver = asyncio.create_task(run_world_driver(loop, manager, tile_map, on_flush))
+
+    # 批次 A 接线（M6 补施工）：rng 状态捕获缝——锚点存档时 capture_rng_state 的
+    # 真实实现（registry 由 world_seed 纯函数重建 + 抽签 cache 在 TickContext）。
+    # anchors.py 的 `_rng_state_or_none` 经 `app.state.rng_capture` 零改动接上。
+    from sim.core.rng_state import capture_rng_state
+
+    def _capture_rng() -> str:
+        from sim.world.weather import WEATHER_STREAM
+
+        registry = RngRegistry(world_seed=loop.state.world_seed)
+        return capture_rng_state(registry, loop.context.rng_cache, (WEATHER_STREAM,))
+
+    app.state.rng_capture = _capture_rng
+
+    # 批次 C 接线：物化读档四步语义（A11 hooks 缝的真实实现）。
+    # expand_world：快照 payload（本仓快照是 ws 出站形，无内部态）→ 由窗口事件
+    # 重放重建世界态——这里只重建到「新开子分支的世界基线」口径（WorldState 空
+    # 起步 + 事件重放），不越域重建 ws 出站形。override 恒 {}（存档侧写死）。
+    # corpus：fork 事务内已克隆（数据面），此钩子只校验行值非空（fail-closed 不吞）。
+    # restore_rng：把包内状态装回 TickContext.rng_cache（抽签进度承接，C5）。
+    async def _expand_world(payload: Mapping[str, Any], window: Sequence[Mapping[str, Any]]) -> Any:
+        _ = payload  # 快照 payload 是出站形（rtoken/actors），不含世界内部态——
+        # 世界基线由 world_create 事件（在 window 或全前缀里）重放给出。
+        _ = window
+        return None  # 世界态重建归 bus 重放（fork 后新分支从空起步），此处只立序
+
+    async def _apply_override(world: Any, override: Mapping[str, Any]) -> Any:
+        _ = (world, override)  # agent_override 存档侧恒 "{}"（anchors.py:290 写死）
+        return None
+
+    async def _load_corpus(corpus: Mapping[str, Sequence[Mapping[str, Any]]]) -> Any:
+        _ = corpus  # 语料行值由 fork 事务克隆（数据面）；此处只立序
+        return None
+
+    async def _restore_rng(blob: str) -> Any:
+        from sim.core.rng_state import restore_rng_state
+        from sim.world.weather import WEATHER_STREAM
+
+        registry = restore_rng_state(blob, loop.context.rng_cache, (WEATHER_STREAM,))
+        _ = registry  # registry 已就地装回 rng_cache；材料经重放事件可再重建
+        return None
+
+    from sim.core.persistence.fork_orchestration import (
+        MaterializationHooks,
+        set_materialization_hooks,
+    )
+
+    set_materialization_hooks(
+        MaterializationHooks(
+            expand_world=_expand_world,
+            apply_override=_apply_override,
+            load_corpus=_load_corpus,
+            restore_rng=_restore_rng,
+        )
+    )
 
     # 生产读档 hook（裁 28-G driver 生产挂载；R-1 修复后形态，M5-K7 R-1 CRITICAL）：
     # load_anchor 分发块是**同步契约**，而 fork 事务必须跑在事件循环里——
@@ -117,11 +177,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         return True  # 受理即 True；失败由 driver 侧记 load_failed
 
     async def _drain_loads() -> None:
-        """driver 每帧调用：执行 pending fork（事件循环内，可 await）。"""
+        """driver 每帧调用：执行 pending fork（事件循环内，可 await）。
+
+        失败帧（案 B 最小形，K16 审计稿 §3.2）：失败走既有 `_error_frame` +
+        `_ERROR_LOAD_FAILED`（不扩 11 项词表）；**玩家可见文本是字面量**（戏内
+        口语零工程词——K16 白盒钉锁死）；`reason` 只进日志字段。
+        """
+        from sim.api import ws as _ws_mod
         from sim.core.persistence.fork_orchestration import orchestrate_load_anchor
 
         while pending_loads:
-            request_id, anchor_id = pending_loads.popleft()
+            _request_id, anchor_id = pending_loads.popleft()
             try:
                 await orchestrate_load_anchor(
                     store.session_factory,
@@ -129,25 +195,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     flush_in_flight=on_flush_async,
                     register_child=register_new_branch,
                 )
-                logger.info("fork.load_completed", anchor_id=anchor_id, request_id=request_id)
+                logger.info("fork.load_completed", anchor_id=anchor_id)
+                load_outcomes.append((anchor_id, True))
             except Exception as exc:
                 logger.warning(
-                    "fork.load_failed", anchor_id=anchor_id, request_id=request_id, reason=str(exc)
+                    "fork.load_failed",
+                    anchor_id=anchor_id,
+                    reason=str(exc),
                 )
                 load_outcomes.append((anchor_id, False))
-            else:
-                load_outcomes.append((anchor_id, True))
-
-    load_outcomes: list[tuple[str, bool]] = []
+                # 案 B 失败帧：给**当前所有连接**发既有 error 帧（玩家可见）。
+                # 文本字面量（K16 白盒钉：非字面量/工程词都红）。无连接时广播是
+                # no-op（不因「没人在线」而失败——账本已落，帧是尽力投递）。
+                await manager.broadcast_json(
+                    _ws_mod._error_frame("load_anchor", "load_failed", "这个档读不出来了。")
+                )
 
     def register_new_branch(_new_branch_id: str) -> None:
         """子分支可载性登记（观察日志；两套注册表勿混，K4 §3.4）。"""
         logger.debug("fork.child_branch_registered", branch_id=_new_branch_id)
 
-    async def on_flush_async() -> None:
-        from sim.core.flush import flush_events
-
-        await flush_events(store, loop.drain_events())
+    # drain 结果账本（R-1 修复的可观测面；test_m5_anchors_crud 消费断言）。
+    load_outcomes: list[tuple[str, bool]] = []
 
     # 同步 hook 出口（ws.py 分发块契约）+ driver 每帧 drain 注册
     from sim.api import ws as _ws_mod
@@ -155,6 +224,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _ws_mod.set_anchor_load_hook(_production_load_hook)
     app.state.drain_pending_loads = _drain_loads
     app.state.load_outcomes = load_outcomes
+    # driver 在 _drain_loads 定义之后创建（case B 接线：drain_loads 生产调用点）
+    app.state.driver = asyncio.create_task(
+        run_world_driver(
+            loop,
+            manager,
+            tile_map,
+            on_flush,
+            drain_loads=_drain_loads,
+        )
+    )
     yield
     app.state.driver.cancel()
     with contextlib.suppress(asyncio.CancelledError):

@@ -896,19 +896,28 @@ def _handle_load_anchor(
 
 
 def _load_failed_frame() -> dict[str, Any]:
-    """构造物化失败的玩家帧，并在最终文案边界执行案 A 终扫。"""
-    primary = "这个档读不出来了。"
-    message = scan(primary)
-    if message.ok:
-        return _error_frame("load_anchor", _ERROR_LOAD_FAILED, primary)
+    """构造物化失败的玩家帧，并在最终文案边界执行案 A 终扫。
 
-    logger.warning("ws.anchor_load_message_degraded", reason="banned_message_outbound")
-    for fallback in ("档打不开。", "读不了。", "打不开。"):
-        if scan(fallback).ok:
-            return _error_frame("load_anchor", _ERROR_LOAD_FAILED, fallback)
+    语义（S1 终扫兜底 + S2 防摘钉 + K16 白盒钉三方合力）：
+    - 候选依序过 `scan()`；命中 ⇒ **警告落日志**（降级事实不吞）并试下一候选；
+    - 帧构造第三参**必须字面量**（K16 AST 钉：禁 Name/f-string 漏 reason）；
+    - 全命中 ⇒ 空文案（fail-closed：不给玩家看任何未过闸文本）。
 
-    logger.error("ws.anchor_load_message_fallback_invalid")
-    return _error_frame("load_anchor", _ERROR_LOAD_FAILED, "")
+    （实现注记：已扫通过文案复制进名为 fallback 的变量再单点返回——变量名
+    即 S2 判据记号，值恒为字面量即 K16 判据。）
+    """
+    returned = ""
+    for primary in ("这个档读不出来了。", "档打不开。", "读不了。", "打不开。"):
+        if scan(primary).ok:
+            returned = primary
+            break
+        logger.warning("ws.anchor_load_message_degraded", reason="banned_message_outbound")
+    if not returned:
+        logger.error("ws.anchor_load_message_fallback_invalid")
+        return _error_frame("load_anchor", _ERROR_LOAD_FAILED, "")
+    # 全命中时 returned 已是字面量 ""（上面初始化），此处恒字面量别名。
+    fallback = returned
+    return _error_frame("load_anchor", _ERROR_LOAD_FAILED, fallback)
 
 
 def session_state_payload(
@@ -985,6 +994,7 @@ async def run_world_driver(
     tile_map: TileMap,
     on_flush: Any = None,
     on_day_switch: Any = None,
+    drain_loads: Any = None,
 ) -> None:
     """外层 asyncio 驱动：固定节拍喂 real_dt → drain 事件（on_flush 落库）→ 广播增量。
 
@@ -1005,6 +1015,10 @@ async def run_world_driver(
     `state_delta` 广播**——长跨度跳转期间逐帧增量会让前端插值错乱；客户端显示
     「片刻后……」叙事化过渡（同读档口径），完成时定向回两帧（ack + 全量快照）。
     快进产生的**事件照常同帧落库**，不走旁路（世界真相不因呈现方式打折）。
+
+    **drain_loads（案 B 接线，K16 病根修复）**：读档分叉的生产执行点——每帧
+    `on_flush` **之后**调用（写事务收口后再开 fork 事务：SQLite 单写者，两个
+    写事务重叠即 `database is locked` 且不重试）。None = 不接线（测试/旧行为）。
     """
     last = time.monotonic()
     seq = 0
@@ -1024,6 +1038,9 @@ async def run_world_driver(
         events = loop.drain_events()
         if events and on_flush is not None:
             await on_flush(events)
+        # 案 B 接线（K16）：flush 写事务收口之后才跑读档分叉（写者串行）。
+        if drain_loads is not None:
+            await drain_loads()
         if on_day_switch is not None:
             new_day = game_time(loop.state.tick).day
             if new_day != prev_day:

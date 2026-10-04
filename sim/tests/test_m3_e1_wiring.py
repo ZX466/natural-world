@@ -329,7 +329,12 @@ class TestDaySwitchHook:
         assert days_seen == [2, 3, 4]
 
     def test_day_switch_after_flush(self) -> None:
-        """固定执行序：日切回调在事件落库之后（m3-plan 批次 B「事件结算后」）。"""
+        """固定执行序：日切回调在事件落库之后（m3-plan 批次 B「事件结算后」）。
+
+        批次 A 接线后，日界 tick（86400）会**额外产出 entropy_inject**（DESIGN §11
+        每日天气=注入真随机，生产循环兑现）⇒ flush 次数可能 >1（每帧有事件即刷）。
+        本钉保序语义：**首个 flush 先于日切回调**（序不变），不再锁 flush 计数。
+        """
         order: list[str] = []
         loop = _tick_loop_at(86_399)
         loop.issue_move("chenmo", [(1, 1)])
@@ -340,7 +345,7 @@ class TestDaySwitchHook:
 
         days_seen: list[int] = []
         self._drive_frames(loop, real_dt=0.10, days_seen=days_seen, on_flush=on_flush)
-        assert order == ["flush"], "move 事件帧应先落库"
+        assert order, "move 事件帧应先落库"
         assert days_seen == [2], "同一帧内日切应在落库后回调"
 
 

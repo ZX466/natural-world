@@ -10,7 +10,9 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
 from sim.core.clock import GameClock
+from sim.core.entropy import EntropyMixer
 from sim.core.events import WorldEvent, combat_scale_event, move_event
+from sim.core.rng import RngRegistry
 from sim.core.world import EventBus, TickContext, WorldState
 from sim.world.pathfinding import Pathfinder
 
@@ -48,11 +50,35 @@ class TickLoop:
         return n
 
     def _tick_once(self) -> None:
-        """固定执行序：1 实体移动 → 2 定时任务（M0 空）→ 3 感知（M1 挂载点）。"""
+        """固定执行序：0 熵注入（M5 批次 A 接线）→ 1 实体移动 → 2 定时任务（M0 空）→ 3 感知。"""
+        self._maybe_daily_reseed()
         self._step_entity_movement()
         self._run_perception()
         # 预留挂载点（M1+：L1 效用 / Intent 执行时二次校验）
         self.state = self.state.model_copy(update={"tick": self.state.tick + 1})
+
+    def _maybe_daily_reseed(self) -> None:
+        """每日天气熵注入（DESIGN §11；M5 批次 A 的「inject 生产接线」兑现）。
+
+        `daily_reseed_due(tick)` 为真时：用 `state.world_seed` 重建 `RngRegistry`
+        （weather 既有口径——materials 仅含已注入流，纯函数可重建）→
+        `EntropyMixer.mix(WEATHER_STREAM, tick)` → 事件经 `enqueue` 落日志
+        （C4 唯一写路径；mix 返回的新 registry 的 materials 随事件材料重放可重建，
+        状态层 no-op——见 `_apply_entropy_inject`）。tick 0 也注入（首日天气
+        同走注入路径，weather.daily_reseed_due 口径）。
+
+        registry 本体不入 `WorldState`（不碰 schema/state_hash）：mix 内部把新
+        registry 的材料记录在熵事件的 payload 里，消费方（wind/chaotic 抽签）
+        按事件流重放 `replay_mix` 即逐位一致（C5）；`TickContext.rng_cache` 保持
+        抽签进度缓存（不入快照）。
+        """
+        from sim.world.weather import WEATHER_STREAM, daily_reseed_due
+
+        if not daily_reseed_due(self.state.tick):
+            return
+        registry = RngRegistry(world_seed=self.state.world_seed)
+        _, event = EntropyMixer(rng=registry).mix(WEATHER_STREAM, tick=self.state.tick)
+        self.enqueue(event)
 
     def _run_perception(self) -> None:
         """感知挂载点（C06-③）：感知引擎挂入时每帧装配，替换为真实引擎。

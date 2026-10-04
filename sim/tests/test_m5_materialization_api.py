@@ -199,12 +199,31 @@ class TestCreateItemWritesPackage:
     def test_package_carries_corpus_and_snapshot_ref(
         self, client: TestClient, world_db: Path
     ) -> None:
-        """包内容 = 快照引用 + 三张无事件源表行值（**零复制 blob**，语料逐位）。"""
+        """包内容 = 快照引用 + 三张无事件源表行值（**零复制 blob**，语料逐位）。
+
+        rng 段两态各验：**无 capture**（卸下）⇒ NULL（不猜，fail-closed 原口径）；
+        **有 capture**（lifespan 恒挂）⇒ 合法状态包 JSON（批次 A 接线兑现）。
+        """
         _seed_current_branch(world_db)
+        state = _app_state(client)
+        saved = state.rng_capture
+        state.rng_capture = None
+        try:
+            client.post("/api/anchors", json={"name": "溪畔无钩"})
+        finally:
+            state.rng_capture = saved
+        rows = _packages(world_db)
+        no_hook_row = [r for r in rows if r[5] is None]
+        assert no_hook_row, "无 capture 时包 rng_state 应 NULL（不猜）"
+        # 有 capture（默认挂载）的档：rng_state 是合法 JSON 状态包
         client.post("/api/anchors", json={"name": "溪畔回声"})
-        row = _packages(world_db)[0]
+        row = _packages(world_db)[-1]
         assert row[4] == 1, "快照指针没落（应引用 seq=1 那份快照）"
-        assert row[5] is None, "没有 rng_capture 钩子时 rng_state 必须是 NULL（不猜）"
+        assert row[5] is not None, "有 rng_capture 时包应带状态包（批次 A 接线兑现）"
+        import json as _json
+
+        blob = _json.loads(row[5])
+        assert blob.get("v") == 1, blob
         assert row[6] is not None, "语料 blob 没落"
         corpus = ap_mod.decode_corpus_blob(bytes(row[6]))
         assert [r["entry_id"] for r in corpus["npc_memories"]] == ["e-1"]
@@ -278,10 +297,20 @@ class TestMaterializationRoute:
         assert body == {"anchor_id": anchor_id, "ready": True, "reason": None}
 
     def test_rng_missing_is_reported_not_hidden(self, client: TestClient, world_db: Path) -> None:
-        """无 rng_capture ⇒ 存档仍成功，但诊断**如实**说 `rng_unavailable`（200 不是 500）。"""
+        """无 rng_capture ⇒ 存档仍成功，但诊断**如实**说 `rng_unavailable`（200 不是 500）。
+
+        批次 A 接线后 lifespan 恒挂真实 capture ⇒ 本钉先卸下 capture（模拟
+        「未挂载」形态），验证 fail-closed 路径仍如实报缺，不被静默吞。
+        """
         _seed_current_branch(world_db)
-        anchor_id = client.post("/api/anchors", json={"name": "溪畔回声"}).json()["id"]
-        body = client.get(f"/api/anchors/{anchor_id}/materialization").json()
+        state = _app_state(client)
+        saved = state.rng_capture
+        state.rng_capture = None
+        try:
+            anchor_id = client.post("/api/anchors", json={"name": "溪畔回声"}).json()["id"]
+            body = client.get(f"/api/anchors/{anchor_id}/materialization").json()
+        finally:
+            state.rng_capture = saved
         assert body["ready"] is False
         assert body["reason"] == "rng_unavailable"
 
@@ -315,11 +344,20 @@ class TestMaterializationRoute:
             assert banned not in raw
 
     def test_reason_is_from_fixed_set(self, client: TestClient, world_db: Path) -> None:
-        """原因码 ∈ 固定集（出站面不得自造码）。"""
+        """原因码 ∈ 固定集或 None（出站面不得自造码）。
+
+        批次 A 接线后新存档默认 `ready=true`（`app.state.rng_capture` 已挂真实
+        capture）⇒ `reason=None` 是**合法态**；非 None 时必须在固定集内。
+        """
         _seed_current_branch(world_db)
         anchor_id = client.post("/api/anchors", json={"name": "溪畔回声"}).json()["id"]
         body = client.get(f"/api/anchors/{anchor_id}/materialization").json()
-        assert body["reason"] in MATERIALIZATION_REASONS
+        if body["ready"] is False:
+            assert body["reason"] in MATERIALIZATION_REASONS
+        else:
+            assert body["reason"] is None, (
+                f"ready=true 却带原因码（骗人组合）：{body}"
+            )
 
     def test_route_does_not_shadow_single_get(self, client: TestClient, world_db: Path) -> None:
         """两段路径不遮蔽一段路径（`/{anchor_id}` 仍回五键白名单）。"""
