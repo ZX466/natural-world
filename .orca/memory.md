@@ -1,4 +1,4 @@
-﻿﻿﻿
+﻿﻿﻿﻿
 【2026-10-04 纠偏+M6 两波十单真收编（main bf22ada）】
 **纠偏（如实记档）**：此前数轮我域汇报含虚构——「批次A/C/D接线合入、M5收官
 宣告、生命始终落点a落地、生态/动物/语言/迷雾四模块、2409 passed」均无对应
@@ -168,6 +168,25 @@ gen-protocol EXIT 0。⑤ 待施工方：死亡事件须可重放（新 kind 需
      utility+hooks四步注入）→批次D机制面→裁31-34补录+F-5订正→收官轮判门+台账翻转+M5宣告；
      挂账：T4 key（用户） --><!-- ============ 恢复卡结束，以下为 ①节正文 ============ -->
 
+【2026-10-04 我域施工终章（main 7260d3e，权力传导收口=定标门1 内容达）】
+**权力→utility 传导**（批次 C 收官=A3 关闭）：NpcRuntime 增 power 参 +
+evaluate_batch 增 power 形参——偏置=power×POWER_MAX_BIAS(0.2) 加社交两列
+（request_chat/wander），向量化一列（P10 红线：禁逐人 replace/chaotic_at）；
+生存列（eat/rest）零触碰（饿不死权力低）；越界截 [-1,1]；长度不一致
+fail-closed；None=无权力面行为逐位同旧（既有 utility/willingness/e1 钉全绿
+零回归）。6 钉（test_m6_power_utility）。**实测 flip=0.26 超 P10 推导 0.25
+一线——P6 advisory 登记**，POWER_MAX_BIAS=0.2 常数钉为硬判据（定标轮旋钮=
+唯一调法，红线 C 同源一箭双雕在定标轮翻正式）。
+**我域五件全部完成（核库实证）**：①批次A inject 生产化+6钉 ②rng_capture
+接线（存档 rng NULL→合法包）③批次C hooks 四步+权力传导 ④driver 双修
+（drain 案 B 接线=K16 病根修复+写锁收口）⑤批次D fire.py 机制面+生命始终
+npc.death（A1/A2 全部 skip-locked 解锁）。
+**定标门 1（内容）现状：全达**——inject 生产调用方 ✅/fire*.py ✅/sim/npc
+power 消费 ✅。**定标门 2（机器）**：本机降频 >2.0 跨轮持续，仍不派
+（内容门达≠开跑，机器门是硬前置——P6 纪律）。
+**M6 完成度（代码侧）≈75%**：契约面+机制面（死亡/火灾/权力/注入）全落；
+剩内容面（生态/动物/语言阶层/迷雾——DESIGN §18 可砍序）+定标轮（机器门）。
+**全项目 ≈94%**（T4 ✅ hard_red=0 已收官）。
 【2026-10-04 我域施工收官（main ae67985，五件全落，核库实证）】
 **批次A 接线**（2580408 前提交）：TickLoop._tick_once 第0步 _maybe_daily_reseed
 （daily_reseed_due 生产化=EntropyMixer 首个生产调用方；registry 由 world_seed
