@@ -154,11 +154,21 @@ class TestSamplingPoint:
 
 
 class TestBenchAssertionShape:
-    def test_both_no_runaway_and_smoke_assert_equality(self) -> None:
-        """契约形状钉：nightly（`_assert_no_runaway`）与 CI 冒烟（`_assert_smoke`）
-        **两处**都硬断言 `end == start` ⇒ M6 死亡落地必然撞红（派单背景成立）。"""
+    def test_both_sites_use_structural_entity_guard(self) -> None:
+        """契约形状钉（**M6-P1 阶段 A 追改**，原钉名 `…assert_equality`）：
+
+        本钉原本钉「两处都硬断言 `end == start`」= M5-P14 的派单背景。
+        阶段 A 落地后（`docs/perf/m6-soak-contract-preplan.md` §2，裁 36-4）该形状**按设计退役**，
+        改为「两处都走**结构量**共用判据 `_assert_entity_stable`」：
+          · 旧等式断言 **0 次**（已移入共用判据，防双真相源）；
+          · 共用判据在 `_assert_no_runaway` / `_assert_smoke` 各 **1 次** ⇒ 共 2 次。
+        **阶段 A 不预设死亡**：`SOAK_ENTITY_LOSS_PER_GAME_DAY == 0` ⇒ 净减上界 0 ⇒
+        与旧 `end == start` **语义等价**（故仍与下面那条「今天无死亡 kind」钉相容）。
+        阶段 B（生命落点 a 落地同 CR）提常量值，本钉不随动。
+        """
         src = BENCH_SOAK_PY.read_text(encoding="utf-8")
-        assert src.count("assert result.entity_count_end == result.entity_count_start") == 2
+        assert src.count("assert result.entity_count_end == result.entity_count_start") == 0
+        assert src.count("_assert_entity_stable(result, label=label, profile_ids=profile_ids)") == 2
 
     def test_event_kind_registry_has_no_removal_kind(self) -> None:
         """事件白名单里**没有**任何「删除实体/死亡」类 kind ⇒ 死亡语义在 M6 之前无载体。

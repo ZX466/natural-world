@@ -180,15 +180,18 @@ assert set(result.runtime_profile_ids_end) == set(result.entity_ids_end), \
 
 ---
 
-## 7. 提案值汇总（**遵卡片约束：不先写进任何测试**）
-| 常量/判据 | 现值建议 | 阶段 B（生命同 CR） | 体例/落点 |
+## 7. 提案值汇总
+> **✅ 阶段 A 已落（2026-10-04，M6-P1 第 1 件；本表由「提案」转为「实施记录」）**：`SOAK_ENTITY_LOSS_PER_GAME_DAY = 0` + `_entity_loss_bound()` + `_assert_entity_stable()`（四侧判据）+ 结构判据前置 + 契约钉 `test_soak_entity_loss_bound_is_zero_in_phase_a` 均已落 `sim/tests/bench/`；变异测试实证四侧判据非空转；施工记录与验证见 `docs/perf/m6-calibration-order.md` §2。
+> **⚠ 两处如实修正**：①「断言位置移到探针门之前」在本仓当前调用图下**是防御性的**——`_assert_no_runaway` 三个调用方及其 fixture 都在跑 soak 前已调 `_skip_if_throttled()` ⇒ 降频夜结构判据仍不会执行；**每提交结构覆盖实际来自无门的 `_assert_smoke`**（详见 calibration-order §2 末）。②A12 域钉 `test_both_no_runaway_and_smoke_assert_equality` 的**前提被本阶段按设计取代** ⇒ 已最小追改（见 calibration-order §6，含请 opencode 覆盖的报备）。
+
+| 常量/判据 | 阶段 A 实落值 | 阶段 B（生命同 CR） | 体例/落点 |
 |---|---|---|---|
-| `SOAK_ENTITY_LOSS_PER_GAME_DAY` | **0**（等价恒等，可先落） | 由生命面给（本域给推导式） | 代码契约常量 + 锁值钉；**落 `test_bench_soak.py` 顶部，不进 `thresholds.py`** |
-| 增侧界（净增 ≤ 0） | **硬断言**（不进常量） | 不变（除非 M6 明确引入运行中入世 ⇒ 需**单独**的增侧常量与依据） | `_assert_entity_stable` |
-| id 集合判据（无新 id） | **硬断言** | 不变 | `_assert_entity_stable`（需 `SoakResult` 加 id 快照） |
-| 映射一致判据（`entities` ↔ `profiles`） | **硬断言**（现值恒真） | 不变 | `_assert_entity_stable` |
-| 断言位置 | 建议**移到 `_skip_if_throttled()` 之前** | 不变 | `_assert_no_runaway` / `_assert_smoke` |
-| `thresholds.py` | **零改动**（本契约不进红线表） | 零改动 | — |
+| `SOAK_ENTITY_LOSS_PER_GAME_DAY` | **0（已落）** | 由生命面给（本域给推导式） | 代码契约常量 + 锁值钉；**落 `test_bench_soak.py` 顶部，不进 `thresholds.py`** |
+| 增侧界（净增 ≤ 0） | **硬断言（已落）** | 不变（除非 M6 明确引入运行中入世 ⇒ 需**单独**的增侧常量与依据） | `_assert_entity_stable` |
+| id 集合判据（无新 id） | **硬断言（已落，`SoakResult` 已加 id 快照）** | 不变 | `_assert_entity_stable`（需 `SoakResult` 加 id 快照） |
+| 映射一致判据（`entities` ↔ `profiles`） | **硬断言（已落，L1 两测传 `profile_ids`）** | 不变 | `_assert_entity_stable` |
+| 断言位置 | **已移到门之前（防御性，见上 ⚠①）** | 不变 | `_assert_no_runaway` / `_assert_smoke` |
+| `thresholds.py` | **零改动（已守）** | 零改动 | — |
 
 ---
 

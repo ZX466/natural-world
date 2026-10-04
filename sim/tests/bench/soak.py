@@ -263,6 +263,10 @@ class SoakResult:
     total_ticks: int = 0
     entity_count_start: int = 0
     entity_count_end: int = 0
+    #: 实体 id 快照（M6-P1 阶段 A 结构判据用）：**计数相等也可能整体换人**，故并列记录 id 集合。
+    #: 方案见 docs/perf/m6-soak-contract-preplan.md §2.1 ③/④。
+    entity_ids_start: tuple[str, ...] = ()
+    entity_ids_end: tuple[str, ...] = ()
     pending_peak: int = 0
     cache_sizes: dict[str, int] = field(default_factory=dict)
 
@@ -309,7 +313,10 @@ def run_soak(
     - 自动压制内核 debug 日志（否则 logger 开销淹没内核信号）。
     """
     quiet_bench_logging()
-    result = SoakResult(entity_count_start=len(loop.state.entities))
+    result = SoakResult(
+        entity_count_start=len(loop.state.entities),
+        entity_ids_start=tuple(loop.state.entities),
+    )
     samples: list[float] = []
     win_start = loop.state.tick
     for _ in range(ticks):
@@ -333,6 +340,7 @@ def run_soak(
         result.windows.append(_close_window(win_start, samples))
     result.total_ticks = loop.state.tick
     result.entity_count_end = len(loop.state.entities)
+    result.entity_ids_end = tuple(loop.state.entities)
     return result
 
 
