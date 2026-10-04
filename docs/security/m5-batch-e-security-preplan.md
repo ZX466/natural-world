@@ -250,6 +250,16 @@ P10 已裁 `POWER_MAX_BIAS = 0.2`（裁 32），并把「flip 守卫」与「熵
 | 5 | flip≤0.25 + 熵≥阈值 | 机制接线单随附断言 | 两项均不破 | pi 定标（我复核口径） |
 | 6 | 批次 E 面（若 E 批已合入） | `uv run pytest sim/tests/test_m5_offline_drill.py sim/tests/test_m5_anchor_packages.py -q` | 全绿（本稿 E 组钉） | 三方 |
 
+### 5.5 M6-S2 追加复验（S1 终扫兜底防摘）
+
+| 顺序 | 跑什么 | 命令 | PASS 判据 | 归属 |
+| --- | --- | --- | --- | --- |
+| 7 | S1 `load_failed` 终扫兜底回归 | `uv run pytest sim/tests/test_m5_session_state.py::TestLoadAnchorEmitsSessionState -q` | `13 passed`；钉 `test_failure_message_is_terminal_scanned` / `test_failure_message_never_bypasses_scan_call` 均在 | codex |
+| 8 | 摘除/直通负核（临时补丁，核后撤销） | 临时把 `_load_failed_frame` 的主文案出站条件改为恒真后跑同一命令 | `test_failure_message_is_terminal_scanned` 或 `test_failure_message_never_bypasses_scan_call` 转 FAIL；临时补丁不提交 | codex |
+
+> 执行提示：先复跑钉集确认现状，再做第 8 行负核证明可摘性；负核后必须 `git diff` 清零，
+> 不把补丁留在工作区或提交。
+
 ## 6. 变更纪律
 
 - 本稿只出案不施工；E-1..E-12 对齐三方回执后，施工方在自己的单里落钉。

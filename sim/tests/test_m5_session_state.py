@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Iterator
 from typing import Any
 
@@ -28,6 +29,8 @@ from sim.api.ws import (
 from sim.core.events import world_create_event
 from sim.core.tick import TickLoop
 from sim.core.world import WorldState, build_default_bus
+from sim.llm.prompts.banned_words import Hit, ScanResult
+from sim.llm.prompts.banned_words import scan as real_scan
 from sim.world.map import CHUNK_SIZE, Chunk, TileMap
 from sim.world.pathfinding import Pathfinder
 
@@ -151,6 +154,104 @@ class TestForkNotice:
 
 class TestLoadAnchorEmitsSessionState:
     """D-6：读档成功 = 告知帧 + 全量快照两帧；失败仍单帧 error。"""
+
+    def test_failure_message_is_terminal_scanned(
+        self, loop: TickLoop, pf: Pathfinder, control: ControlState, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Case A：玩家可见的物化失败文案必须在最终边界调用 scan()。"""
+        scanned: list[str] = []
+
+        def observe(text: str) -> ScanResult:
+            scanned.append(text)
+            return real_scan(text)
+
+        monkeypatch.setattr(ws_mod, "scan", observe)
+        reply = handle_client_message(
+            {"type": "load_anchor", "channel": "session", "anchor_id": "nope"},
+            loop,
+            pf,
+            control,
+        )
+
+        assert isinstance(reply, dict)
+        assert reply["type"] == "error"
+        assert reply["message"] in scanned
+        assert not real_scan(reply["message"]).hits
+
+    def test_failure_message_hit_degrades_to_clean_fallback(
+        self, loop: TickLoop, pf: Pathfinder, control: ControlState, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Case A：命中时退化，不把原因或命中文案放给玩家。"""
+        primary = "这个档读不出来了。"
+        fallback = "档打不开。"
+        warnings: list[tuple[str, str]] = []
+
+        class Logger:
+            def warning(self, event: str, *, reason: str) -> None:
+                warnings.append((event, reason))
+
+        def inject_hit(text: str) -> ScanResult:
+            if text == primary:
+                return ScanResult(
+                    hits=(Hit(word="injected", start=0, end=1, kind="meta"),),
+                    cleaned=text,
+                )
+            return real_scan(text)
+
+        monkeypatch.setattr(ws_mod, "scan", inject_hit)
+        monkeypatch.setattr(ws_mod, "logger", Logger())
+        reply = handle_client_message(
+            {"type": "load_anchor", "channel": "session", "anchor_id": "nope"},
+            loop,
+            pf,
+            control,
+        )
+
+        assert isinstance(reply, dict)
+        assert reply["message"] == fallback
+        assert not real_scan(reply["message"]).hits
+        assert warnings == [("ws.anchor_load_message_degraded", "banned_message_outbound")]
+
+    def test_failure_message_tries_next_fallback_after_hit(
+        self, loop: TickLoop, pf: Pathfinder, control: ControlState, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """案 A：固定兜底候选命中时继续终扫，不提前放弃为无文案。"""
+        primary = "这个档读不出来了。"
+        first_fallback = "档打不开。"
+
+        def inject_hit(text: str) -> ScanResult:
+            if text in {primary, first_fallback}:
+                return ScanResult(
+                    hits=(Hit(word="injected", start=0, end=1, kind="meta"),),
+                    cleaned=text,
+                )
+            return real_scan(text)
+
+        monkeypatch.setattr(ws_mod, "scan", inject_hit)
+        reply = handle_client_message(
+            {"type": "load_anchor", "channel": "session", "anchor_id": "nope"},
+            loop,
+            pf,
+            control,
+        )
+
+        assert isinstance(reply, dict)
+        assert reply["message"] == "读不了。"
+
+    def test_failure_message_never_bypasses_scan_call(
+        self, loop: TickLoop, pf: Pathfinder, control: ControlState
+    ) -> None:
+        """M6-S2 防摘钉：`load_failed` 必须消费终扫结果，不允许未扫直通。"""
+        source = inspect.getsource(ws_mod._load_failed_frame)
+        assert "_error_frame(" in source
+        for line in source.splitlines():
+            if "_error_frame(" not in line or "return" not in line:
+                continue
+            if '""' in line:
+                continue
+            assert "scan(" in line or "primary" in line or "fallback" in line, (
+                f"文案出站必须消费 scan() 结果或已扫变量: {line}"
+            )
 
     def test_success_returns_notice_then_snapshot(
         self, loop: TickLoop, pf: Pathfinder, control: ControlState

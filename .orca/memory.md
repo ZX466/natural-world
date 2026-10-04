@@ -2290,6 +2290,28 @@ uv run ruff check . && uv run pyright <改动文件>
     `\uXXXX` 转义写进临时 .py 再 `uv run`；③ 「A11 已实现」的派单描述要**逐条核实**——
     本单派单说「{ready,reason} 零世界内部字段」，实测内部 `MaterializationDiagnosis`
     其实带 `snapshot_seq`+`steps`（路由层已正确丢弃），**描述比实现窄**，照抄会写出错判据。
+
+- **M6-S1（W-A 四钉复验 + 案 A 终扫兜底）✅ 本树施工完成**（2026-10-04，未触碰其他树）
+  - `sim/api/ws.py`：`load_anchor` 两条 `load_failed` 出站路径统一进入 `_load_failed_frame()`；
+    玩家文案最终边界调用现有 `scan()`，命中记录
+    `ws.anchor_load_message_degraded` warning 并按候选序退化为零命中文案；所有候选再次命中
+    才 fail-closed 为空文案并记录 error。未修改 `BANNED_WORDS`/`META_SHELL`，后者仍为空。
+  - `sim/tests/test_m5_session_state.py`：新增终扫调用、命中退化、warning 与零命中复扫钉。
+  - `docs/security/m6-materialization-security-pins.md` §5.1：记录执行口径与四钉状态。
+  - **W-A1-1/W-A1-2/W-A2-1/W-A2-2 仍 BLOCKED**：`sim/world/authority/` 当前不存在，不能
+    将未落盘对象误判为通过；落盘后按白盒词面过滤、词表 CR 同步、UtilityDecision/Intent
+    旁路、同输入切换权力档使 `willingness_conflict` band 变化逐钉复验。
+  - 验证：聚焦安全集 `66 passed`；`ruff check` 目标文件 0；`pyright` 目标文件 0；
+    `git diff --check` 0。
+
+- **M6-S2（W-A 四钉复验预备 + 终扫兜底回归钉）✅ 本树施工完成**（2026-10-04，未触碰其他树）
+  - 执行单补在 `docs/security/m5-batch-e-security-preplan.md` §5.5：authority 落盘即按既有
+    §5.1-§5.4 判据跑，本单不重写判据；S1 `load_failed` 终扫回归与临时负核合入速查表。
+  - `sim/tests/test_m5_session_state.py` 新增 `test_failure_message_never_bypasses_scan_call`
+    源码级防摘钉，锁 `_load_failed_frame` 的文案出站必须消费 `scan()` 结果或已扫变量。
+  - `sim/api/ws.py` 顺势用 `ScanResult.ok` 统一判定主/兜底文案，行为不变，代码更易被防摘钉覆盖。
+  - authority 仍不存在，W-A 四钉不解除；验证：全量 `2234 passed, 120 skipped, 70 deselected`、
+    ruff 0、pyright 0、`git diff --check` 0。
 ## 下一步 / 待派（不在本单范围）
 - ~~**T4 nightly 接线未闭合 → 需派 cline**~~ **已作废（第三十九轮 C7 实测推翻）**：探针 step 非 TODO，
   是裁定的长期注释态；env 已是 `Deepseek-v4-flash`（非 `claude-sonnet-5`，`d1940e4` 闭合）。**真实冲突在
