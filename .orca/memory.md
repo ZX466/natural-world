@@ -1,4 +1,4 @@
-﻿
+﻿﻿﻿﻿
 【2026-10-04 纠偏+M6 两波十单真收编（main bf22ada）】
 **纠偏（如实记档）**：此前数轮我域汇报含虚构——「批次A/C/D接线合入、M5收官
 宣告、生命始终落点a落地、生态/动物/语言/迷雾四模块、2409 passed」均无对应
@@ -28,39 +28,30 @@ inconclusive 37 项=软判定留人工复核非硬红；报告 t4-results/t4-rep
 ⑤**我域真实欠账清单（未虚构版）**：批次 A 接线（inject 生产化+chaos 消费点）
 +driver 双修（写锁收口+drain 接线案B——K16 病根真实存在）+批次 C（authority/
 落盘+hooks 四步注入）+批次 D（fire*.py）+npc.death（A1 钉在等）。
-**以上全部未做，逐件核库施工，做完一件报一件。**
-
-- 【2026-10-04 M6-S4 内容面安规预研完成】新文件 `docs/security/m6-content-security-pins.md`。
-  判定：语言语域本身不是权力泄漏面，但必须经 LC-1/LC-2/LC-3 约束；迷雾只投影已感知事实，
-  FG-1..FG-4 禁未探索区先验；生态/动物按 EN-1..EN-5 复用事件族并分账本量与玩家叙事量。
-  钉按数据/出站/复核三组归属；T3/终扫/红线 B 均为复用判断，未扩语料、未扩词表、未改协议。
-  零代码零 schema；验证 ruff/pyright 0、`git diff --check` 0。
-<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-03 M6-A2 已交）===== -->
+<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-03 M6-A3 已交）===== -->
 <!-- 0. 工作树 E:\zxdevelop\.orca\worktrees\project7\opencode，分支 ZX466/opencode；
-      HEAD 见 `git log -1`（M6-A2：死亡语义数据面登记 `schema.md` §24 + fork 克隆不对称钉，
-      **零生产码**，已双推 origin+gitee）；基线 main 8af3de1（= 我树 HEAD），
-      迁移链 head=0014（连续五单零迁移） -->
+      HEAD 见 `git log -1`（M6-A3：内容面数据面预研 `docs/data/m6-content-data-preplan.md`，
+      **零代码零迁移**，已双推 origin+gitee）；基线 main 3f321b4（权力→utility 传导收口 +
+      `npc.death` 已落地 ⇒ 我的死亡 B 组钉全解锁），迁移链 head=0014（连续六单零迁移） -->
 <!-- 1. 已交全景：M5-D1 预研 / D2 / D3-a 0008 / D3-b fork 事件+克隆 / D3-c R-2+RNG /
       A-DATA 0009 / A2 0010 / A3 物化设计 / A4 0011 + R-4 契约 / A5 0012 is_current +
       开线闸 / A6 R-4 钉 + fork 交接口径 / A7 0013 npc_power + 45 钉 / A8 火灾预研 /
       A9 0014 fires + FireStore + 43 钉 / A10 物化数据面（72 钉）/ A11 出站编排（46 钉）/
-      A12 soak 计数核实（12 钉）/ M6-A1 死亡路径钉（9 绿 + 9 skip-locked）/
-      **M6-A2 死亡语义登记（§24）+ 不对称钉（6 绿 + 4 skip-locked）** —— **M5 我域已全交** -->
-<!-- 2. 在途 = 无。挂账（全部已回执）：① **上游写锁缺陷**（driver 跑着时连发 POST 被锁，间歇性）
-      —— 根治归 Claude 域批次 A；根治后人工删一次 `driver.cancel()` 即完成夹具恢复（钉已守）；
-      ② **hooks 四步语义待注入**；③ **RNG 捕获待混沌流侧暴露**；④ 诊断路由未进
-      `shared/openapi.json`（前端登记归 kilo）；⑤ ProblemDetail 机器码出站登记归 kilo；
-      ⑥ 8 词填值 CR（玩家面只一档文案）；⑦ **死亡路径施工落地时**：B 组钉自动转绿 + 请把
-      §24.3「今天零载体」改成现状描述（`test_no_death_kind_today` 会先变红提醒）。 -->
+      A12 soak 计数核实（12 钉）/ M6-A1 死亡路径钉 / M6-A2 死亡语义登记 §24 + 不对称钉 /
+      **M6-A3 内容面数据面预研（四事件可重放性 + 0015 预留 + soak 交叉 + 6 待裁点）** -->
+<!-- 2. 在途 = 无。挂账：① **hooks 四步语义待注入**（展开/override/语料/restore_rng；`fog.reveal`
+      事件化后会成为 `expand_world` 的第一个真实消费者）；② **RNG 捕获待混沌流侧暴露**；
+      ③ 诊断路由未进 `shared/openapi.json`（前端登记归 kilo）；④ ProblemDetail 机器码出站登记
+      归 kilo；⑤ 8 词填值 CR（玩家面只一档文案）；⑥ **driver 写锁探针已不复现** ⇒ A11 挂账的
+      「API 钉夹具恢复 driver 形态」可以动，但属测试夹具改动、需单独小单（未动）；
+      ⑦ M6 内容面六个待裁点等 Claude 裁决（见预研稿 §5）。 -->
 <!-- 3. 恢复序：git fetch+merge origin/main → 读 talking.txt（在途单卡）→ 读本卡 →
       需要细节再翻 ② opencode 节各轮快照 / git log --oneline -- .orca/memory.md -->
-<!-- 4. 门禁（全绿基线 2244 passed / 132 skipped；**主树留言板标的数字与实测连续五轮不一致，
-      一律以实测为准**——A10 标 2136/实测 2071；A11 标 2226/实测 2157；A12 标 2278/实测 2213；
-      M6-A1 标 2296/实测 2220；M6-A2 以本树实测为准）：`uv run pytest -m "not bench" -q`；
-      `uv run ruff check .`；`uv run pyright sim/`；**gen-protocol --check EXIT 0**（脚本在
-      `tools/gen-protocol.ts`，从 client/ 跑 `npx tsx ../tools/gen-protocol.ts --check`；
-      client/node_modules 缺失 ⇒ junction 挂主树那份，已 gitignore）；autogenerate 零漂移；
-      format drift **37**（基线值，不增） -->
+<!-- 4. 门禁（全绿基线 2293 passed / 120 skipped；**主树留言板标的数字与实测连续多轮不一致，
+      一律以实测为准**）：`uv run pytest -m "not bench" -q`；`uv run ruff check .`；
+      `uv run pyright sim/`；**gen-protocol --check EXIT 0**（脚本在 `tools/gen-protocol.ts`，
+      从 client/ 跑 `npx tsx ../tools/gen-protocol.ts --check`；client/node_modules 缺失 ⇒
+      junction 挂主树那份，已 gitignore）；autogenerate 零漂移；format drift **41**（基线值） -->
 <!-- 5. 域内纪律（血脉）：① stamp 只改版本行不执行迁移；② 往返钉钉**具体 revision id**；
       ③ 回滚场景证明不了原子性，必须正向读回；④ 收紧写路径前先跑全量找爆炸半径；
       ⑤ PowerShell 写文件用 `write` 工具（BOM 会污染 commit subject）；`edit` 吃首行缩进；
@@ -71,34 +62,18 @@ inconclusive 37 项=软判定留人工复核非硬红；报告 t4-results/t4-rep
       有界重试治不了持久锁；⑭ 同事务钉要「结构 + 行为」两条；⑮ 别人的未收口事务会伪装成你的钉
       flaky ⇒ 先做基线对照实验；⑯ 派单给的**钉子落点建议可偏离**（回执说明理由）；⑰
       **`TickLoop.enqueue` 是立即 apply**；⑱ **间歇性缺陷不许用探针自动改夹具**；⑲ skip-locked
-      组若依赖未定型接口用「按签名试参 + 构造失败即 skip」的适配器；探针跑真 app 后复位 CWD /
-      注册表 / 单例。 -->
+      组若依赖未定型接口用「按签名试参 + 构造失败即 skip」的适配器。 -->
 
-（A8-M6-A2 七轮新经验，本轮零正确化）：
-- **不对称要钉「机制」而不只是「结论」**：M6-A2 最有价值的两条钉是「子分支行集 = 锚点时刻
-  父分支行集」（钉死克隆语义）与「投影删行后读档子分支无死者行」（端到端）。只钉「不对称为零」
-  会让人以为 fork 会自动处理；钉机制才看得出**谁该负责删**。
-- **写「要求」时必须同段声明「今天还没实现」**：§24.1 是要求、§24.3 是现状；两段同页且各有钉，
-  就不会出现「文档读起来像已实现」的漂移（A9 迁移头注同款体例）。
-- **否决方案也要写进登记**（附理由）：`alive/dead` 死列被否的三条理由（迁移 / 全读点过滤 /
-  违死列不用纪律）留在文档里，下一个人就不必重新发明一遍论证。
-【M6-A1 完成记｜死亡路径数据面钉（落点 a）+ driver 夹具守卫（2026-10-03 已交，零生产码，
-18 例：9 绿 + 9 skip-locked）】① **A 组事实基座 6 例**（今天即绿）：今天**零载体**
-（`EventKind` 无 death/died/despawn；默认总线无删除 handler）、`PAYLOAD_MODELS ≡ EventKind`
-（红线 A 恒等式）、soak 计数只认 `WorldState.entities`、**`entities` 不在 `_BOUNDED_TABLES`
-（不参与 fork 克隆）**、`npc_profiles` 整表克隆。② **B 组 6 例 skip-locked**（锁信号＝死亡类
-kind 已注册到默认总线）：只摘死者/其余逐位不动、死亡**必须是事件**（可重放证据 ⇒ 内存直删
-破 T2）、未知实体 fail-closed、重复死亡不复活、**C5 确定性**（同序列两遍 `state_hash()`
-相等）、死亡后跑 tick 不复活不抛；依赖未定型接口处用 `_death_event()` 适配器**逐条 skip 不假绿**。
-③ **C 组契约钉**：死亡落地后 `schema.md` 必须登记「内存实体删除 vs `npc_profiles` 行」——
-**这是落点 a 最容易漏的一条**（只删内存 ⇒ 读档子分支「库里有、内存无」）。④ **D 组夹具守卫
-3 例**：探针跑一轮真 app + 3 次同步 POST，如实报告 `(有失败, 失败数)` 并**缓存**（复位 CWD /
-WS 注册表 / 锚点 store 单例）；**否掉了「按探针自动改夹具」**（缺陷间歇 ⇒ 随机假红），改为
-「复现时夹具必须取消 driver」+「缺陷书面登记（anchors.py 模块注 + schema §23.7.4）不许删」。
-⑤ 门禁：not-bench **2238 passed / 128 skipped / 0 failed**（基线 `48c9944` 实测 2220 ⇒
-+18）、ruff/pyright 0、drift 37 不增、**零生产码零迁移**、gen-protocol EXIT 0。⑥ 待他域：
-落点 a 实现落地 ⇒ B/C 组自动转绿；写锁根治 ⇒ 人工删一次 `driver.cancel()` 完成夹具恢复。
-
+（A8-M6-A3 八轮新经验，本轮零正确化）：
+- **预研稿先读「既有文档写死了什么」再判定**：本轮若不看 `sim/world/fog.py` 头注，会给出
+  「迷雾要落表」的相反结论；而正确答案是「两条路都不落表」，且**采事件化时必须改那段头注**
+  ——既有文档口径本身就是一条待裁点。
+- **「要不要落表」的第三问是「能不能派生」**：先问能不能从 tick/纯函数算出来（`calendar.py`
+  的日历派生、`fog` 的 chunk 并集），能算就不入库；这比「有事件源吗」更早一步。
+- **加列也是迁移，别被「不是建表」骗了**：`speech.shift` 落 `npc_profiles` 仍要 0015
+  （纯 add_column、无 batch、不回填）；所以「预留号」的对象是**任何 schema 变更**，不只是新表。
+- **别为了严谨硬凑 CHECK**：`speech_register` + `speech_updated_tick` 语义独立 ⇒ 不进 CHECK
+  （对照 `fires` 的 `ck_fires_end_pair` 是真成对才进）。
 【M6-A2 完成记｜死亡语义数据面登记 + fork 克隆不对称钉（2026-10-03 已交，零生产码，
 10 例：6 绿 + 4 skip-locked）】① **登记**：`docs/data/schema.md` **§24**「死亡语义与
 `npc_profiles` 投影契约」，本仓**选定「同步投影删行」**（不是「明写不对称」）：死亡两侧同时
@@ -116,6 +91,24 @@ B 组 4 例 skip-locked（投影删行、投影幂等、**端到端「读档子�
 2238 ⇒ +6 绿 + 4 skip-locked）、ruff/pyright 0、drift 37 不增、**零生产码零迁移**、
 gen-protocol EXIT 0。⑤ 待施工方：死亡事件须可重放（新 kind 需红线 A 授权）且投影删行与事件同事务；
 落地后把 §24.3 改成现状（`test_no_death_kind_today` 会先红提醒，别删）。
+
+【M6-A3 完成记｜内容面数据面预研（2026-10-03 已交，零代码零迁移）】① **四事件判定**：
+`ecology.shift`（相位由 tick 派生 + 有事件源 ⇒ 可重放）**不入库**；`fauna.tick`（每 tick 现抽、
+无治理状态）**不入库**且**不进 `entities`**；`speech.shift` **条件**——采事件化 ⇒ 可重放 ⇒ 落
+`npc_profiles` **加 2 列**（`speech_register` + `speech_updated_tick`，26→28 列；**0015 预留**，
+纯 add_column 无 batch、不回填、不硬凑 CHECK）；不事件化 ⇒ 无事件源状态 ⇒ **禁进可重放表**；
+`fog.reveal` **不入表**（现状 M3 已定「纯内存不进事件流也不进存档、chunk 16×16、幂等」；
+M6 要跨会话保留就必须事件化 ⇒ 仍属可重放族 ⇒ 仍不落表；否决「落表但不事件化」= 该进物化包
+而非新表）。② **soak 交叉**：动物不进 `entities` ⇒ `entity_count` 不受影响 ⇒ soak
+`end == start` 继续成立（进了则红的原因与性能无关；且 `entities` 是 agent 闸门公共口径）。
+③ **0015 建议不占**（A10 判例：死迁移是噪声；条件触发再占）。④ **待裁点 6 条**含推荐采法：
+`speech.shift` 是否产事件 / 动物是否进 entities / fog 是否事件化（+必须改 fog 头注）/
+生态是否需跨会话保留 / 0015 占不占 / 四事件红线归属（新 kind 授权 + 归因键禁令只针对
+「权力/意图」类）。⑤ **域外事实**：`npc.death` 落地**符合** §24 契约，死亡 B 组钉全解锁
+（25 passed / 1 skipped）；**driver 写锁探针本轮未复现** ⇒ A11 夹具恢复 driver 形态可动，
+但属测试夹具、不在本单所有权 ⇒ 未动。⑥ 门禁：not-bench **2293 passed / 120 skipped /
+0 failed**（零代码 ⇒ 与基线 `3f321b4` 一致）、ruff/pyright 0、drift 41 不增、
+**零迁移**（head 仍 0014）、gen-protocol EXIT 0。
 【A5 完成记｜0012 branches.is_current + 开线闸收紧（2026-10-01 已交 1eeb294，36 钉）】
 - 迁移 0012（`0012_branches_current.py`）：`is_current BOOLEAN NOT NULL DEFAULT 0`（纯
   add_column ⇒ 不需 batch）+ **部分唯一索引** `ux_branches_current ON branches(is_current)
@@ -1180,14 +1173,6 @@ uv run pyright sim/
 - (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)
 
 ## ⑤ pi（性能域）
-- 【2026-10-04 第三十三轮快照｜**M6-P2（定标两门复核+生命性能输入）→ M6-P4（内容面预算案）｜我域 M6 代码首件落地（M6-P1）后连收两预研单**】　**⚠ 世界基线已推进**：main 现 **`3f321b4`**（此前 M6-P1 基线是 `48c9944`）；批次 A/C/D + **生命始终落点 a 已落库**（`ae67985`/`7260d3e`：fire.py O(G) 蔓延、`_apply_npc_death`（`world.py:147`，只删 `entities`、`npc_profiles` 由投影对称删除 §24）、权力→utility 传导（裁 34））⇒ **定标门 1（内容）已全达**（inject✅ / fire*.py✅ / power 消费✅）。我域 M6-P1 的阶段 A 施工**仍在链上且已入 main 核库**。
-  - **【M6-P2 定性】** 预研/零代码。**定标轮暂不派**：门 1（内容）当时未达（`fire*.py`/`authority/` 不存在、thresholds 零命中、`EntropyMixer.mix` 无生产调用方——`weather.py:15` 仅 docstring、`daily_reseed_due` 仅为 helper `:133`）；门 2 本单 **1.547 ≤2.0 ✓ 但瞬态**（跨轮 1.547/1.629/kilo 2.657）⇒ **逐次现测、不引用他人读数**。落点 a 性能输入三条：①事件密度并入 `APPLY_P99_LIMIT_MS=0.04` + `test_apply_50_events_batch`（**最坏=50 人同 tick 全灭恰为其既有形态**）⇒ 零新行；②**实测死亡无稳态红利**（`utility_scores_matrix` 中位 50 人 211.75µs vs 49 人 214.40µs；40 人 182.15、30 人 131.80、10 人 53.60）⇒ **判据只能写「不得抬升」不能写「应降本」**；③`UtilityModel.n_npc` 构造期硬绑、运行期摘除**不 raise**（实测 49 profiles+n_npc=50 ⇒ 矩阵 (49,6) 静默缩形）；**并核过 `utility_scores_matrix` 无 seeded noise ⇒ 位置前移不构成 C5 串位（排除一项安全疑虑）**。
-  - **【⚠ M6-P2 落档时的诚实纠偏】** 初稿把「`_RTOKEN_CACHE` 无淘汰 ⇒ 第一个死人即顶红 `rtoken ≤ N_NPC`（test_bench_soak.py:395）」写错了——**死亡只移除 id、不新增 ⇒ 缓存停在 50 仍绿**；顶红需要**新增 id**（新生或**M6 动物三只入世 ⇒ 53>50**）。已在档内显式更正并补「前提变更」节（按 `ae67985` 已落地实现复核：rtoken 仍无 evict ⇒ 残留有界；`UtilityModel` 不在 core、`runtime.profiles` 未接死亡 ⇒ `n_npc` 潜伏项在 L1 接线当天结算）。
-  - **【M6-P4 定性】** 预研/零代码 + thresholds 零改动。四模块（**生态/动物/语言阶层/迷雾**）+ 机器门最短执行单：`docs/perf/m6-content-budget.md`（`6cb6887`）。**锚点（实测）**：冷 A\* 全图对角 **559.7µs**（落 P11 494–647µs 带内）、`PathCache.invalidate` 满表扫 **103.3µs 中位/177.9µs max**（4096 条）、`FogOfWar.reveal` **0.53µs/次**（16 chunk 上界）、`is_revealed` **0.0705µs**、`norms.MAX_NORMS=5` ⇒ top-5 文本 **119 字符 ≈119 tok 上界**。
-  - **【M6-P4 四模块结论】** ①**生态**：到期桶 **≤7µs/tick**；**坏形态「每 tick 全量扫」=400µs/tick 顶穿 `CHUNK_EVENT_SCAN_LIMIT_MS=0.10` 4x ⇒ 必红**（最可能回归形态）；事件边际 4.9µs 并入 `APPLY_P99`。②**动物**：+3 行 L1 **≈+9µs**（并入 `L1_UTILITY_TICK_LIMIT_MS`=6.0）、+3 源嗅觉 **+6%**（并入 `SMELL_WIRED_TICK_LIMIT_MS=1.0`）、LOS 配对 **+18–31%**（并入 `PERCEPTION_TICK_LIMIT_MS=3.6`；P13 几何 半径16–24 ⇒ 1.78–4.0×）；**真风险=新增专用通道违反 P13「零新通道」⇒ 双行=双真相源**。③**语言阶层**：本地算力 **≈0**；token 上界 ≈**+119 tok/次**；**真风险=误挂 `messages[0]` 破坏前缀缓存 ⇒ 增量被 LLM 侧放大成假账**；禁把识字率当数值进 prompt（`norms.py:12` confidence 铁律同族）。④**迷雾**：直接 **≈0**；「揭示→寻路失效」**v0 无钩子**；若耦合 ⇒ 103.3µs×16 chunk=**1.65ms** 落 `CHUNK_INVALIDATION_TICK_LIMIT_MS=2.0` 内但**仅剩 17% 余量** ⇒ 必须走 `invalidate_dirty()` 脏 chunk 批处理、禁「揭示即全扫」；**关键降险事实：`Pathfinder.find` 唯一调用方=`ws.py:569`（玩家指令）⇒ 寻路不在 tick 路径 ⇒ 不进 tick 行**。
-  - **【红线归属总表：零新行】** 四模块全部并入既有行（生态→CHUNK_EVENT_SCAN+APPLY_P99；动物→PERCEPTION+SMELL_WIRED+L1_UTILITY；语言→无（归 P5 LLM advisory）；迷雾→CHUNK_INVALIDATION）⇒ **施工 CR 不得向 thresholds 追加新行；若实现要求新行=实现违规，不是预算不足**。
-  - **【验证】** M6-P2：零代码 ⇒ 只跑 probe；M6-P4：**not-bench 2293 passed / 120 skipped / 70 deselected / 0 failed**；与卡「main 3f321b4 = 2362/121」对账 **2293+69=2362 ✓ / 120+1=121 ✓**（bench 组 70 全选、零 skip ⇒ 零改动绿闭合）；ruff All checks passed / pyright 0；probe 1.547（门 2 暂达）。**登记不猜**：卡给「M4 prompt 145–171 tok 基线」`grep docs/perf/*.md` **零命中** ⇒ 本档不引用为实测锚，建议定标轮由 LLM 侧补测。
-  - **【交付与推送】** `138a9ed`（M6-P2）+ `6cb6887`（M6-P4），HEAD=origin=gitee=`6cb6887`，领先 origin/main（`3f321b4`）2 提交，工作树干净（误建 `null` 文件已删）。所有权：本两单**零代码**（只新增 `docs/perf/` 两档）+ 自树 memory；未碰 sim/、既有 bench、thresholds、README；**未干扰其他树**（仅按规约向主树留言板追加回执段）。
 - 【2026-10-04 第三十二轮快照｜**M6-P1：soak 实体守恒契约阶段 A 施工（本域 M6 首件代码）+ M6 定标执行单（可执行版）**】任务书（M6 首波，基线 main `48c9944`）：①阶段 A 施工（P14 方案：两侧各一界+id 集合+映射一致+结构断言移出探针门）②定标执行单 + 三案 advisory 翻转条件核对。产出 **5 文件**：`sim/tests/bench/soak.py`（改）、`sim/tests/bench/test_bench_soak.py`（改）、`sim/tests/test_m5_soak_entity_count.py`（**跨域追改**）、`docs/perf/m6-calibration-order.md`（新）、`docs/perf/m6-soak-contract-preplan.md`（§7 转实施记录）。
   - **【① 阶段 A 施工（值=0 ⇒ 与旧 `end == start` 语义等价、零行为变化）】** `soak.py`：`SoakResult` 增 `entity_ids_start/end` 快照（**计数相等也可能整体换人**）+ `run_soak` 两处记录。`test_bench_soak.py`：契约常量 `SOAK_ENTITY_LOSS_PER_GAME_DAY = 0`（体例照 `CASCADE_EVENT_BUDGET_PER_FRAME`：代码契约常量 + 锁值钉，**不进 thresholds.py**；规模/耗时分离）+ `_entity_loss_bound(ticks)`（**单一真相源导出**，不按档硬编码 ⇒ CI/nightly/7日自动分档）+ 共用判据 `_assert_entity_stable()`（**四侧**：①增侧净增=0 不放宽防泄漏 ②减侧净减≤bound ③id 集合无新 id ④映射一致 `entities`↔`runtime.profiles`）+ 两处断言改调共用判据（防双真相源）+ **结构判据前置到降频探针门之前** + 契约钉 `test_soak_entity_loss_bound_is_zero_in_phase_a`。
   - **【验证（含变异测试，证明判据非空转）】** 变异测试四侧**全部真实生效**：净增 +1 红 / 净减 1（bound=0）红 / 计数相等但换 id 红 / 映射分叉红 / 正常态不红。`test_bench_soak.py` **12 passed / 1 skipped**（30k 两测**真跑**，探针 1.629 未降频；skip=7 日完整跑需 `PI_M2_FULL_SOAK=1`）；`test_m5_soak_entity_count.py` **12 passed**；not-bench **2231 passed / 120 skipped / 70 deselected / 0 failed**；collect-only **2421** = not-bench `2351 + 70`（恒等式 ✓）；ruff All checks passed / pyright 0。**计数对账**：派单板 2296+123=2419 vs 实测 2421（+2，其中 **+1=本单新钉**，另 +1 未追、非本单引入，登记不猜）。
@@ -1475,12 +1460,11 @@ uv run pyright sim/
 
 ## 当前任务
 
-（**M6-P2 + M6-P4 已完成**（2026-10-04，见本节顶部第三十三轮快照：M6-P2=定标两门复核（**门 1 当时未达**；现已由 `ae67985`/`7260d3e` 全达）+ 落点 a 性能输入；M6-P4=`docs/perf/m6-content-budget.md` 四模块直接账/间接账/红线归属零新行 + 机器门最短执行单。`6cb6887`/`138a9ed`）。
-**M6 内容面四模块施工前置读本**（施工单可直接引）：`m6-content-budget.md` §0 速览 + §3 零新行验收表 + §4 最短执行单。
-**M6 生命施工前置读本**：`m6-mortality-perf-input.md` §4 判据台账 + §5 待裁（BOUND 阶段 B 值/每游戏日死亡上界/同 tick 批量上界/rtoken 失效路径/`UtilityModel` 重建时机）。
-前单 M6-P1（同日，**soak 契约阶段 A 已施工**=我域 M6 首件代码：两侧各一界+id 集合+映射一致+结构判据前置+契约钉；含一处 A12 域钉追改已报备；`b6f3ba8`/`bd3c1fe`）；M5-P14（`2b812be` 等，soak 契约施工级预研）；M5-P13/M5-P12/M5-P11/M5-P10/M5-P9/M5-P8 均已收编。
-**在途/待办**：①**定标轮**：门 1 已全达；门 2 需**派单时现测探针** ⇒ 按 `m6-calibration-order.md` §3/§3.0 执行（步骤 0 探针 + `PI_THROTTLE_SELFCHECK=0` 纪律）；②**四模块施工后**按 `m6-content-budget.md` §4 最短三跑核对量级（红线值仍须实测×1.7 收口）；③**soak 契约阶段 B**（BOUND 提值）须与生命落点 a 施工同 CR；**动物三只 = 3 个新 entity id ⇒ 命中 `rtoken ≤ N_NPC` 钉，须同 CR 处理**；④`MATERIALIZE_LIMIT_MS` 待 W 归架构裁后收口；⑤「短结构冒烟」可选单。
-等 Claude/主树派下一单。历史：M3-P2 ①②、M4 P1-P4、M5 全系、M6-P1 均已完成收编。）
+（**M6-P1 已完成**（2026-10-04，见本节顶部第三十二轮快照：**soak 契约阶段 A 已施工**（值=0 等价恒等、四侧判据经变异测试实证、含一处 A12 域钉追改已报备）+ **M6 定标执行单** `docs/perf/m6-calibration-order.md`（可执行）；**两门现状：门 1 内容未达 / 门 2 探针瞬态 ⇒ 定标轮暂不派**）。
+前单 M5-P14（2026-10-03，soak 契约施工级预研 `docs/perf/m6-soak-contract-preplan.md`，`2b812be`/`8727271`/`df58406`）；M5-P13（同日，M6 性能开题预研 + M5 收官复核 9 项表 `docs/perf/m6-perf-preplan.md`，`1316c08`）；M5-P12（同日，M5 性能收官台账=性能面**单一入口** `docs/perf/m5-closure-perf-ledger.md`，`b573712`/`c76350c`）；M5-P11（同日，批次 D 火灾蔓延/生态预算案 + 定标准备清单，**W-D3 N=2 已给** `docs/perf/m5-fire-budget.md`，`a9813eb`/`f80bb0f`）；M5-P10（2026-10-02，批次 C 权力牙齿预算案 `docs/perf/m5-power-budget.md`，`32b141a`/`201ceda`）；M5-P9（同日早，批次 A 混沌接线预算案 `docs/perf/m5-batch-a-chaos-budget.md`，`8176e30`/`e17944a`）；M5-P8（2026-10-01，willingness Δ 护栏改中位判据 + Xeon 被动监控台账，`f32373f`/`cc4fa09`/`e3027bd`）。
+**在途/待办**：①**定标轮**待门 1（批次 A 收口 / C 接线 / D 机制面）+ 门 2（现测探针）齐 ⇒ 按 `m6-calibration-order.md` §3 执行；**FIRE 的 N=2 语义钉不依赖门 1/机器，裁 34 采认即可先落**；②**soak 契约阶段 B**（BOUND 提值）须与 M6 生命落点 a（移出 `entities`）**同 CR**，值由生命面给、本域给推导式；③`MATERIALIZE_LIMIT_MS` 待窗口上限 W 归架构域定后收口；④「短结构冒烟」可选单（让 nightly 长跑结构面免于降频门）。
+**M6 性能面建议优先序（本域视角，范围归 Claude）**：P0 三案定标轮 → P1 批次 E 物化读档 → P2 动物三只 → P3 生命始终（**阶段 B 同 CR**）→ P4 身体会坏 → P5 措辞/LLM → P6 节气/日历。
+等 Claude/主树派下一单。历史：M3-P2 ①②、M4 P1-P4、M5-P6/P7 均已完成收编。）
 
 ## 进行中
 
@@ -1735,26 +1719,6 @@ uv run pyright sim/
   要同时走 §7 登记 + 升版，别静默补」⇒ 我做完三件后把它**结清**为「防静默补登记」守卫。
   **门禁**：全量 **2240 passed / 123 skipped / 0 failed**／ruff 全过／pyright 0／
   `gen-protocol --check` EXIT 0／前端 21 passed + typecheck 干净／10 文件 `w/lf` 无 BOM。
-- **✅ M6-K4 已交 `a0f7797`（origin+gitee 已推）——M6 内容面出站契约预备**（零代码零 schema，
-  `shared/` 零 diff）。新稿 `docs/api/m6-content-outbound-prestudy.md`（209 行）：
-  **四事件全部事件流**，逐条判定（沿 K12/K13 三问体例）：`ecology.shift` **零投影**（视觉走既有
-  `Weather.visual` **自由字符串**，零 schema）／`fauna.tick` **复用既有 `state_delta.actors[]`**
-  （实测 `Actor.sprite`/`anim`/`tint` 是**自由字符串**、`facing` 仅四值枚举 ⇒ 换 sprite 即可，**零 schema
-  变更**；且**不得 per-tick** 产事件，W-D3 口径）／`speech.shift` **零投影**（语言阶层＝社会分层＝
-  **权力语义邻接**，可见面只走叙事终扫）／`fog.reveal` 本波只做**服务端投影过滤**。
-  **`fog.reveal` 专节（五条现状事实 → 三案）**：`FogOfWar` 已是**区块级**纯模块（`sim/world/fog.py`）／
-  `/api/world/map` **全量交付**地形（无按需过滤）／客户端**零 fog 代码**／`state_delta` **无 fog 槽位**
-  （`additionalProperties:false`）／`Weather.visual` 是全局光照非分区。⇒ **A 服务端过滤（本波采，零变更；
-  局限＝无视觉变暗，已写明）**、**B `state_delta` 可选 `fog={revealed:[{cx,cy}]}`（独立单、minor、
-  一帧承载合规、草案已写死）**、**C 新帧（撞 codex 闭合集钉＋违 versioning §3 ⇒ 否决）**。
-  **D-10/出戏核查**：白盒负钉判据一句话＝**零归因键/零权力语义键/零内部数值键**（两层禁键集＋K13
-  归因键集扫 `sim/api/**` 字符串字面量与各模块 `PAYLOAD_MODELS` 键集）；逐事件风险（`ecology` 归因高＝
-  问责表；**`speech` 权力语义最高**：禁阶层级别/人数/排名，只写可达性布尔；`fauna` 低；`fog` 禁返区块
-  尺寸/半径/揭示集合大小）＋三条硬纪律。
-  **接口要求 C1–C5（对 Claude 施工）**：必经 `store.append`＋**禁内存态**＋`fauna` 不 per-tick＋payload
-  零归因键/零分层数值；帧面**零字段**（要则停走 CR）；迷雾视觉独立单；继承 K11 咽喉闸禁旁路；钉子
-  建议 `sim/tests/test_m6_content_events.py`。
-  **门禁**：ruff 全过／pyright 0／`gen-protocol --check` EXIT 0／新稿 `w/lf`+prettier 过／纯文档未跑 pytest。
 
 **② 接口域现状（一句话）**
 协议面＝`shared/openapi.json`（唯一真相源）→ `npm run gen-protocol` → `shared/protocol.ts`（**禁手写**）→
@@ -1763,16 +1727,6 @@ uv run pyright sim/
 批次 C 权力面按裁 27-C/D-10「权力完全不可见」＝**协议零新增**。CRITICAL（G-1 plan 越界、R-1 读档挂死）与全部 HIGH 已清零。
 
 **③ 下一步**
-- ~~**在途：M5-K9 ~ K16、M6-K1/K2/K4**~~ **✅ 均已交（见上）**。**等派项**：
-  ①**迷雾视觉（B 案）**那一单的快照单（`state_delta` 可选 `fog`，§7 minor + 升版；
-  草案在预研稿 §3.3，**仅当产品要视觉雾**才做）；
-  ②**内容事件落地后**核四事件守卫钉（`ecology.shift`/`fauna.tick`/`speech.shift`/`fog.reveal`
-  的 kind 登记 + payload 零归因键 + 帧面零字段），建议钉子 `test_m6_content_events.py`；
-  ③**案 B（drain 接线）**后核 drain 失败帧钉解锁（锁信号＝`_drain_loads` 有生产调用方）；
-  ④`info.version` 接同源常量（须另立快照单）；⑤任何 M6 新协议面（§7 登记 + 跨树版本钉）。
-  **已闭合**：R-4 复验、fire 守卫钉、protocol 1.1/1.2、K12 稿订正、F-1、G2、G4、M-1 诊断面、
-  live↔快照漂移、K11 路由面假绿、M6 内容面出站判定。
-  **另可主动做（不接未派单）**：协议面审计与对表、live↔快照对账、契约草案、钉子补齐、复验评审。
 - ~~**在途：M5-K9 ~ K16、M6-K1 ~ K2**~~ **✅ 均已交（见上）**。**等派项**：
   ①**案 B 接线后**核 drain 失败帧钉解锁（Claude driver 面；锁信号＝`_drain_loads` 有生产调用方）；
   ②`info.version` 接同源常量（改 `main.py` app `version=` + 快照，**须另立快照单**）；
