@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 import os
 import statistics
 from pathlib import Path
@@ -100,14 +101,71 @@ def _build_loop_with_perception() -> TickLoop:
     return loop
 
 
-def _assert_no_runaway(result, *, label: str) -> None:
+# --- M6-P1（阶段 A）：实体守恒契约 --------------------------------------------------
+# 方案：`docs/perf/m6-soak-contract-preplan.md`（M5-P14 施工级预研，已收编）。
+# 体例对照 `CASCADE_EVENT_BUDGET_PER_FRAME`（代码契约常量，**非** thresholds 红线）：
+#   规模侧由本常量/派生式硬约束，耗时侧仍由 `SOAK_*` 红线覆盖，两者不混。
+# **阶段 A 值 = 0** ⇒ 净减上界 0 ⇒ 与旧断言（`end == start`）**语义等价**、零行为变化。
+# **阶段 B**（M6「生命始终」落点 a = 移出 `WorldState.entities` 落地时**同 CR**）才提值：
+#   由生命面给「每游戏日可接受净减上界」；本域只提供派生式（不按档硬编码，防双真相源）。
+# 契约钉：`test_soak_entity_loss_bound_is_zero_in_phase_a`（阶段 B 须同步更新）。
+SOAK_ENTITY_LOSS_PER_GAME_DAY = 0
+
+
+def _entity_loss_bound(ticks: int) -> int:
+    """本 run 允许的实体**净减**上界（单一真相源导出，不按档硬编码）。
+
+    CI(1,200t)/nightly(30k)/里程碑(604.8k) 自动得不同值，避免三处常量（双真相源）。
+    """
+    if SOAK_ENTITY_LOSS_PER_GAME_DAY <= 0:
+        return 0
+    return math.ceil(SOAK_ENTITY_LOSS_PER_GAME_DAY * ticks / TICKS_PER_GAME_DAY)
+
+
+def _assert_entity_stable(
+    result, *, label: str, profile_ids: set[str] | None = None
+) -> None:
+    """实体守恒（**结构量**判据，两处断言共用，防双真相源）。
+
+    四侧判据（M6-P1 阶段 A，方案见 `docs/perf/m6-soak-contract-preplan.md` §2.1/§3）：
+      ① 增侧：净增必须为 0——**不放宽**原断言的防泄漏意图（「实体凭空增多」）；
+      ② 减侧：净减 ≤ `_entity_loss_bound(total_ticks)`（阶段 A = 0 ⇒ 等价恒等）；
+      ③ id 集合：不得出现**新 id**（比计数强：计数相等也可能整体换人）；
+      ④ 映射一致（传 `profile_ids` 时）：实体集 ↔ `runtime.profiles` 同名（`soak.py`
+         接线契约）——「只删一半」会留下幽灵 NPC（A12/M6-A1 实证：`entities` 不参与
+         fork 克隆而 `npc_profiles` 整表克隆 ⇒ 不对称风险）。
+    与机器速度**无关**（结构量非计时量）⇒ 调用方应把它排在降频探针门**之前**。
+    """
+    start, end = result.entity_count_start, result.entity_count_end
+    bound = _entity_loss_bound(result.total_ticks)
+    assert end <= start, f"{label}: 实体净增（疑似泄漏/失控 spawn）{start} → {end}"
+    assert start - end <= bound, (
+        f"{label}: 实体净减 {start - end} 超界（上界 {bound}，{start} → {end}）"
+    )
+    if result.entity_ids_start:
+        new_ids = set(result.entity_ids_end) - set(result.entity_ids_start)
+        assert not new_ids, f"{label}: 出现新实体 id（{sorted(new_ids)[:5]}…）"
+        if profile_ids is not None:
+            assert set(result.entity_ids_end) == profile_ids, (
+                f"{label}: 实体集 ↔ runtime.profiles 映射分叉"
+                f"（实体 {len(result.entity_ids_end)} / profiles {len(profile_ids)}）"
+            )
+
+
+def _assert_no_runaway(
+    result, *, label: str, profile_ids: set[str] | None = None
+) -> None:
     """长跑稳定性断言（分窗口径，抗单窗离群）。
 
-    **降频自检前置**（M5-P7 / M5-P6 风险①收口）：`SOAK_STEADY_MEAN_LIMIT_MS` 是绝对值
+    **结构判据前置**（M6-P1 / P14 建议已采）：实体守恒是**结构量**（与机器速度无关），
+    故排在降频探针门**之前**——降频夜不该让结构面静默不检。
+
+    **降频自检**（M5-P7 / M5-P6 风险①收口）：`SOAK_STEADY_MEAN_LIMIT_MS` 是绝对值
     判据，而 soak 是分钟级持续 CPU 负载——本机若处于持续降频（实测 6.6x，
     m5-p6-soak-arbitration.md §2.2）必然假红。先跑 `throttle_probe.probe()`；比值越
     阈值即 `pytest.skip`（不是 fail：降频是环境事实，非代码回归；漂移比判据天然免疫）。
     """
+    _assert_entity_stable(result, label=label, profile_ids=profile_ids)
     _skip_if_throttled()
     windows = result.windows
     assert len(windows) >= 2, f"{label}: 窗口数不足（{len(windows)}），无法判漂移"
@@ -142,12 +200,11 @@ def _assert_no_runaway(result, *, label: str) -> None:
         assert h_growth <= SOAK_HANDLE_GROWTH_LIMIT, (
             f"{label}: 句柄增长 {h_growth} > {SOAK_HANDLE_GROWTH_LIMIT}（疑似句柄泄漏）"
         )
-    # 实体数不漂移（长跑中 NPC 集合应稳定）
-    assert result.entity_count_end == result.entity_count_start, (
-        f"{label}: 实体数漂移 {result.entity_count_start} → {result.entity_count_end}"
-    )
+    # 实体守恒已**前置**到本函数首行（M6-P1：结构量不受降频门管辖），此处不再重复。
 
-def _assert_smoke(result, *, label: str, expected_ticks: int) -> None:
+def _assert_smoke(
+    result, *, label: str, expected_ticks: int, profile_ids: set[str] | None = None
+) -> None:
     """CI 冒烟（框架契约）：只验「可跑通 + 实体集稳定 + 总 tick 到位」。
 
     ci_smoke 形态收口（裁 28-D / M5-P5）：**不判漂移、不判稳态均值、不判资源增长**——
@@ -160,9 +217,7 @@ def _assert_smoke(result, *, label: str, expected_ticks: int) -> None:
     assert result.total_ticks == expected_ticks, (
         f"{label}: 总 tick {result.total_ticks} != {expected_ticks}"
     )
-    assert result.entity_count_end == result.entity_count_start, (
-        f"{label}: 实体数漂移 {result.entity_count_start} → {result.entity_count_end}"
-    )
+    _assert_entity_stable(result, label=label, profile_ids=profile_ids)
 
 def _write_soak_artifact(result, *, label: str) -> None:
     """窗口级数字落 artifact（裁 28-D 建议②采纳）。
@@ -267,6 +322,18 @@ def test_throttle_probe_selfcheck_off_short_circuits() -> None:
 def test_m2_acceptance_tick_constant_is_7_days() -> None:
     """量纲守卫：M2 验收 = 7 游戏日 = 604,800 tick（DESIGN §10/§17）。"""
     assert M2_ACCEPTANCE_TICKS == 604_800
+
+def test_soak_entity_loss_bound_is_zero_in_phase_a() -> None:
+    """契约钉（体例同 `test_cascade_frame_budget_is_100_nodes`）：阶段 A 净减上界 = 0。
+
+    **阶段 B**（M6「生命始终」落点 a 落地同 CR）本钉须随之更新为「= 生命面给定值」，
+    并同步更新 `docs/perf/m6-soak-contract-preplan.md` §7 提案值表。
+    阶段 A 断言 `== 0` ⇒ `_entity_loss_bound` 恒 0 ⇒ 与旧断言（`end == start`）语义等价。
+    """
+    assert SOAK_ENTITY_LOSS_PER_GAME_DAY == 0
+    assert _entity_loss_bound(0) == 0
+    assert _entity_loss_bound(_CI_SOAK_TICKS) == 0
+    assert _entity_loss_bound(M2_ACCEPTANCE_TICKS) == 0
 
 
 @pytest.fixture(scope="module")
@@ -394,7 +461,7 @@ def test_soak_nightly_l1_feeder_stability() -> None:
         feeder=make_l1_feeder(runtime, grid_w=_MAP_W, grid_h=_MAP_H),
     )
     _write_soak_artifact(result, label="M2 长跑 L1 feeder 30k")
-    _assert_no_runaway(result, label="M2 长跑 L1 feeder 30k")
+    _assert_no_runaway(result, label="M2 长跑 L1 feeder 30k", profile_ids=set(runtime.profiles))
 
 
 @pytest.mark.bench
@@ -413,4 +480,9 @@ def test_soak_l1_feeder_ci_smoke() -> None:
         window_ticks=_CI_WINDOW_TICKS,
         feeder=make_l1_feeder(runtime, grid_w=_MAP_W, grid_h=_MAP_H),
     )
-    _assert_smoke(result, label="M2 长跑 L1 feeder CI 冒烟", expected_ticks=_CI_SOAK_TICKS)
+    _assert_smoke(
+        result,
+        label="M2 长跑 L1 feeder CI 冒烟",
+        expected_ticks=_CI_SOAK_TICKS,
+        profile_ids=set(runtime.profiles),
+    )
