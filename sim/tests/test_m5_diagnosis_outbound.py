@@ -299,11 +299,28 @@ requires_diagnosis_in_snapshot = pytest.mark.skipif(
 
 @requires_diagnosis_in_snapshot
 class TestDiagnosisSurfaceParity:
-    def test_live_and_snapshot_agree_on_diagnosis(self) -> None:
-        """诊断路由的 live 段与快照段**逐字段相等**（K3 铁律在诊断面上的落点）。"""
-        live = _live_spec()["paths"][DIAGNOSIS_PATH]["get"]
-        snap = json.loads(SNAPSHOT.read_text(encoding="utf-8"))["paths"][DIAGNOSIS_PATH]["get"]
-        assert live == snap, "诊断路由 live ≠ 快照"
+    """M6-K1 缺口已由 M6-K2 补齐（快照注入 + ext 登记）——本组现为**结构对拍**。
+
+    ⚠ 为什么是**结构**对拍而不是逐字段相等：快照是**手工维护的 mock**（codegen.md §4），
+    与 live 的**系统性差异**是设计而非漂移——operationId（live 是 FastAPI 自动名
+    `get_anchor_api_...`，快照是 camelCase `getAnchor`，前端类型名由它派生）、summary 文案、
+    live 侧的 `description`/`tags`（ext 后处理剥除）、以及 422 与 Problem 码的分工。
+    故对拍口径 = **前端真正依赖的结构**：响应码集合（snapshot ⊆ live）、200 的 `$ref`。
+    """
+
+    def test_live_and_snapshot_agree_on_diagnosis_structure(self) -> None:
+        live_get = _live_spec()["paths"][DIAGNOSIS_PATH]["get"]
+        snap_get = json.loads(SNAPSHOT.read_text(encoding="utf-8"))["paths"][DIAGNOSIS_PATH]["get"]
+        # 口径：snapshot ⊆ live，且两个 Problem 码（400/404）必须**都在**。
+        # live 多出的 422 是 FastAPI 自动校验响应（快照按同族体例不声明它）。
+        extra = sorted(set(snap_get["responses"]) - set(live_get["responses"]))
+        assert not extra, f"快照声明了 live 没有的响应码：{extra}"
+        assert {"400", "404"} <= set(snap_get["responses"]), snap_get["responses"]
+        assert (
+            live_get["responses"]["200"]["content"]["application/json"]["schema"]
+            == (snap_get["responses"]["200"]["content"]["application/json"]["schema"])
+        ), "200 响应模型不一致"
+        assert snap_get["operationId"] == "getAnchorMaterialization", snap_get["operationId"]
 
     def test_snapshot_diagnosis_schema_is_closed_and_minimal(self) -> None:
         """快照侧同样锁：封闭 + 三键（M-1 的**协议面**形态）。"""
@@ -312,6 +329,13 @@ class TestDiagnosisSurfaceParity:
         assert schema.get("additionalProperties") is False, schema
         assert set(schema["properties"]) == set(DIAGNOSIS_KEYS), sorted(schema["properties"])
         assert find_forbidden_keys(schema) == [], "快照诊断 schema 含禁键"
+
+    def test_ext_declares_problem_responses_for_diagnosis(self) -> None:
+        """`openapi_ext` 必须为该路由**手工登记** Problem 响应（§3.3 坑：不登记就没有）。"""
+        src = (REPO_ROOT / "sim" / "api" / "openapi_ext.py").read_text(encoding="utf-8")
+        assert f'attach("{DIAGNOSIS_PATH}", "get"' in src, (
+            "openapi_ext 未登记该路由的 Problem 响应——live spec 里 400/404 会缺"
+        )
 
 
 # ---------------------------------------------------------------------------

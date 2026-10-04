@@ -1,4 +1,4 @@
-"""协议版本断言钉（M5-K14 / 裁 34-1 甲案：WS 协议升 1.1）
+"""协议版本断言钉（M5-K14 甲案升 1.1；M6-K2 诊断面进快照升 1.2）
 
 **为什么要有这个文件**：版本号在仓里有**两个落点**——`sim/api/ws.py::_PROTOCOL_VERSION`（真相源）
 与 `client/src/net/ws.ts::PROTOCOL_VERSION`（第二落点），而两处各写各的**漂移过一次**
@@ -32,14 +32,15 @@ WS_TS = REPO_ROOT / "client" / "src" / "net" / "ws.ts"
 SNAPSHOT = REPO_ROOT / "shared" / "openapi.json"
 VERSIONING = REPO_ROOT / "docs" / "api" / "versioning.md"
 
-#: 本次升版目标（裁 34-1 甲案：M5 三个 minor 级变更）。
-EXPECTED_VERSION = "1.1"
+#: 当前版本（1.1=裁 34-1 甲案三个 minor；1.2=M6-K2 诊断面进快照，仍是 minor）。
+EXPECTED_VERSION = "1.2"
 
-#: 登记在 §7 的三个 minor 变更的关键词（doc 同步钉用，避免「登记与代码各说各话」）。
+#: 登记在 §7 的 minor 变更关键词（doc 同步钉用，避免「登记与代码各说各话」）。
 REGISTERED_MINOR_KEYWORDS = (
     "fast_forward",
     "/api/anchors/current",
     "PlanDelta",
+    "AnchorMaterializationStatus",
 )
 
 
@@ -119,9 +120,11 @@ class TestRegistrationSync:
         assert missing == [], f"§7 登记缺关键词：{missing}"
 
     def test_section7_minor_row_mentions_commit_hashes(self) -> None:
-        """1.1 登记须带 commit hash（可追到具体变更，不靠『大概是那三个』）。"""
+        """1.1 登记须带 commit hash（可追到具体变更，不靠『大概是那三个』）。
+
+        1.2 行按体例写「commit 见收编落账」（收编时 hash 才定），故本钉只对 1.1 行断言。"""
         section = _registration_section()
-        rows = [line for line in section.splitlines() if line.startswith(f"| {EXPECTED_VERSION} |")]
+        rows = [line for line in section.splitlines() if line.startswith("| 1.1 |")]
         assert rows, "§7 缺 1.1 行"
         hashes = re.findall(r"`([0-9a-f]{7,40})`", rows[0])
         assert len(hashes) >= 3, (

@@ -574,6 +574,9 @@ def _attach_problem_responses(schema: dict[str, Any]) -> None:
     attach("/api/anchors/current", "get", ["404"])  # R-3②：空库 404（K3 前瞻声明对齐）
     attach("/api/anchors/{anchor_id}", "patch", ["404", "422"])  # 不存在 / 校验失败
     attach("/api/anchors/{anchor_id}", "delete", ["404", "409"])  # 不存在 / 末梢受保护
+    # M6-K2：只读诊断面（批次 E）——`exception_handler` 产的 400/404 不会自动进
+    # /openapi.json（§3.3 关键坑），故与快照同款手工登记。
+    attach("/api/anchors/{anchor_id}/materialization", "get", ["400", "404"])  # 无世界 / 档不存在
 
 def custom_openapi() -> dict[str, Any]:
     """自动 schema + WS 消息 schemas（components.schemas.WsMessage 联合）。挂到 app.openapi。"""

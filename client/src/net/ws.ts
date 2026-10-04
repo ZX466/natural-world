@@ -12,13 +12,14 @@ const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
 
 /**
- * WS 信封 `v`（versioning.md §1：major.minor，当前 1.1）。
+ * WS 信封 `v`（versioning.md §1：major.minor，当前 1.2）。
  * 必须与 sim 侧 `sim/api/ws.py::_PROTOCOL_VERSION` 一致——此前两处各写各的
  * （sim 0.1 / client 0.1）已漂移，P05 统一为 1.0（kilo K03：前端以 sim 为准）；
- * 1.1 升版（裁 34-1 甲案）后由 `sim/tests/test_protocol_version.py` 的跨树钉锁死
+ * 1.1（裁 34-1 甲案）/ 1.2（M6-K2 诊断面进快照）升版后由
+ * `sim/tests/test_protocol_version.py` 的跨树钉锁死
  * （本文件是**第二落点**，真相源在 ws.py；改一处必改另一处）。
  */
-const PROTOCOL_VERSION = '1.1';
+const PROTOCOL_VERSION = '1.2';
 
 export type WsStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
 

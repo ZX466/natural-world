@@ -62,6 +62,18 @@ client ◄──hello_ack── { "v": "1.1", "server_versions": ["1.0","1.1"], 
 |---|---|---|---|
 | 1.0 | 协议基线（ws-protocol.md 全量消息 + rtoken/时间口径裁决） | client+sim | 2026-09-19 |
 | 1.1 | **M5 三个 minor 级变更合入**（逐项 commit 见右侧登记）：① `a149bb9` M5-K3 批次 B——`fast_forward` action（`SetControlMessage.action` 扩枚举）+ `session_state` 首帧（SessionAnchor 游标指针 `name`/`story_label`）+ `GET /api/anchors/current`（末梢档读路径）；② `f7f6e1b` M5-K7——`GET /api/anchors/{anchor_id}` 单档读端点（响应 `AnchorListItem`，五键白名单）+ `state_delta.plan` 字段（**顶层可选数组**）；③ `7dc8d69` M5-K10——`PlanDelta` **封闭 schema** 补齐（裁 19 CRITICAL：`state_delta.plan` 越界冻结，`additionalProperties:false`） | client+sim | 2026-10-03 |
+| 1.2 | **批次 E 只读诊断面进协议快照**（M6-K2，commit 见收编落账）：① `GET /api/anchors/{anchor_id}/materialization`（**新增端点**，响应 `AnchorMaterializationStatus{anchor_id, ready, reason?}`，`additionalProperties:false`，三键白名单）；② `openapi_ext` 手工登记该路由的 `400`/`404` Problem 响应（§3.3 坑：`exception_handler` 产出不会自动进 spec）；③ 诊断面**零新字段**：不返世界真相（`seq`/`tick`/`branch_id`）与随机流状态（M-1 递归扫零命中） | client+sim | 2026-10-04 |
+
+> **1.2 升版说明（M6-K2）**：**新增端点 + 新增响应 schema** 属 §3 兼容性表里的 **minor**
+> （纯新增，旧客户端不受影响；无 major 语义反转、无既有字段改型）⇒ 只升 minor 位。
+> **版本影响面**：① WS 信封 `v` 与前端 `net/ws.ts` 常量**一并升到 1.2**（单一版本号语义：
+> §5「双处记录」；跨树钉 `test_protocol_version.py` 锁两处相等）；② HTTP 侧**不引入 URL 版本前缀**
+> （§4 现行口径：单用户本地部署无外部消费者，用 schema 变更 + 重新生成管控），
+> 前端的可见变化是 `shared/protocol.ts` **新增** `getAnchorMaterialization` 操作与
+> `AnchorMaterializationStatus` 类型（**纯新增，无既有类型改型**）。
+> **这次补登记的债**：该端点自 A11 落地起就**不在快照里**（live↔快照漂移，而
+> `gen-protocol --check` 只校「生成物↔快照」、不校「live↔快照」，故一直不红）；
+> M6-K1 钉出、M6-K2 补齐，并把 live↔快照对拍钉与 K11 路由面钉一起修成真保证。
 
 > **1.1 升版说明（裁 34-1 甲案）**：三个变更均为 **minor**（新增可选 action / 新增可选字段 / 新增端点与响应模型；**无 major 语义反转、无既有字段改型**），故只升 minor 位。
 > **零物理快照变更**：本次升版**不动** `shared/openapi.json` 与 `shared/protocol.ts` 的任何字段

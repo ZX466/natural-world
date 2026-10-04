@@ -274,6 +274,27 @@
           "404": { "$ref": "#/components/responses/Problem" }
         }
       }
+    },
+    "/api/anchors/{anchor_id}/materialization": {
+      "parameters": [
+        { "name": "anchor_id", "in": "path", "required": true, "schema": { "type": "string" } }
+      ],
+      "get": {
+        "operationId": "getAnchorMaterialization",
+        "summary": "只读诊断：该档能不能回退（不可回退给原因码；不含任何世界状态）",
+        "responses": {
+          "200": {
+            "description": "materialization status",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AnchorMaterializationStatus" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      }
     }
   },
   "components": {
@@ -840,6 +861,16 @@
           "story_label": { "type": "string", "description": "叙事化时间标签，非 tick 数值" },
           "created_at": { "type": "string", "format": "date-time" },
           "protected": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "AnchorMaterializationStatus": {
+        "type": "object",
+        "required": ["anchor_id", "ready"],
+        "properties": {
+          "anchor_id": { "type": "string" },
+          "ready": { "type": "boolean" },
+          "reason": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
         },
         "additionalProperties": false
       },

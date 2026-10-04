@@ -88,6 +88,18 @@ def _keys_recursive(obj: Any) -> list[str]:
     return out
 
 
+def _live_paths() -> dict[str, Any]:
+    """**live** OpenAPI 的 `paths`（M6-K2 起为路由面断言的唯一来源）。
+
+    ⚠ **不要用 `app.routes`**：本仓 anchors/world 路由在 `_IncludedRouter` 包装里，
+    `app.routes` 只有 9 条、看不到 `/api/anchors/*` ⇒ 基于它的路由面断言会**假绿**
+    （M6-K1 实测发现的坑，K11 那条钉中过招）。
+    """
+    from sim.api.main import app  # 必须先于 openapi_ext import（半初始化模块坑）
+
+    return app.openapi().get("paths", {})
+
+
 # ---------------------------------------------------------------------------
 # ① 递归禁键扫描与剥除（纯函数层）
 # ---------------------------------------------------------------------------
@@ -278,17 +290,35 @@ class TestHttpSurfaceSeal:
 
         **这是 HTTP 侧不另装中间件的理由**（契约稿 §3.2）：没有 `response_model` 的路由
         等于没有闸，出现一个即红。
-        """
-        from sim.api.main import app
 
-        missing = [
-            f"{getattr(route, 'path', '?')}:{','.join(sorted(getattr(route, 'methods', []) or []))}"
-            for route in app.routes
-            if getattr(route, "methods", None)
-            and getattr(route, "path", "").startswith("/api/")
-            and getattr(route, "response_model", None) is None
-        ]
-        assert missing == [], f"这些 /api 路由没有 response_model（无结构密封）：{missing}"
+        ⚠ **M6-K2 修（假绿修复）**：断言源从 `app.routes` 换成 **live spec 的 `paths`**——本仓
+        anchors/world 路由挂在 `_IncludedRouter` 包装里，`app.routes` 实测只有 **9 条**、看不到
+        任何 `/api/anchors/*` ⇒ 旧版实际只在查 `/api/health` 与 `/api/world/map`。
+        判据=**200 段是否带 content schema**（FastAPI 按 `response_model` 过滤；未声明时
+        200 段退化成空 `{}`）；204 段（无响应体）按「声明过 operation」放行。
+        """
+        paths = _live_paths()
+        methods = {"get", "post", "put", "patch", "delete"}
+
+        def _sealed(op: dict[str, Any]) -> bool:
+            ok = op.get("responses", {}).get("200")
+            if ok is None:
+                return bool(op.get("responses"))  # 如 204：无响应体也算已声明
+            content = ok.get("content") or {}
+            schema = next(iter(content.values())).get("schema", {}) if content else {}
+            return bool(schema.get("$ref") or schema.get("type"))
+
+        missing = sorted(
+            f"{path}:{method.upper()}"
+            for path, ops in paths.items()
+            if path.startswith("/api/")
+            for method, op in ops.items()
+            if method in methods and not _sealed(op)
+        )
+        assert missing == [], f"这些 /api 操作没有响应模型声明（无结构密封）：{missing}"
+        assert any(p.startswith("/api/anchors") for p in paths), (
+            "live spec 里一条 anchors 路径都没有——断言源又空了（先查路由是否被挪走）"
+        )
 
     def test_snapshot_paths_have_no_power_route(self) -> None:
         """零新路由的可执行形式：快照 paths 键零 authority/power 族。"""

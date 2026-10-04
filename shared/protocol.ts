@@ -40,6 +40,25 @@ export type paths = {
     readonly patch: operations['renameAnchor'];
     readonly trace?: never;
   };
+  readonly '/api/anchors/{anchor_id}/materialization': {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path: {
+        readonly anchor_id: string;
+      };
+      readonly cookie?: never;
+    };
+    /** 只读诊断：该档能不能回退（不可回退给原因码；不含任何世界状态） */
+    readonly get: operations['getAnchorMaterialization'];
+    readonly put?: never;
+    readonly post?: never;
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
   readonly '/api/anchors/current': {
     readonly parameters: {
       readonly query?: never;
@@ -184,6 +203,11 @@ export type components = {
       readonly protected: boolean;
       /** @description 叙事化时间标签，非 tick 数值 */
       readonly story_label: string;
+    };
+    readonly AnchorMaterializationStatus: {
+      readonly anchor_id: string;
+      readonly ready: boolean;
+      readonly reason?: string | null;
     };
     readonly AnchorRename: {
       readonly name: string;
@@ -719,6 +743,30 @@ export interface operations {
           readonly 'application/json': components['schemas']['AnchorListItem'];
         };
       };
+      readonly 404: components['responses']['Problem'];
+    };
+  };
+  readonly getAnchorMaterialization: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path: {
+        readonly anchor_id: string;
+      };
+      readonly cookie?: never;
+    };
+    readonly requestBody?: never;
+    readonly responses: {
+      /** @description materialization status */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly 'application/json': components['schemas']['AnchorMaterializationStatus'];
+        };
+      };
+      readonly 400: components['responses']['Problem'];
       readonly 404: components['responses']['Problem'];
     };
   };

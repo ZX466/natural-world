@@ -499,20 +499,38 @@ class TestSameTransactionIsStructural:
 
 
 class TestProtocolSurfaceUntouched:
-    def test_route_exists_in_app_but_not_in_mock_snapshot(self) -> None:
-        """真实面有该路由、mock 快照里**没有** ⇒ 协议面零变更（前端登记归 kilo）。
+    def test_route_in_snapshot_now_registered_as_minor_1_2(self) -> None:
+        """**挂账已结清（M6-K2，2026-10-04）**：诊断路由进了 mock 快照，且**带 §7 minor 登记**。
 
-        判别力：这是我域边界（shared/ 非我所有）留下的**显式挂账**——若哪天有人把它补进
-        快照，这条钉会提醒同时走 versioning §7 minor 登记 + 升版，别静默补。
+        本钉原本是**显式挂账事实钉**：「真实面有该路由、mock 快照里没有 ⇒ 协议面零变更
+        （前端登记归 kilo）」，并明写「若哪天有人把它补进快照，这条钉会提醒同时走
+        versioning §7 minor 登记 + 升版，**别静默补**」。
+
+        M6-K2 正是那次「补进快照」——按本钉的嘱咐同提交做了三件事：
+        ①`versioning.md` §7 加 **1.2** 行（新增端点 = minor）；②`_PROTOCOL_VERSION`
+        与前端 `net/ws.ts` 一并升 **1.2**（跨树钉 `test_protocol_version.py` 锁两处相等）；
+        ③`shared/openapi.json` + `shared/protocol.ts` 同提交重生成。
+
+        ⇒ 本钉从「挂账事实」转为**防静默补登记**的守卫：快照里有该路由 ⇒ §7 必须有 1.2 行、
+        版本号必须 ≥1.2。将来若有人再加路由/字段又忘了登记，这条会先红。
         """
         from sim.api.main import app
 
-        # ⚠️ 本版 FastAPI 把 include_router 的路由包成 `_IncludedRouter`（path=None）⇒
-        # 断言必须读 **live OpenAPI**（也正是 mock 要对齐的那份形状）。
         live = set(app.openapi()["paths"])
         assert "/api/anchors/{anchor_id}/materialization" in live
         snap = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
-        assert "/api/anchors/{anchor_id}/materialization" not in snap["paths"]
+        assert "/api/anchors/{anchor_id}/materialization" in snap["paths"], (
+            "诊断路由又从快照里消失了（M6-K2 已补齐）——先查是不是回退过头"
+        )
+
+        versioning = (REPO_ROOT / "docs" / "api" / "versioning.md").read_text(encoding="utf-8")
+        assert "| 1.2 |" in versioning, "快照新增了端点但 §7 没有 1.2 登记——别静默补"
+
+        from sim.api.ws import _PROTOCOL_VERSION
+
+        assert tuple(int(x) for x in _PROTOCOL_VERSION.split(".")) >= (1, 2), (
+            f"快照新增端点但协议版本仍 {_PROTOCOL_VERSION}（应 ≥1.2）"
+        )
 
     def test_machine_code_still_absent_from_snapshot(self) -> None:
         """物化机器码**不进**协议快照（批次 E「零 schema」红线；K14 已论证）。
