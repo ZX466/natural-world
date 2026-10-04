@@ -14,6 +14,7 @@ L1 决策不走 IntentGate（闸门审 LLM 输出；效用函数是确定性代�
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Final
 
 import numpy as np
 
@@ -44,6 +45,15 @@ HABIT_BONUS = 0.05
 
 #: OCEAN→动作的温和偏置（外向者爱交谈等；占位系数）
 _EXTRAVERSION_CHAT_BIAS = 0.3
+
+#: 权力偏置上界（裁 34-2 采 pi P10 提案：`POWER_MAX_BIAS=0.2` ⇒ flip≤0.25；同时
+#: 是安规「被操纵感」守卫——动作分布熵坍缩=操纵前兆，与 codex 红线 C 共用断言）。
+#: 权力列偏置 = power × POWER_MAX_BIAS，加到社交两列（request_chat/wander——
+#: 高权力者更主动社交/活动，低权力者收缩；不碰生存列 eat/rest——饿不死权力低）。
+POWER_MAX_BIAS: Final[float] = 0.2
+
+#: 权力偏置作用的动作列（社交/活动族；生存列零触碰）
+_POWER_SOCIAL_ACTIONS: Final[tuple[str, ...]] = ("request_chat", "wander")
 
 
 @dataclass(frozen=True)
@@ -90,10 +100,18 @@ class UtilityModel:
         return rows
 
 
-def utility_scores_matrix(profiles: list[NpcProfileData], model: UtilityModel) -> np.ndarray:
+def utility_scores_matrix(
+    profiles: list[NpcProfileData],
+    model: UtilityModel,
+    power: list[float] | None = None,
+) -> np.ndarray:
     """50 NPC 全量打分：需求加权和 + 外向偏置 → (n_npc, n_actions) float32。
 
     向量化实现（与 bench 原型同构：矩阵乘法一次算完）。
+
+    power（M6 批次 C 接线）：与 profiles 等长的权力值（[-1,1]；None = 无权力面，
+    打分逐位同旧）。作为**效用额外列**参与打分（P10 红线：向量化，禁逐人
+    replace/chaotic_at）——偏置 = power × POWER_MAX_BIAS，只加社交两列。
     """
     needs = model._needs_matrix(profiles)  # (n, 3)
     weights = model._weights_matrix(profiles)  # (n, 3)
@@ -108,12 +126,33 @@ def utility_scores_matrix(profiles: list[NpcProfileData], model: UtilityModel) -
 
     # 习惯加成占位：常数列偏置（M4 前均匀；避免全零打分并列）
     scores += np.float32(HABIT_BONUS)
+
+    # 批次 C 权力列（裁 34；P10 向量化口径）：power × POWER_MAX_BIAS 加社交两列。
+    # 生存列（eat/rest）零触碰——权力不改变生存紧迫度语义（饿不死权力低）。
+    if power is not None:
+        if len(power) != len(profiles):
+            msg = f"power 长度 {len(power)} 与 profiles 数 {len(profiles)} 不一致"
+            raise ValueError(msg)
+        bias = np.array(
+            [np.float32(max(-1.0, min(1.0, float(v))) * POWER_MAX_BIAS) for v in power],
+            dtype=np.float32,
+        )
+        for action in _POWER_SOCIAL_ACTIONS:
+            col = model.action_index[action]
+            scores[:, col] = scores[:, col] + bias
     return scores
 
 
-def evaluate_batch(profiles: list[NpcProfileData], model: UtilityModel) -> list[UtilityDecision]:
-    """批量评估 → 每 NPC 一个 UtilityDecision（argmax；scores 全量随行供审计）。"""
-    scores = utility_scores_matrix(profiles, model)
+def evaluate_batch(
+    profiles: list[NpcProfileData],
+    model: UtilityModel,
+    power: list[float] | None = None,
+) -> list[UtilityDecision]:
+    """批量评估 → 每 NPC 一个 UtilityDecision（argmax；scores 全量随行供审计）。
+
+    power（M6 批次 C）：透传给打分矩阵（None = 无权力面，行为逐位同旧）。
+    """
+    scores = utility_scores_matrix(profiles, model, power=power)
     best = scores.argmax(axis=1)
     return [
         UtilityDecision(

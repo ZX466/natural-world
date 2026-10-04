@@ -39,11 +39,18 @@ class NpcRuntime:
     willingness（M4-B3）：全队共享的意愿冲突注入（测试/接线缝）——传入时每个
     NPC 动作执行面产 NPC_MONOLOGUE 事件（K8 通路）；None = 无意愿面（M2 行为
     完全不变）。「最终都执行」由实现保证：verdict 不改 NPC_ACT。
+
+    power（M6 批次 C 接线，裁 34 口径）：{npc_id: float} 权力值快照（调用方每
+    tick 物化后传入；[-1,1] 量纲，A7 口径）。传入 ⇒ 权力作为**效用额外列**参与
+    打分（P10 红线：向量化一列，禁逐人 replace/chaotic_at）；无支配动作偏好——
+    权力偏置只作用于社交/ 工作两列（POWER_MAX_BIAS≤0.2，flip≤0.25）。None =
+    无权力面（行为与无权力管线逐位一致，既有钉零回归）。
     """
 
     profiles: dict[str, NpcProfileData]
     utility: UtilityModel
     willingness: WillingnessVerdict | None = None
+    power: dict[str, float] | None = None
     _order: list[str] = field(default_factory=list, init=False)
 
     def __post_init__(self) -> None:
@@ -104,7 +111,16 @@ class NpcRuntime:
         if not active_ids:
             self.profiles = advanced
             return []
-        decisions = evaluate_batch([advanced[nid] for nid in active_ids], self.utility)
+        # 批次 C 接线：权力快照按 active 序重排（缺键兜底 0.0——A7「无行=未表态
+        # 兜底 0」口径；越界值截到 [-1,1] 量纲，防快照外值混入打分）。
+        power_values: list[float] | None = None
+        if self.power is not None:
+            power_values = [
+                max(-1.0, min(1.0, float(self.power.get(nid, 0.0)))) for nid in active_ids
+            ]
+        decisions = evaluate_batch(
+            [advanced[nid] for nid in active_ids], self.utility, power=power_values
+        )
 
         # 3. 事件产出：params 只带白名单键（eat/rest/wander/move 无参数动作 → 空 params）
         for nid, d in zip(active_ids, decisions, strict=True):
