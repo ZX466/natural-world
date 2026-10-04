@@ -28,30 +28,31 @@ inconclusive 37 项=软判定留人工复核非硬红；报告 t4-results/t4-rep
 ⑤**我域真实欠账清单（未虚构版）**：批次 A 接线（inject 生产化+chaos 消费点）
 +driver 双修（写锁收口+drain 接线案B——K16 病根真实存在）+批次 C（authority/
 落盘+hooks 四步注入）+批次 D（fire*.py）+npc.death（A1 钉在等）。
-<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-03 M6-A3 已交）===== -->
+<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-04 M6-A4 已交）===== -->
 <!-- 0. 工作树 E:\zxdevelop\.orca\worktrees\project7\opencode，分支 ZX466/opencode；
-      HEAD 见 `git log -1`（M6-A3：内容面数据面预研 `docs/data/m6-content-data-preplan.md`，
-      **零代码零迁移**，已双推 origin+gitee）；基线 main 3f321b4（权力→utility 传导收口 +
-      `npc.death` 已落地 ⇒ 我的死亡 B 组钉全解锁），迁移链 head=0014（连续六单零迁移） -->
+      HEAD 见 `git log -1`（M6-A4：fog.py 头注同步改〔裁 40-4〕+ 死亡投影三问复核，
+      **零生产码**，已双推 origin+gitee）；基线 main 9857115（M6 内容预备波五单收编 +
+      定标门 2 解除 + 裁 40），迁移链 head=0014（连续七单零迁移） -->
 <!-- 1. 已交全景：M5-D1 预研 / D2 / D3-a 0008 / D3-b fork 事件+克隆 / D3-c R-2+RNG /
       A-DATA 0009 / A2 0010 / A3 物化设计 / A4 0011 + R-4 契约 / A5 0012 is_current +
       开线闸 / A6 R-4 钉 + fork 交接口径 / A7 0013 npc_power + 45 钉 / A8 火灾预研 /
       A9 0014 fires + FireStore + 43 钉 / A10 物化数据面（72 钉）/ A11 出站编排（46 钉）/
-      A12 soak 计数核实（12 钉）/ M6-A1 死亡路径钉 / M6-A2 死亡语义登记 §24 + 不对称钉 /
-      **M6-A3 内容面数据面预研（四事件可重放性 + 0015 预留 + soak 交叉 + 6 待裁点）** -->
-<!-- 2. 在途 = 无。挂账：① **hooks 四步语义待注入**（展开/override/语料/restore_rng；`fog.reveal`
+      A12 soak 计数核实（12 钉）/ M6-A1 死亡路径钉 / M6-A2 §24 死亡语义登记 + 不对称钉 /
+      M6-A3 内容面数据面预研（四事件判定 + 0015 预留 + 6 待裁点）/
+      **M6-A4 fog 头注同步改 + 死亡投影复核（发现 npc_health 残留）** -->
+<!-- 2. 在途 = 无。挂账：① **hooks 四步语义待注入**（读档后内存侧一致性的最后一环；`fog.reveal`
       事件化后会成为 `expand_world` 的第一个真实消费者）；② **RNG 捕获待混沌流侧暴露**；
       ③ 诊断路由未进 `shared/openapi.json`（前端登记归 kilo）；④ ProblemDetail 机器码出站登记
       归 kilo；⑤ 8 词填值 CR（玩家面只一档文案）；⑥ **driver 写锁探针已不复现** ⇒ A11 挂账的
-      「API 钉夹具恢复 driver 形态」可以动，但属测试夹具改动、需单独小单（未动）；
-      ⑦ M6 内容面六个待裁点等 Claude 裁决（见预研稿 §5）。 -->
+      「API 钉夹具恢复 driver 形态」可动（属测试夹具，需单独小单）；⑦ M6 内容面六个待裁点等
+      裁决；⑧ **npc_health 死亡残留**（建议投影连带删，见完成记）。 -->
 <!-- 3. 恢复序：git fetch+merge origin/main → 读 talking.txt（在途单卡）→ 读本卡 →
       需要细节再翻 ② opencode 节各轮快照 / git log --oneline -- .orca/memory.md -->
-<!-- 4. 门禁（全绿基线 2293 passed / 120 skipped；**主树留言板标的数字与实测连续多轮不一致，
-      一律以实测为准**）：`uv run pytest -m "not bench" -q`；`uv run ruff check .`；
-      `uv run pyright sim/`；**gen-protocol --check EXIT 0**（脚本在 `tools/gen-protocol.ts`，
-      从 client/ 跑 `npx tsx ../tools/gen-protocol.ts --check`；client/node_modules 缺失 ⇒
-      junction 挂主树那份，已 gitignore）；autogenerate 零漂移；format drift **41**（基线值） -->
+<!-- 4. 门禁（全绿基线 2293 passed / 120 skipped）：`uv run pytest -m "not bench" -q`；
+      `uv run ruff check .`；`uv run pyright sim/`；**gen-protocol --check EXIT 0**（脚本在
+      `tools/gen-protocol.ts`，从 client/ 跑 `npx tsx ../tools/gen-protocol.ts --check`；
+      client/node_modules 缺失 ⇒ junction 挂主树那份，已 gitignore）；autogenerate 零漂移；
+      format drift **41**（基线值；`sim/world/fog.py` 本身在名单内 ⇒ 只改 docstring 不重排） -->
 <!-- 5. 域内纪律（血脉）：① stamp 只改版本行不执行迁移；② 往返钉钉**具体 revision id**；
       ③ 回滚场景证明不了原子性，必须正向读回；④ 收紧写路径前先跑全量找爆炸半径；
       ⑤ PowerShell 写文件用 `write` 工具（BOM 会污染 commit subject）；`edit` 吃首行缩进；
@@ -62,36 +63,19 @@ inconclusive 37 项=软判定留人工复核非硬红；报告 t4-results/t4-rep
       有界重试治不了持久锁；⑭ 同事务钉要「结构 + 行为」两条；⑮ 别人的未收口事务会伪装成你的钉
       flaky ⇒ 先做基线对照实验；⑯ 派单给的**钉子落点建议可偏离**（回执说明理由）；⑰
       **`TickLoop.enqueue` 是立即 apply**；⑱ **间歇性缺陷不许用探针自动改夹具**；⑲ skip-locked
-      组若依赖未定型接口用「按签名试参 + 构造失败即 skip」的适配器。 -->
+      组若依赖未定型接口用「按签名试参 + 构造失败即 skip」的适配器；⑳ **改 docstring 的文件若已在
+      ruff format 漂移名单里，不要顺手重排**（无关 diff 比格式不一致更贵）。 -->
 
-（A8-M6-A3 八轮新经验，本轮零正确化）：
-- **预研稿先读「既有文档写死了什么」再判定**：本轮若不看 `sim/world/fog.py` 头注，会给出
-  「迷雾要落表」的相反结论；而正确答案是「两条路都不落表」，且**采事件化时必须改那段头注**
-  ——既有文档口径本身就是一条待裁点。
-- **「要不要落表」的第三问是「能不能派生」**：先问能不能从 tick/纯函数算出来（`calendar.py`
-  的日历派生、`fog` 的 chunk 并集），能算就不入库；这比「有事件源吗」更早一步。
-- **加列也是迁移，别被「不是建表」骗了**：`speech.shift` 落 `npc_profiles` 仍要 0015
-  （纯 add_column、无 batch、不回填）；所以「预留号」的对象是**任何 schema 变更**，不只是新表。
-- **别为了严谨硬凑 CHECK**：`speech_register` + `speech_updated_tick` 语义独立 ⇒ 不进 CHECK
-  （对照 `fires` 的 `ck_fires_end_pair` 是真成对才进）。
-【M6-A2 完成记｜死亡语义数据面登记 + fork 克隆不对称钉（2026-10-03 已交，零生产码，
-10 例：6 绿 + 4 skip-locked）】① **登记**：`docs/data/schema.md` **§24**「死亡语义与
-`npc_profiles` 投影契约」，本仓**选定「同步投影删行」**（不是「明写不对称」）：死亡两侧同时
-发生——内存 `WorldState.entities` 删键 + `npc_profiles` 投影删行（同事务、走事件，守 C4）。
-**为什么不能只删内存**（三条不对称来源）：① `npc_profiles` 是 agent 层花名册（`materialize()`
-读它、`lod` 驱动升降格与 `runtime.py:103` 的 L1 参与集）⇒ 死者继续被决策；② `npc_profiles`
-在 `_BOUNDED_TABLES` 内**整表克隆**而 `entities` **不在** ⇒ 历史点读档把死者克隆回子分支
-（派单所说「库里有、内存无」）；③ `state_hash()` 哈希内存态、投影表是另一份真相 ⇒ 长期不一致。
-**被否方案**：加 `alive/dead` 死列保留行（迁移 + 须所有读点过滤 + 违「死列不用」纪律）；
-允许过渡兜底（只删内存的版本必须在读档路径显式过滤并登记临时形态）。② **钉**：A 组 6 例今天即绿
-（§24 不许被删 / 指名三张关系 / 写明选了哪条路 / 声明未实现 / 结构性来源 / 今天零载体）+
-B 组 4 例 skip-locked（投影删行、投影幂等、**端到端「读档子分支无死者行」**、子分支行集 = 锚点
-时刻父分支行集）。③ **§24.2 不对称判据**：子分支 `npc_profiles` 行集 ⊆ 物化后 entities 键集
-（为零）。④ 门禁：not-bench **2244 passed / 132 skipped / 0 failed**（基线 `8af3de1` 实测
-2238 ⇒ +6 绿 + 4 skip-locked）、ruff/pyright 0、drift 37 不增、**零生产码零迁移**、
-gen-protocol EXIT 0。⑤ 待施工方：死亡事件须可重放（新 kind 需红线 A 授权）且投影删行与事件同事务；
-落地后把 §24.3 改成现状（`test_no_death_kind_today` 会先红提醒，别删）。
-
+（A8-M6-A4 九轮新经验，本轮零正确化）：
+- **复核别人的实现要答「为什么这个 no-op/幂等是安全的」，而不只是「它不抛」**：死亡投影的
+  行不存在即 no-op 只有在「非法死亡进不了事件流」（世界层 fail-closed）时才安全——这条论证
+  本身才是复核的交付物。
+- **对称删除要问「同一主体的其他表还剩什么」**：§24 只钉了 `npc_profiles`，复核才发现
+  `npc_health` 残留且 `materialize_hidden` 不 JOIN `npc_profiles` ⇒ 死者的隐藏属性仍进决策。
+  **教训**：写「对称删除」契约时按**主体**列全表清单（npc_profiles / npc_health /
+  matter_state / material_balances / knowledge / npc_power），别只写正在改的那张。
+- **只改 docstring 也可能被 format 工具顺手改掉**：改前先 `git stash` 验一次该文件是否在漂移
+  名单内，是就不重排。
 【M6-A3 完成记｜内容面数据面预研（2026-10-03 已交，零代码零迁移）】① **四事件判定**：
 `ecology.shift`（相位由 tick 派生 + 有事件源 ⇒ 可重放）**不入库**；`fauna.tick`（每 tick 现抽、
 无治理状态）**不入库**且**不进 `entities`**；`speech.shift` **条件**——采事件化 ⇒ 可重放 ⇒ 落
@@ -109,6 +93,26 @@ M6 要跨会话保留就必须事件化 ⇒ 仍属可重放族 ⇒ 仍不落表�
 但属测试夹具、不在本单所有权 ⇒ 未动。⑥ 门禁：not-bench **2293 passed / 120 skipped /
 0 failed**（零代码 ⇒ 与基线 `3f321b4` 一致）、ruff/pyright 0、drift 41 不增、
 **零迁移**（head 仍 0014）、gen-protocol EXIT 0。
+
+【M6-A4 完成记｜fog.py 头注同步改 + 死亡投影复核（2026-10-04 已交，零生产码）】① **fog 头注**
+按裁 40-4 改成事件化口径：`fog.reveal` 承载揭示（fold=并集、幂等）⇒ 可重放、**不落表**
+（引 A3 预研 §2.4）；跨会话保留=玩家进度（丢了就重探）；保留「M3 当时口径是视角面」的沿革说明
++ 指向「事件化接线在我域施工单」。**实现零改动**，且该文件本就在 ruff format 漂移名单内 ⇒
+不重排（避免无关 diff）。② **死亡投影三问逐答**：① 幂等语义 ✅ 与我的
+`test_projection_is_idempotent` 一致（`npc_store.py:643-644` 行不存在即 return；分工是
+**世界层 fail-closed + 投影层幂等**，这个论证已写进回执）；② fork 不复活 ✅ 行级
+`INSERT…SELECT` + 锚点前已删行（钉 `test_child_branch_has_no_row_for_dead_npc` /
+`test_child_rows_equal_anchor_time_rows`）；③ 不误删他人 ✅ **双键取行**
+`{"branch_id", "id"}`（L642）+ payload 只有 `entity_id`（零归因键），旁证是
+`_project_lod_change` 头注记录的 0008 单键跨分支写旧 bug。条件性说明：读档后内存侧一致性取决于
+`expand_world` 注入（未注入），death 可重放 ⇒ 展开按 fold 走即自动一致。③ **新发现（同类残留）**：
+`npc.death` 只删 `npc_profiles`，**`npc_health` 残留**，而 `materialize_hidden()` 只查
+`npc_health` 不 JOIN `npc_profiles` ⇒ 死者隐藏属性仍进 agent 决策输入（实测：npc_profiles `[]`
+/ npc_health `['doomed']` / materialize_hidden `['doomed']`）。**建议**投影连带删 `npc_health`
+（比给读点加 JOIN 好：后者是第二真相源）；另附待裁：`matter_state`/`material_balances` 里以死者
+id 为主键的行建议**保留**（尸体是物质）并登记。④ 门禁：not-bench **2293 passed / 120 skipped /
+0 failed**（只改 docstring ⇒ 与基线 `9857115` 一致）、ruff/pyright 0、drift 41 不增、
+**零生产码零迁移**、gen-protocol EXIT 0。
 【A5 完成记｜0012 branches.is_current + 开线闸收紧（2026-10-01 已交 1eeb294，36 钉）】
 - 迁移 0012（`0012_branches_current.py`）：`is_current BOOLEAN NOT NULL DEFAULT 0`（纯
   add_column ⇒ 不需 batch）+ **部分唯一索引** `ux_branches_current ON branches(is_current)
