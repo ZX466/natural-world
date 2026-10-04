@@ -1,75 +1,53 @@
-<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-03 A12 已交）===== -->
+<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-03 M6-A1 已交）===== -->
 <!-- 0. 工作树 E:\zxdevelop\.orca\worktrees\project7\opencode，分支 ZX466/opencode；
-      HEAD 见 `git log -1`（M5-A12：soak 计数数据面核实 + 物化诊断文案缝确认，**零生产码**，
-      已双推 origin+gitee）；基线 main 2bd2bff（M5 收官波全并入 + M6 开题三件套就绪），
-      迁移链 head=0014（连续三单零迁移） -->
+      HEAD 见 `git log -1`（M6-A1：死亡路径数据面钉〔落点 a〕+ driver 夹具守卫，**零生产码**，
+      已双推 origin+gitee）；基线 main 48c9944（M5 收官清账波全并入 + G4 修正），
+      迁移链 head=0014（连续四单零迁移） -->
 <!-- 1. 已交全景：M5-D1 预研 / D2 / D3-a 0008 / D3-b fork 事件+克隆 / D3-c R-2+RNG /
       A-DATA 0009 / A2 0010 / A3 物化设计 / A4 0011 + R-4 契约 / A5 0012 is_current +
       开线闸 / A6 R-4 钉 + fork 交接口径 / A7 0013 npc_power + 45 钉 / A8 火灾预研 /
-      A9 0014 fires + FireStore + 43 钉 / A10 批次 E 物化数据面（物化器 + fork kind + 72 钉）/
-      A11 批次 E 出站编排（编排链 + hooks 缝 + 同步写面 + 诊断路由 + 46 钉）/
-      **A12 soak 计数核实 + 诊断文案缝确认（零生产码 + 12 钉）** —— **M5 我域已全交** -->
-<!-- 2. 在途 = 无（等收编）。**M6 待派**。挂账（全部已回执，等他域接线）：
-      ① **上游阻塞缺陷**：driver 跑起来时连发 POST 会长期占住 world.db 写锁（R-4 基线同样
-      复现 ⇒ 非我引入），根治在 `run_world_driver`/lifespan 侧（谁开的事务谁收口）；
-      ② **hooks 四步语义待注入**（展开/override/语料/restore_rng；缺「快照 dict → WorldState」
-      反向函数）；③ **RNG 捕获待混沌流侧暴露** registry+抽签 cache（`app.state.rng_capture`
-      接缝已留，不挂 ⇒ 存档诊断 `rng_unavailable`）；④ 诊断路由未进 `shared/openapi.json`
-      （前端类型面登记归 kilo，走 versioning §7 minor + 升版）；⑤ ProblemDetail 机器码出站
-      登记归 kilo；⑥ **8 词填值 CR**：玩家面只一档文案（8 词未触发，reason 是英文裸 slug）。 -->
+      A9 0014 fires + FireStore + 43 钉 / A10 物化数据面（物化器 + fork kind + 72 钉）/
+      A11 出站编排（编排链 + hooks 缝 + 同步写面 + 诊断路由 + 46 钉）/ A12 soak 计数核实（12 钉）/
+      **M6-A1 死亡路径钉（落点 a，9 绿 + 9 skip-locked）+ 夹具守卫** ——
+      **M5 我域已全交，M6 待派** -->
+<!-- 2. 在途 = 无。挂账（全部已回执）：① **上游写锁缺陷**（driver 跑着时连发 POST 被锁，
+      间歇性，R-4 基线同样复现）——根治归 Claude 域批次 A；**根治后**人工删一次
+      `test_m5_materialization_api.py` 的 `driver.cancel()` 即完成夹具恢复（钉已守）；
+      ② **hooks 四步语义待注入**；③ **RNG 捕获待混沌流侧暴露** registry+抽签 cache；
+      ④ 诊断路由未进 `shared/openapi.json`（前端登记归 kilo）；⑤ ProblemDetail 机器码出站
+      登记归 kilo；⑥ 8 词填值 CR（玩家面只一档文案）；⑦ **死亡落地后 `schema.md` 必须登记
+      「内存实体删除 vs npc_profiles 行」**（C 组契约钉会红）。 -->
 <!-- 3. 恢复序：git fetch+merge origin/main → 读 talking.txt（在途单卡）→ 读本卡 →
       需要细节再翻 ② opencode 节各轮快照 / git log --oneline -- .orca/memory.md -->
-<!-- 4. 门禁（全绿基线 2225 passed / 120 skipped；**主树留言板标的数字与实测连续三轮不一致，
-      一律以实测为准**——A10 标 2136/实测 2071；A11 标 2226/实测 2157；A12 标 2278/实测 2213）：
-      `uv run pytest -m "not bench" -q`；`uv run ruff check .`；`uv run pyright sim/`；
-      **gen-protocol --check EXIT 0**（脚本在 **`tools/gen-protocol.ts`**，从 client/ 跑
-      `npx tsx ../tools/gen-protocol.ts --check`；client/node_modules 缺失 ⇒ junction 挂
-      主树那份，已 gitignore）；autogenerate 零漂移；format drift **37**（基线值，不增） -->
-<!-- 5. 域内纪律（血脉）：① stamp 只改版本行不执行迁移；② 往返钉钉**具体 revision id**
-      不钉 head；③ 回滚场景证明不了原子性，必须正向读回；④ 收紧写路径前先跑全量找
-      爆炸半径；⑤ PowerShell 写文件用 `write` 工具（`Set-Content -Encoding UTF8` 塞 BOM，
-      反引号是转义符）；`edit` 工具吃掉被替换块首行缩进；⑥ skip-locked 钉必须实测开锁；
-      ⑦ 改 `async def` 辅助函数后**逐个调用点补 `await`**；⑧ 写完查 U+FFFD 乱码替换符；
-      ⑨ **BOM 会污染 commit subject**（commit message 一律用 `write` 工具落文件）；
-      ⑩ **Python 补丁脚本要「整体断言 + 最后写」**；⑪ 测试里别自己 gzip（`write_snapshot` 自己
-      压缩）；`store.append` 收 store 行 dict；锚点是**事件 seq** 不是 tick；⑫ 变异探针要先验证
-      变异真落到文件上；subprocess 跑 pytest 必须带 `sys.executable`；
-      ⑬ **FastAPI 路由断言读 live OpenAPI**（include_router 被包成 `_IncludedRouter`）；
-      ⑭ **SQLite writer-first**（读后升级为写不吃 busy 重试）；有界重试治不了持久锁；
-      ⑮ **同事务钉要「结构 + 行为」两条**；⑯ 别人的未收口事务会伪装成你的钉 flaky ⇒ 先做
-      「基线是否同样复现」的对照实验；⑰ 派单给的**钉子落点建议可偏离**，但要在回执说明理由；
-      ⑱ **`TickLoop.enqueue` 是立即 apply**（写事件即刻改状态，不排队等 tick）——写涉 tick
-      时序的断言时别假设「下一个 tick 才生效」。 -->
+<!-- 4. 门禁（全绿基线 2238 passed / 128 skipped；**主树留言板标的数字与实测连续四轮不一致，
+      一律以实测为准**——A10 标 2136/实测 2071；A11 标 2226/实测 2157；A12 标 2278/实测 2213；
+      M6-A1 标 2296/实测 2220）：`uv run pytest -m "not bench" -q`；`uv run ruff check .`；
+      `uv run pyright sim/`；**gen-protocol --check EXIT 0**（脚本在 `tools/gen-protocol.ts`，
+      从 client/ 跑 `npx tsx ../tools/gen-protocol.ts --check`；client/node_modules 缺失 ⇒
+      junction 挂主树那份，已 gitignore）；autogenerate 零漂移；format drift **37**（基线值，不增） -->
+<!-- 5. 域内纪律（血脉）：① stamp 只改版本行不执行迁移；② 往返钉钉**具体 revision id**；
+      ③ 回滚场景证明不了原子性，必须正向读回；④ 收紧写路径前先跑全量找爆炸半径；
+      ⑤ PowerShell 写文件用 `write` 工具（BOM 会污染 commit subject，同 `Set-Content` 塞 BOM）；
+      `edit` 工具吃首行缩进；⑥ skip-locked 钉必须实测开锁；⑦ 改 `async def` 后逐调用点补
+      `await`；⑧ 写完查 U+FFFD；⑨ Python 补丁脚本「整体断言 + 最后写」；⑩ 测试里别自己 gzip；
+      `store.append` 收 store 行 dict；锚点是事件 seq 不是 tick；⑪ 变异探针要先验证变异真落到
+      文件上；subprocess 跑 pytest 必须带 `sys.executable`；⑫ FastAPI 路由断言读 live
+      OpenAPI；⑬ SQLite writer-first；有界重试治不了持久锁；⑭ 同事务钉要「结构 + 行为」
+      两条；⑮ 别人的未收口事务会伪装成你的钉 flaky ⇒ 先做基线对照实验；⑯ 派单给的**钉子落点
+      建议可偏离**，回执说明理由；⑰ **`TickLoop.enqueue` 是立即 apply**；⑱ **间歇性缺陷不许用
+      探针自动改夹具**（会变随机假红）——探针只如实报告，确定性守卫留在钉里；⑲ **skip-locked 组
+      若依赖尚未定型的接口**：用「按签名试参 + 构造失败即 skip」的适配器（假绿比跳过更坏）；
+      探针跑真 app 后必须复位 CWD / 注册表 / 单例。 -->
 
-（A8-A12 五轮新经验，本轮零正确化）：
-- **核实类答问要把「我原来的猜测」也写进钉子**：本轮我以为「app 形态 start 会是 0（create 在
-  tick 1 落）」，钉子一跑就证伪（enqueue 立即 apply ⇒ start=1）——**猜的东西要能被自己的钉打脸**。
-- **回答契约类问题时给「形状建议」而不只是「事实」**：pi 要的是「死亡语义选行删除还是列翻转
-  才让契约成立」，事实是「今天两者都不存在载体」；把事实推到形状（`end ≤ start` 且偏差=本窗
-  死亡数，可与死亡事件对账）+ 指出数据面泄漏**不在这个计数器覆盖内**，才是可执行的答复。
-- **给下游域的清单要带「不进文案」的一档**：kilo 要 reason 文案覆盖清单时，除了逐码归属，
-  还要明说「玩家面只一档、reason 留运维」，否则文案面会自己长出五种玩家可见差异——
-  那正是 META_SHELL 8 词填值的触发风险。
-【A11 完成记｜批次 E 出站编排收官件（2026-10-03 已交，46 钉：编排 24 + API 22）】① **编排链**
-（`fork_orchestration.py`）：`locate → diagnose → materialize → fork(kind="anchor") →
-register_child`；诊断先于分叉 ⇒ 不可物化的档**零副作用**被拒（`AnchorLoadUnavailable(reason)`，
-`RuntimeError` 子类 ⇒ `_drain_loads` 既有 `load_failed` 降级体例接管，不新增消息类型）；
-`hooks=None` = 现行 head 分叉逐字不变。② **hooks 注入缝**：`set/get_materialization_hooks()`
-进程级注册（`ws.py::set_anchor_load_hook` 同款）；缺省是 **fail-closed 桩**（四步都抛
-`hooks_unavailable`，**不假装能展开世界态**——仓内今天没有「快照 dict → WorldState」反向函数），
-待注入清单写在模块 docstring。③ **同步写面**：`write_anchor_package_sync` /
-`collect_corpus_rows_sync` / `latest_snapshot_ref_sync`，与 async 面**共用同一份 SQL 与参数
-构造**（`_PACKAGE_UPSERT_SQL` / `_corpus_select` / `_package_upsert_params`），跨面一致性 3 钉。
-④ **API 两件**：`create_item` **同事务写包**（结构钉：写包调用排在 `s.commit()` 之前 +
-行为钉：写包炸 ⇒ 档行也回滚）；`GET /api/anchors/{anchor_id}/materialization` 诊断路由
-（200 + `ready`/`reason`；不可物化**不是** HTTP 错误；响应零世界内部字段；协议面零变更 ⇒
-不进 `shared/openapi.json`，前端登记归 kilo）。⑤ **⚠ 上游阻塞缺陷（已回执）**：driver 跑起来
-时连发 POST 会长期占住 world.db 写锁（`database is locked`，**R-4 基线同样复现** ⇒ 非我引入），
-本单只做 writer-first 收紧 + 夹具取消 driver 求确定性，根治归 Claude/kilo。⑥ 门禁：not-bench
-**2203 passed / 120 skipped / 0 failed**（基线 `8491659` 实测 2157 ⇒ +46 全为本单）、
-`gen-protocol --check` EXIT 0、ruff/pyright 0、format drift 38 不增、alembic head 仍 0014；
-**变异探针 6 处破坏 → 6 处变红**（其中「包写挪到 commit 之后」把 5 条钉打红）。
-
+（A8-M6-A1 六轮新经验，本轮零正确化）：
+- **「等实现落地再写钉」的钉子必须先写钉**：死亡路径今天零载体，但**事实基座**（今天没有载体、
+  哪些表会跟着动、哪些不会）可以今天就钉死——落地那天要复核的正是这几条，而不是从零写。
+- **钉子要指出「设计者可能漏掉的那条」**：`entities` 不参与 fork 克隆 + `npc_profiles` 整表克隆
+  ⇒ 落点 a 只删内存会在读档子分支留下「库里有、内存无」的 NPC。这条不是钉「已实现的行为」，
+  是钉**必须登记的账**（C 组文档契约钉）。
+- **把「自动化治理」和「自动化猜测」分开**：夹具能否自动恢复 driver，取决于缺陷是否**确定性**
+  可观测；间歇缺陷（3 次 POST 失败 0-2 次）只能「如实报告 + 确定性守卫 + 人工一次」。
+  自动猜测会把所有钉变成随机假红——那是把不确定性转嫁给门禁。
 【A12 完成记｜soak 计数数据面核实 + 物化诊断文案缝确认（2026-10-03 已交，零生产码 + 12 钉）】
 ① **答 pi 两问**：`entity_count` = `len(WorldState.entities)`（soak.py:312/335，**零表查询**，
 不是 `npc_profiles` 行数、不含 `matter_state`）；`EntityState` 只有 `entity_id/pos/path`
@@ -89,6 +67,23 @@ M6 须选「行删除」（新增死亡 kind + handler `entities.pop()`）契约
 `test_m5_materialization_*.py`——与物化面无关，另立文件）。⑤ 门禁：not-bench
 **2225 passed / 120 skipped / 0 failed**（基线 `2bd2bff` 实测 2213 ⇒ +12 全为本单）、
 ruff/pyright 0、drift 37 不增、**零生产码零迁移**（head 仍 0014）、gen-protocol EXIT 0。
+
+【M6-A1 完成记｜死亡路径数据面钉（落点 a）+ driver 夹具守卫（2026-10-03 已交，零生产码，
+18 例：9 绿 + 9 skip-locked）】① **A 组事实基座 6 例**（今天即绿）：今天**零载体**
+（`EventKind` 无 death/died/despawn；默认总线无删除 handler）、`PAYLOAD_MODELS ≡ EventKind`
+（红线 A 恒等式）、soak 计数只认 `WorldState.entities`、**`entities` 不在 `_BOUNDED_TABLES`
+（不参与 fork 克隆）**、`npc_profiles` 整表克隆。② **B 组 6 例 skip-locked**（锁信号＝死亡类
+kind 已注册到默认总线）：只摘死者/其余逐位不动、死亡**必须是事件**（可重放证据 ⇒ 内存直删
+破 T2）、未知实体 fail-closed、重复死亡不复活、**C5 确定性**（同序列两遍 `state_hash()`
+相等）、死亡后跑 tick 不复活不抛；依赖未定型接口处用 `_death_event()` 适配器**逐条 skip 不假绿**。
+③ **C 组契约钉**：死亡落地后 `schema.md` 必须登记「内存实体删除 vs `npc_profiles` 行」——
+**这是落点 a 最容易漏的一条**（只删内存 ⇒ 读档子分支「库里有、内存无」）。④ **D 组夹具守卫
+3 例**：探针跑一轮真 app + 3 次同步 POST，如实报告 `(有失败, 失败数)` 并**缓存**（复位 CWD /
+WS 注册表 / 锚点 store 单例）；**否掉了「按探针自动改夹具」**（缺陷间歇 ⇒ 随机假红），改为
+「复现时夹具必须取消 driver」+「缺陷书面登记（anchors.py 模块注 + schema §23.7.4）不许删」。
+⑤ 门禁：not-bench **2238 passed / 128 skipped / 0 failed**（基线 `48c9944` 实测 2220 ⇒
++18）、ruff/pyright 0、drift 37 不增、**零生产码零迁移**、gen-protocol EXIT 0。⑥ 待他域：
+落点 a 实现落地 ⇒ B/C 组自动转绿；写锁根治 ⇒ 人工删一次 `driver.cancel()` 完成夹具恢复。
 【A5 完成记｜0012 branches.is_current + 开线闸收紧（2026-10-01 已交 1eeb294，36 钉）】
 - 迁移 0012（`0012_branches_current.py`）：`is_current BOOLEAN NOT NULL DEFAULT 0`（纯
   add_column ⇒ 不需 batch）+ **部分唯一索引** `ux_branches_current ON branches(is_current)
