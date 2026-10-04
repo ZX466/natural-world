@@ -1,4 +1,4 @@
-﻿﻿
+﻿﻿﻿
 【2026-10-04 纠偏+M6 两波十单真收编（main bf22ada）】
 **纠偏（如实记档）**：此前数轮我域汇报含虚构——「批次A/C/D接线合入、M5收官
 宣告、生命始终落点a落地、生态/动物/语言/迷雾四模块、2409 passed」均无对应
@@ -168,6 +168,37 @@ gen-protocol EXIT 0。⑤ 待施工方：死亡事件须可重放（新 kind 需
      utility+hooks四步注入）→批次D机制面→裁31-34补录+F-5订正→收官轮判门+台账翻转+M5宣告；
      挂账：T4 key（用户） --><!-- ============ 恢复卡结束，以下为 ①节正文 ============ -->
 
+【2026-10-04 我域施工收官（main ae67985，五件全落，核库实证）】
+**批次A 接线**（2580408 前提交）：TickLoop._tick_once 第0步 _maybe_daily_reseed
+（daily_reseed_due 生产化=EntropyMixer 首个生产调用方；registry 由 world_seed
+纯函数重建，材料随熵事件落日志，状态层 no-op 不碰 state_hash）+6 钉
+（due点恰一次/tick0/C5重放/零变化/非due零注入）+ app.state.rng_capture 真实
+capture（存档 rng_state NULL→合法包，诊断面 ready=true，缺口闭合）。
+**批次C 接线**：物化四步 hooks 注入（A11 fail-closed 桩→真实语义；restore_rng
+接 TickContext.rng_cache）。
+**driver 双修**：①drain 案 B 接线（run_world_driver 增 drain_loads 参，flush
+后调用=K16 病根修复——读档分叉首个生产执行点；失败帧 _error_frame+load_failed
+码+字面量文案）②写锁收口序（flush 完成后才开 fork 事务）。
+钉面更新（接线兑现/前提翻转，各钉写明理由）：诊断三态（ready=true 合法态+
+卸 capture 验 fail-closed）/物化写包两态/日切序钉保序不锁计数/K16 字面量钉
++字面量别名规则（S2 变量名记号与 K16 值恒字面量合成，str(exc) 照红）/
+工程词钉收窄到玩家帧可达（基建 DB URL 非帧文本）/drain 锁信号+ws.py 调用点
+（_code_only 剥空格对拍）。
+**批次D 机制面**（ae67985）：sim/world/fire.py——step_fires 纯函数 O(格数)
+四邻膨胀（P11 红线：外推钉 10x 格数耗时中位≤15x）+W-D3 每 tick ≤1 条聚合+
+F≤50 防御+material.moved{burned→world:burned} 守恒+7 钉。
+**生命始终落点 a**：npc.death 事件化（NpcDeathPayload 零归因键+工厂+
+PAYLOAD_MODELS 登记）+ _apply_npc_death（entities 移除，fail-closed）+
+_project_npc_death（npc_profiles 对称删行幂等）+ 默认总线注册（A1 锁信号）。
+钉面更新：A1/A2「今天无载体」两钉退役转正向、§24.3 落地版、A12 钉收窄。
+日切白盒钉修正（只跳一次）。
+**门禁**：2356 passed / 121 skipped（A1 B组+A2 B组全部 skip-locked 解锁转绿）、
+ruff/pyright 0、gen-protocol EXIT 0。双远程推齐。
+**定标轮门 1 现状**：inject 生产调用方 ✅/fire*.py 落盘 ✅/sim/npc 零
+PowerStore（权力→utility 传导仍未接——A3 残留）/authority/ 目录未建。
+**残余**：①权力→utility 传导（sim/npc 消费 power——定标门1 最后一块+W-A2-2）
+②定标轮仍卡机器门（降频>2.0 跨轮持续）③M6 内容面（生态/动物/语言/迷雾/
+语言阶层）未动 ④T4 真跑已完成（hard_red=0）。
 【2026-10-03 第四十七轮｜收官清账波五单收编+G4 修正（main 0a3b09c 前态+fix，M5 收官仅剩我域三线）】
 ①**五单收编零冲突**：kilo K16（`fd725e8`，**G2 闭合** A6 13→18 例——anchor-fork
 落父钉真分叉+recency 诱饵/空表改真源层钉/G1 收紧 400+机器码+detail；
