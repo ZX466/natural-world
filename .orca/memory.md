@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿
+﻿
 【2026-10-04 纠偏+M6 两波十单真收编（main bf22ada）】
 **纠偏（如实记档）**：此前数轮我域汇报含虚构——「批次A/C/D接线合入、M5收官
 宣告、生命始终落点a落地、生态/动物/语言/迷雾四模块、2409 passed」均无对应
@@ -1750,6 +1750,38 @@ uv run pyright sim/
   要同时走 §7 登记 + 升版，别静默补」⇒ 我做完三件后把它**结清**为「防静默补登记」守卫。
   **门禁**：全量 **2240 passed / 123 skipped / 0 failed**／ruff 全过／pyright 0／
   `gen-protocol --check` EXIT 0／前端 21 passed + typecheck 干净／10 文件 `w/lf` 无 BOM。
+- **✅ M6-K4 已交 `a0f7797`（origin+gitee 已推）——M6 内容面出站契约预备**（零代码零 schema，
+  `shared/` 零 diff）。新稿 `docs/api/m6-content-outbound-prestudy.md`：**四事件全部事件流**，
+  逐条判定（沿 K12/K13 三问体例）：`ecology.shift` 零投影（视觉走既有 `Weather.visual` **自由
+  字符串**）／`fauna.tick` **复用既有 `state_delta.actors[]`**（实测 `Actor.sprite`/`anim`/`tint` 是
+  **自由字符串**、`facing` 仅四值枚举 ⇒ 换 sprite 即可，**零 schema 变更**；且**不得 per-tick**，W-D3
+  口径）／`speech.shift` 零投影（语言阶层＝社会分层＝**权力语义邻接**，可见面只走叙事终扫）／
+  `fog.reveal` 本波只做**服务端投影过滤**。
+  **`fog.reveal` 专节（五条现状事实 → 三案）**：`FogOfWar` 已是**区块级**纯模块／
+  `/api/world/map` **全量交付**地形／客户端**零 fog 代码**／`state_delta` **无 fog 槽位**／
+  `Weather.visual` 是全局光照非分区 ⇒ **A 服务端过滤（本波采，零变更；局限＝无视觉变暗）**、
+  **B `state_delta` 可选 `fog={revealed:[{cx,cy}]}`（独立单、minor、一帧承载合规、草案已写死）**、
+  **C 新帧（撞闭合集钉＋违 versioning §3 ⇒ 否决）**。
+  **接口要求 C1–C5（对 Claude 施工）**：必经 `store.append`＋**禁内存态**＋`fauna` 不 per-tick＋
+  payload 零归因键/零分层数值；帧面**零字段**（要则停走 CR）；迷雾视觉独立单；继承 K11 咽喉闸禁旁路；
+  钉子建议 `test_m6_content_events.py`。
+- **✅ M6-K5 已交 `010a5a6`（origin+gitee 已推）——内容事件出站守卫钉**（零生产码）。
+  `sim/tests/test_m6_content_events.py` **17 例＝7 即绿 / 10 skip-locked**；锁信号＝`EventKind` 出现
+  `ECOLOGY_`/`FAUNA_`/`SPEECH_`/`FOG_` 前缀成员；**解锁路径已用既有 kind `fire.ignited` 预跑通**
+  （`PAYLOAD_MODELS[EventKind(kind)]`/`model_fields`/`model_config`）。
+  五组：①kind 登记 4（`PAYLOAD_MODELS` 红线 A 恒等式分组版 + `extra="forbid"` + **零归因键**（K13
+  键集）+ 零出站禁键）／②**零帧面** 4（帧判别器闭合集／快照任何位置／`protocol.ts`／live paths）／
+  ③**speech 零数值** 2（禁社会分层键 + **字段类型零 `int`/`float`**——比键名更严）／④**咽喉闸继承** 3
+  （接线白盒 + **防旁路** + 世界/领域层零 WebSocket 依赖）／⑤CI 覆盖 2。
+  **⚠ 防旁路钉实测发现 pre-existing 豁免**：`main.py::ws_endpoint`（legacy WSGI 全量回帧端点
+  `:316-352`）有 **3 处 `ws.send_json` 直发不经咽喉** ⇒ **该路径帧不过 K11 出站闸**；已列入豁免名单
+  （将来新增任何旁路仍会红），**收口建议交 Claude**（改走 `ConnectionManager.send_json_to`）。
+  **⚠ 口径更正（我的旧说法不准确）**：CI **没有**「M5/M6 步」——`ci.yml` 的 pytest 步是**全量**
+  `uv run pytest -m "not bench"`（另有若干按路径的命名信号步）。已加 ⑤ CI 覆盖钉写死实况。
+  **⚠ 环境坑（新记）**：`git commit -m "…"` 消息里含**半角双引号**（如 `-m "not bench"`）会被
+  PowerShell 截断 ⇒ 整条命令报 `pathspec … did not match`；**长消息一律 `git commit -F <file>`**。
+  **门禁**：钉 7 passed/10 skipped／全量 **2300 passed / 130 skipped / 0 failed**／ruff 全过／
+  format 干净／pyright 0／`gen-protocol --check` EXIT 0／新文件 `w/lf` 无 BOM。
 
 **② 接口域现状（一句话）**
 协议面＝`shared/openapi.json`（唯一真相源）→ `npm run gen-protocol` → `shared/protocol.ts`（**禁手写**）→
@@ -1758,12 +1790,18 @@ uv run pyright sim/
 批次 C 权力面按裁 27-C/D-10「权力完全不可见」＝**协议零新增**。CRITICAL（G-1 plan 越界、R-1 读档挂死）与全部 HIGH 已清零。
 
 **③ 下一步**
-- ~~**在途：M5-K9 ~ K16、M6-K1 ~ K2**~~ **✅ 均已交（见上）**。**等派项**：
-  ①**案 B 接线后**核 drain 失败帧钉解锁（Claude driver 面；锁信号＝`_drain_loads` 有生产调用方）；
-  ②`info.version` 接同源常量（改 `main.py` app `version=` + 快照，**须另立快照单**）；
-  ③任何 M6 新协议面（走 §7 登记 + 跨树版本钉 `test_protocol_version.py`；快照改法见 K2 的两条口径）。
+- ~~**在途：M5-K9 ~ K16、M6-K1 ~ K5**~~ **✅ 均已交（见上）**。**等派项**：
+  ①**四内容 kind 落地后**核 `test_m6_content_events.py` 的 10 例 skip-locked 自动转绿
+  （锁信号＝`ECOLOGY_`/`FAUNA_`/`SPEECH_`/`FOG_` 前缀成员）；
+  ②**legacy `ws_endpoint` 旁路收口**（`main.py:316-352` 三处 `ws.send_json` 直发不经咽喉 ⇒
+  该路径帧不过 K11 出站闸；**非我所有权**，等 Claude 改走 `ConnectionManager.send_json_to`）；
+  ③**迷雾视觉（B 案）**那一单的快照单（`state_delta` 可选 `fog`，§7 minor + 升版；草案在
+  预研稿 §3.3，**仅当产品要视觉雾**才做）；
+  ④**案 B（drain 接线）**后核 drain 失败帧钉解锁（锁信号＝`_drain_loads` 有生产调用方）；
+  ⑤`info.version` 接同源常量（须另立快照单）；⑥任何 M6 新协议面（§7 登记 + 跨树版本钉；
+  快照改法见 K2 的两条口径）。
   **已闭合**：R-4 复验、fire 守卫钉、protocol 1.1/1.2、K12 稿订正、F-1、G2、G4、M-1 诊断面、
-  live↔快照漂移、K11 路由面假绿。
+  live↔快照漂移、K11 路由面假绿、M6 内容面出站判定与其守卫钉。
   **另可主动做（不接未派单）**：协议面审计与对表、live↔快照对账、契约草案、钉子补齐、复验评审。
 - ~~**在途：M5-K9 ~ K16、M6-K1**~~ **✅ 均已交（见上）**。**等派项**：
   ①**诊断路由补快照**（live↔快照对拍；须动 `shared/`——我出钉已就位，补完自动解锁）；
