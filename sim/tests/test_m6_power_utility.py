@@ -82,14 +82,15 @@ class TestPowerBiasWiring:
             return
         raise AssertionError("长度不一致竟未抛")
 
-    def test_flip_advisory_observed_and_bias_is_the_hard_bound(self) -> None:
-        """flip 观测（advisory）+ 偏置硬上界（一箭双雕的机制判据）。
+    def test_flip_bounded_by_bias_constant(self) -> None:
+        """flip ≤ 0.25 翻正式（pi M6-P5 定标扫参裁决：POWER_MAX_BIAS 0.2→0.18）。
 
-        实测（本钉口径，seed=42）：|power|=1 时 flip=0.26 —— **超过** P10 推导的
-        0.25 一线。P6 纪律：0.25 是定标轮的 advisory 判据（未定标前不判红）；
-        **硬判据** = 偏置本身被 `POWER_MAX_BIAS=0.2` 钉死（上面的常数钉）——
-        调低常数即压 flip（定标轮的旋钮），机制面不偷跑。
-        红线 C（动作熵坍缩=操纵感前兆）在定标轮用同一观测翻转（pi P10 一箭双雕）。
+        定标记录（seed=42 同夹具）：bias 0.20→flip 0.260 / **0.18→0.240**（余量
+        4%）/ 0.15→0.200——取「满足守卫的最松值」0.18（权力被感知=机制意图，
+        过度收紧=无感；0.15 已备下档）。**advisory 界 0.5 就此翻正式 0.25**；
+        常数钉同步 ==0.18（定标轮唯一旋钮，勿偷调）。
+        熵守卫（红线 C）不得跨口径引用——须在 L1 bench 真实分布另建基线
+        （P5 口径警告：本夹具体熵 0.68–0.88 与 P10 合成面 2.52/2.41 不同口径）。
         """
         rng = np.random.default_rng(42)
         profiles = [
@@ -100,7 +101,7 @@ class TestPowerBiasWiring:
         full = evaluate_batch(profiles, model, power=[1.0] * 50)
         flips = sum(1 for a, b in zip(base, full, strict=True) if a.action != b.action)
         ratio = flips / len(base)
-        # advisory 界（P6：未定标不判红，只登记观测——定标轮翻正式时收紧此数）
-        assert ratio <= 0.5, f"flip={ratio:.2f} 失常（半数 NPC 改主意=偏置失控）"
+        # 正式界（pi P5 扫参：0.18 ⇒ 实测 0.240 ≤ 0.25）
+        assert ratio <= 0.25, f"flip={ratio:.2f} > 0.25（被操纵感前兆——红线 C 同源）"
         # 硬判据：偏置上界由常量保证（机制旋钮，定标轮唯一调法是改 POWER_MAX_BIAS）
-        assert POWER_MAX_BIAS == 0.2, "POWER_MAX_BIAS 被改（须随定标轮同 CR，勿偷调）"
+        assert POWER_MAX_BIAS == 0.18, "POWER_MAX_BIAS 被改（须随定标轮同 CR，勿偷调）"

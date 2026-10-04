@@ -43,7 +43,8 @@ class NpcRuntime:
     power（M6 批次 C 接线，裁 34 口径）：{npc_id: float} 权力值快照（调用方每
     tick 物化后传入；[-1,1] 量纲，A7 口径）。传入 ⇒ 权力作为**效用额外列**参与
     打分（P10 红线：向量化一列，禁逐人 replace/chaotic_at）；无支配动作偏好——
-    权力偏置只作用于社交/ 工作两列（POWER_MAX_BIAS≤0.2，flip≤0.25）。None =
+    权力偏置只作用于社交两列（POWER_MAX_BIAS=0.18，flip≤0.25——pi P5 定标
+    扫参裁值，2026-10-04）。None =
     无权力面（行为与无权力管线逐位一致，既有钉零回归）。
     """
 
