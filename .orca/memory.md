@@ -1204,6 +1204,15 @@ uv run pyright sim/
 - (读 Claude 经 talking.txt 写来的任务指派；给他树留言写对方树 talking.txt)
 
 ## ⑤ pi（性能域）
+- 【2026-10-04 第三十四轮快照｜**M6-P5 定标轮执行：步骤 0 未过 ⇒ 按卡暂停（未收口任何值）+ POWER_MAX_BIAS 裁值 0.18 已给**】任务书=终局执行单（三案 advisory→硬断言翻转、步骤 0 探针**硬前置**、thresholds 零新行）。产出 `docs/perf/m6-calibration-execution.md`（`e838829`）。
+  - **【步骤 0：未过 ⇒ 暂停】** 4 连读（默认 25s 段）：**2.731（throttled=true）/ 1.391 / 1.712 / 1.697**（samples 1185/1435/1403/1393）⇒ **第 1 次落在卡明示的 2.0–4.0「不宜开跑」临界带**，且 4 次里 1 次 ≥2.0 = **跨阈值抖动** ⇒ 分钟级 bench 的绝对阈值读数不可信（P6 原始场景）⇒ **三案 advisory 一律未翻**（无实测中位 ⇒ 不能 ×1.7 ⇒ **不拍数**）。CHAOS / FIRE / MATERIALIZE 均登记「未翻原因 + 翻转前最小步骤」。
+  - **【POWER_MAX_BIAS 裁值 = 0.18（本单唯一实质交付；确定性、不依赖跑分）】** 机制：`sim/npc/utility.py:53` 常数 0.2，偏置=`power × POWER_MAX_BIAS`，**只作用社交/活动两列**（`_POWER_SOCIAL_ACTIONS`），**生存列零触碰**；派生判据 `flip ≤ 0.25`（P10 §3，与 codex 红线 C 一箭双雕）；实测越界（`test_m6_power_utility.py:85`，seed=42 ⇒ **flip=0.26**）。**实测方法（关键技巧）**：偏置项=`power × 常数`，而 `utility_scores_matrix` 无其他对 `POWER_MAX_BIAS` 的依赖 ⇒ **用 `power=[s]*50` 等价扫出「换常数」的效果，完全不改源码**。结果（同 seed=42 同夹具）：**bias 0.20 → flip 0.260** / **0.18 → 0.240** / 0.15 → 0.200 / 0.25 → 0.260（**该夹具饱和：0.20→0.25 不改判**）/ 0.10 → 0.140。
+  - **【为何取 0.18 而非 0.15】** ①守卫合规的余量来自**实测**（0.240 ≤ 0.25，余量 4%）且**确定性测试不随机器漂移** ⇒ 可作硬断言；②**取「满足守卫的最松值」**——权力面的存在意义是**让权力被感知**（D-10/§17 意图），过度收紧=机制「无感」=功能空转；0.18 相对 0.20 仅降 10% 偏置、叙事效果基本保留；③0.15（余量 20%）**没有任何数据支持「margin 越大越好」**——守卫是**上限不是优化目标**；0.15 作为已备好下档，Claude 若要更重安全余量可直接取用。
+  - **【⚠ 口径警告（重要，防误用）】** 本夹具体的动作分布熵实测 **0.680–0.881**（eat 主导），**与 P10 §2.1 的 2.52/2.41 是不同口径**（那是合成 score 面）⇒ **本裁值只依据 flip（同钉同 seed 同口径）**；熵守卫（红线 C）不得跨口径引用，须在 P10 同口径或 **L1 bench 真实动作分布**另建基线（已列委托 §5-2）。
+  - **【交付给 Claude 的同 CR 最小改动（本域不改码，卡授权归 Claude）】** ①`utility.py:53` → `0.18`；②`runtime.py:46` docstring 的 `POWER_MAX_BIAS≤0.2, flip≤0.25` **同 CR 一改**；③`test_m6_power_utility.py:85` 的 advisory `assert ratio <= 0.5` → **`assert ratio <= 0.25`**（翻正式）+ 常数钉 `== 0.2` → `== 0.18`；**验收命令 = `uv run pytest -q sim/tests/test_m6_power_utility.py`（确定性、免探针）**。
+  - **【新增操作纪律（比旧纪律强）】** 旧纪律只查**跑前**探针 ⇒ 分钟级 bench **跑中**一样可能掉进临界带 ⇒ 新增**跑前+跑后双探针**：跑后 >2.0 ⇒ 该轮中位**作废重取**（**不是放宽阈值**）；成本 +25s/轮。**重派判据（可检查不猜）= 连续 3 次读数 ≤1.8**（相对 2.0 阈值留 10% 余量）。
+  - **【验证】** 零代码 ⇒ 仍跑卡验收的全量：not-bench **2293 passed / 120 skipped / 70 deselected / 0 failed**；`test_m6_power_utility.py` **6 passed**（证实常数仍 0.2、flip 0.26 在 advisory 0.5 内）；ruff All checks passed / pyright 0。**thresholds 零新行**（未触）。HEAD == origin/main == `9857115`（开工 `fetch` 同头确认，**无需 merge**，工作树干净）。
+  - **【交付与推送】** commit `e838829`（新档）+ memory commit，双推 origin+gitee。所有权：`docs/perf/m6-calibration-execution.md`（新）+ 自树 memory；**未改任何代码/阈值/常数**（POWER_MAX_BIAS 给数归 Claude，卡授权）；未干扰其他树。
 - 【2026-10-04 第三十二轮快照｜**M6-P1：soak 实体守恒契约阶段 A 施工（本域 M6 首件代码）+ M6 定标执行单（可执行版）**】任务书（M6 首波，基线 main `48c9944`）：①阶段 A 施工（P14 方案：两侧各一界+id 集合+映射一致+结构断言移出探针门）②定标执行单 + 三案 advisory 翻转条件核对。产出 **5 文件**：`sim/tests/bench/soak.py`（改）、`sim/tests/bench/test_bench_soak.py`（改）、`sim/tests/test_m5_soak_entity_count.py`（**跨域追改**）、`docs/perf/m6-calibration-order.md`（新）、`docs/perf/m6-soak-contract-preplan.md`（§7 转实施记录）。
   - **【① 阶段 A 施工（值=0 ⇒ 与旧 `end == start` 语义等价、零行为变化）】** `soak.py`：`SoakResult` 增 `entity_ids_start/end` 快照（**计数相等也可能整体换人**）+ `run_soak` 两处记录。`test_bench_soak.py`：契约常量 `SOAK_ENTITY_LOSS_PER_GAME_DAY = 0`（体例照 `CASCADE_EVENT_BUDGET_PER_FRAME`：代码契约常量 + 锁值钉，**不进 thresholds.py**；规模/耗时分离）+ `_entity_loss_bound(ticks)`（**单一真相源导出**，不按档硬编码 ⇒ CI/nightly/7日自动分档）+ 共用判据 `_assert_entity_stable()`（**四侧**：①增侧净增=0 不放宽防泄漏 ②减侧净减≤bound ③id 集合无新 id ④映射一致 `entities`↔`runtime.profiles`）+ 两处断言改调共用判据（防双真相源）+ **结构判据前置到降频探针门之前** + 契约钉 `test_soak_entity_loss_bound_is_zero_in_phase_a`。
   - **【验证（含变异测试，证明判据非空转）】** 变异测试四侧**全部真实生效**：净增 +1 红 / 净减 1（bound=0）红 / 计数相等但换 id 红 / 映射分叉红 / 正常态不红。`test_bench_soak.py` **12 passed / 1 skipped**（30k 两测**真跑**，探针 1.629 未降频；skip=7 日完整跑需 `PI_M2_FULL_SOAK=1`）；`test_m5_soak_entity_count.py` **12 passed**；not-bench **2231 passed / 120 skipped / 70 deselected / 0 failed**；collect-only **2421** = not-bench `2351 + 70`（恒等式 ✓）；ruff All checks passed / pyright 0。**计数对账**：派单板 2296+123=2419 vs 实测 2421（+2，其中 **+1=本单新钉**，另 +1 未追、非本单引入，登记不猜）。
@@ -1491,11 +1500,11 @@ uv run pyright sim/
 
 ## 当前任务
 
-（**M6-P1 已完成**（2026-10-04，见本节顶部第三十二轮快照：**soak 契约阶段 A 已施工**（值=0 等价恒等、四侧判据经变异测试实证、含一处 A12 域钉追改已报备）+ **M6 定标执行单** `docs/perf/m6-calibration-order.md`（可执行）；**两门现状：门 1 内容未达 / 门 2 探针瞬态 ⇒ 定标轮暂不派**）。
-前单 M5-P14（2026-10-03，soak 契约施工级预研 `docs/perf/m6-soak-contract-preplan.md`，`2b812be`/`8727271`/`df58406`）；M5-P13（同日，M6 性能开题预研 + M5 收官复核 9 项表 `docs/perf/m6-perf-preplan.md`，`1316c08`）；M5-P12（同日，M5 性能收官台账=性能面**单一入口** `docs/perf/m5-closure-perf-ledger.md`，`b573712`/`c76350c`）；M5-P11（同日，批次 D 火灾蔓延/生态预算案 + 定标准备清单，**W-D3 N=2 已给** `docs/perf/m5-fire-budget.md`，`a9813eb`/`f80bb0f`）；M5-P10（2026-10-02，批次 C 权力牙齿预算案 `docs/perf/m5-power-budget.md`，`32b141a`/`201ceda`）；M5-P9（同日早，批次 A 混沌接线预算案 `docs/perf/m5-batch-a-chaos-budget.md`，`8176e30`/`e17944a`）；M5-P8（2026-10-01，willingness Δ 护栏改中位判据 + Xeon 被动监控台账，`f32373f`/`cc4fa09`/`e3027bd`）。
-**在途/待办**：①**定标轮**待门 1（批次 A 收口 / C 接线 / D 机制面）+ 门 2（现测探针）齐 ⇒ 按 `m6-calibration-order.md` §3 执行；**FIRE 的 N=2 语义钉不依赖门 1/机器，裁 34 采认即可先落**；②**soak 契约阶段 B**（BOUND 提值）须与 M6 生命落点 a（移出 `entities`）**同 CR**，值由生命面给、本域给推导式；③`MATERIALIZE_LIMIT_MS` 待窗口上限 W 归架构域定后收口；④「短结构冒烟」可选单（让 nightly 长跑结构面免于降频门）。
-**M6 性能面建议优先序（本域视角，范围归 Claude）**：P0 三案定标轮 → P1 批次 E 物化读档 → P2 动物三只 → P3 生命始终（**阶段 B 同 CR**）→ P4 身体会坏 → P5 措辞/LLM → P6 节气/日历。
-等 Claude/主树派下一单。历史：M3-P2 ①②、M4 P1-P4、M5-P6/P7 均已完成收编。）
+（**M6-P5 已执行并如实暂停**（2026-10-04，见顶部第三十四轮快照）：**步骤 0 未过**（4 连读 2.731/1.391/1.712/1.697，跨越 2.0 = 临界带抖动）⇒ 按卡暂停，**三案 advisory 未翻、无值收口**；**POWER_MAX_BIAS 裁值 0.18 已给**（等效缩放实测 flip 0.240 ≤0.25；0.15 为备选下档），最小改动清单+验收命令在 `docs/perf/m6-calibration-execution.md` §2.4。
+**重派定标轮的可检查判据**：**连续 3 次 `throttle_probe` ≤1.8**；跑前+跑后双探针（跑后 >2.0 ⇒ 中位作废重取）。
+**给 Claude 的待裁**：①POWER_MAX_BIAS 0.18（备选 0.15）是否采纳；②**熵守卫口径统一**（P10 合成面 2.4 vs 真实分布 0.68–0.88，勿跨口径引用）；③CHAOS/FIRE 重派时机；④W（窗上限）归架构域 ⇒ MATERIALIZE 收口前置。
+前单 M6-P4/M6-P2（同日，`m6-content-budget.md` 四模块零新行预算案 + `m6-mortality-perf-input.md`，`6cb6887`/`138a9ed`）；M6-P1（同日，**soak 契约阶段 A 已施工**=我域 M6 首件代码）；M5-P14/P13/P12/P11/P10/P9/P8 均收编。
+等 Claude/主树派下一单（或按 §4 判据重派定标轮）。历史：M3-P2 ①②、M4 P1-P4、M5 全系、M6-P1 均已完成收编。）
 
 ## 进行中
 
