@@ -28,7 +28,14 @@ inconclusive 37 项=软判定留人工复核非硬红；报告 t4-results/t4-rep
 ⑤**我域真实欠账清单（未虚构版）**：批次 A 接线（inject 生产化+chaos 消费点）
 +driver 双修（写锁收口+drain 接线案B——K16 病根真实存在）+批次 C（authority/
 落盘+hooks 四步注入）+批次 D（fire*.py）+npc.death（A1 钉在等）。
-**以上全部未做，逐件核库施工，做完一件报一件。**<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-03 M6-A2 已交）===== -->
+**以上全部未做，逐件核库施工，做完一件报一件。**
+
+- 【2026-10-04 M6-S4 内容面安规预研完成】新文件 `docs/security/m6-content-security-pins.md`。
+  判定：语言语域本身不是权力泄漏面，但必须经 LC-1/LC-2/LC-3 约束；迷雾只投影已感知事实，
+  FG-1..FG-4 禁未探索区先验；生态/动物按 EN-1..EN-5 复用事件族并分账本量与玩家叙事量。
+  钉按数据/出站/复核三组归属；T3/终扫/红线 B 均为复用判断，未扩语料、未扩词表、未改协议。
+  零代码零 schema；验证 ruff/pyright 0、`git diff --check` 0。
+<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-03 M6-A2 已交）===== -->
 <!-- 0. 工作树 E:\zxdevelop\.orca\worktrees\project7\opencode，分支 ZX466/opencode；
       HEAD 见 `git log -1`（M6-A2：死亡语义数据面登记 `schema.md` §24 + fork 克隆不对称钉，
       **零生产码**，已双推 origin+gitee）；基线 main 8af3de1（= 我树 HEAD），
