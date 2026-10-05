@@ -110,17 +110,22 @@ class TileMap(BaseModel):
 
     @classmethod
     def from_json_file(cls, path: Path) -> TileMap:
-        """加载内部格式 JSON（Tiled → 内部格式由构建期脚本转换，见 sim/content）。"""
+        """加载内部格式 JSON（Tiled → 内部格式由构建期脚本转换，见 sim/content）。
+
+        chunk 键格式 `"cx,cy"`（build_town.py 产出）；M0 原实现的
+        `for (cx, cy), c in items()` 对字符串键解构即炸（管线未实现时无真实
+        文件验证）——M7-T3 修为按逗号拆分。
+        """
         data = json.loads(path.read_text(encoding="utf-8"))
-        chunks = {
-            (int(cx), int(cy)): Chunk(
-                cx=int(cx),
-                cy=int(cy),
+        chunks = {}
+        for key, c in data["chunks"].items():
+            cx_s, cy_s = key.split(",")
+            chunks[(int(cx_s), int(cy_s))] = Chunk(
+                cx=int(cx_s),
+                cy=int(cy_s),
                 ground=tuple(c["ground"]),
                 collision=tuple(bool(b) for b in c["collision"]),
             )
-            for (cx, cy), c in data["chunks"].items()
-        }
         return cls(
             width=int(data["width"]),
             height=int(data["height"]),
