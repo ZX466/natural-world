@@ -127,3 +127,39 @@ uv run pytest -q sim/tests/bench/
 | `thresholds.py` 行盘点 | `CHUNK_EVENT_SCAN_LIMIT_MS=0.10` / `CHUNK_INVALIDATION_TICK_LIMIT_MS=2.0` / `SMELL_WIRED_TICK_LIMIT_MS=1.0` / `PERCEPTION_TICK_LIMIT_MS=3.6` / `L1_UTILITY_TICK_LIMIT_MS` ⇒ 四模块**全部有归属** |
 | `--collect-only` + not-bench | 全量 **2421** = not-bench `2351 + 70`（恒等式）；M6-P4 **零代码** ⇒ not-bench **2293 passed / 120 skipped / 70 deselected / 0 failed**；与卡「main `3f321b4` = 2362/121」对账：2293+**69**=2362 ✓、120+**1**=121 ⇒ **bench 组 70 全选、无一 skip ⇒ 零改动绿闭合**（M6-P1 口径 2231/120 系旧 main `48c9944`，不可混用） |
 | `ruff` / `pyright` | All checks passed / 0 errors |
+
+---
+
+## 6. 施工合入后待实测项清单（M6-P6 追加；**合入通知即触发**）
+> 口径：对照 §1 锚点与 §2 逐模块账。**触发条件 = 对应模块合入 main**（Claude 通知即跑）。
+> 纪律：跑前+跑后**双探针**（`m5-closure-perf-ledger.md` §8 实证：同机数分钟内可给 3.287 与 1.615 两个相反判定）⇒ **任一侧 >1.8 则本轮读数作废**（不放宽）。
+> 所有 bench 带探针跑；只有「验证 CI 断言面」才用 `PI_THROTTLE_SELFCHECK=0`。
+
+### 6.1 锚点复核（**先跑这组**：施工可能改变底账，锚点变了则 §2 各账要重推）
+| # | 命令（临时脚本，跑完即删） | §1 锚点（现值） | 判据（越界=什么） |
+|---|---|---|---|
+| A1 | `Pathfinder.find((0,0),(63,63))` 冷跑中位 ×50 | **559.7µs** | >647µs（P11 带上沿）⇒ 寻路底账退化（查 map/chunk 改动） |
+| A2 | `PathCache.invalidate` 满 4096 条中位 | **103.3µs**（max 177.9） | >1.5x ⇒ 缓存条目结构变了（查 `pathfinding.py` 键/容量） |
+| A3 | `FogOfWar.reveal` / `is_revealed` | **0.530µs** / **0.0705µs** | reveal >2µs ⇒ 揭示不再是 O(1)（查是否引入扫描） |
+| A4 | `norms_text_of` top-5 字符数（`MAX_NORMS=5`） | **119 字符** | >2x ⇒ 语言段膨胀（§2.3 token 账须重算） |
+
+### 6.2 四模块（预期值来自 §2，判据来自 §3 既有行）
+| 模块（触发） | 命令 | 预期（§2） | 判据（越界含义） |
+|---|---|---|---|
+| **生态**（`sim/world/ecology*.py` 合入） | `uv run pytest -q -m "not bench" -k "ecology or eco"`；若带 bench 再跑 `sim/tests/bench/` | 到期桶 **≤7µs/tick** | **顶穿 `CHUNK_EVENT_SCAN_LIMIT_MS=0.10` = 实现退化为「每 tick 全量扫」**（§2.1 坏形态 400µs/tick）⇒ 报回归，**不放宽阈值** |
+| **动物**（`actors[]` 合入） | 三行分跑：`-k "perception"` / `-k "smell"` / `-k "utility"` | L1 **+9µs**；嗅觉 **+6%**；LOS 配对 **+18–31%** | 越 `PERCEPTION_TICK_LIMIT_MS=3.6` / `SMELL_WIRED_TICK_LIMIT_MS=1.0` / `L1_UTILITY_TICK_LIMIT_MS=6.0`；**另查是否新增「动物专用通道」**（违反 P13 零新通道 ⇒ 双真相源） |
+| **语言阶层**（prompt 段合入） | 本地：`-k "norms or prompt"`；**LLM 侧**：按 §5-2 委托建 token 基线 | 本地 **≈0**；token 上界 **+119 tok/次**（CJK 1:1） | 结构钉：**`messages[0]` 前缀缓存未被破坏**（破坏 ⇒ 增量被 LLM 侧放大成假账）；token 值须 LLM 侧实测，**勿跨口径引用 P10 的 2.41/2.52** |
+| **迷雾**（观察面接线合入） | `-k "fog"` + 揭示路径走查（是否调 `invalidate_dirty()`） | 直接 **≈0** | 越 `CHUNK_INVALIDATION_TICK_LIMIT_MS=2.0` = 「揭示即全扫」（103.3µs×16=1.65ms 已占 82%）；**须见脏 chunk 批处理形态** |
+
+### 6.3 全局验收（模块无关，合入后必跑）
+| # | 命令 | 判据 |
+|---|---|---|
+| G1 | `grep -nE "^(CHAOS\|POWER\|FIRE\|ECOLOGY\|ANIMAL\|FOG\|LANG)[A-Z_]* =" sim/tests/bench/thresholds.py` | **只应出现既有行名**（§3 零新行）；出现新模块行 = **实现违规**，报裁不放宽 |
+| G2 | `uv run pytest -q -m "not bench"` | 0 failed；**skipped 数变化须用 `-rs` 查明细**（降频 skip vs 真 skip，见台账 §3.4） |
+| G3 | `uv run ruff check . && uv run pyright .` | All checks passed / 0 errors |
+
+### 6.4 已落模块的遗留待实测（非四模块，但同属「合入后」触发）
+| 项 | 命令/依据 | 判据 |
+|---|---|---|
+| **生命（已落 `ae67985`）** | `sim/tests/test_m5_soak_entity_count.py` + `sim/tests/bench/test_bench_soak.py` | rtoken 钉（`rtoken ≤ N_NPC`）**若动物三只/新生入世 ⇒ 53>50 须同 CR 处理**（`m6-mortality-perf-input.md` §2.3-1）；阶段 B `SOAK_ENTITY_LOSS_PER_GAME_DAY` 提值须与生命施工同 CR |
+| **三案重派（P5 遗留）** | CHAOS：`-k "rng or chaos"`；FIRE：`uv run pytest -q sim/tests/bench/test_bench_fire.py`；POWER：`uv run pytest -q sim/tests/test_m6_power_utility.py`（**已裁 0.18，确定性免探针**）；MATERIALIZE：待 W | 重派前置 = **连续 3 次探针 ≤1.8**（台账 §8 序列**未达成**）；收口走 `m6-calibration-execution.md` §3 表 |
