@@ -28,10 +28,10 @@ inconclusive 37 项=软判定留人工复核非硬红；报告 t4-results/t4-rep
 ⑤**我域真实欠账清单（未虚构版）**：批次 A 接线（inject 生产化+chaos 消费点）
 +driver 双修（写锁收口+drain 接线案B——K16 病根真实存在）+批次 C（authority/
 落盘+hooks 四步注入）+批次 D（fire*.py）+npc.death（A1 钉在等）。
-<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-04 M6-A5 已交）===== -->
+<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-04 M6-A6 已交）===== -->
 <!-- 0. 工作树 E:\zxdevelop\.orca\worktrees\project7\opencode，分支 ZX466/opencode；
-      HEAD 见 `git log -1`（M6-A5：npc_health 对称删除钉〔skip-locked 10 例〕
-            + schema §24.4「活体删/物质留」登记，**零生产码**，已双推 origin+gitee）；基线 main 9857115（M6 内容预备波五单收编 +
+      HEAD 见 `git log -1`（M6-A6：npc_health 对称删除**施工**〔生产码：`_project_npc_death` 连带删，双键+幂等〕
+            + schema §24.4「活体删/物质留」**已实现**状态行（A5 五例 skip-locked 已转绿），已双推 origin+gitee）；基线 main 9857115（M6 内容预备波五单收编 +
       定标门 2 解除 + 裁 40），迁移链 head=0014（连续七单零迁移） -->
 <!-- 1. 已交全景：M5-D1 预研 / D2 / D3-a 0008 / D3-b fork 事件+克隆 / D3-c R-2+RNG /
       A-DATA 0009 / A2 0010 / A3 物化设计 / A4 0011 + R-4 契约 / A5 0012 is_current +
@@ -40,14 +40,14 @@ inconclusive 37 项=软判定留人工复核非硬红；报告 t4-results/t4-rep
       A12 soak 计数核实（12 钉）/ M6-A1 死亡路径钉 / M6-A2 §24 死亡语义登记 + 不对称钉 /
       M6-A3 内容面数据面预研（四事件判定 + 0015 预留 + 6 待裁点）/
       M6-A4 fog 头注同步改 + 死亡投影复核（发现 npc_health 残留）/
-      **M6-A5 npc_health 对称删除钉（10 例）+ §24.4 登记（活体删/物质留）** -->
+      M6-A5 npc_health 对称删除钉（10 例）+ §24.4 登记（活体删/物质留）/
+      **M6-A6 npc_health 对称删除施工（生产码；A5 五例转绿 + 残留反向钉退役；零迁移）** -->
 <!-- 2. 在途 = 无。挂账：① **hooks 四步语义待注入**（读档后内存侧一致性的最后一环；`fog.reveal`
       事件化后会成为 `expand_world` 的第一个真实消费者）；② **RNG 捕获待混沌流侧暴露**；
       ③ 诊断路由未进 `shared/openapi.json`（前端登记归 kilo）；④ ProblemDetail 机器码出站登记
       归 kilo；⑤ 8 词填值 CR（玩家面只一档文案）；⑥ **driver 写锁探针已不复现** ⇒ A11 挂账的
       「API 钉夹具恢复 driver 形态」可动（属测试夹具，需单独小单）；⑦ M6 内容面六个待裁点等
-      裁决；⑧ **npc_health 死亡残留已钉**（5 例 skip-locked 等 Claude 落地对称删除；锁信号 =
-      `_project_npc_death` 函数体内出现 `NpcHealth`）。 -->
+      裁决；⑧ ~~npc_health 死亡残留~~ **已修完**（M6-A6 我域自施工：投影连带删 + A5 五例转绿）。 -->
 <!-- 3. 恢复序：git fetch+merge origin/main → 读 talking.txt（在途单卡）→ 读本卡 →
       需要细节再翻 ② opencode 节各轮快照 / git log --oneline -- .orca/memory.md -->
 <!-- 4. 门禁（全绿基线约 2300 passed / 130 skipped，**有 17 例随间歇性探针摆动 ⇒ 只信同场 delta**）：`uv run pytest -m "not bench" -q`；
@@ -71,7 +71,7 @@ inconclusive 37 项=软判定留人工复核非硬红；报告 t4-results/t4-rep
       passed↔skipped 摆动：同一 tree A4 轮 2293/120 vs A5 轮 2300/130）⇒ delta 必须
       stash 后同场跑基线，禁跨轮比绝对值；探针仍不许自动改夹具（纪律⑱）。 -->
 
-（A8-M6-A5 十轮新经验，本轮零正确化）：
+（A8-M6-A6 十一轮新经验，本轮零正确化）：
 - **复核别人的实现要答「为什么这个 no-op/幂等是安全的」，而不只是「它不抛」**：死亡投影的
   行不存在即 no-op 只有在「非法死亡进不了事件流」（世界层 fail-closed）时才安全——这条论证
   本身才是复核的交付物。
@@ -118,6 +118,24 @@ M6 要跨会话保留就必须事件化 ⇒ 仍属可重放族 ⇒ 仍不落表�
 id 为主键的行建议**保留**（尸体是物质）并登记。④ 门禁：not-bench **2293 passed / 120 skipped /
 0 failed**（只改 docstring ⇒ 与基线 `9857115` 一致）、ruff/pyright 0、drift 41 不增、
 **零生产码零迁移**、gen-protocol EXIT 0。
+
+
+【M6-A6 完成记｜npc_health 对称删除施工（2026-10-04 已交，生产码 + 状态行，零迁移）】①
+`sim/core/persistence/npc_store.py::_project_npc_death` 加一条
+`sa_delete(NpcHealth).where(branch_id == ..., npc_id == ...)`：**双键**（与 `_project_lod_change`
+同体例，0008「单键取行不看分支 ⇒ 写到父分支那一行」的旧坑不复发）+ **幂等**（命中零行不是错误），
+与 profile 删行同一事务。② **本轮最关键的一行改动**：原 `if row is None: return`（早退）改成
+`if row is None: pass else: session.delete(row)` —— 连带删**刻意不挂在 profile 早退之下**。
+理由：profile 行已删而健康行还在的**残留态**（旧库升级后重放、profile 删成功而健康删失败的半写）
+也必须被治好；挂在早退之下就永远治不了，而「治好残留」正是本单的施工目的。**教训**：往一个带
+早退的投影里加「另一张表的删除」时，先问「早退那条路径上，那张表还需不需要处理」。
+③ `docs/data/schema.md` §24.4 补「**已实现**」状态行（含「钉身未改一字」「反向钉按设计退役」）。
+④ **A5 钉组实测开锁**：19 passed / 1 skipped——5 例 skip-locked 全绿，唯一 skip 是
+`TestHealthResidueToday`（落地前残留的反向钉，**退役不是失败**）；`npc_health ∈ _BOUNDED_TABLES`
+机制钉仍绿 ⇒ 根因（整表克隆会带进死者行）被投影删行正面堵住。⑤ 门禁：2309 passed / 131 skipped
+（同场基线 2300/130 ⇒ +4/−4，正好 = 5 解锁 − 1 反向钉退役）、ruff/pyright 0、drift 41 不增、
+**零迁移**、gen-protocol EXIT 0。⑥ **方法论收获**：「skip-locked 正向钉 + 反向钉」这一对组合
+让施工单收尾**可证伪**——正向钉转绿 + 反向钉退役 = 缺口真被堵上，而不是被 skip 掩盖。
 
 【M6-A5 完成记｜npc_health 对称删除钉 + §24.4 登记（2026-10-04 已交，零生产码）】①
 `docs/data/schema.md` 新增 **§24.4**「活体状态机删、物质账本留」：按**主体**列全四张表各给判决

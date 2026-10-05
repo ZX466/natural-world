@@ -25,6 +25,7 @@ import json
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -634,6 +635,10 @@ async def _project_npc_death(session: AsyncSession, branch_id: str, event: World
     `npc_profiles` 走有界表整表克隆——若死亡只删内存不删行，读档子分支会出现
     「库里有、内存无」的 NPC。删行 = 状态层 `_apply_npc_death` 的对称落库半。
     行不存在 ⇒ **幂等 no-op**（重放路径下死亡事件重放第二次，行已删）。
+
+    **连带删 `npc_health`**（M6-A6 施工，schema §24.4「活体状态机删、物质账本留」）：
+    活体状态机两面（花名册 + 隐藏属性）一起删；物质账本（`matter_state` /
+    `material_balances`）**保留**——删物质行 = 物质凭空消失 ⇒ 破 T1 材料守恒。
     """
     payload = event.payload
     npc_id = str(payload.get("entity_id", ""))
@@ -641,8 +646,24 @@ async def _project_npc_death(session: AsyncSession, branch_id: str, event: World
         raise NpcStoreError(f"NPC_DEATH payload 缺 entity_id: {payload!r}")
     row = await session.get(NpcProfile, {"branch_id": branch_id, "id": npc_id})
     if row is None:
-        return  # 幂等：行已删（重放第二遍）或本分支本就没有
-    await session.delete(row)
+        # 幂等：profile 行已删（重放第二遍）或本分支本就没有——但**不能早退**：
+        # 健康行的删除必须与 profile 行解耦（见下），否则「残留态」永远治不好。
+        pass
+    else:
+        await session.delete(row)
+
+    # **活体状态机两面同删**（schema §24.4「活体状态机删、物质账本留」；M6-A5 复核发现）：
+    # 1) 不删 ⇒ 读档子分支「库里有、内存无」照旧发生在 `npc_health` 上（它也在有界表清单里、
+    #    随 fork **整表克隆**）；且 `materialize_hidden()` 只查本表、不 JOIN `npc_profiles`
+    #    ⇒ 死者的隐藏属性仍会被装配进 agent 决策输入。
+    # 2) 放在 profile 分支**之外**：profile 行已删而健康行还在的「残留态」（旧版本库升级后
+    #    重放、或 profile 删成功但健康删失败的半写）也必须被治好——挂在早退之下就治不了。
+    # 3) **双键**（branch_id + npc_id）：与 `_project_lod_change` 同体例，绝不跨分支删
+    #    （0008「单键取行不看分支 ⇒ 写到父分支那一行」的旧坑）。
+    # 4) 幂等：DELETE 命中零行不是错误（重放路径第二次到此，健康行已空）。
+    await session.execute(
+        sa_delete(NpcHealth).where(NpcHealth.branch_id == branch_id, NpcHealth.npc_id == npc_id)
+    )
 
 
 async def _project_lod_change(session: AsyncSession, branch_id: str, event: WorldEvent) -> None:
