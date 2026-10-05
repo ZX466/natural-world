@@ -60,6 +60,20 @@ class EventKind(StrEnum):
     #: 「库里有、内存无」）。**零归因键**（死因/致死者是意图归因，不入事件层）——
     #: 只有 entity_id；重复死亡 fail-closed（投影层幂等语义见 fold/handler）。
     NPC_DEATH = "npc.death"
+    # ---- M6 内容面（生态/动物/语言/迷雾；K4 C1「必经事件流」+ A3 可重放性判定）----
+    #: 生态相位跨越信号（**信号≠状态**：相位本身由 tick 纯函数派生
+    #: `ecology_phase_at`，事件只在**可叙事相位跨越**时发——档内重算恒同值
+    #: 不发，W-D3 口径）。零归因键、零数值（相位标签是词，铁律 1）。
+    ECOLOGY_SHIFT = "ecology.shift"
+    #: 动物节律信号（**不 per-tick**：位置/节律未变零事件——W-D3；可见面走
+    #: 既有 `state_delta.actors[]` 零 schema，K4 判定）。零归因键、零计数。
+    FAUNA_TICK = "fauna.tick"
+    #: 语言阶层语域变更信号（**零数值零档号**——S4 三边界：语域只以行为外显，
+    #: 出站只见语域词；阶层级别/人数/排名禁入 payload）。
+    SPEECH_SHIFT = "speech.shift"
+    #: 迷雾揭示（**事件化=可重放**，fold=并集幂等——裁 40-4；chunk 坐标只载
+    #: **已踏入事实**，禁邻居/候选/房间形状等未探索字段——S4 FG-1）。
+    FOG_REVEAL = "fog.reveal"
 
 
 # ---------------------------------------------------------------------------
@@ -412,6 +426,60 @@ class NpcDeathPayload(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     entity_id: _ID
+
+
+class EcologyShiftPayload(BaseModel):
+    """生态相位跨越（M6 内容面；**零数值**——相位是词，铁律 1）。
+
+    只带相位标签（繁盛/平稳/稀少），**禁**数量/密度/增长率（K12 零元信息
+    同源纪律）；extra="forbid" 封闭。
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    phase: str
+    prey_trend: str
+    predator_trend: str
+
+
+class FaunaTickPayload(BaseModel):
+    """动物节律信号（M6 内容面；**零计数零坐标**——物种+节律态词）。
+
+    `species` 是物种词（狼/鹿/鸟）、`state` 是节律词（出没/蛰伏）——
+    数量/位置不进出站面（K12 纪律）；extra="forbid" 封闭。
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    species: str
+    state: str
+
+
+class SpeechShiftPayload(BaseModel):
+    """语言阶层语域变更（M6 内容面；**零分层级别/人数/排名**——S4 边界②）。
+
+    只带语域词（粗/日常/文雅）与**可达性布尔**（S4 边界①③：不读 power 档、
+    只经可达性）；`register_word` 是语域词字段（零数值——字段类型钉的合法
+    形态；不叫 `register` 是避 pydantic BaseModel 属性遮蔽）；extra="forbid"
+    封闭。
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    register_word: str
+    in_circle: bool = True
+
+
+class FogRevealPayload(BaseModel):
+    """迷雾揭示（M6 内容面；**只载已踏入事实**——S4 FG-1）。
+
+    `chunks` 是玩家实际踏入后确认的 chunk 坐标列表——**禁**邻居/候选/房间
+    形状等未探索字段（不提供未探索区先验）；extra="forbid" 封闭。
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    chunks: tuple[tuple[int, int], ...]
 
 
 class WorldEvent(BaseModel):

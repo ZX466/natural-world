@@ -24,10 +24,13 @@ from pydantic import BaseModel, ValidationError
 
 from sim.core.events import (
     CombatScaleChangePayload,
+    EcologyShiftPayload,
     EntropyInjectPayload,
     EventKind,
+    FaunaTickPayload,
     FireExtinguishedPayload,
     FireIgnitedPayload,
+    FogRevealPayload,
     HiddenEmergePayload,
     MaterialMovedPayload,
     MatterPayload,
@@ -36,6 +39,7 @@ from sim.core.events import (
     NpcDeathPayload,
     NpcLodChangePayload,
     NpcMonologuePayload,
+    SpeechShiftPayload,
     StructureCheckpointPayload,
     StructureCollapsedPayload,
     StructureCompletedPayload,
@@ -70,6 +74,11 @@ PAYLOAD_MODELS: dict[EventKind, type[BaseModel]] = {
     EventKind.FIRE_EXTINGUISHED: FireExtinguishedPayload,
     # M6 生命始终（落点 a）：死亡 = 事件（可重放），投影同步删 npc_profiles 行。
     EventKind.NPC_DEATH: NpcDeathPayload,
+    # M6 内容面（K4 C1：四事件一律经事件流；payload 零归因键/零数值/零分层数值）。
+    EventKind.ECOLOGY_SHIFT: EcologyShiftPayload,
+    EventKind.FAUNA_TICK: FaunaTickPayload,
+    EventKind.SPEECH_SHIFT: SpeechShiftPayload,
+    EventKind.FOG_REVEAL: FogRevealPayload,
     EventKind.NPC_HIDDEN_EMERGE: HiddenEmergePayload,
     EventKind.STRUCTURE_STARTED: StructureStartedPayload,
     EventKind.STRUCTURE_CHECKPOINT: StructureCheckpointPayload,

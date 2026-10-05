@@ -329,23 +329,26 @@ async def ws_endpoint(ws: WebSocket) -> None:
     # M5-K3 / 裁 21-A D-3：会话态**连接级**——由 ConnectionManager 每连接一份
     control = manager.control_of(ws)
     try:
-        # 接入即发全量快照（kilo ws-protocol：sync 的答案）
-        await ws.send_json(snapshot_payload(app.state.loop, app.state.tile_map))
+        # 接入即发全量快照（kilo ws-protocol：sync 的答案）。
+        # M6-K5 裁 41-4：出站**一律走咽喉**（`manager.send_json_to`）——直发
+        # `ws.send_json` 会绕过 K11/K15 两层禁键剥除+留痕（旁路=闸门失效）。
+        await manager.send_json_to(ws, snapshot_payload(app.state.loop, app.state.tile_map))
         # M5-K3 / D-5+D-6：连接期初值一帧（刻度/暂停态/游标指针 + notice=null）。
         # 重连后前端据此恢复「世界此刻的样子」，不必靠推断。
-        await ws.send_json(
+        await manager.send_json_to(
+            ws,
             session_state_payload(
                 speed=control.effective_speed(),
                 paused=control.paused,
                 anchor=_current_anchor_pointer(),
-            )
+            ),
         )
         while True:
             raw = await ws.receive_json()
             reply = handle_client_message(raw, app.state.loop, pf, control)
             # M5-K3：读档成功回两帧（分叉告知 + 全量），其余仍单帧/无帧
             for frame in frames_of(reply):
-                await ws.send_json(frame)
+                await manager.send_json_to(ws, frame)
     except WebSocketDisconnect:
         pass
     finally:

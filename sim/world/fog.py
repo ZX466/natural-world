@@ -40,6 +40,20 @@ class FogOfWar:
         return self.reveal(x // chunk_size, y // chunk_size)
 
 
+def fold_fog_reveal(prev: FogOfWar, chunk_coords: tuple[tuple[int, int], ...]) -> FogOfWar:
+    """`fog.reveal` 单折叠（**并集、幂等**——M6 事件化口径，A3 §2.4）。
+
+    事件化后揭示集 = 「此前揭示集 + 本次踏入块」（并集）——重放同事件序列
+    必得同集合（C5）；同一块二次揭示 = 并集不动（幂等，重放第二遍安全）。
+    折叠与「直接调 reveal」同源（本函数就是对每个坐标调 :meth:`reveal`），
+    不另写一套并集逻辑（schema §19.3 两路径铁律）。
+    """
+    fog = prev
+    for cx, cy in chunk_coords:
+        fog = fog.reveal(cx, cy)
+    return fog
+
+
 def chunk_neighbors(cx: int, cy: int) -> frozenset[tuple[int, int]]:
     """四邻 chunk 坐标（M3 未用，预留给「踏入半亮邻块」扩展——不接入揭示语义）。"""
     return frozenset({(cx - 1, cy), (cx + 1, cy), (cx, cy - 1), (cx, cy + 1)})

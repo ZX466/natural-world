@@ -308,9 +308,10 @@ class TestSpeechNoSocialHierarchyNumbers:
         （「这字我认得」），系统**不得**告知「你现在处于第几层」。
         """
         offenders: list[str] = []
+        kinds = _content_kinds()
         for name in _speech_kinds():
             hit = sorted(
-                set(_payload_model(EventKind(name).value).model_fields)
+                set(_payload_model(kinds[name]).model_fields)
                 & SOCIAL_HIERARCHY_FORBIDDEN_KEYS
             )
             if hit:
@@ -324,11 +325,15 @@ class TestSpeechNoSocialHierarchyNumbers:
 
         判据=pydantic 字段注解：数值型（`int`/`float`，含 `Optional`/`list` 包裹）在
         speech 面上零容忍；布尔与字面量枚举（可达性）是唯一合法形态。
+        （⚠ M6 修：`_speech_kinds()` 返回**成员名**（`SPEECH_SHIFT`），而 StrEnum
+        的 `EventKind(x)` 是**按值**查找（`speech.shift`）——原实现 `EventKind(name)`
+        必 ValueError；取值走 `_content_kinds()[name]`。）
         """
         numeric = re.compile(r"\b(int|float)\b")
         offenders: list[str] = []
+        kinds = _content_kinds()
         for name in _speech_kinds():
-            model = _payload_model(EventKind(name).value)
+            model = _payload_model(kinds[name])
             for field, info in model.model_fields.items():
                 annotation = str(info.annotation)
                 if numeric.search(annotation):
