@@ -7,6 +7,7 @@
  */
 import type { FullSnapshotMessage, StateDeltaMessage, WsMessage } from './protocol';
 import type { WorldMirror } from '../game/world-mirror';
+import { worldClock } from '../game/clock';
 
 const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
@@ -90,14 +91,20 @@ export class WsClient {
       case 'full_snapshot':
         this.mirror.applySnapshot(msg.actors, msg.lights);
         if (msg.map) {
-          // collision 静态层走 HTTP，这里只登记尺寸/tileset（M0 mock 阶段）
+          // collision/ground 静态层走 HTTP（worldApi.ts），这里只消费 time
         }
+        if (msg.time) worldClock.apply(msg.time); // M7-R3：时钟权威帧
         this.cb.onSnapshot(msg);
         break;
       case 'state_delta':
         this.mirror.applyActorDeltas(msg.actors);
         if (msg.lights) this.mirror.applyLightDeltas(msg.lights);
+        if (msg.time) worldClock.apply(msg.time); // M7-R3
         this.cb.onDelta(msg);
+        break;
+      case 'session_state':
+        // M5-K3 会话首帧（刻度/暂停态/游标）；M7：time 可选随帧同步
+        if (msg.time) worldClock.apply(msg.time);
         break;
       default:
         // 未知类型/戏外未实现消息：静默忽略（不出错不出戏，versioning.md）
