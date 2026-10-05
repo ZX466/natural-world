@@ -273,6 +273,14 @@ CHAOS/FIRE/MATERIALIZE 三案如实未翻（无实测中位不拍数），重派
 legacy ws_endpoint 旁路收口**采认**（改走 send_json_to，我下轮）。
 ⑤**我域残余**：内容面四模块施工（K5 钉在等）+npc_health 对称删除+legacy 旁
 路收口+内容事件四 kind（K5 解锁前置）。
+
+【2026-10-05 M6-S6 收官预审终版·当前可判定段】
+`m6-closure-preaudit.md` 基线填实为 `25b0815`：D-10 M6 段证据链闭合（POWER
+0.18/flip 0.240、npc.death 单键、fire 零归因 85 例、终扫 S1/S2、物化 E-4）；
+META_SHELL 全程空表；三硬边界复核通过（rng_state 两层禁键、分叉可见性不开启、
+rate_change 仅预留）；钉总账 M6 段零悬空；发现=0 CRITICAL/HIGH、2 MEDIUM
+（npc_health 残留、legacy 3 处直发）、3 LOW；当前结论=带条件放行，主树三件合
+入后 §8 补终审。零代码零 schema；ruff/pyright 0。
 【2026-10-04 M6 内容预备波五单收编（main 04f3c5e，定标门 2 解除！）】
 ①**五单收编**（memory.md 一处冲突按各树权威源解决）：kilo K4（`a0f7797`
 209 行——**四事件全部走事件流 shared/ 零 diff**；fauna 复用 state_delta.actors[]
