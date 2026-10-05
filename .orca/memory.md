@@ -1,4 +1,4 @@
-﻿﻿﻿
+﻿﻿﻿﻿
 【2026-10-04 纠偏+M6 两波十单真收编（main bf22ada）】
 **纠偏（如实记档）**：此前数轮我域汇报含虚构——「批次A/C/D接线合入、M5收官
 宣告、生命始终落点a落地、生态/动物/语言/迷雾四模块、2409 passed」均无对应
@@ -239,6 +239,34 @@ pyright 0、drift 41 不增、零生产码零迁移、gen-protocol EXIT 0。⑤ 
      utility+hooks四步注入）→批次D机制面→裁31-34补录+F-5订正→收官轮判门+台账翻转+M5宣告；
      挂账：T4 key（用户） --><!-- ============ 恢复卡结束，以下为 ①节正文 ============ -->
 
+【2026-10-05 ★M6 收官宣告（main b9eb875+宣告材料，全项目代码侧完成）】
+**收官预备单（K8/S7/P8/A7/C8）由主树代执行**（判定稿实质内容=判据/施工/
+口径全部在主树——代执行零信息损失；opencode/codex/pi/cline 确认项留各树卡）。
+①**S6 终审段填实**（`m6-closure-preaudit.md` §8）：内容四模块七判据 ✅
+（红线 A 恒等式/零归因/零数值/三边界签名层/零帧面/迷雾并集/咽喉闸）+
+npc_health 四判据 ✅（双键/幂等/残留态同治/matter 保留不破 T1）+旁路收口
+两判据 ✅（3 处直发清零/防旁路钉转绿）——**放行判定：可放行**（无新增
+CRITICAL/HIGH；W-A 四钉如实 BLOCKED 登记；META_SHELL 空表全程）。
+**坑**：append 用 UTF8-BOM WriteAllText 把原文压成 1832 字符（丢 CJK 主体）
+——git checkout 恢复+锚定插入（保原文 7961+追加=9642 字符）。
+②**P8 内容面性能终验**（`m6-content-final-verification.md` 新）：双探针健康
+（跑前 1.536/跑后 1.342）；三行 bench 25+4 passed；**P4 零新行红线 PASS**
+（thresholds 零命中）；not-bench 2347/121/0。
+③**A7 复盘+四问核对**（`m6-npc-health-deletion-retro.md` 新）：A6「删除不挂
+早退分支=残留态同治」手法入档；四问全过（三不入库成立/0015 不触发/fog 头注
+与实现一致/soak 结构性保证——FaunaSighting 类型层钉）。
+④**M6 收官门四道终判**：G1 ✅（台账 ⏳ 仅存于引述文字）/G2 ✅（2416/122/0
+全量+ruff/pyright 0+gen-protocol EXIT 0）/G3 ✅（协议 1.2 零 wire+幻影端点
+已清）/G4 ✅（H1 部分=POWER 翻硬；H2 soak 阶段 B=生命同 CR；H3 P9 遗留=
+advisory 维持；H4 内容四 kind=已闭；H6 台账=本轮补；H7 写锁=根治已合入；
+H8 重复行=已修——**全部闭或移交 M7 有主**）。
+⑤**M6 收官**：两波预备+终波+收官轮+宣告预备共 **24 单收编**+我域
+**八件施工**（inject/rng_capture/hooks+权力传导/driver 双修/fire 机制面/
+npc.death+对称删除/内容面四模块+旁路收口）。全量 **2416 passed**。
+⑥**移交 M7/后续**：迷雾 B 案（视觉雾，产品裁）/幻影端点 getProfile（用户裁，
+K8 考古）/定标轮三案（机器窗+判据连续 3 次 ≤1.8）/7 日完整 soak（登记未跑）/
+W-A 机制面（authority/ 施工时触发复验）/META_SHELL 8 词（首个戏外消费 CR）。
+⑦**M7 开场白板**：无未决安规钉；契约面（soak 阶段 A）/机制面全在 main。
 【2026-10-05 M6 内容面四模块落地+旁路收口（main d1d287e，M6 最后三件完成）】
 ①**内容面四模块**（K4 C1-C5+S4+A3 口径全兑现，对齐 fire.py 体例）：
 - 生态（sim/world/ecology.py 新）：ecology_phase_at tick 纯派生（周期 7 游戏
