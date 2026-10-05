@@ -28,10 +28,10 @@ inconclusive 37 项=软判定留人工复核非硬红；报告 t4-results/t4-rep
 ⑤**我域真实欠账清单（未虚构版）**：批次 A 接线（inject 生产化+chaos 消费点）
 +driver 双修（写锁收口+drain 接线案B——K16 病根真实存在）+批次 C（authority/
 落盘+hooks 四步注入）+批次 D（fire*.py）+npc.death（A1 钉在等）。
-<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-04 M6-A4 已交）===== -->
+<!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-04 M6-A5 已交）===== -->
 <!-- 0. 工作树 E:\zxdevelop\.orca\worktrees\project7\opencode，分支 ZX466/opencode；
-      HEAD 见 `git log -1`（M6-A4：fog.py 头注同步改〔裁 40-4〕+ 死亡投影三问复核，
-      **零生产码**，已双推 origin+gitee）；基线 main 9857115（M6 内容预备波五单收编 +
+      HEAD 见 `git log -1`（M6-A5：npc_health 对称删除钉〔skip-locked 10 例〕
+            + schema §24.4「活体删/物质留」登记，**零生产码**，已双推 origin+gitee）；基线 main 9857115（M6 内容预备波五单收编 +
       定标门 2 解除 + 裁 40），迁移链 head=0014（连续七单零迁移） -->
 <!-- 1. 已交全景：M5-D1 预研 / D2 / D3-a 0008 / D3-b fork 事件+克隆 / D3-c R-2+RNG /
       A-DATA 0009 / A2 0010 / A3 物化设计 / A4 0011 + R-4 契约 / A5 0012 is_current +
@@ -39,16 +39,18 @@ inconclusive 37 项=软判定留人工复核非硬红；报告 t4-results/t4-rep
       A9 0014 fires + FireStore + 43 钉 / A10 物化数据面（72 钉）/ A11 出站编排（46 钉）/
       A12 soak 计数核实（12 钉）/ M6-A1 死亡路径钉 / M6-A2 §24 死亡语义登记 + 不对称钉 /
       M6-A3 内容面数据面预研（四事件判定 + 0015 预留 + 6 待裁点）/
-      **M6-A4 fog 头注同步改 + 死亡投影复核（发现 npc_health 残留）** -->
+      M6-A4 fog 头注同步改 + 死亡投影复核（发现 npc_health 残留）/
+      **M6-A5 npc_health 对称删除钉（10 例）+ §24.4 登记（活体删/物质留）** -->
 <!-- 2. 在途 = 无。挂账：① **hooks 四步语义待注入**（读档后内存侧一致性的最后一环；`fog.reveal`
       事件化后会成为 `expand_world` 的第一个真实消费者）；② **RNG 捕获待混沌流侧暴露**；
       ③ 诊断路由未进 `shared/openapi.json`（前端登记归 kilo）；④ ProblemDetail 机器码出站登记
       归 kilo；⑤ 8 词填值 CR（玩家面只一档文案）；⑥ **driver 写锁探针已不复现** ⇒ A11 挂账的
       「API 钉夹具恢复 driver 形态」可动（属测试夹具，需单独小单）；⑦ M6 内容面六个待裁点等
-      裁决；⑧ **npc_health 死亡残留**（建议投影连带删，见完成记）。 -->
+      裁决；⑧ **npc_health 死亡残留已钉**（5 例 skip-locked 等 Claude 落地对称删除；锁信号 =
+      `_project_npc_death` 函数体内出现 `NpcHealth`）。 -->
 <!-- 3. 恢复序：git fetch+merge origin/main → 读 talking.txt（在途单卡）→ 读本卡 →
       需要细节再翻 ② opencode 节各轮快照 / git log --oneline -- .orca/memory.md -->
-<!-- 4. 门禁（全绿基线 2293 passed / 120 skipped）：`uv run pytest -m "not bench" -q`；
+<!-- 4. 门禁（全绿基线约 2300 passed / 130 skipped，**有 17 例随间歇性探针摆动 ⇒ 只信同场 delta**）：`uv run pytest -m "not bench" -q`；
       `uv run ruff check .`；`uv run pyright sim/`；**gen-protocol --check EXIT 0**（脚本在
       `tools/gen-protocol.ts`，从 client/ 跑 `npx tsx ../tools/gen-protocol.ts --check`；
       client/node_modules 缺失 ⇒ junction 挂主树那份，已 gitignore）；autogenerate 零漂移；
@@ -64,9 +66,12 @@ inconclusive 37 项=软判定留人工复核非硬红；报告 t4-results/t4-rep
       flaky ⇒ 先做基线对照实验；⑯ 派单给的**钉子落点建议可偏离**（回执说明理由）；⑰
       **`TickLoop.enqueue` 是立即 apply**；⑱ **间歇性缺陷不许用探针自动改夹具**；⑲ skip-locked
       组若依赖未定型接口用「按签名试参 + 构造失败即 skip」的适配器；⑳ **改 docstring 的文件若已在
-      ruff format 漂移名单里，不要顺手重排**（无关 diff 比格式不一致更贵）。 -->
+      ruff format 漂移名单里，不要顺手重排**（无关 diff 比格式不一致更贵）；
+      ㉑ **门禁数字只信同场基线**（全量 not-bench 有 17 例随间歇性写锁探针在
+      passed↔skipped 摆动：同一 tree A4 轮 2293/120 vs A5 轮 2300/130）⇒ delta 必须
+      stash 后同场跑基线，禁跨轮比绝对值；探针仍不许自动改夹具（纪律⑱）。 -->
 
-（A8-M6-A4 九轮新经验，本轮零正确化）：
+（A8-M6-A5 十轮新经验，本轮零正确化）：
 - **复核别人的实现要答「为什么这个 no-op/幂等是安全的」，而不只是「它不抛」**：死亡投影的
   行不存在即 no-op 只有在「非法死亡进不了事件流」（世界层 fail-closed）时才安全——这条论证
   本身才是复核的交付物。
@@ -113,6 +118,22 @@ M6 要跨会话保留就必须事件化 ⇒ 仍属可重放族 ⇒ 仍不落表�
 id 为主键的行建议**保留**（尸体是物质）并登记。④ 门禁：not-bench **2293 passed / 120 skipped /
 0 failed**（只改 docstring ⇒ 与基线 `9857115` 一致）、ruff/pyright 0、drift 41 不增、
 **零生产码零迁移**、gen-protocol EXIT 0。
+
+【M6-A5 完成记｜npc_health 对称删除钉 + §24.4 登记（2026-10-04 已交，零生产码）】①
+`docs/data/schema.md` 新增 **§24.4**「活体状态机删、物质账本留」：按**主体**列全四张表各给判决
+（`npc_profiles`/`npc_health` **删**，`matter_state`/`material_balances` **保留**），保留侧写明
+理由 = **T1 材料守恒**（删物质行 = 物质凭空消失；判据见 `golden/assertions/conservation.py`
+「Σ 余额与基线一致」）。**教训**：写「对称删除」契约要按主体列全表清单，且**保留侧必须给理由**，
+否则登记会被后人当漏删来「修」。② 钉 10 例落在 `sim/tests/test_m6_death_profiles_contract.py`：
+登记钉 4（今天即绿，含机制钉 `npc_health ∈ _BOUNDED_TABLES`——它是「必须删」的根因）+
+残留反向钉 1（今天即绿、落地即退役：profile 行已删 / health 行仍在 / `materialize_hidden` 仍装死者）+
+skip-locked 5（对称删除 / 幂等 / 装配反向钉且断言活人仍在 / fork 克隆钉 / 双键不误删跨分支）。③
+锁信号 = `_project_npc_death` **函数体内**出现 `NpcHealth`：`ast.get_source_segment` 取真身 +
+`tokenize` 剥 COMMENT/STRING 再找 ⇒ **文档先行的假解锁无效**（沿用 A1 手法），语法坏时返回 False
+只 skip 不误报红。④ 门禁：2305 passed / 135 skipped（+10 钉；同场基线 2300/130 ⇒ +5/+5）、ruff 与
+pyright 0、drift 41 不增、零生产码零迁移、gen-protocol EXIT 0。⑤ **新口径**：全量 not-bench 有
+**17 例随间歇性写锁探针摆动** ⇒ **delta 必须同场测基线**（已入血脉㉑）。
+
 【A5 完成记｜0012 branches.is_current + 开线闸收紧（2026-10-01 已交 1eeb294，36 钉）】
 - 迁移 0012（`0012_branches_current.py`）：`is_current BOOLEAN NOT NULL DEFAULT 0`（纯
   add_column ⇒ 不需 batch）+ **部分唯一索引** `ux_branches_current ON branches(is_current)
