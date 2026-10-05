@@ -35,6 +35,12 @@ inconclusive 37 项=软判定留人工复核非硬红；报告 t4-results/t4-rep
       HEAD 见 `git log -1`（M6-A6：npc_health 对称删除**施工**〔生产码：`_project_npc_death` 连带删，双键+幂等〕
             + schema §24.4「活体删/物质留」**已实现**状态行（A5 五例 skip-locked 已转绿），已双推 origin+gitee）；基线 main 9857115（M6 内容预备波五单收编 +
       定标门 2 解除 + 裁 40），迁移链 head=0014（连续七单零迁移） -->
+<!-- 0.1 **新对话开场（复制这段发给新会话即可续跑）**：
+      「读 E:\zxdevelop\.orca\worktrees\project7\opencode\.orca\memory.md 顶部的
+      opencode 专属恢复卡，再读 E:\zxdevelop\project7\.orca\talking.txt 的在途单卡，
+      然后 `git fetch origin && git merge origin/main` 对齐基线，继续 opencode 域的活。」
+      恢复后第一件事＝看卡里「2. 在途」；无在途就读 talking.txt 等派单。 -->
+
 <!-- 1. 已交全景：M5-D1 预研 / D2 / D3-a 0008 / D3-b fork 事件+克隆 / D3-c R-2+RNG /
       A-DATA 0009 / A2 0010 / A3 物化设计 / A4 0011 + R-4 契约 / A5 0012 is_current +
       开线闸 / A6 R-4 钉 + fork 交接口径 / A7 0013 npc_power + 45 钉 / A8 火灾预研 /
