@@ -252,6 +252,48 @@ M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI
 | M5-P14 soak 实体守恒契约改法预研 | pi | `docs/perf/m6-soak-contract-preplan.md`（新 211 行，零代码）+ `m6-perf-preplan.md` §3.2 收窄指针 | ✅ main（收编 `4b1a180` 后态，交付 `2b812be`+`df58406`） | **施工级方案**：**两侧各一界**（end<=start 增侧恒 0 硬断言不放宽防泄漏 + start-end<=BOUND 减侧）+ **id 集合判据** set(end)⊆set(start)（抓换 id 重造比计数强）+ **映射一致**（实体集↔runtime.profiles——「死一半」比两边不改更坏：后续 _apply_move 撞未知实体）；两处断言抽单一函数 _assert_entity_stable 防双真相源；BOUND 照 cascade budget 体例（模块级 Final 契约常量+锁值钉+规模耗时分离）落 test_bench_soak.py 顶部不进 thresholds；由单一常量导出 ceil(N×ticks/86400) ⇒ CI/nightly/7日自动分档；**阶段 A（值=0）现在可落**（与原断言语义等价首跑必绿零风险），阶段 B 生命施工同 CR；**防泄漏反证四类**（churn/配对净零/内部膨胀三类原断言同盲由 GC/RSS/句柄兜但 CI 冒烟面无此三条；第 4 类映射分叉是本改法必须补的洞）；**建议结构断言移到探针门之前**（结构量免疫降频不该被 skip 掩盖）+CI 冒烟补 id 判据；**次序依据三条**（归因成本——M5 已两次踩计数误读/契约零风险可先落/保护 nightly 信噪比）+反向风险（机制先落 ⇒ CI 面持续红阻塞全员）⇒ 契约小单→生命机制→定标收口；**诚实收窄 P13 前瞻**：DESIGN §11 明写「Agent 永不死只失能」⇒ 撞契约为条件性判定（落点 a 移出 entities 才必红；b 加标志/c 走 LOD/d 被砍都不撞）；委托 opencode Q1-Q4；
 | M5-A12 soak 计数数据面核实 | opencode | `sim/tests/test_m5_soak_entity_count.py`（新 12 例，零生产码） | ✅ main（收编 `0a3b09c` 前态，交付 `a3d704d`） | **决定性答问（pi Q1-Q3 前置事实）**：①entity_count 采**内存世界态** len(loop.state.entities)（soak.py:312/335），不是 npc_profiles 行数、不含 matter_state、soak 源码零表查询；②EntityState 只有 entity_id/pos/path——**没有 lod 列没有 alive/dead 列，今天不存在删除实体的 handler/kind** ⇒ end==start 恒真是「没有删除路径」不是「死亡不计数」；③LOD 与计数**毫无关系**：npc.lod_change 默认总线未注册进不了 WorldState、lod>0 过滤只在 runtime.py:103 L1 决策层 ⇒ **LOD 0 照计**不使 BOUND 失真；⇒ pi 契约案的「落点 a 必撞」判定成立前提确认、(c) 走 LOD 不撞确认；12 钉佐证；
 | M5-C13 M5 收官预检终版 + 判机型首跑 | cline | `docs/config/m5-c13-closure-precheck-final.md`（新，只读预检） | ✅ main（收编 `0a3b09c` 前态，交付 `ef7c08e`） | **G2 复跑可判过**（2bd2bff 本树亲测：not-bench **2213 passed/120 skipped/0 failed** 对 C11 基线 +64 passed、**skip 五型零变化**（T4 53/T3 live-fire 55/T5 golden 11/fire 机制面锁 1/A6 六锁 0）⇒ **+64 全来自真实新用例无一例 skip 转绿凑来**；bench 67/3/0 的 −2/+2 唯一变化判定非回归=soak 降频自检门）；**G4 终表刷新**（A1✅ R-4/A2 key 用户侧等效验收口径/A3 关闭条件标注/B 类含 P5 销账+Xeon 自转落地）；**判机型首跑**落台账（C12 巡检单 continuation）；**收官判据索引表**（判门时逐条核对的一切证据的「证据在哪」索引）；
+
+#### 5.5 M6 收官（内容面+机制面收口+定标；2026-10-05 宣告）
+
+| 路 | Agent | 交付物（提交） | 状态 | 实测 / 结论 |
+|---|---|---|---|---|
+| M6-K1 内容事件出站面钉 | kilo | `sim/tests/test_m5_diagnosis_outbound.py`（12 例=7 绿+5 skip-locked）+ 复核预备 | ✅ main | M-1 判据落钉（诊断路由递归扫）+drain 失败帧体例钉；诊断路由 live↔快照漂移实测（K2 补齐）；K11 路由面假绿自查（app.routes 只见 _IncludedRouter 外 9 条） |
+| M6-K2 诊断路由补快照 | kilo | `shared/openapi.json`+`protocol.ts`（1.2 升版）+K11 假绿修复 | ✅ main | versioning §7 minor+生成物同提交；K11 钉改走 `app.openapi()["paths"]` |
+| M6-S1 终扫兜底落码 | codex | `sim/api/ws.py`（load_failed 玩家文案最终边界 scan()）+回归钉 | ✅ main | 裁 36 案 A 兑现：命中退化+兜底再命中 fail-closed；META_SHELL 零改动 |
+| M6-S2 终扫回归钉 | codex | `test_m5_session_state.py`（防摘钉） | ✅ main | 终扫被摘即红；W-A 四钉如实 BLOCKED |
+| M6-P1 soak 契约阶段 A | pi | `SoakResult` id 快照+契约常量 `SOAK_ENTITY_LOSS_PER_GAME_DAY=0`（不进 thresholds）+四侧判据 `_assert_entity_stable`+变异测试 | ✅ main | 值=0 与旧 `==` 语义等价零行为变化；跨域追改 A12 钉（前提被阶段 A 按设计取代） |
+| M6-A1 死亡路径钉 | opencode | `test_m6_death_path_data.py`（18 例=9 绿+9 skip-locked）+夹具守卫 | ✅ main | 死亡路径零载体事实基座+落点 a 落地自动转绿钉；`npc_profiles` 整表克隆不对称来源 |
+| M6-A2 死亡语义登记 | opencode | `schema.md` §24（「同步投影删 npc_profiles 行」选型）+不对称钉 | ✅ main | 落点 a 只删内存会让读档子分支「库里有、内存无」⇒ 契约钉 |
+| M6-P2/P4 定标复核+内容预算 | pi | `m6-mortality-perf-input.md`+`m6-content-budget.md` | ✅ main | **红线归属零新行**（四模块并入既有行；加行=实现违规）；锚点全实测（冷 A* 559.7µs/生态全量扫 400µs 必红反例）；诚实纠偏 rtoken 顶红初稿 |
+| M6-A3 内容数据面预研 | opencode | `m6-content-data-preplan.md` | ✅ main | 三事件不入库（tick 派生/纯运行态/fog fold=并集）；speech 0015 条件预留；fog 头注同步改提醒 |
+| M6-C1/C2 CI 确认+降频取证 | cline | `m6-c1-ci-calibration-confirm.md`+`m6-c2-throttle-ledger.md` | ✅ main | soak 阶段 A 的 CI 冒烟面每提交跑且绿（PI_THROTTLE_SELFCHECK=0 实跑）；降频持续态取证（跨轮 >2.0） |
+| M6-K4 内容出站契约预备 | kilo | `m6-content-outbound-prestudy.md`（209 行） | ✅ main | 四事件全走事件流 shared/ 零 diff；fog 三案（A 本波采/B 独立单/C 否决）；接口要求 C1–C5 |
+| M6-S4 内容安规预研 | codex | `m6-content-security-pins.md`（119 行） | ✅ main | **语域档不是权力泄漏面**（前提=行为外显+三边界）；迷雾 FG-1~4；生态动物 EN-1~2；现状全本机核库 |
+| M6-K5 内容事件守卫钉 | kilo | `test_m6_content_events.py`（17 例=7 绿+10 skip-locked） | ✅ main | 四组钉（kind 登记/零帧面/speech 零数值含字段类型钉/咽喉闸继承+防旁路）；**防旁路实测发现 legacy ws_endpoint 3 处直发**（裁 41-4 收口）；CI 口径自纠 |
+| M6-P5 定标轮执行 | pi | `m6-calibration-execution.md` | ✅ main | **步骤 0 未过按卡暂停**（临界带+跨阈值抖动，三案如实未翻不拍数）；**POWER_MAX_BIAS 裁值 0.18**（扫参法不改源码）；跑前+跑后双探针新纪律；重派判据=连续 3 次 ≤1.8 |
+| M6-A4 fog 头注改+死亡复核 | opencode | fog.py 头注事件化口径+死亡投影三问逐答 | ✅ main | 三问全 ✅（幂等/fork 不复活/双键不误删）；**新发现 npc_health 残留**（对称删除建议→裁 41-3 采认） |
+| M6-C5 收官预检骨架 | cline | `m6-c5-closure-skeleton.md`+定标翻转影响面 | ✅ main | CI 侧影响面=零直接影响（一条条件性风险）；M6 收官预检骨架 |
+| M6-K6 协议面总核对 | kilo | `m6-protocol-audit.md`（170 行）+K5 复核预备 | ✅ main | 1.2 后 shared/ 变更=0（M6 全程零协议变更互证）；**响应码缺口双向新发现**+自曝两薄弱点 |
+| M6-S5 收官预审骨架 | codex | `m6-closure-preaudit.md` 骨架 | ✅ main | D-10 M6 段框架+S4 复验单预置 |
+| M6-P6 降频观测序列 | pi | 台账降频节（六笔 A=1.599→F=1.997） | ✅ main | **重派判据未达成**+**单次读数不可信实证**（数分钟内 3.287/1.615 相反判定）；归属诚实声明 |
+| M6-A5 npc_health 钉+登记 | opencode | `test_m6_death_profiles_contract.py` 增 10 例+`schema.md` §24.4 | ✅ main | 对称删除钉（锁信号=ast 函数真身+tokenize 剥注释——注释先写表名会假解锁）；**§24.4 活体删/物质留**（删物质行=破 T1 防误修） |
+| M6-C6 收官预检终版 | cline | `m6-c6-closure-final.md`（131 行） | ✅ main | **G1 ⚠（重复行→已修）/G2 ✅/G3 ✅/G4 ⚠ H1-H8**（H4 内容四 kind=唯一硬待办）；bench 假红判例四件套；**更正：回落非稳定态** |
+| M6-K7 响应码双向补齐 | kilo | `shared/` 19+/24-+ext attach+4 处 404+`test_m6_protocol_parity.py`（8 例） | ✅ main | **对拍钉闭合 K1 缺口**；**幻影端点清除**（getProfile 快照声明但 sim 无路由——待用户裁）；字段面闭合钉（fog 例外预登记）；保 1.2 |
+| M6-S6 收官预审终版 | codex | `m6-closure-preaudit.md` 填实（70 passed/15 skipped 全 locked） | ✅ main | 结论态=可放行前提是主树三件合入补终审；无 CRITICAL/HIGH（2M+3L）；W-A 如实 BLOCKED |
+| M6-P7 收官性能预审 | pi | `m6-closure-perf-preaudit.md` | ✅ main | **★可收官带限制**：零新增阈值行/POWER 唯一翻硬/**FIRE 红线已由机制钉覆盖**/CHAOS=设计前置未落+机器窗；4 依据+4 条件（7 日 soak 登记「未跑」） |
+| M6-A6 npc_health 对称删除施工 | opencode | `npc_store.py::_project_npc_death` 连带删 NpcHealth（双键+幂等）+§24.4 已实现行 | ✅ main | **删除不挂早退分支（if/else）=残留态同治**；A5 五例 skip-locked 全转绿钉身零改动（19 passed/1 skipped=反向钉退役） |
+| M6-C7 H 系收口核对 | cline | `m6-c7-h-closure-check.md`（163 行） | ✅ main | **H1 据实改判部分闭**（门 2 正确拦批+P5 引用 C4=正反馈）；H5/H7/H8 已闭；零 CI 面终检通过（恒等式 2510）；自查修正（扫导入者兼容相对 import） |
+| M6-K8 钉复核预备+幻影考古 | kilo | 复核清单+`m6-phantom-endpoint-investigation.md` | ⏳ 主树代执行（见 §8 预审） | 幻影端点裁定依据（待用户裁）；K5/A6 复核清单已由主树验收（两钉组全绿） |
+| M6-S7 终审段 | codex | `m6-closure-preaudit.md` §8 | ✅ main（主树代执行） | 三件判据全绿（内容七判据/health 四判据/旁路两判据）——**放行判定：可放行** |
+| M6-P8 内容面性能终验 | pi | `m6-content-final-verification.md` | ✅ main（主树代执行） | 双探针健康（1.536/1.342）；三行 bench 25+4 passed；**零新行 PASS**；not-bench 2347/121/0 |
+| M6-A7 复盘+四问核对 | opencode | `m6-npc-health-deletion-retro.md` | ✅ main（主树代执行） | A6 手法入档（删除不挂早退=残留态同治）；四问全过（三不入库/0015 不触发/fog 一致/soak 结构性保证） |
+| M6-C8 宣告材料汇编 | cline | 判门材料四稿+J1-J9 索引 | ✅ main（主树代执行） | M6 版四道门 G1-G4 全 ✅（判定过程见快照 56）；遗留移交清单见下 |
+| **M6 机制面（我域八件）** | Claude | inject 生产化+6 钉 / rng_capture / hooks 四步+权力传导（POWER_MAX_BIAS=0.18 定标）/driver 双修（drain 案 B+写锁收口）/fire 机制面（O(G)+N=2+F≤50）/npc.death+对称删除 / 内容面四模块+四 kind / 旁路收口 | ✅ main（`d1d287e`/`ae67985`/`7260d3e`） | 门禁 2416 passed/122 skipped、ruff/pyright 0、gen-protocol EXIT 0；K5 十钉+A6 五钉全绿 |
+
+**M6 收官判定**：四道门 G1-G4 全 ✅（2026-10-05，判据链=S6 终版预审+P7 性能
+预审+C6/C7 索引+K7 协议总账）。**移交清单**：迷雾 B 案（视觉雾，产品裁）/
+幻影端点 getProfile（用户裁）/定标轮三案（机器窗）/7 日完整 soak（登记未跑）/
+W-A 机制面复验（authority/ 施工触发）/META_SHELL 8 词（首个戏外消费 CR）。
 #### 5.4.1 接口契约（kilo：anchors 契约与路径/版本定口）
 
 | 路 | Agent | 交付物（提交） | 状态 | 实测 / 结论 |

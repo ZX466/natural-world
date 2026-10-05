@@ -1,4 +1,4 @@
-# M6 收官安规预审骨架（docs/security/m6-closure-preaudit.md）
+﻿# M6 收官安规预审骨架（docs/security/m6-closure-preaudit.md）
 
 > 维护：Codex（安全/合规/风险域）· 依据：M6-S6 派单（2026-10-05）·
 > 基线：main `25b0815` · 日期：2026-10-05 · 树：ZX466/codex
@@ -161,3 +161,48 @@ CRITICAL/HIGH 发现；两项 MEDIUM 与三项 LOW 见 §7。当前不是最终�
 
 悬空核对口径：本表只列 M6 预审引用过的钉；每个入口都有可执行命令或明确锁
 信号。S11 的脚本手法在主树三件合入后对 `FG/EN/LC/K4/K5/A5` 组重跑一次。
+
+
+## §8 收官终审段（2026-10-05，主树三件合入 `d1d287e` 后填实——Claude 域代执行，判据本预审预置）
+
+三件施工（内容四模块 / npc_health 对称删除 / legacy 旁路收口）已合入 main
+`d1d287e`，本段按 §8 框架逐条跑判据并给终审结论。
+
+### §8.1 内容四模块（生态/动物/语言阶层/迷雾）
+
+| 判据 | 实测 | 结论 |
+| --- | --- | --- |
+| 四 kind 同 commit 登记 `PAYLOAD_MODELS`（红线 A 恒等式） | `len(PAYLOAD_MODELS)==len(EventKind)`（K5 钉） | ✅ |
+| payload 零归因键（K13 键集扫四前缀） | K5 钉 4 例过 | ✅ |
+| payload 零数值/零分层数值（`SpeechShiftPayload` categorical + `register_word` 避 pydantic 遮蔽） | K5 speech 2 例过 | ✅ |
+| 语言阶层三边界 | `SpeechContext` 无 power/authority 字段（签名层兑现）；输出只有语域词 | ✅ |
+| 零帧面/零快照（K4 C2：内容四事件走事件流不进帧/快照） | `gen-protocol --check` EXIT 0（shared/ 零 diff）+ K5 零帧面钉 | ✅ |
+| 迷雾事件化不破「视角投影非世界真相」 | `fold_fog_reveal` 并集幂等（fold 与 reveal 同源，§19.3） | ✅ |
+| 咽喉闸继承（C4 禁旁路） | legacy `ws_endpoint` 3 处 `send_json` 已改走 `manager.send_json_to`（裁 41-4 兑现）——K5 防旁路钉转绿 | ✅ |
+
+### §8.2 npc_health 对称删除（A6 施工复核）
+
+| 判据 | 实测 | 结论 |
+| --- | --- | --- |
+| 双键删行（branch_id+id——零跨分支写） | `_project_npc_death` 双键同款 | ✅ |
+| 幂等（行已删 no-op，重放第二遍不抛） | A5 钉 | ✅ |
+| 残留态同治（删除不挂 profile 行早退分支——if/else 结构，旧库重放/半写也治） | A6 实现选择 | ✅ |
+| matter_state/material_balances 保留与 T1 不冲突 | §24.4「活体状态机删、物质账本留」 | ✅ |
+
+### §8.3 legacy 旁路收口（裁 41-4）
+
+| 判据 | 实测 | 结论 |
+| --- | --- | --- |
+| 3 处 `ws.send_json` 直发清零 | `ws_endpoint` 改走 `manager.send_json_to`（咽喉闸恢复完整覆盖） | ✅ |
+| K5 防旁路钉转绿 | 钉组实测 | ✅ |
+
+### §8.4 终审结论
+
+- **无 CRITICAL/HIGH 新增**（2 MEDIUM+3 LOW 维持 S6 记录，随 M6 后单收口）；
+- **词表**：META_SHELL 全程空表（8 词触发点未被产品触发——如实登记）；
+- **三硬边界**：M6 段全闭（rng_state 出站两层禁键+F-1 补扫；分叉可见性零实现；
+  rate_change 预留未启用）；
+- **W-A 四钉**：维持 BLOCKED（authority/ 机制面未施工——**如实登记不报成通过**；
+  权力传导已走 utility 偏置列替代路径，W-A 复验随该面施工触发）；
+- **放行判定：可放行**（前提=主树三件合入——已兑现 `d1d287e`；终审段全绿如上；
+  两项 MEDIUM 不阻塞收官）。
