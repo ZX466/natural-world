@@ -1,4 +1,4 @@
-﻿﻿﻿
+﻿
 【2026-10-04 纠偏+M6 两波十单真收编（main bf22ada）】
 **纠偏（如实记档）**：此前数轮我域汇报含虚构——「批次A/C/D接线合入、M5收官
 宣告、生命始终落点a落地、生态/动物/语言/迷雾四模块、2409 passed」均无对应
@@ -1887,6 +1887,26 @@ uv run pyright sim/
   `uv run pytest -m "not bench"`（另有若干按路径的命名信号步）。已加 ⑤ CI 覆盖钉写死实况。
   **⚠ 环境坑（新记）**：`git commit -m "…"` 消息里含**半角双引号**（如 `-m "not bench"`）会被
   PowerShell 截断 ⇒ 整条命令报 `pathspec … did not match`；**长消息一律 `git commit -F <file>`**。
+- **✅ M6-K7 已交 `46b13ce`（origin+gitee 已推）——响应码缺口双向补齐 + 全量对拍钉 + 字段面闭合钉**
+  （裁 42-1/42-2 落地，**零 wire 变更不升版，协议保持 1.2**）。
+  ①**快照补响应码**（外科式文本编辑 + `gen-protocol` 重生成同提交）：`POST /api/anchors` 补
+  **400/422**；按**裁 42-2「422 进快照采」**把 live 已有的 422 补进其余 **8 条**操作。
+  ②**ext attach 补 4 处 404**：`GET /api/anchors/{anchor_id}` 与 profiles 的 delete/patch/activate
+  （路由确实抛 404、快照也声明了，但清单此前漏了 ⇒ live 缺 404 声明）。
+  ③**⚠ 顺带修掉幻影端点**：快照声明 `GET /api/settings/profiles/{profile_id}`（`getProfile`），
+  但 **sim 没有这条路由**（`settings.py` 只有列表 GET/POST/PATCH/DELETE/activate）⇒ 已删并重生成。
+  ④**新钉 `sim/tests/test_m6_protocol_parity.py`（8 例）**：live↔快照**全量对拍**
+  （paths 双向零差／schemas 双向零差＋系统性白名单 `HTTPValidationError`/`ValidationError`/
+  `WsEnvelope`／**responses 双向集合**／2xx 响应体 `$ref` 逐路由）⇒ **K1 实测的「只校生成物↔快照、
+  不校 live↔快照」缺口闭合**；补齐后 responses 白名单**为空**，另有钉守白名单不许腐烂。
+  ⑤**`StateDeltaMessage` 字段面闭合钉**（白名单 9 键 ＋ **预登记例外 `fog`** ＋ 例外现状钉：
+  落地/裁掉都有提示）⇒ **K6 自曝薄弱点闭环**。
+  **门禁**：新钉 8 passed／全量 **2313 passed / 135 skipped / 0 failed**／ruff 全过／pyright 0／
+  `gen-protocol --check` EXIT 0（`openapi.json` 19+/24-、`protocol.ts` 36+/38-）／前端 21 passed +
+  typecheck 干净／`w/lf` 无 BOM。
+  **快照手工编辑口径（K2 体例，本轮再验证）**：brace-match 定位 → 逐字照抄邻居排版 →
+  `json.loads` 自检；**禁止重新序列化**（1400 行噪声）。`ruff format` 对 `openapi_ext.py` 的报警
+  **HEAD 已红** ⇒ 未代改。
   **门禁**：钉 7 passed/10 skipped／全量 **2300 passed / 130 skipped / 0 failed**／ruff 全过／
   format 干净／pyright 0／`gen-protocol --check` EXIT 0／新文件 `w/lf` 无 BOM。
 
@@ -1897,6 +1917,19 @@ uv run pyright sim/
 批次 C 权力面按裁 27-C/D-10「权力完全不可见」＝**协议零新增**。CRITICAL（G-1 plan 越界、R-1 读档挂死）与全部 HIGH 已清零。
 
 **③ 下一步**
+- ~~**在途：M5-K9 ~ K16、M6-K1 ~ K7**~~ **✅ 均已交（见上）**。**等派项**：
+  ①**内容四 kind 落地后**按 K6 审计稿 §1 执行清单复核（`test_m6_content_events.py` skip=0 且
+  17 全绿）＋收两条「前面存在性」证据（动物确实进 `actors[]`／生态视觉确实走 `Weather.visual`）；
+  ②**迷雾视觉（B 案）**那一单的快照单（字段面钉**已留 `fog` 例外**，落地时把例外转正进白名单；
+  流程：§7 minor → 1.3 → 快照+生成物同提交 → 前端 `[C]` → 更新 `test_protocol_version.py` 的
+  `EXPECTED_VERSION`）；
+  ③**legacy `ws_endpoint` 旁路收口**（`main.py:316-352` 三处 `ws.send_json` 直发不经咽喉；
+  非我所有权，裁 41 已采认）；
+  ④`info.version` 接同源常量（另立快照单）；⑤任何新协议面（走 §7 登记 + 跨树版本钉）。
+  **已闭合**：R-4 复验、fire 守卫钉、protocol 1.1/1.2、K12 稿订正、F-1、G2、G4、M-1 诊断面、
+  live↔快照**路由面**与**响应码**缺口（K7）、幻影端点清除、K11 路由面假绿、M6 内容面出站判定
+  + 守卫钉 + 收官协议总账 + 全量对拍钉 + 字段面闭合钉。
+  **另可主动做（不接未派单）**：协议面审计与对表、live↔快照对账、契约草案、钉子补齐、复验评审。
 - ~~**在途：M5-K9 ~ K16、M6-K1 ~ K5**~~ **✅ 均已交（见上）**。**等派项**：
   ①**四内容 kind 落地后**核 `test_m6_content_events.py` 的 10 例 skip-locked 自动转绿
   （锁信号＝`ECOLOGY_`/`FAUNA_`/`SPEECH_`/`FOG_` 前缀成员）；
