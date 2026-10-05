@@ -75,7 +75,8 @@
                 "schema": { "$ref": "#/components/schemas/ProfileListItem" }
               }
             }
-          }
+          },
+          "422": { "$ref": "#/components/responses/Problem" }
         }
       }
     },
@@ -88,21 +89,6 @@
           "schema": { "type": "string" }
         }
       ],
-      "get": {
-        "operationId": "getProfile",
-        "summary": "Profile 详情（api_key 掩码）",
-        "responses": {
-          "200": {
-            "description": "profile",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ProfileListItem" }
-              }
-            }
-          },
-          "404": { "$ref": "#/components/responses/Problem" }
-        }
-      },
       "patch": {
         "operationId": "updateProfile",
         "summary": "更新（api_key 可选，缺省保留）",
@@ -123,7 +109,8 @@
               }
             }
           },
-          "404": { "$ref": "#/components/responses/Problem" }
+          "404": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" }
         }
       },
       "delete": {
@@ -131,7 +118,8 @@
         "summary": "删除 Profile",
         "responses": {
           "204": { "description": "deleted" },
-          "404": { "$ref": "#/components/responses/Problem" }
+          "404": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" }
         }
       }
     },
@@ -156,7 +144,8 @@
               }
             }
           },
-          "404": { "$ref": "#/components/responses/Problem" }
+          "404": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" }
         }
       }
     },
@@ -197,7 +186,9 @@
                 "schema": { "$ref": "#/components/schemas/AnchorListItem" }
               }
             }
-          }
+          },
+          "400": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" }
         }
       }
     },
@@ -247,7 +238,8 @@
               }
             }
           },
-          "404": { "$ref": "#/components/responses/Problem" }
+          "404": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" }
         }
       },
       "delete": {
@@ -256,7 +248,8 @@
         "responses": {
           "204": { "description": "deleted" },
           "404": { "$ref": "#/components/responses/Problem" },
-          "409": { "$ref": "#/components/responses/Problem" }
+          "409": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" }
         }
       },
       "get": {
@@ -271,7 +264,8 @@
               }
             }
           },
-          "404": { "$ref": "#/components/responses/Problem" }
+          "404": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" }
         }
       }
     },
@@ -292,7 +286,8 @@
             }
           },
           "400": { "$ref": "#/components/responses/Problem" },
-          "404": { "$ref": "#/components/responses/Problem" }
+          "404": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" }
         }
       }
     }

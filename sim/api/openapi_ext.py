@@ -572,11 +572,19 @@ def _attach_problem_responses(schema: dict[str, Any]) -> None:
 
     attach("/api/anchors", "post", ["400", "422"])  # 世界未就绪 / 校验失败
     attach("/api/anchors/current", "get", ["404"])  # R-3②：空库 404（K3 前瞻声明对齐）
+    # M6-K7（K6 审计 §3.3 反向缺口）：路由确实抛 404，此前 attach 清单漏了
+    attach("/api/anchors/{anchor_id}", "get", ["404"])  # 不存在
     attach("/api/anchors/{anchor_id}", "patch", ["404", "422"])  # 不存在 / 校验失败
     attach("/api/anchors/{anchor_id}", "delete", ["404", "409"])  # 不存在 / 末梢受保护
     # M6-K2：只读诊断面（批次 E）——`exception_handler` 产的 400/404 不会自动进
     # /openapi.json（§3.3 关键坑），故与快照同款手工登记。
     attach("/api/anchors/{anchor_id}/materialization", "get", ["400", "404"])  # 无世界 / 档不存在
+    # M6-K7（K6 审计 §3.3 反向缺口）：这三条**确实抛 404**（`settings.py` 抛
+    # `/errors/profile-not-found`），快照也声明了，但 attach 清单此前漏了 ⇒ live spec 缺 404 声明，
+    # 与快照不一致。补齐后 live↔快照在这四条路由上对齐。
+    attach("/api/settings/profiles/{profile_id}", "patch", ["404"])  # 档案不存在
+    attach("/api/settings/profiles/{profile_id}", "delete", ["404"])  # 档案不存在
+    attach("/api/settings/profiles/{profile_id}/activate", "post", ["404"])  # 档案不存在
 
 def custom_openapi() -> dict[str, Any]:
     """自动 schema + WS 消息 schemas（components.schemas.WsMessage 联合）。挂到 app.openapi。"""

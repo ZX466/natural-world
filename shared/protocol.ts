@@ -120,8 +120,7 @@ export type paths = {
       };
       readonly cookie?: never;
     };
-    /** Profile 详情（api_key 掩码） */
-    readonly get: operations['getProfile'];
+    readonly get?: never;
     readonly put?: never;
     readonly post?: never;
     /** 删除 Profile */
@@ -672,6 +671,8 @@ export interface operations {
           readonly 'application/json': components['schemas']['AnchorListItem'];
         };
       };
+      readonly 400: components['responses']['Problem'];
+      readonly 422: components['responses']['Problem'];
     };
   };
   readonly getAnchor: {
@@ -695,6 +696,7 @@ export interface operations {
         };
       };
       readonly 404: components['responses']['Problem'];
+      readonly 422: components['responses']['Problem'];
     };
   };
   readonly deleteAnchor: {
@@ -717,6 +719,7 @@ export interface operations {
       };
       readonly 404: components['responses']['Problem'];
       readonly 409: components['responses']['Problem'];
+      readonly 422: components['responses']['Problem'];
     };
   };
   readonly renameAnchor: {
@@ -744,6 +747,7 @@ export interface operations {
         };
       };
       readonly 404: components['responses']['Problem'];
+      readonly 422: components['responses']['Problem'];
     };
   };
   readonly getAnchorMaterialization: {
@@ -768,6 +772,7 @@ export interface operations {
       };
       readonly 400: components['responses']['Problem'];
       readonly 404: components['responses']['Problem'];
+      readonly 422: components['responses']['Problem'];
     };
   };
   readonly getCurrentAnchor: {
@@ -853,29 +858,7 @@ export interface operations {
           readonly 'application/json': components['schemas']['ProfileListItem'];
         };
       };
-    };
-  };
-  readonly getProfile: {
-    readonly parameters: {
-      readonly query?: never;
-      readonly header?: never;
-      readonly path: {
-        readonly profile_id: string;
-      };
-      readonly cookie?: never;
-    };
-    readonly requestBody?: never;
-    readonly responses: {
-      /** @description profile */
-      readonly 200: {
-        headers: {
-          readonly [name: string]: unknown;
-        };
-        content: {
-          readonly 'application/json': components['schemas']['ProfileListItem'];
-        };
-      };
-      readonly 404: components['responses']['Problem'];
+      readonly 422: components['responses']['Problem'];
     };
   };
   readonly deleteProfile: {
@@ -897,6 +880,7 @@ export interface operations {
         content?: never;
       };
       readonly 404: components['responses']['Problem'];
+      readonly 422: components['responses']['Problem'];
     };
   };
   readonly updateProfile: {
@@ -924,6 +908,7 @@ export interface operations {
         };
       };
       readonly 404: components['responses']['Problem'];
+      readonly 422: components['responses']['Problem'];
     };
   };
   readonly activateProfile: {
@@ -947,6 +932,7 @@ export interface operations {
         };
       };
       readonly 404: components['responses']['Problem'];
+      readonly 422: components['responses']['Problem'];
     };
   };
   readonly getWorldMap: {
