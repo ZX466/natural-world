@@ -1,0 +1,87 @@
+"""sim/content/build_palette.py — 从 CC0 素材包生成调色板与运行时副本（M7-T1）。
+
+素材：ArMM1998 "Zelda-like tilesets and sprites"（OpenGameArt，CC0 零限制）。
+  https://opengameart.org/content/zelda-like-tilesets-and-sprites
+（原计划 Sprout Lands 免费版需手动购买页操作且仅非商用；用户裁定换 CC0 直链包。
+ Ruling 记录于 .superpowers ledger：素材源 Sprout Lands → Zelda-like CC0。）
+
+职责：
+  1. 复制 Overworld.png → client/public/assets/tilesets/（运行时副本）
+  2. 复制 character.png/NPC_test.png → client/public/assets/actors/
+  3. 生成 sprout-palette.json（键名沿用计划契约，值域=Overworld 40 列行主序 index）
+
+帧布局实测（pillow 逐像素分析，见 .superpowers ledger）：
+  - Overworld.png 640×576 = 40×36 tiles @16px；
+  - character.png 272×256：主角块 gx0-2 gy0-3，行序 下/上/右/左 × 3 帧（步/站/步）；
+  - NPC_test.png 64×128：4×8 tiles，村民站立帧取 (0,0)。
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+PKG = REPO / "sim" / "content" / "assets" / "zelda-like" / "pkg" / "gfx"
+TS_OUT = REPO / "client" / "public" / "assets" / "tilesets"
+ACTOR_OUT = REPO / "client" / "public" / "assets" / "actors"
+
+TILE = 16
+OVERWORLD_COLS = 40  # 640/16
+
+# 地形名 → Overworld 图集 (gx, gy)——逐 tile 像素采样+视觉核对后的裁定（见 ledger）
+TERRAIN: dict[str, tuple[int, int]] = {
+    "grass_1": (0, 4),
+    "grass_2": (2, 4),
+    "grass_3": (0, 3),
+    "water": (0, 1),
+    "tree": (1, 14),
+    "farm_soil": (12, 11),
+    "path_dirt": (12, 12),
+    "house_wall": (4, 12),
+    "house_roof": (7, 0),
+    "house_door": (17, 5),
+    "stone": (0, 12),
+    "flower": (0, 8),
+}
+
+
+def main() -> None:
+    TS_OUT.mkdir(parents=True, exist_ok=True)
+    ACTOR_OUT.mkdir(parents=True, exist_ok=True)
+
+    shutil.copyfile(PKG / "Overworld.png", TS_OUT / "sprout-tileset.png")
+    shutil.copyfile(PKG / "character.png", ACTOR_OUT / "chenmo.png")
+    shutil.copyfile(PKG / "NPC_test.png", ACTOR_OUT / "villager.png")
+
+    palette = {
+        "tileset": "zelda_like_v1",
+        "image": "sprout-tileset.png",
+        "image_size": [640, 576],
+        "tile_size": TILE,
+        "cols": OVERWORLD_COLS,
+        "ground": {name: gy * OVERWORLD_COLS + gx for name, (gx, gy) in TERRAIN.items()},
+        "actors": {
+            "chenmo": {
+                "image": "chenmo.png",
+                "frame_size": [16, 16],
+                # 主角块：列 0-2 × 行 0-3；行序 down/up/right/left，每行 3 帧
+                "rows": {"down": 0, "up": 1, "right": 2, "left": 3},
+                "frames_per_row": 3,
+                "frame_layout": "step-stand-step",
+            },
+            "villager": {
+                "image": "villager.png",
+                "frame_size": [16, 16],
+                "standing_frame": 0,
+            },
+        },
+    }
+    out = TS_OUT / "sprout-palette.json"
+    out.write_text(json.dumps(palette, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"palette: {out} ({len(palette['ground'])} ground tiles)")
+
+
+if __name__ == "__main__":
+    main()

@@ -73,3 +73,7 @@ logs/
 # .github: workflows 等必须入库（.*/ 兜底会挡新增文件，故显式例外；2026-09-21 裁决）
 !.github/
 !.github/**
+
+# M7: 素材包原件（CC0 可重建，保持仓库精瘦）与人工下载暂存
+_incoming/
+sim/content/assets/zelda-like/pkg/
