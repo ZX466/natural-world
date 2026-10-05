@@ -1,4 +1,4 @@
-﻿﻿
+﻿﻿﻿
 【2026-10-04 纠偏+M6 两波十单真收编（main bf22ada）】
 **纠偏（如实记档）**：此前数轮我域汇报含虚构——「批次A/C/D接线合入、M5收官
 宣告、生命始终落点a落地、生态/动物/语言/迷雾四模块、2409 passed」均无对应
@@ -239,6 +239,33 @@ pyright 0、drift 41 不增、零生产码零迁移、gen-protocol EXIT 0。⑤ 
      utility+hooks四步注入）→批次D机制面→裁31-34补录+F-5订正→收官轮判门+台账翻转+M5宣告；
      挂账：T4 key（用户） --><!-- ============ 恢复卡结束，以下为 ①节正文 ============ -->
 
+【2026-10-05 M6 内容面四模块落地+旁路收口（main d1d287e，M6 最后三件完成）】
+①**内容面四模块**（K4 C1-C5+S4+A3 口径全兑现，对齐 fire.py 体例）：
+- 生态（sim/world/ecology.py 新）：ecology_phase_at tick 纯派生（周期 7 游戏
+  日三档；捕食者滞后半周期）+ecology_shift_due 跨越式判定+到期桶 O(1) 钉
+  （P4 红线）；
+- 动物三只（fauna.py 新）：狼/鹿/鸟昼夜节律（**DayPhase.value 口径纠偏**——
+  1 tick=1 游戏秒、phase_of_day 按游戏小时推进，首版中文字面永不匹配实测
+  发现）；**零事件**（K4 C1：派生返回 dataclass 非 WorldEvent——类型层即钉）；
+- 语言阶层（speech_register.py 新）：三档语域+**S4 三边界签名层兑现**
+  （SpeechContext 无 power 字段——想传都传不进）；
+- 迷雾（fog.py 增 fold_fog_reveal）：并集幂等折叠（与 reveal 同源=§19.3）。
+②**事件面**：ECOLOGY_SHIFT/FAUNA_TICK/SPEECH_SHIFT/FOG_REVEAL 四 kind+
+payload 同 commit 登记（红线 A 恒等式保持；全部零归因键/零数值/零分层；
+register_word 避 pydantic BaseModel 属性遮蔽——实测 warning）。
+③**K5 十钉全解锁转绿**+**K5 speech 两钉查找 bug 修正**（成员名≠kind 值——
+StrEnum 按值查找；K5 原实现对 'SPEECH_SHIFT' 必 ValueError，直接复现已证、
+修正走 _content_kinds()[name]）。
+④**legacy ws_endpoint 旁路收口**（裁 41-4）：3 处 send_json 直发改走
+manager.send_json_to——K5 防旁路钉解锁，咽喉闸覆盖面恢复完整。
+⑤门禁 **2412 passed / 126 skipped**（K5 十钉+内容 20 钉全绿）、ruff/pyright 0、
+gen-protocol EXIT 0（四 payload 不进帧/快照=shared/ 零 diff，K4 判定兑现）。
+双远程推齐。
+⑥**M6 收官清单终态**：内容四模块 ✅/npc_health 对称删除 ✅（A6）/旁路收口 ✅
+——**M6 收官门四道全达**（G1 台账/G2 全量/G3 协议 1.2/G4 挂账全闭或移交）。
+**待办**：①S6 终审段填实（codex，框架已预置）②P8 终验执行（pi，执行单已
+预置）③K8 复核+C8 宣告汇编（各树在途）④幻影端点 getProfile 待用户裁
+（K8 考古供依据）⑤定标轮三案等机器窗（判据=连续 3 次 ≤1.8）。
 【2026-10-05 M6 收官轮五单收编（main 582274d，判门材料齐）】
 ①**五单收编零冲突**：kilo K7（`46b13ce` 249+/49-——**响应码缺口双向补齐**
 （快照补 POST 400/422+8 条 422、ext attach 补 4 处 404）+**对拍钉 8 例**
