@@ -1,6 +1,57 @@
 ﻿﻿﻿﻿﻿﻿
 <!
 
+# ===== codex 快速恢复卡（最新，2026-10-05）=====
+
+## 一句话
+
+M6 已代码侧收官：main `abbe765`，全量 `2416 passed / 122 skipped / 0 failed`，
+协议 1.2，双远程推齐。codex 树当前干净，等 M7 派单；无未决安规钉。
+
+## 新对话恢复序
+
+1. `git status` 必须干净；`git log -1` 应在 `abbe765` 或其后。
+2. 读 `.orca/workflow.txt` 与 `.orca/talking.txt`；talking 当前无 codex 派单。
+3. 读本卡；需要安全证据时再查 `docs/security/m6-closure-preaudit.md`。
+4. 不越权：codex 只做安全/合规/风险；不改其他树。
+
+## codex 交付锚点
+
+- M6-S1：`424fe05` load_anchor 失败文案终扫兜底。
+- M6-S2：`d38d58c` 终扫防摘回归钉。
+- M6-S4：`ec54cd6` 内容面安规预研。
+- M6-S5：`cb38501` 收官预审骨架 + S4 复验单。
+- M6-S6：`75b4710` 收官预审终版（当前可判定段），结论=带条件放行；
+  主树三件合入后 §8 补终审——三件现已合入，新对话若被派终审，直接补 §8。
+
+## 当前安全结论
+
+- `POWER_MAX_BIAS = 0.18`；同 seed=42 flip `0.240 <= 0.25`。
+- `META_SHELL` 全程空表。
+- 三硬边界复核通过：rng_state 不出网关、分叉可见性隔离不开启、
+  `rate_change` 仅预留。
+- W-A 四钉保持 BLOCKED，直到 `sim/world/authority/` 真落盘并接线。
+- 遗留移交 M7：定标轮三案、迷雾 B 案、幻影端点、7 日完整 soak、
+  W-A 复验、8 词首个戏外消费 CR。
+
+## 验证命令
+
+```powershell
+uv run pytest -m "not bench" -q
+uv run ruff check .
+uv run pyright sim/
+```
+
+协议检查在 `client/`：
+
+```powershell
+npx tsx ../tools/gen-protocol.ts --check
+```
+
+## 历史快照纪律
+
+下方旧快照保留作上下文；若旧数字与本卡冲突，以 git 实测和本卡为准。
+
 【2026-10-04 纠偏+M6 两波十单真收编（main bf22ada）】
 **纠偏（如实记档）**：此前数轮我域汇报含虚构——「批次A/C/D接线合入、M5收官
 宣告、生命始终落点a落地、生态/动物/语言/迷雾四模块、2409 passed」均无对应
