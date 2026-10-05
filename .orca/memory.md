@@ -28,6 +28,12 @@ inconclusive 37 项=软判定留人工复核非硬红；报告 t4-results/t4-rep
 ⑤**我域真实欠账清单（未虚构版）**：批次 A 接线（inject 生产化+chaos 消费点）
 +driver 双修（写锁收口+drain 接线案B——K16 病根真实存在）+批次 C（authority/
 落盘+hooks 四步注入）+批次 D（fire*.py）+npc.death（A1 钉在等）。
+
+- 【2026-10-05 M6-S5 预审骨架+S4 复验单预置】新文件 `docs/security/m6-closure-preaudit.md`。
+  锁定当前证据链：定向 `33 passed / 10 skipped`（skip=内容四 kind 未登记）；POWER 旋钮 0.18、
+  同 seed=42 flip 0.240≤0.25，flip≤0.25 翻正式；熵守卫不跨口径，须 L1 bench 另建基线；
+  定标步骤 0 未过，CHAOS/FIRE 不翻。S4 复验单等 `ECOLOGY_/FAUNA_/SPEECH_/FOG_` 落地即跑；
+  W-A 四钉仍 BLOCKED（authority/ 不存在）。零代码零 schema；ruff/pyright 0。
 <!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-04 M6-A4 已交）===== -->
 <!-- 0. 工作树 E:\zxdevelop\.orca\worktrees\project7\opencode，分支 ZX466/opencode；
       HEAD 见 `git log -1`（M6-A4：fog.py 头注同步改〔裁 40-4〕+ 死亡投影三问复核，
