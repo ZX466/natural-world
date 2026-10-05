@@ -1119,6 +1119,12 @@ handler 归架构/Claude 域（红线 A：新增 kind 需授权）；**本节只
 | 物质账本 | `matter_state` | **保留** | 主体死亡不改变物质存亡：尸体是物质。删行 = 物质凭空消失 ⇒ **破 T1 材料守恒**（`sim/tests/golden/assertions/conservation.py` 的「Σ 余额与基线一致」判据）⇒ 登记为**保留**，不是漏删 |
 | 物质账本 | `material_balances` | **保留** | 同上：余额表是 T1 的 Σ 口径载体，删行即凭空增减材料 |
 
+**状态：已实现（2026-10-04，M6-A6）**——`_project_npc_death` **连带删 `npc_health`**：
+一条 `DELETE WHERE branch_id AND npc_id`（**双键**、**幂等**：命中零行不是错误），且
+**不挂在 `npc_profiles` 早退分支之下**——profile 行已删而健康行还在的「残留态」
+（旧库升级后重放、半写）同样被治好。钉在 `sim/tests/test_m6_death_profiles_contract.py`：
+A5 的 **5 例 skip-locked 已自动转绿**，钉身未改一字；1 例「落地前残留」反向钉按设计退役。
+
 判据一句话：**删「主体的活体状态机」，留「主体的物质账本」**。边界争议（尸体是否生成 corpse
 物质、`npc_power` 等衍生表是否随主体删）归机制面裁定；数据面先把上表四行钉死，不留「顺手再说」
 的口子。钉在 `sim/tests/test_m6_death_profiles_contract.py`（`npc_health` 组为 skip-locked，
