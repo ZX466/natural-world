@@ -1,3 +1,25 @@
+<!-- ===== ★ pi（性能域）新对话快速恢复卡（2026-10-05 M6 收官后）=====
+0. 工作树 E:\zxdevelop\.orca\worktrees\project7\pi；分支 ZX466/pi；
+   HEAD 见 `git log -1`；恢复序：本卡 → .orca/talking.txt（派单板）→ workflow.txt →
+   `git fetch origin` + `git merge origin/main`（各树并行推进，常需合并）→ `git log --oneline -15`。
+1. 本域状态：**M6 性能面已收官**（P7 判定稿三态=【可收官带限制】）。全项目 M0-M6 六里程碑已宣告收官。
+2. 本域 M6 交付（全部零/低代码，逐档可查）：
+   - M6-P1 soak 契约阶段 A 施工（`sim/tests/bench/soak.py` + `test_bench_soak.py`：SOAK_ENTITY_LOSS_PER_GAME_DAY=0
+     + 四侧判据 + 契约钉；含 A12 域钉最小追改已报备）→ `m6-soak-contract-preplan.md`
+   - M6-P2 生命落点 a 性能输入（死亡无稳态红利 211.75/214.40µs；n_npc 硬绑不 raise；rtoken 钉）→ `m6-mortality-perf-input.md`
+   - M6-P4 内容面预算案（生态/动物/语言阶层/迷雾；**红线归属零新行**）→ `m6-content-budget.md`
+   - M6-P5 定标轮执行（步骤 0 未过⇒暂停；**POWER_MAX_BIAS 裁值 0.18** 已给并被主树同 CR 落地=flip 0.240≤0.25 翻硬）→ `m6-calibration-execution.md`
+   - M6-P6 降频观测序列（**跑前+跑后双探针**实证：同机数分钟内 3.287 与 1.615 两个相反判定）+ P4 §6 待实测项清单 → 台账 §8 / `m6-content-budget.md` §6
+   - M6-P7 收官性能预审判定稿（**可收官带限制**）→ `m6-closure-perf-audit`… 实为 `m6-closure-perf-preaudit.md`
+3. 待触发项（均非本域可单方推进）：
+   ①**定标轮三案**（CHAOS/FIRE 数值/MATERIALIZE）→ 等**机器窗**；重派判据=**连续 3 次探针 ≤1.8** + 跑前/跑后双探针；runbook=`m6-calibration-execution.md` §3 + 台账 §2
+   ②**内容面施工合入后终验** → 按 `m6-content-budget.md` §6（先 6.1 锚点复核，再 6.2 逐模块一行命令+既有阈值行，再 6.3 全局零新行 grep）
+   ③`MATERIALIZE_LIMIT_MS` 待架构域给 W；④7 日完整 soak 须 `PI_M2_FULL_SOAK=1`（收官门须登记「未跑」）
+4. 纪律（血泪）：**核库后再报数字**（虚构事故已记档）；探针现测不引用他人读数；跑前+跑后双探针；
+   **写入文件后必须独立校验产物**（行号/计数/grep，不得凭「看起来有输出」判定成功）；
+   thresholds 零新行（加行=实现违规报裁不放宽）；skip 分型逐条读原始 SKIPPED 行再怀疑代码。
+===== pi 恢复卡结束 ===== -->
+
 ﻿﻿﻿﻿﻿
 <!-- ===== 新对话快速恢复卡（Claude 主树，2026-10-05 M6 收官/README 落地）===== -->
 <!-- 0. 本会话状态：main `a562adf`（README 已落），2416 passed/122 skipped（全量）、
