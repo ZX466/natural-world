@@ -1107,3 +1107,19 @@ handler 归架构/Claude 域（红线 A：新增 kind 需授权）；**本节只
 - skip-locked 钉（A1 B 组 6 例 + A2 B 组）已随落地**全部转绿**；soak 契约前提
   （M5-A12）确认：死亡影响 `entity_count` 的路径就是 `entities` 字典，阶段 B 的
   `SOAK_ENTITY_LOSS_PER_GAME_DAY` 提值随生命机制同 CR（性能域口径不动）。
+
+### 24.4 主体删行的边界（2026-10-04 M6-A5 登记）：**活体状态机删、物质账本留**
+
+删哪些行按**主体**列全清单，不按「正在改的那张表」列（漏一张就会长出同类残留）：
+
+| 分类 | 表 | 死亡投影 | 理由 |
+| --- | --- | --- | --- |
+| 活体状态机 | `npc_profiles` | **删** | §24.1 落点 a 契约；不删 ⇒ 读档子分支「库里有、内存无」 |
+| 活体状态机 | `npc_health` | **删** | 同一不对称：`npc_health` 也在有界表清单里、随 fork **整表克隆** ⇒ 死者行会被带进子分支；且 `NpcStore.materialize_hidden()` 只查本表、**不 JOIN `npc_profiles`** ⇒ 不删则死者的隐藏属性仍被装配进 agent 决策输入 |
+| 物质账本 | `matter_state` | **保留** | 主体死亡不改变物质存亡：尸体是物质。删行 = 物质凭空消失 ⇒ **破 T1 材料守恒**（`sim/tests/golden/assertions/conservation.py` 的「Σ 余额与基线一致」判据）⇒ 登记为**保留**，不是漏删 |
+| 物质账本 | `material_balances` | **保留** | 同上：余额表是 T1 的 Σ 口径载体，删行即凭空增减材料 |
+
+判据一句话：**删「主体的活体状态机」，留「主体的物质账本」**。边界争议（尸体是否生成 corpse
+物质、`npc_power` 等衍生表是否随主体删）归机制面裁定；数据面先把上表四行钉死，不留「顺手再说」
+的口子。钉在 `sim/tests/test_m6_death_profiles_contract.py`（`npc_health` 组为 skip-locked，
+`_project_npc_death` 落到 `NpcHealth` 即自动解锁；反向钉钉住落地前的残留，落地即退役）。

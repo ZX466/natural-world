@@ -39,6 +39,7 @@ from sim.core.persistence.store import SnapshotData, SqlEventStore
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_MD = REPO_ROOT / "docs" / "data" / "schema.md"
 FORK_PY = REPO_ROOT / "sim" / "core" / "persistence" / "fork.py"
+NPC_STORE_PY = REPO_ROOT / "sim" / "core" / "persistence" / "npc_store.py"
 
 PARENT = "main"
 CHILD = "fork-anchor"
@@ -372,3 +373,266 @@ async def _materialize(store: SqlEventStore):
 async def _materialize_with_world(store: SqlEventStore, package, *, alive: set[str]):
     """返回带「存活集合」信息的物化产物（今天 hooks 不产出世界态 ⇒ 直接透传包）。"""
     return package
+
+
+# ===========================================================================
+# npc_health 组（M6-A5）：活体状态机**也要**删；物质账本**保留**
+# ===========================================================================
+
+
+def _health_deletion_landed() -> bool:
+    """锁信号：`_project_npc_death` **函数体内**出现 `NpcHealth`。
+
+    用 ast 取函数真身 + tokenize 剥注释/字符串后再找（与 A1 锁信号同手法的理由）：
+    注释或头注里先写表名**不算落地**（文档先行的假解锁是本仓已吃过的坑——A3 fog），
+    锁必须打在代码体上。
+    """
+    import ast
+    import io
+    import tokenize
+
+    src = NPC_STORE_PY.read_text(encoding="utf-8")
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:  # pragma: no cover - 源码坏了就让这组 skip，不误报红
+        return False
+    fn = next(
+        (
+            n
+            for n in ast.walk(tree)
+            if isinstance(n, (ast.AsyncFunctionDef, ast.FunctionDef))
+            and n.name == "_project_npc_death"
+        ),
+        None,
+    )
+    if fn is None:
+        return False
+    seg = ast.get_source_segment(src, fn) or ""
+    code = "\n".join(
+        tok.string
+        for tok in tokenize.generate_tokens(io.StringIO(seg).readline)
+        if tok.type not in (tokenize.COMMENT, tokenize.STRING)
+    )
+    return "NpcHealth" in code
+
+
+requires_health_deletion = pytest.mark.skipif(
+    not _health_deletion_landed(),
+    reason="npc_health 对称删除未落：`_project_npc_death` 尚不碰 NpcHealth（落地后自动解锁）",
+)
+requires_no_health_deletion = pytest.mark.skipif(
+    _health_deletion_landed(),
+    reason="npc_health 对称删除已落：残留已被正向钉接管，反向钉退役",
+)
+
+_CATEGORY = "disease"
+
+
+async def _seed_npc_with_health(
+    session: AsyncSession, *, npc_id: str, branch_id: str = PARENT, hidden: bool = True
+) -> None:
+    """种一个「有花名册行 + 有隐藏属性行」的 NPC（活体状态机的两面）。"""
+    from sim.core.persistence.models import NpcHealth
+
+    session.add(NpcProfile(id=npc_id, name=f"npc-{npc_id}", branch_id=branch_id, lod=1))
+    session.add(
+        NpcHealth(
+            npc_id=npc_id,
+            branch_id=branch_id,
+            category=_CATEGORY,
+            label="secret",
+            hidden=hidden,
+            active=True,
+        )
+    )
+
+
+async def _health_ids(session: AsyncSession, branch_id: str, npc_id: str) -> set[str]:
+    from sim.core.persistence.models import NpcHealth
+
+    rows = await session.execute(
+        select(NpcHealth.label).where(NpcHealth.branch_id == branch_id, NpcHealth.npc_id == npc_id)
+    )
+    return {str(r[0]) for r in rows.all()}
+
+
+# ---------------------------------------------------------------------------
+# A 组：登记节（今天即绿，确定性）
+# ---------------------------------------------------------------------------
+
+
+class TestSchemaLivingVsLedgerBoundary:
+    """§24.4「活体状态机删、物质账本留」必须登记在案（不许只在对话里说过）。"""
+
+    def _section_24_4(self) -> str:
+        src = SCHEMA_MD.read_text(encoding="utf-8")
+        m = re.search(r"^### 24\.4 .*?(?=^#{2,3} |\Z)", src, re.M | re.S)
+        assert m is not None, "schema.md 缺 §24.4（主体删行边界登记段）"
+        return m.group(0)
+
+    def test_section_24_4_exists(self) -> None:
+        self._section_24_4()
+
+    def test_registration_names_four_tables_with_verdicts(self) -> None:
+        """四张表都要点名，且每张都要有明确判决（`npc_health` 删、`matter_state` 留）。"""
+        sec = self._section_24_4()
+        for table in ("npc_profiles", "npc_health", "matter_state", "material_balances"):
+            assert table in sec, f"§24.4 未点名 {table}（漏一张就会长出同类残留）"
+        assert "**删**" in sec, "§24.4 未写「删」的判决"
+        assert "**保留**" in sec, "§24.4 未写「保留」的判决（matter_state 是登记不是漏删）"
+
+    def test_registration_states_the_ledger_justification(self) -> None:
+        """保留物质账本必须给出**理由**（否则后人会当成漏删来「修」）。"""
+        sec = self._section_24_4()
+        assert "T1" in sec, "§24.4 的物质保留理由必须点名 T1 材料守恒"
+        assert "materialize_hidden" in sec, "§24.4 必须记录装配反向事实（只查 npc_health 不 JOIN）"
+
+    def test_npc_health_is_a_bounded_table(self) -> None:
+        """机制钉：`npc_health` 在有界表清单里 ⇒ 随 fork 整表克隆 ⇒ 死者行会被带进子分支。
+
+        这是「必须删」的根因（不是洁癖）：克隆源里留着，就等于给死亡开了复活后门。
+        """
+        from sim.core.persistence.fork import _BOUNDED_TABLES
+
+        tables = {table for table, _cols in _BOUNDED_TABLES}
+        assert "npc_health" in tables
+
+
+# ---------------------------------------------------------------------------
+# 反向钉：钉住**落地前**的残留（今天即绿；对称删除落地即自动退役）
+# ---------------------------------------------------------------------------
+
+
+@requires_no_health_deletion
+class TestHealthResidueToday:
+    @pytest.mark.t1
+    async def test_death_leaves_health_row_and_assembly_keeps_dead_npc(
+        self, session: AsyncSession, store: SqlEventStore
+    ) -> None:
+        """**今天的残留**（这正是本组钉子的存在理由，落地后本钉退役）：
+
+        1) `npc_profiles` 行已删（§24.1 兑现）；
+        2) `npc_health` 行**还在**；
+        3) `materialize_hidden()` **仍装配死者的隐藏属性**（它只查 npc_health，不 JOIN
+           npc_profiles）⇒ agent 决策输入里仍有死人。
+        """
+        from sim.core.persistence.npc_store import NpcStore
+
+        session.add(Branch(id=PARENT, status="active", is_current=True))
+        await _seed_npc_with_health(session, npc_id="doomed")
+        await session.commit()
+
+        await NpcStore(store, branch_id=PARENT).flush_tick([_death_event(1, "doomed")])
+
+        assert await _ids(session, PARENT) == set(), "前提不成立：npc_profiles 行没删"
+        assert await _health_ids(session, PARENT, "doomed") == {"secret"}, "今天不该已删健康行"
+        hidden = await NpcStore(store, branch_id=PARENT).materialize_hidden()
+        assert "doomed" in hidden, "今天 materialize_hidden 应仍返回死者（残留的装配面证据）"
+
+
+# ---------------------------------------------------------------------------
+# B 组：npc_health 对称删除落地即转绿（skip-locked）
+# ---------------------------------------------------------------------------
+
+
+@requires_health_deletion
+class TestDeathProjectsHealthDeletion:
+    async def test_projection_deletes_npc_health_row(
+        self, session: AsyncSession, store: SqlEventStore
+    ) -> None:
+        """对称删除：`npc_health` 行随死亡**同事务**删除（活体状态机两面一起删）。"""
+        from sim.core.persistence.npc_store import NpcStore
+
+        session.add(Branch(id=PARENT, status="active", is_current=True))
+        await _seed_npc_with_health(session, npc_id="doomed")
+        await session.commit()
+
+        await NpcStore(store, branch_id=PARENT).flush_tick([_death_event(1, "doomed")])
+        assert await _health_ids(session, PARENT, "doomed") == set(), "死亡已投影但健康行仍在"
+
+    async def test_projection_is_idempotent_when_health_row_absent(
+        self, session: AsyncSession, store: SqlEventStore
+    ) -> None:
+        """幂等：健康行不存在时重复投影**不抛**（DELETE 命中零行不是错误）。"""
+        from sim.core.persistence.npc_store import NpcStore
+
+        session.add(Branch(id=PARENT, status="active", is_current=True))
+        await session.commit()
+        npc_store = NpcStore(store, branch_id=PARENT)
+        await npc_store.flush_tick([_death_event(1, "ghost")])
+        await npc_store.flush_tick([_death_event(2, "ghost")])
+
+    async def test_materialize_hidden_excludes_dead_npc(
+        self, session: AsyncSession, store: SqlEventStore
+    ) -> None:
+        """**装配反向钉**：死者不再出现在 `materialize_hidden()` 的装配结果里。
+
+        这条独立于「行删没删」——即便有人未来改走读侧过滤，这条也照样绿；
+        反之，若只加 JOIN 过滤而不删行，fork 克隆那条仍会红（两处一起钉，避免单点修法）。
+        """
+        from sim.core.persistence.npc_store import NpcStore
+
+        session.add(Branch(id=PARENT, status="active", is_current=True))
+        await _seed_npc_with_health(session, npc_id="doomed")
+        await _seed_npc_with_health(session, npc_id="alive-1")
+        await session.commit()
+
+        npc_store = NpcStore(store, branch_id=PARENT)
+        hidden = await npc_store.materialize_hidden()
+        assert "doomed" in hidden, "前提不成立：死者本该先在装配结果里（否则本钉无判别力）"
+
+        await npc_store.flush_tick([_death_event(1, "doomed")])
+        hidden = await npc_store.materialize_hidden()
+        assert "doomed" not in hidden, "死者仍在 agent 决策输入的隐藏属性里"
+        assert "alive-1" in hidden, "投影误伤活人（删除不按主体？)"
+
+    async def test_fork_does_not_clone_dead_health_row(
+        self, session: AsyncSession, store: SqlEventStore
+    ) -> None:
+        """fork 克隆钉：死者的 `npc_health` 行不得被整表克隆进读档子分支。"""
+        from sim.core.persistence.fork import fork_from_anchor
+        from sim.core.persistence.npc_store import NpcStore
+
+        session.add(Branch(id=PARENT, status="active", is_current=True))
+        await _seed_npc_with_health(session, npc_id="alive-1")
+        await _seed_npc_with_health(session, npc_id="dead-1")
+        await session.commit()
+
+        await store.append(PARENT, [_seed_event(1)])
+        await NpcStore(store, branch_id=PARENT).flush_tick([_death_event(2, "dead-1")])
+        await _seed_package(session, store, seq=2, tick=2)
+        package = await _materialize(store)
+        assert (await diagnose_anchor_materialization(store, "anchor-1")).ready
+
+        await fork_from_anchor(
+            store.session_factory,
+            parent_branch_id=PARENT,
+            fork_seq=2,
+            fork_tick=2,
+            preflush=_noop,
+            new_branch_id=CHILD,
+            kind="anchor",
+            package=package,
+        )
+        assert await _health_ids(session, CHILD, "dead-1") == set(), "死者健康行被克隆进子分支"
+        assert await _health_ids(session, CHILD, "alive-1") == {"secret"}, "子分支丢了活人的健康行"
+
+    async def test_health_deletion_is_scoped_to_branch_and_npc(
+        self, session: AsyncSession, store: SqlEventStore
+    ) -> None:
+        """双键口径：只删「本分支的这个 NPC」，不误删同名 id 的他分支行、也不误删本分支他人。"""
+        from sim.core.persistence.npc_store import NpcStore
+
+        session.add(Branch(id=PARENT, status="active", is_current=True))
+        session.add(Branch(id=CHILD, status="active", is_current=False))
+        await _seed_npc_with_health(session, npc_id="doomed", branch_id=PARENT)
+        await _seed_npc_with_health(session, npc_id="doomed", branch_id=CHILD)
+        await _seed_npc_with_health(session, npc_id="bystander", branch_id=PARENT)
+        await session.commit()
+
+        await NpcStore(store, branch_id=PARENT).flush_tick([_death_event(1, "doomed")])
+        assert await _health_ids(session, PARENT, "doomed") == set(), "本分支死者行未删"
+        assert await _health_ids(session, PARENT, "bystander") == {"secret"}, "误删了旁人"
+        assert await _health_ids(session, CHILD, "doomed") == {"secret"}, (
+            "跨分支误删（未按 branch_id 限定）"
+        )
