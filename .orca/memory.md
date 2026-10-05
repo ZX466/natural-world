@@ -1,5 +1,91 @@
-﻿﻿﻿﻿﻿﻿
+# ═══════ cline 树专属 · 新对话快速恢复卡（2026-10-05）═══════
+<!-- 用途：本文件是 **cline 工作树**的记忆载体。新对话读这张卡即可接上，不必回溯 2700 行正文。 -->
+<!-- 若本卡与正文/`.orca/talking.txt` 冲突，以 **本卡 + 当前 git 状态** 为准（卡总是最新写入的）。 -->
+
+## ① 我是谁 / 我的域
+- **树**：`E:\zxdevelop\.orca\worktrees\project7\cline`，分支 **`ZX466/cline`**，双推 **origin(GitHub) + gitee**。
+- **能力域**：**依赖 / 配置 / 文档 / CI**（`.orca/agent-registry.md`：推荐 cline，评审 Claude）。
+- **我拥有**：`docs/config/`（我自建目录）、`.github/workflows/`、`docs/README.md` 台账、`.orca/memory.md`。
+- **我不碰**（他人域，只读不改）：`sim/`（代码/阈值）、`client/`、`docs/arch`（裁决正文）、`docs/security`(codex)、`docs/perf`(pi)、`docs/api`(kilo)、`docs/data`(opencode)。**跨域发现只报不改。**
+
+## ② 恢复序（照此 4 步即可接上）
+1. **本卡**（下方 ③④⑤⑥）
+2. `.orca/talking.txt` — 当前派单板（Claude 主树 → 我）
+3. `git fetch origin && git merge origin/main`（**记忆冲突按「两侧并存」解，勿丢正文**）
+4. `git log --oneline -15`（看最近轮次勾账）
+
+## ③ 当前状态（2026-10-05）
+- **M0–M6 六里程碑全部收官**（M6 于 2026-10-05 宣告，四道门 G1–G4 全 ✅）；**全项目代码侧完成**。
+- 仓库根已有 **`README.md`**（项目入口：定位/快速开始/架构/里程碑/文档地图/约定）。
+- 门禁基线（`pytest --collect-only` 亲测）：**全量 2538 collected ＝ not-bench 2468 ＋ 70 deselected ＝ bench 70** ⇒ **恒等式成立**。
+- 协议版本 **1.2**；`gen-protocol --check` EXIT 0；ruff/pyright 0。
+
+## ④ 我域已交付（`docs/config/`，13 稿，全部 ✅ 收编）
+| 单 | 稿 | 一句话 |
+|---|---|---|
+| M5-C7 | `m5-c7-workflow-audit.md` | workflow 台账巡检＋T4 两口径预研（**纠偏 codex 两条过期提醒**） |
+| M5-C9 | `m5-c9-t4-probe-runbook.md` | T4 真跑执行单（裁 31-T4 口径甲，两道判据先形态后内容） |
+| M5-C10 | `m5-c10-closure-inventory.md` | M5 收官盘点（挂账 9 项＋四道门框架） |
+| M5-C11 | `m5-c11-closure-precheck.md` | G2/G4 预检首版（首次跑通全量 ＋ A1 关闭） |
+| M5-C12 | `m5-c12-machine-tier-probe.md`＋`m5-t4-final-check.md` | **零凭据判机型**（pi 甲案）＋T4 终态单页 checklist |
+| M5-C13 | `m5-c13-closure-precheck-final.md` | 收官预检终版＋**§4 收官判据索引表**（判门逐条引用） |
+| M6-C1 | `m6-c1-ci-calibration-confirm.md` | soak 阶段 A 的 CI 冒烟面＋定标探针门确认 |
+| M6-C2 | `m6-c2-throttle-ledger.md` | 降频门取证台账（**修正 C1「持续态」结论为临界态**） |
+| M6-C4 | `m6-c4-stage-ledger.md` | 降频第四笔（**回落成立**）＋M6 阶段台账 |
+| M6-C5 | `m6-c5-closure-skeleton.md` | 收官预检**骨架**＋**定标翻转 CI 侧影响面**（零影响，三条实证） |
+| M6-C6 | `m6-c6-closure-final.md` | 终版＋判据索引 J1–J9（bench 1 例 failed 判**环境抖动假红**） |
+| M6-C7 | `m6-c7-h-closure-check.md` | H1–H8 逐项核对＋零 CI 面终检（**H1 据实改判部分闭**） |
+
+## ⑤ 移交给我域的后续（**均无代码阻塞，逐项有主**）
+- **我域 M6-C1/C2/C4/C5/C6/C7 六件台账零登记** — README §5 无 `M6-C*` 行（**G1 域归 Claude，我未改**）。
+- **H4 内容四 kind**：`sim/core/events.py` 需出现 `ECOLOGY_`/`FAUNA_`/`SPEECH_`/`FOG_` 前缀成员 ⇒ `test_m6_content_events.py` 的 10 条 skip-locked **自动解锁**（机制已被 `test_m5_fire_state.py` 因 `fire.py` 落盘自动解除验证过一次）。归属 Claude 域施工。
+- **定标轮三案**（CHAOS/FIRE/MATERIALIZE）：判据＝**连续 3 次探针 ≤1.8** ＋**跑前跑后双探针**，runbook 就绪。
+- **7 日完整 soak**：`PI_M2_FULL_SOAK=1`。
+- **T4 真跑**：已完成（`hard_red=0`）；常态 53 条 skip 是**设计态**（三把锁默认关）。
+
+## ⑥ 环境坑（全轮血泪，新对话直接可用）
+- **日志编码**：pytest 经 `cmd.exe` 重定向落盘按**系统代码页 GBK/936** 解码；读 skip 原因用 `[System.Text.Encoding]::GetEncoding(936).GetString(bytes)`（有时是 UTF-8，`ReadAllText(path,[Text.Encoding]::UTF8)`）。运行中读日志用 `File.Open`＋`FileShare.ReadWrite`。
+- **长跑超时**：全量 >30s **必超工具单命令上限** ⇒ `Start-Process cmd /c` 后台跑 ＋ 分次轮询日志。
+- **BOM**：改文件前先 `git ls-files --eol` ＋记 BOM；`docs/README.md` **有 BOM**、`docs/config/*` **无 BOM**。反复 `WriteAllText` 会在文件头**累积 BOM 字符**（本卡已清理过 11 个）。
+- **中文正则**：PowerShell 脚本内直接写中文会按 ANSI 解码花掉 ⇒ 用 `[char]0x…` 转义。
+- **git commit 引号**：PowerShell 里 `-m "…\"x\"…"` 会断（PowerShell 不用反斜杠转义）⇒ **写消息文件 + `git commit -F`**。
+- **扫「导入者」**：仓内大量**相对 import**（`from .thresholds import …`）；正则只写点分/绝对路径会**假零命中** ⇒ 断言「零命中」前先验证能命中已知正例。
+- **性能留痕纪律**（P10/P11）：bench 结果 ＋ **同轮** `throttle_probe` 比值 ＋ skip 明细 ＋ **单独复跑**对照 ⇒ 四件套齐才能判回归；**passed 变少禁止直接写回归**。
+- **本机（i7-14650HX）会周期性降频**：`throttle_ratio` 在 **1.3–4.0** 间摆，**2.0–4.0 是临界带**（已登记进 pi 台账 §3.1）⇒ 任何跑分前**必须当场跑探针**。
+
+## ⑦ 纪律（全轮血泪）
+**核库后再报**（虚构事故已记档）｜**门禁数字同场测、只比 delta，不引用他人读数**｜**写入后独立校验产物**（UTF8/BOM/锚定插入）｜**只读预检不代改他人域**｜**跨轮结论被新证据推翻时显式写修正，别悄悄改口**｜key **永不落盘**（运行时环境变量）。
+<!-- ═══════ cline 恢复卡结束，以下为各轮快照正文 ═══════ -->
+
 <!
+
+
+<!-- ===== 新对话快速恢复卡（Claude 主树，2026-10-05 M6 收官/README 落地）===== -->
+<!-- 0. 本会话状态：main `a562adf`（README 已落），2416 passed/122 skipped（全量）、
+     2347/121（not-bench），ruff/pyright 0，gen-protocol EXIT 0，协议 1.2，
+     双远程推齐，六树同头 `a562adf`，工作树全干净 -->
+<!-- 1. ★M0-M6 六里程碑全部收官（M6 于 2026-10-05 宣告，四道门 G1-G4 全 ✅）；
+     全项目代码侧完成。README.md 已落仓库根（项目入口：定位/快速开始/架构/里程碑/文档地图/约定） -->
+<!-- 2. M6 收官构成（24 单收编+我域八件施工，详见 55/56 快照）：
+     机制面=inject 生产化/rng_capture/hooks 四步+权力传导（POWER 0.18 翻硬）/
+     driver 双修（drain 案 B+写锁收口）/fire 机制面（O(G)+N=2）/npc.death 对称删除；
+     内容面=生态（到期桶）/动物三只（零事件不进 entities）/语言阶层（三边界签名层）/
+     迷雾（事件化 fold=并集）——四 kind 全进 EventKind+PAYLOAD_MODELS；
+     契约面=soak 阶段 A 四侧判据/终扫兜底/对拍钉 8 例/字段面闭合钉/协议总账 -->
+<!-- 3. 收官门四道终判：G1 ✅（⏳ 仅存引述）/G2 ✅（2416/122/0+三件套 0）/
+     G3 ✅（协议 1.2 零 wire+幻影端点清）/G4 ✅（H 系全闭或移交有主）；
+     判据链=S6 终版预审（可放行）+P7 性能预审（可收官带限制）+C6/C7 索引+K7 协议总账 -->
+<!-- 4. 移交清单（M7/后续，逐项有主，全非代码阻塞）：
+     ①定标轮三案（CHAOS/FIRE/MATERIALIZE）→机器窗（判据=连续 3 次探针 ≤1.8+跑前跑后双探针，runbook 就绪）
+     ②迷雾 B 案视觉雾→产品裁 ③幻影端点 getProfile→用户裁（K8 考古已备）
+     ④7 日完整 soak→PI_M2_FULL_SOAK=1 ⑤W-A 机制面复验→authority/ 施工触发
+     ⑥META_SHELL 8 词→首个戏外消费 CR -->
+<!-- 5. 纪律（全轮血泪）：核库后再报（虚构事故已记档）；门禁数字同场测基线比 delta；
+     探针现测不引用他人读数；跑前+跑后双探针；写入后独立校验产物（UTF8-BOM/锚定插入）；
+     StrEnum 按值查找（成员名≠kind 值）；skip 分型逐条读原始 SKIPPED 行 -->
+<!-- 6. 恢复序：本卡 → .orca/talking.txt（当前派单板）→ workflow.txt+agent-registry.md
+     → git fetch+merge origin/main → git log --oneline -15（轮次勾账） -->
+<!-- ============ 恢复卡结束，以下为各轮快照正文 ============ -->
 
 【2026-10-04 纠偏+M6 两波十单真收编（main bf22ada）】
 **纠偏（如实记档）**：此前数轮我域汇报含虚构——「批次A/C/D接线合入、M5收官
