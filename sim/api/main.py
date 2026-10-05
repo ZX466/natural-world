@@ -10,6 +10,7 @@ import contextlib
 import uuid
 from collections import deque
 from collections.abc import AsyncIterator, Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -41,10 +42,15 @@ logger = structlog.get_logger()
 
 manager = ConnectionManager()
 
-# M0：默认 32x32 开阔图（占位；内容管线接入后由 sim/content 加载 Tiled 转换产物）
+# M7（R7）：创世名册——陈默 + 3 名占位村民（静止实体，AI 归 M2 装配线）
+GENESIS_ENTITIES: tuple[str, ...] = ("chenmo", "villager_1", "villager_2", "villager_3")
+#: 出生点（build_town.py SPAWN 同源；创世 (0,0) 落树墙内 → 事件搬运到可走格）
+SPAWN_TILE: tuple[int, int] = (8, 8)
+TOWN_MAP_PATH = Path(__file__).resolve().parents[1] / "content" / "linhe-town.json"
 
 
-def _default_map() -> TileMap:
+def _fallback_map() -> TileMap:
+    """M0 占位 32×32 全平图（真实图缺失/损坏时的 fail-safe 底座）。"""
     from sim.world.map import CHUNK_SIZE, Chunk
 
     chunks = {}
@@ -59,8 +65,18 @@ def _default_map() -> TileMap:
     return TileMap(width=32, height=32, chunks=chunks)
 
 
+def _default_map() -> TileMap:
+    """优先 sim/content 真实小镇图；缺失/损坏回退占位（fail-safe，启动不炸）。"""
+    if TOWN_MAP_PATH.exists():
+        try:
+            return TileMap.from_json_file(TOWN_MAP_PATH)
+        except Exception as exc:
+            logger.warning("map.town_load_failed", reason=str(exc))
+    return _fallback_map()
+
+
 async def build_loop() -> tuple[TickLoop, Any]:
-    """组装世界：store（建表）+ bus + TickLoop + 创世。返回 (loop, store)。"""
+    """组装世界：store（建表）+ bus + TickLoop + 创世 + 出生点搬运。返回 (loop, store)。"""
     from sqlalchemy.ext.asyncio import create_async_engine
 
     engine = create_async_engine("sqlite+aiosqlite:///world.db")
@@ -68,7 +84,13 @@ async def build_loop() -> tuple[TickLoop, Any]:
     session_factory = create_session_factory(engine)
     store = SqlEventStore(session_factory)
     loop = TickLoop(clock=_make_clock(), bus=build_default_bus(), state=WorldState(world_seed=42))
-    loop.enqueue(world_create_event(tick=0, seed=42, entity_ids=("chenmo",)))
+    loop.enqueue(world_create_event(tick=0, seed=42, entity_ids=GENESIS_ENTITIES))
+    # M7（R7）：创世实体 (0,0)（world.py 硬编码）落在树墙内——事件搬运到出生点。
+    # 4 实体各一条 move 事件（C4 唯一写路径）；推 1 秒帧让 path 消费完（60tps，
+    # 单段路径 1 tick 即达，余 tick 空转无害——世界此刻无连接，无广播成本）。
+    for eid in GENESIS_ENTITIES:
+        loop.issue_move(eid, [(0, 0), SPAWN_TILE])
+    loop.advance_frame(1.0)
     return loop, store
 
 
