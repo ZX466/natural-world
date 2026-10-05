@@ -260,6 +260,7 @@ export type components = {
       readonly lights: readonly components['schemas']['Light'][];
       readonly map: components['schemas']['MapInfo'];
       readonly structures: readonly components['schemas']['Structure'][];
+      readonly time: components['schemas']['TimeInfo'];
       /**
        * @description discriminator enum property added by openapi-typescript
        * @enum {string}
@@ -322,12 +323,14 @@ export type components = {
       readonly v: string;
       readonly ws_seq: number;
     };
-    /** @description 碰撞层 chunk：collision_b64 = base64(每格 1 字节 0/1，顺序按 chunk 内行优先)，只读静态资产 */
+    /** @description 碰撞+地面层 chunk（只读静态资产）。M7(1.3) 增 ground_b64 = base64(u16 小端、chunk 内行主序) */
     readonly MapChunk: {
       /** @description base64 编码的可通行位（1=可通行），不含 seed/tick/entity_id */
       readonly collision_b64: string;
       readonly cx: number;
       readonly cy: number;
+      /** @description base64 编码的地面 tile id（u16 小端、行主序；调色板值域见前端 sprout-palette.json） */
+      readonly ground_b64: string;
     };
     readonly MapInfo: {
       readonly h: number;
@@ -471,6 +474,7 @@ export type components = {
       readonly paused: boolean;
       /** @enum {integer} */
       readonly speed: 1 | 4 | 16;
+      readonly time?: components['schemas']['TimeInfo'] | null;
       /**
        * @description discriminator enum property added by openapi-typescript
        * @enum {string}
@@ -503,6 +507,7 @@ export type components = {
       readonly lights?: readonly components['schemas']['LightDelta'][];
       readonly plan?: readonly components['schemas']['PlanDelta'][];
       readonly structures?: readonly components['schemas']['StructureDelta'][];
+      readonly time: components['schemas']['TimeInfo'];
       /**
        * @description discriminator enum property added by openapi-typescript
        * @enum {string}
@@ -541,6 +546,15 @@ export type components = {
       readonly type: 'sync_request';
       readonly v: string;
       readonly ws_seq: number;
+    };
+    /** @description 戏内时间（服务端权威帧；day 从 1 起，phase 四枚举，集市日布尔） */
+    readonly TimeInfo: {
+      readonly day: number;
+      readonly hour: number;
+      readonly is_market_day: boolean;
+      readonly minute: number;
+      /** @enum {string} */
+      readonly phase: 'dawn' | 'day' | 'dusk' | 'night';
     };
     readonly TimescaleMessage: {
       readonly active: boolean;

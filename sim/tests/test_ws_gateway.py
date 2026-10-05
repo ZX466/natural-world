@@ -269,17 +269,19 @@ class TestOutOfCharacterBoundary:
             "map",
             "weather",
             "combat",
+            "time",  # M7（1.3）：时钟权威帧（R3）——安全评审随本 CR：五键全为戏内事实
         }
         for actor in payload["actors"]:
             assert set(actor.keys()) == {"rtoken", "x", "y", "facing", "sprite", "anim"}
         assert set(payload["map"].keys()) == {"w", "h", "tileset"}
+        assert set(payload["time"].keys()) == {"day", "hour", "minute", "phase", "is_market_day"}
 
     def test_delta_key_whitelist(self, loop: TickLoop):
         """delta 键白名单同口径。"""
         loop.issue_move("chenmo", [(1, 0), (2, 0)])
         loop.advance_frame(1.0)
         payload = delta_payload(loop, loop.drain_delta())
-        assert set(payload.keys()) == {"type", "channel", "v", "ws_seq", "actors"}
+        assert set(payload.keys()) == {"type", "channel", "v", "ws_seq", "actors", "time"}
         for actor in payload["actors"]:
             assert set(actor.keys()) == {"rtoken", "x", "y"}
 

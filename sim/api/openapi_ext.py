@@ -168,6 +168,21 @@ _SUB_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         "additionalProperties": False,
     },
+    # M7（1.3）：戏内时间权威帧（R3）。五键白名单、零 tick 原值——
+    # phase/is_market_day 是戏内事实（TopBar 既有展示），非禁键。
+    "TimeInfo": {
+        "type": "object",
+        "description": "戏内时间（服务端权威帧；day 从 1 起，phase 四枚举，集市日布尔）",
+        "required": ["day", "hour", "minute", "phase", "is_market_day"],
+        "properties": {
+            "day": {"type": "integer", "minimum": 1},
+            "hour": {"type": "integer", "minimum": 0, "maximum": 23},
+            "minute": {"type": "integer", "minimum": 0, "maximum": 59},
+            "phase": {"type": "string", "enum": ["dawn", "day", "dusk", "night"]},
+            "is_market_day": {"type": "boolean"},
+        },
+        "additionalProperties": False,
+    },
     "MapInfo": {
         "type": "object",
         "required": ["tileset", "w", "h"],
@@ -321,9 +336,11 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
             },
             "weather": {"$ref": "#/components/schemas/Weather"},
             "combat": _oneof_null({"$ref": "#/components/schemas/CombatInfo"}),
+            # M7（1.3）：time 权威帧（R3）——快照必带
+            "time": {"$ref": "#/components/schemas/TimeInfo"},
         },
         # 快照口径：combat optional（可为 null=无战斗）
-        ["map", "lights", "actors", "structures", "weather"],
+        ["map", "lights", "actors", "structures", "weather", "time"],
     ),
     "StateDeltaMessage": _envelope(
         "render",
@@ -344,8 +361,10 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
             # driver 的 moved 过滤漏掉。可选（不进 required）：账本空则不发该键。
             "plan": {"type": "array", "items": {"$ref": "#/components/schemas/PlanDelta"}},
             "weather": {"$ref": "#/components/schemas/Weather"},
+            # M7（1.3）：time 权威帧（R3）——delta 必带（每帧重同步）
+            "time": {"$ref": "#/components/schemas/TimeInfo"},
         },
-        ["actors"],
+        ["actors", "time"],
     ),
     "PerceptionMessage": _envelope(
         "narrative",
@@ -453,6 +472,8 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
             "paused": {"type": "boolean"},
             "anchor": _oneof_null({"$ref": "#/components/schemas/SessionAnchor"}),
             "notice": _oneof_null({"type": "string"}),
+            # M7（1.3）：time 权威帧（R3）——可选（生产端传 tick 才带）
+            "time": _oneof_null({"$ref": "#/components/schemas/TimeInfo"}),
         },
         ["speed", "paused", "anchor", "notice"],
     ),

@@ -19,7 +19,7 @@ const RECONNECT_MAX_MS = 8000;
  * `sim/tests/test_protocol_version.py` 的跨树钉锁死
  * （本文件是**第二落点**，真相源在 ws.py；改一处必改另一处）。
  */
-const PROTOCOL_VERSION = '1.2';
+const PROTOCOL_VERSION = '1.3';
 
 export type WsStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
 

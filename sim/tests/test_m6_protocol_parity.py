@@ -31,7 +31,7 @@ SNAPSHOT = REPO_ROOT / "shared" / "openapi.json"
 #: ② `state_delta` 字段面白名单（render 通道的可见世界变化载体）。
 #: **闭合**=不在表里的键不许出现（防「顺手加个 fauna[]/power[]」）。
 STATE_DELTA_WHITELIST: frozenset[str] = frozenset(
-    {"v", "ws_seq", "channel", "type", "actors", "lights", "structures", "plan", "weather"}
+    {"v", "ws_seq", "channel", "type", "actors", "lights", "structures", "plan", "weather", "time"}
 )
 
 #: **预登记例外**：迷雾视觉 B 案要给 `state_delta` 加**可选** `fog={revealed:[{cx,cy}]}`

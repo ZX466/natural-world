@@ -117,6 +117,7 @@ class TestOpenApiExt:
             "actors",
             "structures",
             "weather",
+            "time",  # M7（1.3）：时钟权威帧必带（R3）
         }
         assert snap["properties"]["type"]["enum"] == ["full_snapshot"]
         assert snap["properties"]["combat"]["oneOf"] == [

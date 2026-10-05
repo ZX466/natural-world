@@ -121,7 +121,8 @@ class TestSubSchemasAdded:
             "$ref": "#/components/schemas/MapChunk"
         }
         chunk = schemas["MapChunk"]
-        assert set(chunk["required"]) == {"cx", "cy", "collision_b64"}
+        # M7（1.3）：ground_b64 加入（u16 小端地面层）
+        assert set(chunk["required"]) == {"cx", "cy", "collision_b64", "ground_b64"}
 
 
 class TestWsMemberFieldDiffs:
@@ -146,6 +147,7 @@ class TestWsMemberFieldDiffs:
         assert set(full["required"]) == {
             "v", "ws_seq", "channel", "type",
             "map", "lights", "actors", "structures", "weather",
+            "time",  # M7（1.3）：时钟权威帧（R3）
         }
 
     def test_state_delta_refs_and_optionals(self, schemas: dict) -> None:
@@ -156,7 +158,8 @@ class TestWsMemberFieldDiffs:
         assert props["lights"]["items"] == {"$ref": "#/components/schemas/LightDelta"}
         assert props["structures"]["items"] == {"$ref": "#/components/schemas/StructureDelta"}
         assert props["weather"] == {"$ref": "#/components/schemas/Weather"}
-        assert set(delta["required"]) == {"v", "ws_seq", "channel", "type", "actors"}
+        assert props["time"] == {"$ref": "#/components/schemas/TimeInfo"}  # M7（1.3）
+        assert set(delta["required"]) == {"v", "ws_seq", "channel", "type", "actors", "time"}
 
     def test_perception_form_added_subject_deleted(self, schemas: dict) -> None:
         """§1.3/§3.1：form 补（oneOf-null 形），subject 整字段删除。"""
@@ -319,7 +322,7 @@ class TestHttpRoutes:
     def test_world_map_endpoint_runtime_shape(self, client: TestClient) -> None:
         body = client.get("/api/world/map").json()
         assert set(body) == {"w", "h", "tileset", "chunks"}
-        assert set(body["chunks"][0]) == {"cx", "cy", "collision_b64"}
+        assert set(body["chunks"][0]) == {"cx", "cy", "collision_b64", "ground_b64"}
 
 
 class TestRegression:
@@ -338,4 +341,5 @@ class TestRegression:
         assert set(snap["properties"]) == {
             "v", "ws_seq", "channel", "type",
             "map", "lights", "actors", "structures", "weather", "combat",
+            "time",  # M7（1.3）
         }

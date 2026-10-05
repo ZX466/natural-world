@@ -63,6 +63,7 @@ client ◄──hello_ack── { "v": "1.1", "server_versions": ["1.0","1.1"], 
 | 1.0 | 协议基线（ws-protocol.md 全量消息 + rtoken/时间口径裁决） | client+sim | 2026-09-19 |
 | 1.1 | **M5 三个 minor 级变更合入**（逐项 commit 见右侧登记）：① `a149bb9` M5-K3 批次 B——`fast_forward` action（`SetControlMessage.action` 扩枚举）+ `session_state` 首帧（SessionAnchor 游标指针 `name`/`story_label`）+ `GET /api/anchors/current`（末梢档读路径）；② `f7f6e1b` M5-K7——`GET /api/anchors/{anchor_id}` 单档读端点（响应 `AnchorListItem`，五键白名单）+ `state_delta.plan` 字段（**顶层可选数组**）；③ `7dc8d69` M5-K10——`PlanDelta` **封闭 schema** 补齐（裁 19 CRITICAL：`state_delta.plan` 越界冻结，`additionalProperties:false`） | client+sim | 2026-10-03 |
 | 1.2 | **批次 E 只读诊断面进协议快照**（M6-K2，commit 见收编落账）：① `GET /api/anchors/{anchor_id}/materialization`（**新增端点**，响应 `AnchorMaterializationStatus{anchor_id, ready, reason?}`，`additionalProperties:false`，三键白名单）；② `openapi_ext` 手工登记该路由的 `400`/`404` Problem 响应（§3.3 坑：`exception_handler` 产出不会自动进 spec）；③ 诊断面**零新字段**：不返世界真相（`seq`/`tick`/`branch_id`）与随机流状态（M-1 递归扫零命中） | client+sim | 2026-10-04 |
+| 1.3 | **M7 渲染面加法变更**（`docs/arch/m7-render-art.md` §2.2，随施工 commit 登记）：① `MapChunk.ground_b64`（新增字段，base64(u16 小端、chunk 内行主序)——地面层走 HTTP 静态通道，沿 codex 意见 5 裁决）；② `TimeInfo` 公共子 schema（`{day,hour,minute,phase,is_market_day}` 五键封闭集，`additionalProperties:false`）+ `full_snapshot.time`/`state_delta.time`（必带）与 `session_state.time`（可选）——戏内时钟权威帧（R3），键全为戏内事实非禁键；③ 出站扫描/键白名单测试同步扩键（安全随行评审记录于执行台账） | client+sim | 2026-10-05 |
 
 > **1.2 升版说明（M6-K2）**：**新增端点 + 新增响应 schema** 属 §3 兼容性表里的 **minor**
 > （纯新增，旧客户端不受影响；无 major 语义反转、无既有字段改型）⇒ 只升 minor 位。

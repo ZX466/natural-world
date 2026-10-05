@@ -268,7 +268,11 @@ class HealthStatus(BaseModel):
 
 
 class MapChunk(BaseModel):
-    """碰撞层 chunk：collision_b64 = base64(每格 1 字节 0/1，顺序按 chunk 内行优先)，只读静态资产"""
+    """碰撞+地面层 chunk（只读静态资产）。
+
+    M7（1.3）增 `ground_b64` = base64(u16 小端、chunk 内行主序)——与
+    `map_static_payload` / 前端 `decodeGroundB64` 三方同一定义。
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -276,6 +280,10 @@ class MapChunk(BaseModel):
     cy: int = Field(ge=0)
     collision_b64: str = Field(
         description="base64 编码的可通行位（1=可通行），不含 seed/tick/entity_id"
+    )
+    ground_b64: str = Field(
+        description="base64 编码的地面 tile id（u16 小端、行主序；"
+        "调色板值域见前端 sprout-palette.json）"
     )
 
 
@@ -341,6 +349,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 speed=control.effective_speed(),
                 paused=control.paused,
                 anchor=_current_anchor_pointer(),
+                tick=app.state.loop.state.tick,  # M7-R3：连接即同步时钟
             ),
         )
         while True:

@@ -38,6 +38,7 @@ import asyncio
 import base64
 import hmac
 import secrets
+import struct
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -63,7 +64,7 @@ logger = structlog.get_logger(__name__)
 #: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
 #: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
 #: PlanDelta 封闭）；1.2 = 批次 E 只读诊断面进协议快照（M6-K2）——登记见 versioning.md §7。
-_PROTOCOL_VERSION = "1.2"
+_PROTOCOL_VERSION = "1.3"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 
 # K4 提案 §2.2/§3.2：五类 C→S 消息在此与 _CHANNEL_FOR **成对**注册
@@ -250,6 +251,25 @@ def _rtoken(entity_id: str) -> str:
     return "rt-" + hashlib.sha256(entity_id.encode()).hexdigest()[:12]
 
 
+def _time_payload(tick: int) -> dict[str, Any]:
+    """戏内时间块（M7-R3 时钟权威帧）。五键白名单，零 tick 原值。
+
+    phase/is_market_day 派生自 sim.core.calendar（与 TopBar 展示同源——
+    C3 出戏边界：这些是戏内事实，mock 时代前端就在同形展示；禁键
+    tick/seq/branch 照旧零出站，T3 出站扫描覆盖）。
+    """
+    from sim.core.calendar import game_time, is_market_day, phase_of_day
+
+    t = game_time(tick)
+    return {
+        "day": t.day,
+        "hour": t.hour,
+        "minute": t.minute,
+        "phase": phase_of_day(tick).value,
+        "is_market_day": is_market_day(tick),
+    }
+
+
 class ConnectionManager:
     """WS 连接登记与广播。"""
 
@@ -373,6 +393,7 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
         "map": {"w": tile_map.width, "h": tile_map.height, "tileset": "grid"},
         "weather": {"visual": "clear", "ambient_light": 1.0},
         "combat": None,
+        "time": _time_payload(loop.state.tick),
     }
 
 
@@ -398,6 +419,7 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
         "v": _PROTOCOL_VERSION,
         "ws_seq": 0,
         "actors": actors,
+        "time": _time_payload(loop.state.tick),
     }
     known = registry().entries()
     plan_items = [
@@ -463,11 +485,24 @@ async def route_monologue(manager: ConnectionManager, actor_id: str, frame: dict
 
 
 def map_static_payload(tile_map: TileMap) -> dict[str, Any]:
-    """碰撞层 HTTP 端点载荷（kilo 提案按 chunk 模式，codex 意见 5：静态资产不走 WS）。"""
+    """碰撞+地面层 HTTP 端点载荷（kilo 提案按 chunk 模式，codex 意见 5：静态资产不走 WS）。
+
+    M7（1.3 加法）：每 chunk 增 `ground_b64` = base64(**u16 小端**、chunk 内行主序，
+    16×16×2=512 字节)；与前端 `assembleGround`（decodeGroundB64）互为镜像定义。
+    collision_b64 口径不变（M0 契约不回退）。
+    """
     chunks = []
     for (cx, cy), chunk in sorted(tile_map.chunks.items()):
         bits = bytes(1 if w else 0 for w in chunk.collision)
-        chunks.append({"cx": cx, "cy": cy, "collision_b64": base64.b64encode(bits).decode()})
+        ground = b"".join(struct.pack("<H", g) for g in chunk.ground)
+        chunks.append(
+            {
+                "cx": cx,
+                "cy": cy,
+                "collision_b64": base64.b64encode(bits).decode(),
+                "ground_b64": base64.b64encode(ground).decode(),
+            }
+        )
     return {
         "w": tile_map.width,
         "h": tile_map.height,
@@ -925,6 +960,7 @@ def session_state_payload(
     paused: bool,
     anchor: dict[str, str] | None = None,
     notice: str | None = None,
+    tick: int | None = None,
 ) -> dict[str, Any]:
     """`session_state` 帧构造（M5-K3 / 裁 21-A D-5+D-6 **一帧承载**）。
 
@@ -934,8 +970,11 @@ def session_state_payload(
     **零原始数值**：`speed` 只在 {1,4,16}（暂停时=恢复后倍率，不是 0）；`anchor`
     只带 `name` + `story_label`；`notice` 是戏内口语行。tick/seq/branch_id/
     entity_id 零出现（ws-protocol §5）。
+
+    M7（1.3）：`tick` 传入时附 `time` 权威帧（R3 连接即同步时钟）；None 不带
+    （旧调用点/测试兼容，可选字段不制造噪声）。
     """
-    return {
+    payload: dict[str, Any] = {
         "type": "session_state",
         "channel": "session",
         "v": _PROTOCOL_VERSION,
@@ -947,6 +986,9 @@ def session_state_payload(
         else None,
         "notice": notice,
     }
+    if tick is not None:
+        payload["time"] = _time_payload(tick)
+    return payload
 
 
 def fork_notice(anchor_name: str) -> str:

@@ -167,7 +167,8 @@ class TestDeltaPayloadPlan:
         loop = self._loop()
         payload = delta_payload(loop, set(loop.state.entities))
         assert "plan" not in payload
-        assert set(payload) == {"type", "channel", "v", "ws_seq", "actors"}
+        # M7（1.3）：time 权威帧随 delta 必带
+        assert set(payload) == {"type", "channel", "v", "ws_seq", "actors", "time"}
 
     def test_plan_present_when_set(self) -> None:
         from sim.api.ws import delta_payload
