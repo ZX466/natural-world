@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿
+﻿﻿﻿﻿
 <!
 
 【2026-10-04 纠偏+M6 两波十单真收编（main bf22ada）】
@@ -30,6 +30,51 @@ inconclusive 37 项=软判定留人工复核非硬红；报告 t4-results/t4-rep
 ⑤**我域真实欠账清单（未虚构版）**：批次 A 接线（inject 生产化+chaos 消费点）
 +driver 双修（写锁收口+drain 接线案B——K16 病根真实存在）+批次 C（authority/
 落盘+hooks 四步注入）+批次 D（fire*.py）+npc.death（A1 钉在等）。
+<!-- ===== kilo 专属恢复卡（接口/兼容性域，2026-10-05 M6-K7 已交）===== -->
+<!-- 0. 工作树 E:\zxdevelop\.orca\worktrees\project7\kilo，分支 ZX466/kilo；
+       HEAD = origin/main（收编后自动同步）；协议版本 **1.2**；基线 main `25b0815`（M6 收官波五单收编 +
+       裁 42〔K6 六项遗留归我本波 + **422 进快照采**〕）。本树跑 pytest/ruff/pyright/gen-protocol。 -->
+<!-- 1. 已交全景（每条都是「契约+施工+钉」三件套，细节查 git log --oneline -- docs/api/ sim/tests/）：
+       M5 K1 协议基线 / K2 codegen+工具 / K3 版本登记 / K4 openapi 编写范式 / K5 WS 帧文档 /
+       K6 snapshot→protocol codegen / K7 HTTP 端点文档 / K8 快照对齐四钉 / K9 R-4 契约条款+R-5 集合 /
+       K10 R-4 六钉验收对表+branch-ambiguous 登记单 / K11 批次 C 权力 API 面**施工**
+       （`sim/api/outbound_guard.py` 出站咽喉闸 ＋ `docs/api/m5-power-api.md`）/
+       K12 火灾预研 / K13 火灾守卫钉+R-4 复验单 / K14 versioning 1.1＋批次 E 出站核对 /
+       K15 F-1 随机流补扫+K12 稿 2-kind 订正 / K16 G2 补钉+`m5-load-outcomes-audit.md`（drain 病根）/
+       M6 K1 M-1 诊断路由递归扫+drain 失败帧钉 / K2 诊断路由进快照（**versioning 1.2**）+K11 假绿修复 /
+       K4 内容面出站预备（四事件判定+fog 三案）/ K5 内容事件守卫钉（17 例，10 skip-locked 等四 kind）/
+       K6 收官协议面总核对 `m6-protocol-audit.md` / **K7 响应码双向补齐+全量对拍钉+字段面闭合钉**。 -->
+<!-- 2. 在途 = **无**。等派项：①内容四 kind 落地后按 K6 审计稿 §1 清单复核（`test_m6_content_events.py`
+       skip 须为 0 且 17 全绿）＋收两条「前面存在性」证据；②迷雾视觉 B 案快照单（字段面钉**已留 `fog`
+       例外**；流程 §7 minor → 1.3 → 快照+生成物同提交 → 前端 `[C]` → 改 `test_protocol_version.py` 的
+       `EXPECTED_VERSION`）；③legacy `main.py::ws_endpoint` 三处 `ws.send_json` 直发旁路收口（**Claude 域**，
+       裁 41 已采认；那条路径的帧**不过 K11 出站闸**）；④`info.version` 接同源（另立快照单）。 -->
+<!-- 3. 恢复序（**新对话照此三步，勿从历史快照读起**）**：
+       ①`git fetch origin main && git merge origin main`（确认同头）；
+       ②读本卡 + `.orca/talking.txt`（当前波派单/我回执）；
+       ③需要细节再翻下方 ①节我域条目 / `git log --oneline -20`。 -->
+<!-- 4. 门禁（基线约 2313 passed / 135 skipped，**间歇性探针会摆动 ⇒ 只信同场 delta**）：
+       `uv run pytest -m "not bench" -q`；`uv run ruff check sim/`；`uv run pyright`；
+       `node tools/gen-protocol.ts --check`（EXIT 0，硬门禁）；前端 `cd client && npm run test`。
+       收尾三件套：双推 `origin ZX466/kilo` ＋ `gitee ZX466/kilo`；回执粘
+       `E:\zxdevelop\project7\.orca\talking.txt` 留言板；本文件加条目（`git add -f .orca/memory.md`）。 -->
+<!-- 5. 我的环境坑速查（**踩过就别再踩**）：
+       ① **PowerShell `Get-Content`/`Set-Content` 会按系统代码页解码 CJK 文件** ⇒ 乱码且行数偏少
+          （实测 `ws.py` 报 859 行、真实 1028）⇒ 改文件一律用 **edit 工具**或 `uv run python`
+          的 `read_text(encoding="utf-8")`/`write_bytes`；查行号用 `Select-String`/python。
+       ② `git commit -m` 消息含**半角双引号**会被 PowerShell 截断 ⇒ 长消息走
+          **`git commit -F <file>`**（`Out-File -Encoding utf8` 的 BOM git 能容忍）。
+       ③ **`shared/openapi.json` 是手工维护的 mock**，`prettier --check` 对它本就不绿 ⇒ 改它只能
+          **外科式文本编辑**（brace-match 定位＋照抄邻居排版＋`json.loads` 自检），**禁重新序列化**
+          （否则 1400 行噪声）；`protocol.ts` 由 `npm run gen:protocol` 重生成，**禁手写**。
+       ④ **新 docs/新测试文件按 prettier/ruff format 落盘**；**既有红文件只增不重排**（纪律 12）。
+       ⑤ **CI 没有「M5/M6 步」**：`ci.yml` 的 pytest 步是全量 `-m "not bench"`；按路径的命名信号步另计。
+       ⑥ **路由面断言走 `app.openapi()["paths"]`**，**不要用 `app.routes`**（`_IncludedRouter` 包装
+          ⇒ 只见 9 条，K11 那条钉曾因此假绿）。
+       ⑦ **live↔快照是「结构对拍」不是逐字段相等**（operationId/summary/description/tags/parameters
+          与 422-vs-Problem 码分工都是**设计性差异**）；逐路由响应码已由 K7 对拍钉锁双向零差。
+       ⑧ **skip-locked 双态**是本项目处理「待施工」的标准姿势：锁信号写明、解锁路径**用既有 kind 预跑通**、
+          今天即绿的部分单列一组。 -->
 <!-- ===== opencode 专属恢复卡（数据/持久化域，2026-10-04 M6-A6 已交）===== -->
 <!-- 0. 工作树 E:\zxdevelop\.orca\worktrees\project7\opencode，分支 ZX466/opencode；
       HEAD 见 `git log -1`（M6-A6：npc_health 对称删除**施工**〔生产码：`_project_npc_death` 连带删，双键+幂等〕
