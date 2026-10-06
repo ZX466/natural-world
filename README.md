@@ -156,7 +156,7 @@ M0–M6 六个里程碑**全部收官**（M6 于 2026-10-05 宣告，四道门 G
 | M5 | 读档=分叉（anchors）+ 权力机制数据面 + 火灾数据面 + 性能治理 |
 | M6 | 权力→决策传导 + 火灾机制面 + 死亡对称删除 + 内容面 + 定标（POWER 翻硬） |
 
-**当前门禁**：2476 passed / 124 skipped / 0 failed · ruff clean · pyright 0 · `gen-protocol --check` EXIT 0 · 协议版本 1.3。skip 全部为设计态（T4 真模型探针、T3 live-fire、T5 golden、降频自检门与环境门）——无失败、无悬空。
+**当前门禁**：2505 passed / 123 skipped / 0 failed · ruff clean · pyright 0 · `gen-protocol --check` EXIT 0 · 协议版本 1.3。skip 全部为设计态（T4 真模型探针、T3 live-fire、T5 golden、降频自检门与环境门）——无失败、无悬空。
 
 ## M7 渲染面（2026-10-06 收口）
 
