@@ -78,3 +78,7 @@ logs/
 _incoming/
 sim/content/assets/zelda-like/pkg/
 _rev_game_frames_0-11.png
+
+# D8 调色板分析临时图（根目录 *.png 已清理，防再生成）
+/tile_*.png
+/palette_fix_*.png
