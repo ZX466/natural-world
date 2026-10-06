@@ -789,6 +789,8 @@ def _handle_player_impulse(raw: dict[str, Any]) -> dict[str, Any]:
 
     同步纯函数：不 await LLM、不改 Agent 状态（写路径唯一 = apply）。
     冲突度规则表 / 叙事化模板归 LLM 域（8.3）,本块按占位 cue 与模板作答。
+    批次 C：通过校验的念头经 _impulse_trigger 钩子置位 chenmo 即时决策轮
+    （钩子 None = driver 未装配，静默跳过——世界照常运转）。
     """
     text = raw.get("text")
     if not isinstance(text, str) or not text.strip():
@@ -811,6 +813,10 @@ def _handle_player_impulse(raw: dict[str, Any]) -> dict[str, Any]:
         )
         return _error_frame("player_impulse", code, "这个念头进不去。")
     cleaned = verdict.content
+    # 批次 C：念头过闸 → 置位 chenmo 即时决策轮（携带原文进 prompt [输入] 段；
+    # 钩子 None = driver 未装配，静默跳过）。乐观反馈语义不变（§2.5 异步）。
+    if _IMPULSE_TRIGGER is not None:
+        _IMPULSE_TRIGGER(cleaned)
     return {
         "type": "impulse_feedback",
         "channel": "control",
@@ -823,6 +829,18 @@ def _handle_player_impulse(raw: dict[str, Any]) -> dict[str, Any]:
             "content": "这话我记下了。",
         },
     }
+
+
+#: 批次 C：impulse → chenmo 即时决策的触发钩子（main.py lifespan 装配；
+#: 签名 (text: str) -> None）。None = driver 未装配（测试/降级，静默跳过）。
+#: 同 _ANCHOR_LOAD_HOOK 钩子缝模式——handler 保持纯函数，副作用经注入。
+_IMPULSE_TRIGGER: Any = None
+
+
+def set_impulse_trigger(fn: Any) -> None:
+    """装配 impulse 触发钩子（lifespan 调用；测试可注入替身）。"""
+    global _IMPULSE_TRIGGER
+    _IMPULSE_TRIGGER = fn
 
 
 def _impulse_cue(text: str) -> str:

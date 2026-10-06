@@ -178,6 +178,19 @@ def _apply_npc_act(state: WorldState, event: WorldEvent, ctx: TickContext) -> Ap
     return ApplyResult(state=state)
 
 
+def _apply_npc_monologue(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    """NPC_MONOLOGUE（批次 C 接线）：独白记录进事件日志，状态层 no-op。
+
+    M2 起独白事件只走 WS 投影面（monologue_events_to_frames）；经 enqueue 入流
+    需要本 handler 注册（同 _apply_npc_act / _apply_entropy_inject 口径——
+    no-op ⇒ 重放安全）。独白是自言自语的叙述记录，不改世界状态。
+    """
+    from sim.core.events import NpcMonologuePayload
+
+    NpcMonologuePayload.model_validate(event.payload)  # schema 校验；无状态效果
+    return ApplyResult(state=state)
+
+
 def _apply_tile_changed(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
     """M3 预留：M0 地图静态，收到即拒绝。"""
     msg = "tile_changed 在 M0 未启用（可变地图底座是 M3）"
@@ -194,4 +207,5 @@ def build_default_bus() -> EventBus:
     bus.register(EventKind.TILE_CHANGED, _apply_tile_changed)
     bus.register(EventKind.NPC_DEATH, _apply_npc_death)
     bus.register(EventKind.NPC_ACT, _apply_npc_act)
+    bus.register(EventKind.NPC_MONOLOGUE, _apply_npc_monologue)
     return bus

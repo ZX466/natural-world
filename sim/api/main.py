@@ -112,6 +112,36 @@ def _make_clock():
     return GameClock(speed=1.0)
 
 
+def _active_profile_snapshot_provider():
+    """批次 C：active LLM profile → ProfileSnapshot 提供器（driver 每轮取）。
+
+    无 active profile 返回 None（driver 零调用降级）。api_key 解密只发生在
+    load_profile_snapshot 调用瞬间（K3：用完即丢，明文只活在快照生命周期内）。
+    读档/fork 后 profile 表换分支不在本批范围（profile 是戏外配置面）。
+    """
+    from sim.api.settings import get_profile_store
+    from sim.llm.client import load_profile_snapshot as _load_snapshot
+
+    def _provider():
+        try:
+            row = get_profile_store().get_active()
+        except Exception as exc:  # 设置库故障不拖垮世界（降级无 LLM）
+            logger.warning("chenmo.profile_provider_failed", reason=str(exc))
+            return None
+        if row is None:
+            return None
+        return _load_snapshot(
+            profile_name=row.name,
+            base_url=row.base_url,
+            model=row.model,
+            temperature=row.temperature,
+            max_tokens=row.max_tokens,
+            api_key_enc=row.api_key_enc,
+        )
+
+    return _provider
+
+
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     import asyncio
@@ -166,6 +196,50 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         return batch or None
 
     loop.attach_npc_runtime(_npc_tick_hook)
+
+    # ── 批次 C：陈默 L2 决策驱动（LLM 接进决策循环）─────────────────
+    # 播种主角档案 → 组 ChenmoDriver → impulse 钩子 + 节拍任务随 lifespan。
+    # LLM 调用全异步、失败降级（driver 内）；世界照常运转不因 LLM 阻塞。
+    from sim.agent.driver import ChenmoDriver
+    from sim.api.ws import set_impulse_trigger
+    from sim.content.protagonist import build_anchor, seed_protagonist
+    from sim.llm.client import LlmClient
+
+    chenmo_seeded = await seed_protagonist(store.session_factory)
+    if chenmo_seeded:
+        logger.info("protagonist.seeded", npc_id="chenmo")
+    llm_client = LlmClient()
+    driver = ChenmoDriver(
+        anchor=build_anchor(),
+        llm=llm_client,
+        profile_provider=_active_profile_snapshot_provider(),
+    )
+    app.state.chenmo_driver = driver
+    set_impulse_trigger(driver.request_decision)
+
+    async def _chenmo_loop() -> None:
+        """决策循环：impulse 置位或节拍到期 → 一轮决策 + 执行（与世界 driver 平行）。"""
+        import os
+        import time as _time
+
+        try:
+            interval = float(os.environ.get("CHENMO_DECIDE_SECONDS", "60"))
+        except ValueError:
+            interval = 60.0
+        interval = max(5.0, interval)  # 下限护栏：防误配 0 烧钱
+        last = _time.monotonic()
+        while True:
+            await asyncio.sleep(0.5)
+            now = _time.monotonic()
+            due = (now - last) >= interval
+            if not driver.take_requested() and not due:
+                continue
+            last = now
+            driver.execute_pending(loop, pathfinder=pathfinder)
+            await driver.decide_once(loop.state, loop.state.tick)
+            # 决策产物在下一拍执行头（revalidate 用最新世界态；独白/MOVE 随帧落库）
+
+    app.state.chenmo_task = asyncio.create_task(_chenmo_loop())
 
     # 批次 A 接线（M6 补施工）：rng 状态捕获缝——锚点存档时 capture_rng_state 的
     # 真实实现（registry 由 world_seed 纯函数重建 + 抽签 cache 在 TickContext）。
@@ -295,6 +369,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
     )
     yield
+    app.state.chenmo_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await app.state.chenmo_task
     app.state.driver.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await app.state.driver
