@@ -51,10 +51,14 @@ class ChenmoDriver:
         anchor: IdentityAnchor,
         llm: LlmClient,
         profile_provider: Callable[[], ProfileSnapshot | None],
+        perception_provider: Callable[[], str] | None = None,
     ) -> None:
         self._anchor = anchor
         self._llm = llm
         self._profile_provider = profile_provider
+        # 批次 D6：实况感知投影供数（main.py 装配：chenmo 感知帧 → narrated()）。
+        # None = 无感知面（测试/降级，[处境] 段省略——既有行为）。
+        self._perception_provider = perception_provider
         self._gate = IntentGate()
         self._pending: deque[Intent] = deque()
         # impulse 置位（ws handler 在事件循环线程调，driver 循环也在事件循环——
@@ -107,6 +111,12 @@ class ChenmoDriver:
             logger.debug("chenmo.no_profile", tick=tick)
             return False
         impulse = self.take_impulse()
+        if perception_text == "" and self._perception_provider is not None:
+            try:
+                perception_text = self._perception_provider()
+            except Exception as exc:  # 感知面故障不拖垮决策（降级空处境）
+                logger.warning("chenmo.perception_failed", detail=str(exc))
+                perception_text = ""
         prompt = assemble_prompt(
             anchor=self._anchor,
             memory=MemorySlice(entries=memory_entries),

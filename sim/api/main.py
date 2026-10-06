@@ -251,10 +251,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if chenmo_seeded:
         logger.info("protagonist.seeded", npc_id="chenmo")
     llm_client = LlmClient()
+
+    # 批次 D6：感知帧 → 叙事文本投影（chenmo 的 prompt [处境] 段供数）。
+    # run_perception_step 每 tick 为全员装帧（键=rtoken）；取不到/空感知 →
+    # 空文本（[处境] 段省略）。感知帧是 tick 内瞬时快照——直接读最新帧即可。
+    from sim.perception.frame import PerceptionFrame
+    from sim.perception.senses import rtoken_of
+
+    chenmo_rtoken = rtoken_of("chenmo")
+
+    def _chenmo_perception() -> str:
+        frame = loop.perception_frames.get(chenmo_rtoken)
+        if frame is None:
+            return ""
+        assert isinstance(frame, PerceptionFrame)
+        return frame.narrated()
+
     driver = ChenmoDriver(
         anchor=build_anchor(),
         llm=llm_client,
         profile_provider=_active_profile_snapshot_provider(),
+        perception_provider=_chenmo_perception,
     )
     app.state.chenmo_driver = driver
     set_impulse_trigger(driver.request_decision)

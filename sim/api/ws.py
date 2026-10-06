@@ -251,6 +251,25 @@ def _rtoken(entity_id: str) -> str:
     return "rt-" + hashlib.sha256(entity_id.encode()).hexdigest()[:12]
 
 
+#: 批次 D7：天气日级视觉状态（确定性哈希抽签，同 fire 模式——无 RNG 流）。
+#: visual 协议封闭集 {clear, overcast, rain}；ambient_light 与昼夜色罩叠乘。
+_WEATHER_LIGHTS: dict[str, float] = {"clear": 1.0, "overcast": 0.9, "rain": 0.75}
+
+
+def weather_payload(tick: int, seed: int) -> dict[str, Any]:
+    """戏内天气块（批次 D7）：日级状态，同游戏日恒定。
+
+    判定：(seed, day) 确定性哈希 → 晴 60% / 阴 25% / 雨 15%。雨/阴压低
+    ambient_light（前端色罩叠乘面——昼夜 × 天气的双通道光照）。
+    """
+    day = (tick // 86_400) + 1
+    import zlib
+
+    draw = zlib.crc32(f"weather:{seed}:{day}".encode()) % 100
+    visual = "rain" if draw < 15 else ("overcast" if draw < 40 else "clear")
+    return {"visual": visual, "ambient_light": _WEATHER_LIGHTS[visual]}
+
+
 def _time_payload(tick: int) -> dict[str, Any]:
     """戏内时间块（M7-R3 时钟权威帧）。五键白名单，零 tick 原值。
 
@@ -395,7 +414,7 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
             "h": tile_map.height,
             "tileset": _tileset_name(tile_map),  # C-1：真实图带图集名（快照与 HTTP 同源）
         },
-        "weather": {"visual": "clear", "ambient_light": 1.0},
+        "weather": weather_payload(loop.state.tick, loop.state.world_seed),
         "combat": None,
         "time": _time_payload(loop.state.tick),
     }
