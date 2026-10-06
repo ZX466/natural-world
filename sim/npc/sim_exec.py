@@ -21,6 +21,14 @@ from sim.core.world import WorldState
 from sim.world.pathfinding import Pathfinder
 
 # ---------------------------------------------------------------------------
+# 意愿独白（批次 D2：NPC 开口）——节流常数
+# ---------------------------------------------------------------------------
+
+#: 同 NPC 两次 bubble 独白的最小间隔（tick；300 = 5 游戏分）。batch B 实测
+#: 每 10 tick 一决策，50 人不节流每分钟可产 3000 条独白帧（刷屏+烧 WS）。
+_MONOLOGUE_COOLDOWN_TICKS = 300
+
+# ---------------------------------------------------------------------------
 # 动作目的地（批次 B 内容面；坐标须在 linhe-town.json 可走格上）
 # ---------------------------------------------------------------------------
 
@@ -122,23 +130,48 @@ def npc_events_for_tick(
     pathfinder: Pathfinder,
     *,
     seed: int,
+    monologue_last: dict[str, int] | None = None,
 ) -> list[WorldEvent]:
     """一个决策节拍的事件批次：NpcRuntime.tick → NPC_ACT 批次 + MOVE 交错。
 
     每个活跃 NPC 恰一条 NPC_ACT（决策记录）；移动类决策紧跟同 NPC 的
-    move_event（日志可读序：ACT → MOVE）。runtime 参数是 NpcRuntime
-    （object 注解避免内核↔npc 域反向依赖——实际调用点在 main.py 装配层）。
+    move_event（日志可读序：ACT → MOVE）。runtime.tick 返回的意愿独白
+    （NPC_MONOLOGUE，M4-B3 通路）按 `monologue_last` 节流后原样并入批次
+    （batch D2：NPC 开口——冷却 300 tick 内同 NPC 不再开口，防刷屏）。
+    `monologue_last`：{npc_id: 上次发表 tick}，调用方持有（跨拍记忆态，
+    确定性不受影响——节流只发生在实况侧，不进重放面）。
+
+    runtime 参数是 NpcRuntime（object 注解避免内核↔npc 域反向依赖——
+    实际调用点在 main.py 装配层）。
     """
     acts = runtime.tick(tick)  # type: ignore[attr-defined]
     events: list[WorldEvent] = []
-    for act in acts:
-        if act.event_type.value != "npc.act":
+    for event in acts:
+        if event.event_type.value == "npc.monologue":
+            npc_id = str(event.payload.get("npc_id", ""))
+            if monologue_last is not None:
+                last = monologue_last.get(npc_id, -_MONOLOGUE_COOLDOWN_TICKS)
+                if tick - last < _MONOLOGUE_COOLDOWN_TICKS:
+                    continue  # 冷却期内：静默丢弃（表现面节流，非世界真相）
+                monologue_last[npc_id] = tick
+            # 意愿独白的呈现面转换：runtime 产 thought（M4-B3 硬编码），但村民
+            # 的意愿挣扎是**外在可观察面**（路人可见的嘟囔）——投影为 bubble
+            # （广播面）。thought 私密面归 chenmo L2（driver 侧不经此路）。
+            # 事件入流前替换 payload：内容逐位不变，仅 form 呈现档（见 M5-K8
+            # 投递面契约：bubble=广播）。frozen 事件用 model_copy。
+            if event.payload.get("form") == "thought":
+                event = event.model_copy(
+                    update={"payload": {**event.payload, "form": "bubble"}}
+                )
+            events.append(event)
             continue
-        events.append(act)
+        if event.event_type.value != "npc.act":
+            continue
+        events.append(event)
         mv = plan_npc_move(
             state,
-            str(act.payload.get("npc_id", "")),
-            str(act.payload.get("action", "")),
+            str(event.payload.get("npc_id", "")),
+            str(event.payload.get("action", "")),
             pathfinder,
             seed=seed,
             tick=tick,

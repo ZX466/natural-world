@@ -186,12 +186,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("npc.seeded", count=seeded)
     npc_store = NpcStore(store)
     npc_runtime, _hidden_states = await assemble_runtime(npc_store)
+    # 批次 D2：村民意愿面（band≥1 → bubble 独白；节流 300 tick/人）。
+    # 无 power 值（M6 权力面未接实况）→ verdict 全队共享占位（温和冲突档），
+    # 真实意愿合成随权力/需求闭环批次接入。
+    from sim.agent.will import WillingnessVerdict
+
+    npc_runtime.willingness = WillingnessVerdict(score=0.4, band=1)
     pathfinder = Pathfinder(tile_map)
     app.state.npc_runtime = npc_runtime
+    monologue_last: dict[str, int] = {}
 
     def _npc_tick_hook(state: Any, tick: int) -> list[Any] | None:
         batch = npc_events_for_tick(
-            npc_runtime, state, tick, pathfinder, seed=loop.state.world_seed
+            npc_runtime,
+            state,
+            tick,
+            pathfinder,
+            seed=loop.state.world_seed,
+            monologue_last=monologue_last,
         )
         return batch or None
 
