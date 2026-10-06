@@ -50,8 +50,15 @@ export class WorldMirror {
   protagonist: RToken | null = null;
   /** 重连计数（ws.ts 全量重置时递增，供 Phaser 侧清空精灵池） */
   resetCount = 0;
+  /** 戏内天气（批次 D7）：日级视觉状态（服务端权威，快照/delta 随行） */
+  weather = { visual: 'clear', ambientLight: 1.0 };
 
-  applySnapshot(actors: readonly Actor[], lights: readonly Light[]): void {
+  applySnapshot(
+    actors: readonly Actor[],
+    lights: readonly Light[],
+    weather?: { visual: string; ambientLight: number },
+  ): void {
+    if (weather) this.weather = { ...weather };
     this.actors.clear();
     for (const a of actors) {
       this.actors.set(a.rtoken, { ...a });
@@ -63,6 +70,10 @@ export class WorldMirror {
     if (this.protagonist === null && actors.length > 0) {
       this.protagonist = actors[0]?.rtoken ?? null;
     }
+  }
+
+  setWeather(weather: { visual: string; ambientLight: number }): void {
+    this.weather = { ...weather };
   }
 
   applyActorDeltas(deltas: readonly ActorDelta[]): void {

@@ -35,6 +35,8 @@ export class WorldScene extends Phaser.Scene {
   private mapLayer: Phaser.GameObjects.Graphics | null = null;
   private groundImage: Phaser.GameObjects.Image | null = null;
   private nightOverlay: Phaser.GameObjects.Rectangle | null = null;
+  private rainLayer: Phaser.GameObjects.Graphics | null = null;
+  private rainDrops: { x: number; y: number; speed: number }[] = [];
   private lastResetSeen = -1;
   private goalMarker: Phaser.GameObjects.Arc | null = null;
 
@@ -63,6 +65,8 @@ export class WorldScene extends Phaser.Scene {
       .setOrigin(0)
       .setScrollFactor(0)
       .setDepth(100);
+    // 批次 D7：雨层（短雨丝 Graphics；雨落动画在 update 里逐帧推进）
+    this.rainLayer = this.add.graphics().setScrollFactor(0).setDepth(99);
     this.goalMarker = this.add.circle(0, 0, 3, 0xffd75e).setVisible(false).setDepth(50);
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -161,6 +165,7 @@ export class WorldScene extends Phaser.Scene {
     this.syncActorViews(delta);
     this.syncCamera();
     this.syncOverlay();
+    this.syncRain(delta);
   }
 
   private syncActorViews(delta: number): void {
@@ -229,6 +234,41 @@ export class WorldScene extends Phaser.Scene {
     // M-3：静态 import（动态 import 每帧一次 microtask 且 alpha 恒迟一帧）
     const phase = useUiStore.getState().gameClock?.phase ?? 'day';
     const alpha = { day: 0, dawn: 0.12, dusk: 0.2, night: 0.38 }[phase];
-    overlay.setFillStyle(0x0a1030, alpha);
+    // 批次 D7：天气压暗叠乘（雨比阴更暗——服务端 ambient_light 同源档位）
+    const weatherDark = { clear: 0, overcast: 0.08, rain: 0.16 }[this.mirror.weather.visual] ?? 0;
+    overlay.setFillStyle(0x0a1030, Math.min(1, alpha + weatherDark));
+  }
+
+  /** 批次 D7：雨层（rain 时 80 条短雨丝循环下落；其他天气清空层） */
+  private syncRain(delta: number): void {
+    const layer = this.rainLayer;
+    if (layer === null) return;
+    if (this.mirror.weather.visual !== 'rain') {
+      if (this.rainDrops.length > 0) {
+        this.rainDrops = [];
+        layer.clear();
+      }
+      return;
+    }
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const TARGET = 80;
+    while (this.rainDrops.length < TARGET) {
+      this.rainDrops.push({ x: Math.random() * w, y: Math.random() * h, speed: 220 + Math.random() * 160 });
+    }
+    layer.clear();
+    layer.lineStyle(1, 0x9fb8d8, 0.45);
+    for (const drop of this.rainDrops) {
+      drop.y += (drop.speed * delta) / 1000;
+      drop.x -= (drop.speed * delta) / 3000;
+      if (drop.y > h) {
+        drop.y = -8;
+        drop.x = Math.random() * w;
+      }
+      layer.beginPath();
+      layer.moveTo(drop.x, drop.y);
+      layer.lineTo(drop.x - 1.5, drop.y + 7);
+      layer.strokePath();
+    }
   }
 }
