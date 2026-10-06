@@ -15,6 +15,7 @@ wander 零票——本执行面让**全部动作族**都产生走动，镇子活
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 
 from sim.core.events import WorldEvent, move_event
 from sim.core.world import WorldState
@@ -168,10 +169,32 @@ def npc_events_for_tick(
         if event.event_type.value != "npc.act":
             continue
         events.append(event)
+        npc_id = str(event.payload.get("npc_id", ""))
+        action = str(event.payload.get("action", ""))
+        # 批次 D3：生理闭环——动作**到站**才回写需求（吃了才算吃）。
+        # 判定：NPC 位置 == 该动作的目的地（wander/move 无站点语义，跳过）。
+        entity = state.entities.get(npc_id)
+        if entity is not None and not entity.path and action in ("eat", "rest", "work"):
+            goal = _resolve_goal(
+                state,
+                npc_id,
+                action,
+                seed=seed,
+                tick=tick,
+                w=pathfinder.tile_map.width,
+                h=pathfinder.tile_map.height,
+            )
+            if goal is not None and entity.pos == goal:
+                profiles = getattr(runtime, "profiles", None)
+                if profiles is not None and npc_id in profiles:
+                    from sim.npc.needs import apply_remedy
+
+                    p = profiles[npc_id]
+                    profiles[npc_id] = replace(p, needs=apply_remedy(p.needs, action))
         mv = plan_npc_move(
             state,
-            str(event.payload.get("npc_id", "")),
-            str(event.payload.get("action", "")),
+            npc_id,
+            action,
             pathfinder,
             seed=seed,
             tick=tick,

@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from sim.npc.model import Need
 
@@ -47,3 +47,34 @@ def threshold_hits(
         if d.remedy_action and d.name in by_name and by_name[d.name].value >= d.threshold:
             hits.append(d.remedy_action)
     return tuple(hits)
+
+
+# ---------------------------------------------------------------------------
+# 补救动作回写（批次 D3：eat/rest 生理闭环——到站消耗）
+# ---------------------------------------------------------------------------
+
+#: 补救动作 → 需求回写量（正值=紧迫度缓解量，value 直接减；clip 到 [0,1]）
+REMEDY_RELIEF: dict[str, tuple[tuple[str, float], ...]] = {
+    "eat": (("hunger", 0.3), ("energy", 0.15)),  # 吃饱（负=小幅提振social压力）
+    "rest": (("energy", 0.3),),
+}
+
+
+def apply_remedy(needs: tuple[Need, ...], action: str) -> tuple[Need, ...]:
+    """补救动作的需求回写（frozen：replace 生成新元组；clip 到 [0,1]）。
+
+    实况执行面在动作**到站**时调用（未到站不回写——吃了才算吃）。
+    未知动作 no-op。value 语义=紧迫度（1=最紧迫），「缓解」即减 value；
+    负 relief=提振（吃饱心情好，energy 紧迫度降的更多面不在此表）。
+    """
+    relief = REMEDY_RELIEF.get(action)
+    if not relief:
+        return needs
+    by_name = {n.name: n for n in needs}
+    updated: dict[str, Need] = {}
+    for name, amount in relief:
+        need = by_name.get(name)
+        if need is None:
+            continue
+        updated[name] = replace(need, value=min(1.0, max(0.0, need.value - amount)))
+    return tuple(updated.get(n.name, n) for n in needs)
