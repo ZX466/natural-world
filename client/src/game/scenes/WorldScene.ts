@@ -231,6 +231,9 @@ export class WorldScene extends Phaser.Scene {
   private syncOverlay(): void {
     const overlay = this.nightOverlay;
     if (overlay === null) return;
+    if (overlay.width !== this.scale.width || overlay.height !== this.scale.height) {
+      overlay.setSize(this.scale.width, this.scale.height);
+    }
     // M-3：静态 import（动态 import 每帧一次 microtask 且 alpha 恒迟一帧）
     const phase = useUiStore.getState().gameClock?.phase ?? 'day';
     const alpha = { day: 0, dawn: 0.12, dusk: 0.2, night: 0.38 }[phase];

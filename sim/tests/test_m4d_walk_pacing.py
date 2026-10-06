@@ -97,3 +97,29 @@ class TestBootstrapDrainsPaths:
         loop, _store = asyncio.run(build_loop())
         assert loop.state.entities["chenmo"].pos == SPAWN_TILE
         assert all(not e.path for e in loop.state.entities.values()), "创世路径必须排空"
+
+
+class TestMultiHookNoClobber:
+    """D5 教训回归钉：attach_npc_runtime 必须多槽（第二个挂载不得顶掉第一个）。"""
+
+    def test_both_hooks_called(self) -> None:
+        from sim.core.clock import GameClock
+        from sim.core.events import npc_act_event, world_create_event
+        from sim.core.tick import TickLoop
+        from sim.core.world import WorldState, build_default_bus
+
+        loop = TickLoop(
+            clock=GameClock(speed=1.0), bus=build_default_bus(), state=WorldState(world_seed=42)
+        )
+        loop.enqueue(world_create_event(tick=0, seed=42, entity_ids=("a",)))
+        loop.drain_events()
+
+        calls: list[str] = []
+        loop.attach_npc_runtime(lambda state, tick: (calls.append("npc"), [
+            npc_act_event(tick=tick, npc_id="a", action="wander", params={})
+        ])[1])
+        loop.attach_npc_runtime(lambda state, tick: (calls.append("fire"), None)[1])
+
+        loop.advance_frame(1.0)
+        assert calls.count("npc") == 6  # 每 10 tick 一次 × 60
+        assert calls.count("fire") == 6

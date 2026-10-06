@@ -42,6 +42,7 @@ describe('createGame move_request bridge', () => {
         },
         Scene,
         GameObjects,
+        Scale: { RESIZE: 'RESIZE' },
         Math: { Linear: (a: number, _b: number, _t: number) => a },
       };
       return { default: Phaser };

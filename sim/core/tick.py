@@ -62,7 +62,7 @@ class TickLoop:
     perception_frames: Mapping[str, object] = field(default_factory=dict)
     _perception_hook: PerceptionHook | None = field(default=None, repr=False, compare=False)
     # 批次 B：NPC 决策钩子（每 _NPC_DECISION_INTERVAL tick 一次）
-    _npc_hook: NpcRuntimeHook | None = field(default=None, repr=False, compare=False)
+    _npc_hooks: list[NpcRuntimeHook] = field(default_factory=list, repr=False, compare=False)
 
     def advance_frame(self, real_dt: float) -> int:
         """喂入真实秒数，推进 0..N 个 tick（catch-up 封顶）。返回推进数。"""
@@ -125,23 +125,21 @@ class TickLoop:
         self._perception_hook = hook
 
     def attach_npc_runtime(self, hook: NpcRuntimeHook) -> None:
-        """注入 NPC 决策钩子（批次 B）：每 _NPC_DECISION_INTERVAL tick 一次。
-
-        返回的事件批次立即 enqueue（本 tick 入流）——NPC_ACT 走 no-op handler
-        （记录面），MOVE 走正式 handler（真驱动）。None/空返回 = 本拍无事。
-        """
-        self._npc_hook = hook
+        """追加 NPC 钩子（批次 B；多槽列表——D5 教训：单槽时第二个挂载者
+        静默顶掉第一个（NPC 决策钩子被火灾钩子覆盖，村民全体静止 4 小时
+        无人发觉）。序=挂载序（固定执行序语义：先决策后火灾）。"""
+        self._npc_hooks.append(hook)
 
     def _run_npc_runtime(self) -> None:
-        """定时任务挂载点（M0 预留 → 批次 B 兑现）：决策节拍驱动 NPC runtime。"""
-        hook = self._npc_hook
-        if hook is None or self.state.tick % _NPC_DECISION_INTERVAL != 0:
+        """定时任务挂载点（M0 预留 → 批次 B 兑现）：决策节拍驱动全部 NPC 钩子。"""
+        if not self._npc_hooks or self.state.tick % _NPC_DECISION_INTERVAL != 0:
             return
-        batch = hook(self.state, self.state.tick)
-        if not batch:
-            return
-        for event in batch:
-            self.enqueue(event)
+        for hook in self._npc_hooks:
+            batch = hook(self.state, self.state.tick)
+            if not batch:
+                continue
+            for event in batch:
+                self.enqueue(event)
 
     def _step_entity_movement(self) -> None:
         """沿路径走一格（批次 D1 行走节拍：非每 tick 一步）。

@@ -18,6 +18,12 @@ export function createGame(parent: HTMLElement, mirror: WorldMirror): Phaser.Gam
     height: 600,
     pixelArt: true,
     backgroundColor: '#2a4032', // 批次 D8：黑边→暗绿（与草地同族，画面外不刺眼）
+    scale: {
+      mode: Phaser.Scale.RESIZE, // 批次 D8：画布随容器伸缩（截图里右侧全黑的根因：
+      // 固定 800×600 在宽屏上居中，容器其余区域露出父 div 背景）
+      width: 800,
+      height: 600,
+    },
     scene: [new WorldScene(mirror)],
   });
   game.events.on('client:move_request', ({ x, y }: { x: number; y: number }) => {
