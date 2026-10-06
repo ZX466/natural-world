@@ -57,10 +57,20 @@ class TestWeatherPayload:
         from sim.core.world import WorldState, build_default_bus
         from sim.world.map import CHUNK_SIZE, Chunk
 
-        chunks = {(0, 0): Chunk(cx=0, cy=0, ground=(1,) * (CHUNK_SIZE * CHUNK_SIZE),
-                                collision=(True,) * (CHUNK_SIZE * CHUNK_SIZE))}
-        tile_map = __import__("sim.world.map", fromlist=["TileMap"]).TileMap(width=16, height=16, chunks=chunks)
-        loop = TickLoop(clock=GameClock(speed=1.0), bus=build_default_bus(), state=WorldState(world_seed=42))
+        chunks = {
+            (0, 0): Chunk(
+                cx=0,
+                cy=0,
+                ground=(1,) * (CHUNK_SIZE * CHUNK_SIZE),
+                collision=(True,) * (CHUNK_SIZE * CHUNK_SIZE),
+            )
+        }
+        from sim.world.map import TileMap
+
+        tile_map = TileMap(width=16, height=16, chunks=chunks)
+        loop = TickLoop(
+            clock=GameClock(speed=1.0), bus=build_default_bus(), state=WorldState(world_seed=42)
+        )
         loop.enqueue(world_create_event(tick=0, seed=42, entity_ids=("chenmo",)))
         loop.drain_events()
         snap = snapshot_payload(loop, tile_map)

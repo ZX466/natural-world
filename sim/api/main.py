@@ -153,8 +153,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     loop, store = await build_loop()
     tile_map = _default_map()
     # C06-③：感知挂载进 tick 固定执行序第 3 步（帧键=rtoken，WS 不广播）
+    # 批次 D8：感知叙事接真名（rtoken→戏内名映射；名册 villagers + 陈默）。
+    # 名字是戏内事实可出站；映射后 prompt 说「赵铁柱正朝这边走」而非「rt-…」。
+    from sim.content.protagonist import CHENMO_ID, build_anchor
+    from sim.content.villagers import VILLAGER_IDS, VILLAGER_NAMES
+
+    _display_names: dict[str, str] = dict(zip(VILLAGER_IDS, VILLAGER_NAMES, strict=True))
+    _display_names[CHENMO_ID] = "陈默"
+
     loop.attach_perception(
-        lambda state, tick_events: run_perception_step(state, tile_map, tick_events)
+        lambda state, tick_events: run_perception_step(
+            state, tile_map, tick_events, display_name_of=_display_names
+        )
     )
 
     async def on_flush(events: list[Any]) -> None:
@@ -244,7 +254,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # LLM 调用全异步、失败降级（driver 内）；世界照常运转不因 LLM 阻塞。
     from sim.agent.driver import ChenmoDriver
     from sim.api.ws import set_impulse_trigger
-    from sim.content.protagonist import build_anchor, seed_protagonist
+    from sim.content.protagonist import seed_protagonist
     from sim.llm.client import LlmClient
 
     chenmo_seeded = await seed_protagonist(store.session_factory)

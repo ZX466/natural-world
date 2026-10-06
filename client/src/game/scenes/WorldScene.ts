@@ -9,7 +9,7 @@ import type { WorldMirror } from '../world-mirror';
 import { facingRow, walkFrame, advanceAnimClock, inferFacing, type Facing } from '../render/actors';
 import { useUiStore } from '../../store/uiStore';
 
-const PIXEL_SCALE = 2; // 俯视像素调性，M0 固定 2x
+const PIXEL_SCALE = 3; // 批次 D8：2x→3x（48×48 镇铺满视口，人物可辨）
 const TILE = 16;
 // 批次 D1：插值窗口 = 行走节拍（sim 侧 15 tick/格 @1x = 250ms/格）。
 // 服务端每 delta 帧给出新格坐标，客户端在 250ms 内平滑走完一格——

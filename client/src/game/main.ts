@@ -17,7 +17,7 @@ export function createGame(parent: HTMLElement, mirror: WorldMirror): Phaser.Gam
     width: 800,
     height: 600,
     pixelArt: true,
-    backgroundColor: '#1a1f24',
+    backgroundColor: '#2a4032', // 批次 D8：黑边→暗绿（与草地同族，画面外不刺眼）
     scene: [new WorldScene(mirror)],
   });
   game.events.on('client:move_request', ({ x, y }: { x: number; y: number }) => {

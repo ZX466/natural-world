@@ -30,20 +30,27 @@ ACTOR_OUT = REPO / "client" / "public" / "assets" / "actors"
 TILE = 16
 OVERWORLD_COLS = 40  # 640/16
 
-# 地形名 → Overworld 图集 (gx, gy)——逐 tile 像素采样+视觉核对后的裁定（见 ledger）
+# 地形名 → Overworld 图集 (gx, gy)。
+# 批次 D8 视觉纠错（2026-10-06）：首版盲猜大面积错位（grass_3 指到水纹瓦、
+# water 指到田垄、tree 指到深柱、path 指到藤蔓墙……）——像素统计+图集总览
+# 人工目视重裁定（对照表见 tileset_overview.png / palette_fix_compare.png，
+# 用户批准「按顺序完成」后执行）。裁定点：
+#   grass_1=(0,0) 素草 / grass_2=(2,0) 草+灌木变体 / water=(16,0) 纯水 /
+#   tree=(0,5) 圆树冠 / farm_soil=(16,5) 田垄 / path_dirt=(22,4) 石板路 /
+#   house_wall=(8,2) 木墙白窗 / house_roof=(8,0) 棕横纹顶 / house_door=(15,3) 拱门 /
+#   stone=(30,1) 灰石堆 / flower=(0,7) 花草变体（grass_3 废弃——0,3 亮斑过艳）
 TERRAIN: dict[str, tuple[int, int]] = {
-    "grass_1": (0, 4),
-    "grass_2": (2, 4),
-    "grass_3": (0, 3),
-    "water": (0, 1),
-    "tree": (1, 14),
-    "farm_soil": (12, 11),
-    "path_dirt": (12, 12),
-    "house_wall": (4, 12),
-    "house_roof": (7, 0),
-    "house_door": (17, 5),
-    "stone": (0, 12),
-    "flower": (0, 8),
+    "grass_1": (0, 0),
+    "grass_2": (2, 0),
+    "water": (16, 0),
+    "tree": (0, 5),
+    "farm_soil": (16, 5),
+    "path_dirt": (22, 4),
+    "house_wall": (8, 2),
+    "house_roof": (8, 0),
+    "house_door": (15, 3),
+    "stone": (30, 1),
+    "flower": (0, 7),
 }
 
 

@@ -8,18 +8,17 @@
   "tile_size": 16,
   "cols": 40,
   "ground": {
-    "grass_1": 160,
-    "grass_2": 162,
-    "grass_3": 120,
-    "water": 40,
-    "tree": 561,
-    "farm_soil": 452,
-    "path_dirt": 492,
-    "house_wall": 484,
-    "house_roof": 7,
-    "house_door": 217,
-    "stone": 480,
-    "flower": 320
+    "grass_1": 0,
+    "grass_2": 2,
+    "water": 16,
+    "tree": 200,
+    "farm_soil": 216,
+    "path_dirt": 182,
+    "house_wall": 88,
+    "house_roof": 8,
+    "house_door": 135,
+    "stone": 70,
+    "flower": 280
   },
   "actors": {
     "chenmo": {
