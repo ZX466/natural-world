@@ -65,11 +65,14 @@ class NpcRuntime:
         self,
         tick: int,
         *,
+        ticks: int = 1,
         hidden_states: dict[str, HiddenState] | None = None,
         context_of: Callable[[str], str] | None = None,
     ) -> list[WorldEvent]:
         """推进一 tick：隐藏档重估(+E1 浮现事件) → 需求 → 效用 → 事件批次（顺序固定，可重放）。
 
+        ticks：本拍推进的游戏秒数（批次 B 决策节拍 10 → 需求按 10 tick 推进，
+        保持「每游戏秒一推进」的语义不随节拍漂移）。其余同上。
         hidden_states：物化产物 {npc_id: HiddenState}；传入时第 0 步按
         context_of(npc_id) 重估触发窗口（frozen.evaluate 返回新实例，原 dict 更新）。
         context_of：npc_id → 自身处境文本（感知帧叙事+内感受）；缺省恒空 =
@@ -83,7 +86,7 @@ class NpcRuntime:
         """
         events: list[WorldEvent] = []
 
-        # 0. 隐藏档触发窗口重估（每 tick；hidden.py §2 纯函数）+ E1 浮现事件
+        # 0. 隐藏档触发窗口重估（每拍；hidden.py §2 纯函数）+ E1 浮现事件
         if hidden_states is not None:
             for nid in self._order:
                 if nid in hidden_states:
@@ -101,11 +104,11 @@ class NpcRuntime:
                             )
                         )
 
-        # 1. 需求推进（frozen：replace 生成新元组）
+        # 1. 需求推进（frozen：replace 生成新元组；ticks = 本拍游戏秒数）
         advanced: dict[str, NpcProfileData] = {}
         for npc_id in self._order:
             p = self.profiles[npc_id]
-            advanced[npc_id] = replace(p, needs=advance_needs(p.needs))
+            advanced[npc_id] = replace(p, needs=advance_needs(p.needs, ticks=ticks))
 
         # 2. L0 统计档不做决策（不建对象语义）；其余按固定序参与批量打分
         active_ids = [nid for nid in self._order if advanced[nid].lod > 0]

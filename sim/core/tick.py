@@ -18,11 +18,17 @@ from sim.world.pathfinding import Pathfinder
 
 _MAX_TICKS_PER_FRAME = 240  # 16x = 960 tick/s 上限按 4s catch-up → 单帧封顶
 _PERCEPTION_EVERY_N_TICKS = 2  # H-1 方案 3：视觉传播降采样（听觉随帧全速）
+_NPC_DECISION_INTERVAL = 10  # 批次 B：L1 决策节拍（60tps 下每秒 5 轮，防事件洪泛）
 
 # 感知装配钩子签名：(state, tick_events) -> dict[rtoken, frame]。
 # 返回值 value 用 object 避免内核 import 感知域（内核零依赖感知，钩子由外层注入）；
 # Mapping 保持值型协变，调用方 PerceptionFrame 可直接传入。
 PerceptionHook = Callable[[WorldState, list[WorldEvent]], "Mapping[str, object]"]
+
+# NPC 决策钩子签名（批次 B）：(state, tick) -> 本节拍事件批次（WorldEvent 列表）。
+# 返回批次由 TickLoop 经 enqueue 逐条入流（C4 唯一写路径）；None/空 = 本拍无事。
+# 与 PerceptionHook 同纪律：内核零依赖 npc 域，实现由装配层注入（main.py）。
+NpcRuntimeHook = Callable[[WorldState, int], "list[WorldEvent] | None"]
 
 
 @dataclass
@@ -41,6 +47,8 @@ class TickLoop:
     # M1 感知：tick 内装配的最新帧（rtoken → frame）；感知域消费，WS 不广播
     perception_frames: Mapping[str, object] = field(default_factory=dict)
     _perception_hook: PerceptionHook | None = field(default=None, repr=False, compare=False)
+    # 批次 B：NPC 决策钩子（每 _NPC_DECISION_INTERVAL tick 一次）
+    _npc_hook: NpcRuntimeHook | None = field(default=None, repr=False, compare=False)
 
     def advance_frame(self, real_dt: float) -> int:
         """喂入真实秒数，推进 0..N 个 tick（catch-up 封顶）。返回推进数。"""
@@ -53,6 +61,7 @@ class TickLoop:
         """固定执行序：0 熵注入（M5 批次 A 接线）→ 1 实体移动 → 2 定时任务（M0 空）→ 3 感知。"""
         self._maybe_daily_reseed()
         self._step_entity_movement()
+        self._run_npc_runtime()  # 批次 B：定时任务挂载点兑现（决策节拍）
         self._run_perception()
         # 预留挂载点（M1+：L1 效用 / Intent 执行时二次校验）
         self.state = self.state.model_copy(update={"tick": self.state.tick + 1})
@@ -100,6 +109,25 @@ class TickLoop:
     def attach_perception(self, hook: PerceptionHook) -> None:
         """注入感知装配钩子：签名 (state, tick_events) -> dict[rtoken, frame]。"""
         self._perception_hook = hook
+
+    def attach_npc_runtime(self, hook: NpcRuntimeHook) -> None:
+        """注入 NPC 决策钩子（批次 B）：每 _NPC_DECISION_INTERVAL tick 一次。
+
+        返回的事件批次立即 enqueue（本 tick 入流）——NPC_ACT 走 no-op handler
+        （记录面），MOVE 走正式 handler（真驱动）。None/空返回 = 本拍无事。
+        """
+        self._npc_hook = hook
+
+    def _run_npc_runtime(self) -> None:
+        """定时任务挂载点（M0 预留 → 批次 B 兑现）：决策节拍驱动 NPC runtime。"""
+        hook = self._npc_hook
+        if hook is None or self.state.tick % _NPC_DECISION_INTERVAL != 0:
+            return
+        batch = hook(self.state, self.state.tick)
+        if not batch:
+            return
+        for event in batch:
+            self.enqueue(event)
 
     def _step_entity_movement(self) -> None:
         """沿路径走一格。路径耗尽不发事件；每格一次 MOVE 不必要——

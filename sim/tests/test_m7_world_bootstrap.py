@@ -1,8 +1,9 @@
-"""M7 世界引导：真实地图加载（fail-safe 回退）+ 创世 4 实体落可走格。
+"""M7 世界引导：真实地图加载（fail-safe 回退）+ 创世实体落可走格。
 
-设计：docs/arch/m7-render-art.md §2.3 R7（创世村民）。
+设计：docs/arch/m7-render-art.md §2.3 R7（创世村民）；批次 B 扩容：
+世界 = chenmo + 50 村民（villagers.py 名册），出生位确定性环形散布。
 出生点搬运走**事件**（move 事件经 issue_move，C4 唯一写路径）——
-创世 (0,0) → SPAWN (8,16) 的路径段事件在 build_loop 创世后同 tick 入队。
+创世 (0,0) → SPAWN 的路径段事件在 build_loop 创世后同 tick 入队。
 """
 
 import pytest
@@ -10,7 +11,7 @@ import pytest
 pytestmark = pytest.mark.t1
 
 SPAWN = (8, 16)
-GENESIS = {"chenmo", "villager_1", "villager_2", "villager_3"}
+ROSTER = 50
 
 
 class TestDefaultMap:
@@ -42,23 +43,25 @@ class TestDefaultMap:
 
 
 class TestGenesis:
-    def test_build_loop_four_entities_spawn_area(self):
-        """创世 4 实体：主角在 SPAWN，村民错格环绕（M-2：防同格叠放盖住主角）。"""
+    def test_build_loop_51_entities_scattered(self):
+        """创世 51 实体：主角在 SPAWN，50 村民环形散布（全部错格、可走）。"""
         import asyncio
 
         from sim.api.main import build_loop
 
         loop, _store = asyncio.run(build_loop())
-        assert set(loop.state.entities.keys()) == GENESIS
+        assert len(loop.state.entities) == ROSTER + 1
         assert loop.state.entities["chenmo"].pos == SPAWN
-        villagers = [loop.state.entities[v].pos for v in ("villager_1", "villager_2", "villager_3")]
-        assert len(set(villagers)) == 3, "村民必须错格"
-        assert SPAWN not in villagers, "村民不得与主角同格"
+        villager_ids = [k for k in loop.state.entities if k.startswith("villager_")]
+        assert len(villager_ids) == ROSTER
+        positions = [loop.state.entities[v].pos for v in villager_ids]
+        assert len(set(positions)) == ROSTER, "村民必须错格"
+        assert SPAWN not in positions, "村民不得与主角同格"
         # 全部落在可走格
         from sim.api.main import _default_map
 
         m = _default_map()
-        for pos in [*villagers, SPAWN]:
+        for pos in [*positions, SPAWN]:
             assert m.is_walkable(*pos), f"{pos} 不可走"
 
     def test_spawn_tile_walkable(self):

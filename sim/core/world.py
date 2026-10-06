@@ -163,6 +163,21 @@ def _apply_npc_death(state: WorldState, event: WorldEvent, ctx: TickContext) -> 
     return ApplyResult(state=state.model_copy(update={"entities": entities}))
 
 
+def _apply_npc_act(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    """NPC_ACT（批次 B 实况接线）：决策记录进事件日志，状态层 no-op。
+
+    L1 效用决策（sim/npc/runtime.py）每决策节拍产 NPC_ACT；其**可观察后果**
+    由执行面拆成正式事件走各自 handler（移动 → MOVE；余者批次 C+）。
+    本 handler 与 `_apply_entropy_inject` 同口径：no-op ⇒ 含 NPC_ACT 与不含
+    NPC_ACT 的同构序列 fold 出逐位一致的 state_hash（回放安全，C5）。
+    NPC 需求/决策是 runtime 内存态（不进 WorldState），不因重放重演。
+    """
+    from sim.core.events import NpcActPayload
+
+    NpcActPayload.model_validate(event.payload)  # schema 校验；无状态效果
+    return ApplyResult(state=state)
+
+
 def _apply_tile_changed(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
     """M3 预留：M0 地图静态，收到即拒绝。"""
     msg = "tile_changed 在 M0 未启用（可变地图底座是 M3）"
@@ -170,7 +185,7 @@ def _apply_tile_changed(state: WorldState, event: WorldEvent, ctx: TickContext) 
 
 
 def build_default_bus() -> EventBus:
-    """M0 默认事件总线。"""
+    """M0 默认事件总线（批次 B 增 NPC_ACT no-op——决策记录面）。"""
     bus = EventBus()
     bus.register(EventKind.WORLD_CREATE, _apply_world_create)
     bus.register(EventKind.MOVE, _apply_move)
@@ -178,4 +193,5 @@ def build_default_bus() -> EventBus:
     bus.register(EventKind.ENTROPY_INJECT, _apply_entropy_inject)
     bus.register(EventKind.TILE_CHANGED, _apply_tile_changed)
     bus.register(EventKind.NPC_DEATH, _apply_npc_death)
+    bus.register(EventKind.NPC_ACT, _apply_npc_act)
     return bus

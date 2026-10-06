@@ -42,8 +42,12 @@ logger = structlog.get_logger()
 
 manager = ConnectionManager()
 
-# M7（R7）：创世名册——陈默 + 3 名占位村民（静止实体，AI 归 M2 装配线）
-GENESIS_ENTITIES: tuple[str, ...] = ("chenmo", "villager_1", "villager_2", "villager_3")
+# M7（R7）：创世名册——陈默 + 3 名占位村民（静止实体，AI 归 M2 装配线）。
+# 批次 B：占位村民退役，正式名册 50 村民（sim/content/villagers.py）入列——
+# 世界 = chenmo + 50 villager（51 实体）。
+GENESIS_ENTITIES: tuple[str, ...] = ("chenmo",) + tuple(
+    f"villager_{i + 1:02d}" for i in range(50)
+)
 #: 出生点（build_town.py SPAWN 同源：药铺屋前空地；创世 (0,0) 落树墙内 → 事件搬运）
 SPAWN_TILE: tuple[int, int] = (8, 16)
 TOWN_MAP_PATH = Path(__file__).resolve().parents[1] / "content" / "linhe-town.json"
@@ -85,16 +89,15 @@ async def build_loop() -> tuple[TickLoop, Any]:
     store = SqlEventStore(session_factory)
     loop = TickLoop(clock=_make_clock(), bus=build_default_bus(), state=WorldState(world_seed=42))
     loop.enqueue(world_create_event(tick=0, seed=42, entity_ids=GENESIS_ENTITIES))
-    # M7（R7）：创世实体 (0,0)（world.py 硬编码）落在树墙内——事件搬运到出生点。
-    # 4 实体各一条 move 事件（C4 唯一写路径）；推 1 秒帧让 path 消费完（60tps，
-    # 单段路径 1 tick 即达，余 tick 空转无害——世界此刻无连接，无广播成本）。
-    # M-2：村民错格出生（同格叠放会被渲染按序盖住主角）——确定性常量错格。
-    spawn_of: dict[str, tuple[int, int]] = {
-        "chenmo": SPAWN_TILE,
-        "villager_1": (SPAWN_TILE[0] - 1, SPAWN_TILE[1]),
-        "villager_2": (SPAWN_TILE[0] + 1, SPAWN_TILE[1]),
-        "villager_3": (SPAWN_TILE[0], SPAWN_TILE[1] + 1),
-    }
+    # 批次 B：创世村民搬运走**确定性散布**（villagers.spawn_positions——环形向外
+    # 找可走格，重跑逐位一致）。50 条 move 事件（C4 唯一写路径）。
+    from sim.content.villagers import SPAWN_BASE, spawn_positions
+
+    tile_map_for_spawn = _default_map()
+    positions = spawn_positions(tile_map_for_spawn, base=SPAWN_BASE, count=len(GENESIS_ENTITIES) - 1)
+    spawn_of: dict[str, tuple[int, int]] = {"chenmo": SPAWN_TILE}
+    for eid, pos in zip(GENESIS_ENTITIES[1:], positions, strict=True):
+        spawn_of[eid] = pos
     for eid in GENESIS_ENTITIES:
         loop.issue_move(eid, [(0, 0), spawn_of[eid]])
     loop.advance_frame(1.0)
@@ -135,6 +138,32 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.loop = loop
     app.state.store = store
     app.state.tile_map = tile_map
+
+    # ── 批次 B：NPC 装配进实况世界 ──────────────────────────────────
+    # 1) 播种 50 村民 profile（幂等；库已有则零行）；
+    # 2) 装配 NpcRuntime（物化 profiles → 效用决策器）；
+    # 3) 挂决策钩子（每 10 tick 一轮 → NPC_ACT 批次 + wander/move 拆解 MOVE）。
+    from sim.content.villagers import seed_villagers
+    from sim.core.persistence.npc_store import NpcStore
+    from sim.npc.assemble import assemble_runtime
+    from sim.npc.sim_exec import npc_events_for_tick
+    from sim.world.pathfinding import Pathfinder
+
+    seeded = await seed_villagers(session_factory)
+    if seeded:
+        logger.info("npc.seeded", count=seeded)
+    npc_store = NpcStore(store)
+    npc_runtime, hidden_states = await assemble_runtime(npc_store)
+    pathfinder = Pathfinder(tile_map)
+    app.state.npc_runtime = npc_runtime
+
+    def _npc_tick_hook(state: Any, tick: int) -> list[Any] | None:
+        batch = npc_events_for_tick(
+            npc_runtime, state, tick, pathfinder, seed=loop.state.world_seed
+        )
+        return batch or None
+
+    loop.attach_npc_runtime(_npc_tick_hook)
 
     # 批次 A 接线（M6 补施工）：rng 状态捕获缝——锚点存档时 capture_rng_state 的
     # 真实实现（registry 由 world_seed 纯函数重建 + 抽签 cache 在 TickContext）。
