@@ -15,6 +15,9 @@ export const worldMirror = new WorldMirror();
 
 const SIM_WS_URL = 'ws://127.0.0.1:8000/ws';
 const MOCK_TICK_MS = 1000 / 60;
+/** player_impulse.text 上限（PlayerImpulseMessage schema maxLength 64 同源） */
+export const IMPULSE_MAX_LEN = 64;
+const IMPULSE_TOO_LONG_MSG = '话说得太长了，说不清。';
 
 function phaseOf(hour: number): InGameTime['phase'] {
   if (hour >= 5 && hour < 7) return 'dawn';
@@ -43,7 +46,23 @@ class Runtime {
         }
       },
       onSnapshot: () => useUiStore.getState().setWsStatus('open'),
-      onDelta: () => {},
+      onDelta: (msg) => {
+        // 批次 A：计划看板（delta 即全量替换语义，sim 侧 PlanDelta[] 无增删协议）
+        if (msg.plan) useUiStore.getState().setPlans([...msg.plan]);
+      },
+      onMonologue: (msg) => {
+        useUiStore.getState().pushMonologue(msg.form, msg.content);
+      },
+      onImpulseFeedback: (msg) => {
+        const store = useUiStore.getState();
+        store.setLastImpulseCue(msg.cue);
+        store.setImpulseError(null);
+        store.pushMonologue(msg.reaction_monologue.form, msg.reaction_monologue.content);
+      },
+      onError: (msg) => {
+        // 仅 impulse 来源的 error 入玩家可见位；其他 ref（load_anchor 等）当前无 UI 面
+        if (msg.ref === 'player_impulse') useUiStore.getState().setImpulseError(msg.message);
+      },
     });
     this.ws.connect();
     this.loadWorldMap();
@@ -116,6 +135,30 @@ class Runtime {
       target_y: y,
     };
     this.ws?.send(move);
+  }
+
+  /** 念头注入（ImpulseBar → sim player_impulse；批次 A）。
+   *  客户端预校验：空白/超长即本地拒（不发帧、置 impulseError）；
+   *  服务端 impulse_gate 拒收经 error 帧（ref=player_impulse）回同一 UI 位。
+   *  mock 分支：本地出 accepted feedback（模板独白），骨架验收不受后端阻塞。 */
+  sendImpulse(text: string): void {
+    const store = useUiStore.getState();
+    const cleaned = text.trim();
+    if (!cleaned) {
+      store.setImpulseError('念头还没成形。');
+      return;
+    }
+    if (cleaned.length > IMPULSE_MAX_LEN) {
+      store.setImpulseError(IMPULSE_TOO_LONG_MSG);
+      return;
+    }
+    if (this.mockTimer !== null) {
+      store.setLastImpulseCue('accepted');
+      store.setImpulseError(null);
+      store.pushMonologue('thought', '心里默默记下了这个念头。');
+      return;
+    }
+    this.ws?.send({ type: 'player_impulse', channel: 'control', text: cleaned });
   }
 
   // ── mock 驱动（TASK-C05 起服务后删除）─────────────────────────

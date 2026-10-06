@@ -5,7 +5,14 @@
  * （收到 full_snapshot 才算恢复）——防增量丢失造成表现层幻觉。
  * 指数退避重连；戏内通道收到的未知消息类型静默忽略（versioning.md 铁律）。
  */
-import type { FullSnapshotMessage, StateDeltaMessage, WsMessage } from './protocol';
+import type {
+  FullSnapshotMessage,
+  ImpulseFeedbackMessage,
+  MonologueMessage,
+  StateDeltaMessage,
+  WsErrorMessage,
+  WsMessage,
+} from './protocol';
 import type { WorldMirror } from '../game/world-mirror';
 import { worldClock } from '../game/clock';
 
@@ -28,6 +35,12 @@ export interface WsCallbacks {
   onStatus: (status: WsStatus) => void;
   onSnapshot: (msg: FullSnapshotMessage) => void;
   onDelta: (msg: StateDeltaMessage) => void;
+  /** 批次 A：narrative 通道独白帧（bubble/thought/plan 三形态） */
+  onMonologue?: (msg: MonologueMessage) => void;
+  /** 批次 A：impulse 乐观反馈（入网即回） */
+  onImpulseFeedback?: (msg: ImpulseFeedbackMessage) => void;
+  /** 批次 A：协议 error 帧（ref 定位来源；player_impulse 由 runtime 消费） */
+  onError?: (msg: WsErrorMessage) => void;
 }
 
 export class WsClient {
@@ -105,6 +118,15 @@ export class WsClient {
       case 'session_state':
         // M5-K3 会话首帧（刻度/暂停态/游标）；M7：time 可选随帧同步
         if (msg.time) worldClock.apply(msg.time);
+        break;
+      case 'monologue':
+        this.cb.onMonologue?.(msg as MonologueMessage);
+        break;
+      case 'impulse_feedback':
+        this.cb.onImpulseFeedback?.(msg as ImpulseFeedbackMessage);
+        break;
+      case 'error':
+        this.cb.onError?.(msg as WsErrorMessage);
         break;
       default:
         // 未知类型/戏外未实现消息：静默忽略（不出错不出戏，versioning.md）

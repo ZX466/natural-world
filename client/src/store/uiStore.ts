@@ -6,7 +6,19 @@
  * codex 意见 2：快照/世界真相数值禁入本 store（戏外调试层走 W2 独立通道，M0 不做）。
  */
 import { create } from 'zustand';
+import type { PlanDelta } from '../net/protocol';
 import type { WsStatus } from '../net/ws';
+
+/** 独白环形缓冲上限（超过丢最旧；M4 叙事面） */
+export const MONOLOGUE_CAP = 20;
+
+export type MonologueForm = 'bubble' | 'thought' | 'plan';
+
+/** 独白条目（monologue 帧 / impulse reaction_monologue 的消费端形态） */
+export interface MonologueEntry {
+  form: MonologueForm;
+  content: string;
+}
 
 /** 戏内时间白名单——本 store 允许暴露的全部世界派生字段。 */
 export interface InGameTime {
@@ -24,13 +36,22 @@ interface UiState {
   gameClock: InGameTime | null;
   speed: Speed;
   paused: boolean;
-  /** impulse 反馈 cue（M4 起有真实数据；M0 供占位 UI） */
+  /** impulse 反馈 cue（批次 A 起接真实数据源） */
   lastImpulseCue: string | null;
+  /** 独白流（环形缓冲，上限 MONOLOGUE_CAP；只进面板文本，高频位置数据不在此） */
+  monologues: MonologueEntry[];
+  /** 计划看板（state_delta.plan 整组替换；空 = 收起） */
+  plans: PlanDelta[];
+  /** impulse 入站 error 帧玩家可见文案（仅 ref=player_impulse 置位） */
+  impulseError: string | null;
   setWsStatus: (s: WsStatus) => void;
   setGameClock: (t: InGameTime | null) => void;
   setSpeed: (s: Speed) => void;
   setPaused: (p: boolean) => void;
   setLastImpulseCue: (cue: string | null) => void;
+  pushMonologue: (form: MonologueForm, content: string) => void;
+  setPlans: (plans: PlanDelta[]) => void;
+  setImpulseError: (e: string | null) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -39,9 +60,16 @@ export const useUiStore = create<UiState>((set) => ({
   speed: 1,
   paused: false,
   lastImpulseCue: null,
+  monologues: [],
+  plans: [],
+  impulseError: null,
   setWsStatus: (wsStatus) => set({ wsStatus }),
   setGameClock: (gameClock) => set({ gameClock }),
   setSpeed: (speed) => set({ speed }),
   setPaused: (paused) => set({ paused }),
   setLastImpulseCue: (lastImpulseCue) => set({ lastImpulseCue }),
+  pushMonologue: (form, content) =>
+    set((s) => ({ monologues: [...s.monologues, { form, content }].slice(-MONOLOGUE_CAP) })),
+  setPlans: (plans) => set({ plans }),
+  setImpulseError: (impulseError) => set({ impulseError }),
 }));
