@@ -10,9 +10,10 @@ import type { MirrorActor } from '../world-mirror';
 export type Facing = 'n' | 'e' | 's' | 'w';
 export type Anim = 'idle' | 'walk';
 
-/** 位移方向 → 朝向（对角取主导轴，|dy|≥|dx| 时 y 优先；零位移默认朝南）。 */
-export function inferFacing(dx: number, dy: number): Facing {
-  if (dx === 0 && dy === 0) return 's';
+/** 位移方向 → 朝向（对角取主导轴，|dy|≥|dx| 时 y 优先；零位移**沿用原朝向**——
+ *  H-3：停下不许转身，调用方传 lastFacing 缓存）。 */
+export function inferFacing(dx: number, dy: number, lastFacing: Facing = 's'): Facing {
+  if (dx === 0 && dy === 0) return lastFacing;
   if (Math.abs(dy) >= Math.abs(dx)) return dy > 0 ? 's' : 'n';
   return dx > 0 ? 'e' : 'w';
 }
@@ -22,16 +23,29 @@ export function inferAnim(prev: { x: number; y: number }, cur: { x: number; y: n
   return prev.x === cur.x && prev.y === cur.y ? 'idle' : 'walk';
 }
 
+/** H-2：walk 动画钟推进——moved 时从站立帧起步并累加 delta，静止归 -1（站立帧）。
+ *  修前的实现恰好写反（moved 恒归 0 → 循环死在第 0 帧）。 */
+export function advanceAnimClock(current: number, moved: boolean, deltaMs: number): number {
+  if (!moved) return -1;
+  return current < 0 ? 0 : current + deltaMs;
+}
+
 /** facing → 图集行号（build_palette.py 布局实测：下/上/右/左 = 0/1/2/3）。 */
 export function facingRow(facing: Facing): number {
   return { down: 0, up: 1, right: 2, left: 3 }[({ n: 'up', e: 'right', s: 'down', w: 'left' } as const)[facing]];
 }
 
-/** walk 循环帧号（3 帧布局：步-站-步，150ms/帧）。anim 传 idle 恒取站立帧 1。 */
+/** C-2：chenmo.png 272×256 = **17 列**×16 行 @16px——Phaser spritesheet 线性帧号
+ *  f = col + row*COLS。此前按 3 列算（row*3）→ 帧号全落表第 0 行，朝北 idle
+ *  命中全透明帧（主角消失）。COLS 与 png 实宽绑定，换素材必同改。 */
+const CHENMO_COLS = 17;
+const FRAMES_PER_ROW = 3; // 步-站-步
+
+/** walk 循环帧号（线性 f = row*COLS + phase）。animClock<0 = 站立帧（col 1）。 */
 export function walkFrame(row: number, animClockMs: number): number {
-  if (animClockMs < 0) return row * 3 + 1; // 负钟=站立
-  const phase = Math.floor(animClockMs / 150) % 3;
-  return row * 3 + phase;
+  if (animClockMs < 0) return row * CHENMO_COLS + 1;
+  const phase = Math.floor(animClockMs / 150) % FRAMES_PER_ROW;
+  return row * CHENMO_COLS + phase;
 }
 
 /** Actor 当前逻辑帧号（合成入口：朝向行 + 动画帧）。 */

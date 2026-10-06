@@ -64,7 +64,7 @@ class TestTownMap:
         import sys
 
         before = TOWN_JSON.read_bytes()
-        r = subprocess.run(
+        subprocess.run(
             [sys.executable, str(REPO / "sim" / "content" / "build_town.py")],
             capture_output=True,
             check=True,

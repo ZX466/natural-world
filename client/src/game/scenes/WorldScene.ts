@@ -6,7 +6,8 @@
  */
 import Phaser from 'phaser';
 import type { WorldMirror } from '../world-mirror';
-import { frameOf } from '../render/actors';
+import { facingRow, walkFrame, advanceAnimClock, inferFacing, type Facing } from '../render/actors';
+import { useUiStore } from '../../store/uiStore';
 
 const PIXEL_SCALE = 2; // 俯视像素调性，M0 固定 2x
 const TILE = 16;
@@ -21,6 +22,8 @@ interface ActorView {
   prevY: number;
   /** walk 动画钟（位移中累加 delta；静止归 -1=站立帧） */
   animClockMs: number;
+  /** H-3：最后非零朝向（停下沿用，不转身） */
+  lastFacing: 'n' | 'e' | 's' | 'w';
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -178,7 +181,7 @@ export class WorldScene extends Phaser.Scene {
             0,
           )
           .setDepth(10);
-        view = { sprite, prevX: actor.x, prevY: actor.y, animClockMs: -1 };
+        view = { sprite, prevX: actor.x, prevY: actor.y, animClockMs: -1, lastFacing: 's' as Facing };
         this.views.set(rtoken, view);
         if (isProtagonist) this.cameras.main.startFollow(sprite, true, 0.12, 0.12);
       }
@@ -190,8 +193,13 @@ export class WorldScene extends Phaser.Scene {
       // R2：位移推断 anim/facing → 帧号（villager 无 walk 环，恒帧 0；R7 静止）
       if (rtoken === this.mirror.protagonist) {
         const moved = view.prevX !== actor.x || view.prevY !== actor.y;
-        view.animClockMs = moved ? 0 : view.animClockMs < 0 ? -1 : view.animClockMs + delta;
-        view.sprite.setFrame(frameOf(actor, { x: view.prevX, y: view.prevY }, view.animClockMs));
+        // H-2：walk 累加/idle 归 -1（修前写反 → 循环死在第 0 帧）
+        view.animClockMs = advanceAnimClock(view.animClockMs, moved, delta);
+        // H-3：零位移沿用 lastFacing（停下不转身）；frameOf 只用方向行号
+        if (moved) {
+          view.lastFacing = inferFacing(actor.x - view.prevX, actor.y - view.prevY, view.lastFacing);
+        }
+        view.sprite.setFrame(walkFrame(facingRow(view.lastFacing), view.animClockMs));
         view.prevX = actor.x;
         view.prevY = actor.y;
       }
@@ -215,11 +223,9 @@ export class WorldScene extends Phaser.Scene {
   private syncOverlay(): void {
     const overlay = this.nightOverlay;
     if (overlay === null) return;
-    // 读薄 store（低频；Zustand 非 React 用法 getState，不触发渲染树）
-    import('../../store/uiStore').then(({ useUiStore }) => {
-      const phase = useUiStore.getState().gameClock?.phase ?? 'day';
-      const alpha = { day: 0, dawn: 0.12, dusk: 0.2, night: 0.38 }[phase];
-      overlay.setFillStyle(0x0a1030, alpha);
-    });
+    // M-3：静态 import（动态 import 每帧一次 microtask 且 alpha 恒迟一帧）
+    const phase = useUiStore.getState().gameClock?.phase ?? 'day';
+    const alpha = { day: 0, dawn: 0.12, dusk: 0.2, night: 0.38 }[phase];
+    overlay.setFillStyle(0x0a1030, alpha);
   }
 }

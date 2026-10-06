@@ -146,3 +146,29 @@ class TestGroundB64:
         assert "collision_b64" in MapChunk.model_fields
         wm_props = WorldMapResponse.model_json_schema()["$defs"]["MapChunk"]["properties"]
         assert "ground_b64" in wm_props
+
+
+class TestTilesetName:
+    """C-1 回归钉：真实图带图集名（前端瓦片渲染开关），占位图恒 grid。"""
+
+    def test_town_map_carries_tileset_name(self):
+        from sim.api.main import _default_map
+        from sim.api.ws import map_static_payload
+
+        raw = map_static_payload(_default_map())
+        assert raw["tileset"] == "zelda_like_v1"
+
+    def test_fallback_map_stays_grid(self, monkeypatch, tmp_path):
+        import sim.api.main as main_mod
+        from sim.api.ws import map_static_payload
+
+        monkeypatch.setattr(main_mod, "TOWN_MAP_PATH", tmp_path / "no.json")
+        raw = map_static_payload(main_mod._default_map())
+        assert raw["tileset"] == "grid"
+
+    def test_tileset_name_by_size(self):
+        from sim.api.ws import _tileset_name
+        from sim.world.map import TileMap
+
+        assert _tileset_name(TileMap(width=48, height=48)) == "zelda_like_v1"
+        assert _tileset_name(TileMap(width=32, height=32)) == "grid"

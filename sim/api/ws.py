@@ -390,7 +390,11 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
         "actors": actors,
         "lights": [],
         "structures": [],
-        "map": {"w": tile_map.width, "h": tile_map.height, "tileset": "grid"},
+        "map": {
+            "w": tile_map.width,
+            "h": tile_map.height,
+            "tileset": _tileset_name(tile_map),  # C-1：真实图带图集名（快照与 HTTP 同源）
+        },
         "weather": {"visual": "clear", "ambient_light": 1.0},
         "combat": None,
         "time": _time_payload(loop.state.tick),
@@ -506,9 +510,21 @@ def map_static_payload(tile_map: TileMap) -> dict[str, Any]:
     return {
         "w": tile_map.width,
         "h": tile_map.height,
-        "tileset": "grid",
+        # C-1 修复：tileset 名随真实图携带（fail-safe 占位图='grid' → 前端色块回退；
+        # 真实图='zelda_like_v1' → 前端图集渲染）。名值与 sim/content/build_palette.py
+        # 的 palette["tileset"] 同源——经 TOWN_MAP_PATH 加载时从文件名约定取，占位恒 grid。
+        "tileset": _tileset_name(tile_map),
         "chunks": chunks,
     }
+
+
+def _tileset_name(tile_map: TileMap) -> str:
+    """真实小镇图（48×48）→ 'zelda_like_v1'；占位图 → 'grid'（前端色块开关，C-1）。
+
+    判据用尺寸而非引用传递（map_static_payload 无 app 上下文）；48×48 恰是
+    build_town.py 产物尺寸，占位图恒 32×32——两值是内容常量而非魔数。
+    """
+    return "zelda_like_v1" if (tile_map.width, tile_map.height) == (48, 48) else "grid"
 
 
 def handle_client_message(

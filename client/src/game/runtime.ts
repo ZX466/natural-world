@@ -8,6 +8,7 @@
 import { WorldMirror } from './world-mirror';
 import { WsClient, type WsStatus } from '../net/ws';
 import { fetchWorldMap, assembleCollision, assembleGround } from '../net/worldApi';
+import { worldClock } from './clock';
 import { useUiStore, type InGameTime, type Speed } from '../store/uiStore';
 
 export const worldMirror = new WorldMirror();
@@ -32,7 +33,15 @@ class Runtime {
 
   start(): void {
     this.ws = new WsClient(SIM_WS_URL, worldMirror, {
-      onStatus: (status: WsStatus) => useUiStore.getState().setWsStatus(status),
+      onStatus: (status: WsStatus) => {
+        useUiStore.getState().setWsStatus(status);
+        // H-4：真实连接到达 → 停 mock（假时钟/假地图反盖真实数据的竞态根除）；
+        // H-1：真实链路起 clock（世界静止无 delta 时前端时钟仍平滑推进，R3）。
+        if (status === 'open') {
+          this.stopMock();
+          worldClock.start();
+        }
+      },
       onSnapshot: () => useUiStore.getState().setWsStatus('open'),
       onDelta: () => {},
     });
@@ -42,6 +51,16 @@ class Runtime {
     setTimeout(() => {
       if (useUiStore.getState().wsStatus !== 'open') this.startMock();
     }, 2500);
+  }
+
+  /** H-4：mock 停转（定时器清空 + 计数归零；sendControl/requestMove 的 mock
+   *  分支以 mockTimer===null 判定，清空即自然切回真实链路）。 */
+  private stopMock(): void {
+    if (this.mockTimer !== null) {
+      clearInterval(this.mockTimer);
+      this.mockTimer = null;
+      this.mockTick = 0;
+    }
   }
 
   /** 静态层走 HTTP（codex 意见 5）：缺它 handlePointer 的 map=null 守卫

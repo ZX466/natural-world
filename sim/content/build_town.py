@@ -66,7 +66,9 @@ def build() -> None:
                 ids["grass_alt"] if h % 11 == 0 else ids["grass"]
             )
 
-    def fill(x0: int, y0: int, x1: int, y1: int, role: str, *, walkable: bool | None = None) -> None:
+    def fill(
+        x0: int, y0: int, x1: int, y1: int, role: str, *, walkable: bool | None = None
+    ) -> None:
         for y in range(y0, y1 + 1):
             for x in range(x0, x1 + 1):
                 ground[y][x] = ids[role]
@@ -94,9 +96,10 @@ def build() -> None:
     house(30, 6, 34)   # 住宅一
     house(30, 32, 34)  # 住宅二
 
-    # 农田与水塘
+    # 农田与水塘（M-1：水塘让出横路 y=23-24——路在先、水在后会覆盖，改为避开路段）
     fill(8, 30, 18, 40, "farm")
-    fill(36, 20, 45, 28, "water", walkable=False)
+    fill(36, 20, 45, 21, "water", walkable=False)
+    fill(36, 25, 45, 28, "water", walkable=False)
 
     # 零散石头（确定性点位）
     for sx, sy in ((16, 17), (27, 30), (12, 20), (40, 12), (33, 42)):

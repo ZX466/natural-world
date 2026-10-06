@@ -42,16 +42,24 @@ class TestDefaultMap:
 
 
 class TestGenesis:
-    def test_build_loop_four_entities_on_spawn(self):
-        """创世 4 实体、全部落在 SPAWN（事件搬运后）。"""
+    def test_build_loop_four_entities_spawn_area(self):
+        """创世 4 实体：主角在 SPAWN，村民错格环绕（M-2：防同格叠放盖住主角）。"""
         import asyncio
 
         from sim.api.main import build_loop
 
         loop, _store = asyncio.run(build_loop())
         assert set(loop.state.entities.keys()) == GENESIS
-        for eid in GENESIS:
-            assert loop.state.entities[eid].pos == SPAWN, f"{eid} 未落出生点"
+        assert loop.state.entities["chenmo"].pos == SPAWN
+        villagers = [loop.state.entities[v].pos for v in ("villager_1", "villager_2", "villager_3")]
+        assert len(set(villagers)) == 3, "村民必须错格"
+        assert SPAWN not in villagers, "村民不得与主角同格"
+        # 全部落在可走格
+        from sim.api.main import _default_map
+
+        m = _default_map()
+        for pos in [*villagers, SPAWN]:
+            assert m.is_walkable(*pos), f"{pos} 不可走"
 
     def test_spawn_tile_walkable(self):
         from sim.api.main import _default_map

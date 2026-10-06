@@ -88,8 +88,15 @@ async def build_loop() -> tuple[TickLoop, Any]:
     # M7（R7）：创世实体 (0,0)（world.py 硬编码）落在树墙内——事件搬运到出生点。
     # 4 实体各一条 move 事件（C4 唯一写路径）；推 1 秒帧让 path 消费完（60tps，
     # 单段路径 1 tick 即达，余 tick 空转无害——世界此刻无连接，无广播成本）。
+    # M-2：村民错格出生（同格叠放会被渲染按序盖住主角）——确定性常量错格。
+    spawn_of: dict[str, tuple[int, int]] = {
+        "chenmo": SPAWN_TILE,
+        "villager_1": (SPAWN_TILE[0] - 1, SPAWN_TILE[1]),
+        "villager_2": (SPAWN_TILE[0] + 1, SPAWN_TILE[1]),
+        "villager_3": (SPAWN_TILE[0], SPAWN_TILE[1] + 1),
+    }
     for eid in GENESIS_ENTITIES:
-        loop.issue_move(eid, [(0, 0), SPAWN_TILE])
+        loop.issue_move(eid, [(0, 0), spawn_of[eid]])
     loop.advance_frame(1.0)
     return loop, store
 
