@@ -23,10 +23,17 @@ from sim.llm.prompts.identity import IdentityAnchor
 logger = structlog.get_logger(__name__)
 
 #: [要求] 段固定文本：Intent JSON 输出契约 + reason 第一人称世界内语言。
+#: 字段清单与 sim/agent/intent.py::Intent **精确对齐**（批次 C 实弹校准——
+#: 原「target」字段在 schema 不存在，parse_intent extra_forbidden 全量拒收；
+#: action 枚举同步收窄到 M1_SUPPORTED_ACTIONS 的闸门口径）。
 _REQUIREMENTS_TEXT = (
-    "只输出一个 JSON 对象，字段：action（你要做的事，简短祈使句）、"
-    "target（可选，对象或地点，用你看到的说法指代）、reason（你为什么"
-    "这么做，用你自己的话，第一人称）。不要输出 JSON 以外的任何文字。"
+    "只输出一个 JSON 对象，字段：action（必须是这些之一：move_to、wait、"
+    "talk_to、investigate、flee）、target_id（可选，要找的人，直接说名字）、"
+    "target_pos（可选，要去的地点，格式 [x, y] 的格子坐标；"
+    "镇子是 48×48 的格子，路面和空地能走，屋顶、水塘、树林进不去，"
+    "坐标要落在能站人的地方）、"
+    "reason（你为什么这么做，用你自己的话，第一人称，一句话）。"
+    "不要输出 JSON 以外的任何文字。"
 )
 
 #: [要求] 段因果未知措辞（§14 未知四轴 M4 行 / 裁 14-5：只给「应该能行，不好说」，

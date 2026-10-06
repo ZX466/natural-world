@@ -218,7 +218,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     set_impulse_trigger(driver.request_decision)
 
     async def _chenmo_loop() -> None:
-        """决策循环：impulse 置位或节拍到期 → 一轮决策 + 执行（与世界 driver 平行）。"""
+        """决策循环：impulse 置位或节拍到期 → 决策 + 同拍执行（与世界 driver 平行）。
+
+        执行在决策之后（pending 刚入队即执行，revalidate 用当前世界态）；
+        事件随世界帧落库/广播。
+        """
         import os
         import time as _time
 
@@ -235,9 +239,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             if not driver.take_requested() and not due:
                 continue
             last = now
-            driver.execute_pending(loop, pathfinder=pathfinder)
             await driver.decide_once(loop.state, loop.state.tick)
-            # 决策产物在下一拍执行头（revalidate 用最新世界态；独白/MOVE 随帧落库）
+            driver.execute_pending(loop, pathfinder=pathfinder)
 
     app.state.chenmo_task = asyncio.create_task(_chenmo_loop())
 

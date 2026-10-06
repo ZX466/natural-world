@@ -156,7 +156,9 @@ class ChenmoDriver:
                 and intent.target_pos is not None
                 and not self._issue_move(loop, pathfinder, actor_id, intent.target_pos)
             ):
-                continue
+                # 寻路失败 → 意图不整条丢弃：落 thought 独白（心里想去，脚下去不了
+                # —— 模型给的格子可能在屋顶/树墙内）。真实交付失败由下一轮重规划。
+                logger.info("chenmo.move_unreachable_fallback", goal=str(intent.target_pos))
             from sim.core.events import npc_monologue_event
 
             loop.enqueue(
