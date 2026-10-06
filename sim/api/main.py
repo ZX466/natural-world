@@ -209,6 +209,36 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     loop.attach_npc_runtime(_npc_tick_hook)
 
+    # ── 批次 D5：火灾实况（凌晨确定性起火 → 蔓延 → 死亡代价）──────────
+    from sim.npc.fire_runtime import FireRuntime, ignite_due
+
+    fire_runtime = FireRuntime()
+    app.state.fire_runtime = fire_runtime
+
+    def _fire_tick_hook(state: Any, tick: int) -> list[Any] | None:
+        events: list[Any] = []
+        if ignite_due(loop.state.world_seed, tick):
+            # 确定性落点：药铺前空地东南的草地（seed+tick 哈希散布可走格）
+            import zlib
+
+            h = zlib.crc32(f"fire-spot:{loop.state.world_seed}:{tick}".encode())
+            gx, gy = h % tile_map.width, (h // tile_map.width) % tile_map.height
+            if tile_map.is_walkable(gx, gy):
+                events.extend(fire_runtime.ignite_at(tick=tick, x=gx, y=gy))
+        if fire_runtime.cells:
+            walkable = {
+                (x, y)
+                for x in range(tile_map.width)
+                for y in range(tile_map.height)
+                if tile_map.is_walkable(x, y)
+            }
+            events.extend(fire_runtime.step(tick=tick, walkable=walkable))
+            burning = {(c.x, c.y) for c in fire_runtime.cells}
+            events.extend(fire_runtime.collect_deaths(state, burning=burning))
+        return events or None
+
+    loop.attach_npc_runtime(_fire_tick_hook)
+
     # ── 批次 C：陈默 L2 决策驱动（LLM 接进决策循环）─────────────────
     # 播种主角档案 → 组 ChenmoDriver → impulse 钩子 + 节拍任务随 lifespan。
     # LLM 调用全异步、失败降级（driver 内）；世界照常运转不因 LLM 阻塞。

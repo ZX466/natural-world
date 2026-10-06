@@ -191,6 +191,15 @@ def _apply_npc_monologue(state: WorldState, event: WorldEvent, ctx: TickContext)
     return ApplyResult(state=state)
 
 
+def _apply_fire_event(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    """FIRE_*（批次 D5 接线）：火灾记录进事件日志，状态层 no-op。
+
+    火格账本是 FireRuntime 实况内存态（同 NPC 需求）；世界状态不含火场
+    （A8「火场中间态不入库」口径——事件材料足以重放观察面）。
+    """
+    return ApplyResult(state=state)
+
+
 def _apply_tile_changed(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
     """M3 预留：M0 地图静态，收到即拒绝。"""
     msg = "tile_changed 在 M0 未启用（可变地图底座是 M3）"
@@ -208,4 +217,6 @@ def build_default_bus() -> EventBus:
     bus.register(EventKind.NPC_DEATH, _apply_npc_death)
     bus.register(EventKind.NPC_ACT, _apply_npc_act)
     bus.register(EventKind.NPC_MONOLOGUE, _apply_npc_monologue)
+    bus.register(EventKind.FIRE_IGNITED, _apply_fire_event)
+    bus.register(EventKind.FIRE_EXTINGUISHED, _apply_fire_event)
     return bus
