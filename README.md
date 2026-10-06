@@ -4,7 +4,7 @@
 > 玩家不控制他，只是他的「直觉」：偶尔让某个念头在他脑中冒出来。
 > 世界不可预测、不可控、不可预定。
 
-[![tests](https://img.shields.io/badge/tests-2416%20passed-green)]() [![ruff](https://img.shields.io/badge/ruff-clean-green)]() [![pyright](https://img.shields.io/badge/pyright-0%20errors-green)]() [![protocol](https://img.shields.io/badge/protocol-1.2-blue)]()
+[![tests](https://img.shields.io/badge/tests-2307%20passed-green)]() [![ruff](https://img.shields.io/badge/ruff-clean-green)]() [![pyright](https://img.shields.io/badge/pyright-0%20errors-green)]() [![protocol](https://img.shields.io/badge/protocol-1.3-blue)]()
 
 设计基线见 [DESIGN.md](DESIGN.md)（v2.1 冻结）；本 README 是**运行与开发入口**，设计细节以 DESIGN 与 `docs/` 为准。
 
@@ -71,6 +71,8 @@ npm run dev
 
 只跑了前端、没起后端时，前端约 2.5 秒后自动进入 **mock 模式**（绿点亮起但实际无连接）：
 静态网格地图 + 占位主角来回走 + 时钟自走。用于纯前端开发/演示；要玩真实世界必须起后端。
+
+**画面判别**：色块网格 + 矩形人 = mock（或后端未加载真实图）；瓦片小镇（草地/路/水塘/房屋）+ 像素小人 = 真实世界（48×48 临河镇图，创世 4 实体：陈默 + 3 名村民）。
 
 ### 常用命令（开发）
 
@@ -154,7 +156,11 @@ M0–M6 六个里程碑**全部收官**（M6 于 2026-10-05 宣告，四道门 G
 | M5 | 读档=分叉（anchors）+ 权力机制数据面 + 火灾数据面 + 性能治理 |
 | M6 | 权力→决策传导 + 火灾机制面 + 死亡对称删除 + 内容面 + 定标（POWER 翻硬） |
 
-**当前门禁**：2416 passed / 122 skipped / 0 failed · ruff clean · pyright 0 · `gen-protocol --check` EXIT 0 · 协议版本 1.2。122 个 skip 全部为设计态（T4 真模型探针 53、T3 live-fire 55、T5 golden 11、其余为降频自检门与环境门）——无失败、无悬空。
+**当前门禁**：2307 passed / 110 skipped / 0 failed · ruff clean · pyright 0 · `gen-protocol --check` EXIT 0 · 协议版本 1.3（M7 渲染面：`MapChunk.ground_b64` 地面层 + `TimeInfo` 时钟权威帧）。skip 全部为设计态（T4 真模型探针、T3 live-fire、T5 golden、降频自检门与环境门）——无失败、无悬空。
+
+## M7 渲染面（2026-10-06 收口）
+
+画面从占位色块升级为像素小镇：48×48 临河镇瓦片地图（CC0 素材，`sim/content/` 管线：`build_palette.py` 调色板 → `build_town.py` 确定性建图）、主角四向行走动画、3 名村民、戏内时钟权威帧（服务端供数+客户端平滑推进）、昼夜四相位色罩。设计见 `docs/arch/m7-render-art.md`。
 
 ## 文档地图
 
