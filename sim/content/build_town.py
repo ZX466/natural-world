@@ -23,7 +23,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 SIZE = 48
 CHUNK = 16
-SPAWN = (8, 8)
+SPAWN = (8, 16)  # 药铺屋前空地（屋体 y=8-14，出生点必须屋外开阔草——原 (8,8) 嵌在屋顶内被困）
 
 # 调色板角色名 → sprout-palette.json ground 键（改名先改调色板，本脚本报缺名即回改）
 PALETTE_NAMES: dict[str, str] = {

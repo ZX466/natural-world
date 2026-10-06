@@ -44,8 +44,8 @@ manager = ConnectionManager()
 
 # M7（R7）：创世名册——陈默 + 3 名占位村民（静止实体，AI 归 M2 装配线）
 GENESIS_ENTITIES: tuple[str, ...] = ("chenmo", "villager_1", "villager_2", "villager_3")
-#: 出生点（build_town.py SPAWN 同源；创世 (0,0) 落树墙内 → 事件搬运到可走格）
-SPAWN_TILE: tuple[int, int] = (8, 8)
+#: 出生点（build_town.py SPAWN 同源：药铺屋前空地；创世 (0,0) 落树墙内 → 事件搬运）
+SPAWN_TILE: tuple[int, int] = (8, 16)
 TOWN_MAP_PATH = Path(__file__).resolve().parents[1] / "content" / "linhe-town.json"
 
 

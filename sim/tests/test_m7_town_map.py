@@ -40,8 +40,8 @@ class TestTownMap:
         assert not unknown, f"地图使用了调色板外的 tile id: {sorted(unknown)}"
 
     def test_spawn_walkable(self, town: TileMap):
-        """主角出生点 (8,8) 可通行（build_town SPAWN 硬编码依赖）。"""
-        assert town.is_walkable(8, 8)
+        """主角出生点 (8,16) 可通行（build_town SPAWN 同源依赖）。"""
+        assert town.is_walkable(8, 16)
 
     def test_border_impassable(self, town: TileMap):
         """四周树林墙：边界格不可走（防走出图）。"""

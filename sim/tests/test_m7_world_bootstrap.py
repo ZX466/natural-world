@@ -2,14 +2,14 @@
 
 设计：docs/arch/m7-render-art.md §2.3 R7（创世村民）。
 出生点搬运走**事件**（move 事件经 issue_move，C4 唯一写路径）——
-创世 (0,0) → SPAWN (8,8) 的路径段事件在 build_loop 创世后同 tick 入队。
+创世 (0,0) → SPAWN (8,16) 的路径段事件在 build_loop 创世后同 tick 入队。
 """
 
 import pytest
 
 pytestmark = pytest.mark.t1
 
-SPAWN = (8, 8)
+SPAWN = (8, 16)
 GENESIS = {"chenmo", "villager_1", "villager_2", "villager_3"}
 
 
