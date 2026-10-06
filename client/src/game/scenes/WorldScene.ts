@@ -6,6 +6,7 @@
  */
 import Phaser from 'phaser';
 import type { WorldMirror } from '../world-mirror';
+import { frameOf } from '../render/actors';
 
 const PIXEL_SCALE = 2; // 俯视像素调性，M0 固定 2x
 const TILE = 16;
@@ -14,12 +15,12 @@ const TILESET_KEY = 'sprout-tileset'; // 图集加载键（main.ts preload 同�
 const GROUND_KEY = 'ground-composite'; // 预拼地面 CanvasTexture 键
 
 interface ActorView {
-  sprite: Phaser.GameObjects.Rectangle;
-  fromX: number;
-  fromY: number;
-  toX: number;
-  toY: number;
-  interpStart: number;
+  sprite: Phaser.GameObjects.Sprite;
+  /** 上一帧逻辑格（anim/facing 推断输入，R2） */
+  prevX: number;
+  prevY: number;
+  /** walk 动画钟（位移中累加 delta；静止归 -1=站立帧） */
+  animClockMs: number;
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -168,23 +169,16 @@ export class WorldScene extends Phaser.Scene {
       let view = this.views.get(rtoken);
       if (view === undefined) {
         const isProtagonist = rtoken === this.mirror.protagonist;
+        // M7-T7：矩形色块 → 真精灵（主角=chenmo 走环；村民=villager 站立帧）
         const sprite = this.add
-          .rectangle(
+          .sprite(
             actor.x * TILE + TILE / 2,
             actor.y * TILE + TILE / 2,
-            TILE - 4,
-            TILE - 4,
-            isProtagonist ? 0xe8c39e : 0x9aa7b0,
+            isProtagonist ? 'chenmo' : 'villager',
+            0,
           )
           .setDepth(10);
-        view = {
-          sprite,
-          fromX: actor.x,
-          fromY: actor.y,
-          toX: actor.x,
-          toY: actor.y,
-          interpStart: 0,
-        };
+        view = { sprite, prevX: actor.x, prevY: actor.y, animClockMs: -1 };
         this.views.set(rtoken, view);
         if (isProtagonist) this.cameras.main.startFollow(sprite, true, 0.12, 0.12);
       }
@@ -193,9 +187,14 @@ export class WorldScene extends Phaser.Scene {
       // 相邻 tick 快照间线性插值（m0-client §3）
       view.sprite.x = Phaser.Math.Linear(view.sprite.x, targetX, t);
       view.sprite.y = Phaser.Math.Linear(view.sprite.y, targetY, t);
-      view.sprite.setFillStyle(
-        actor.tint ?? (rtoken === this.mirror.protagonist ? 0xe8c39e : 0x9aa7b0),
-      );
+      // R2：位移推断 anim/facing → 帧号（villager 无 walk 环，恒帧 0；R7 静止）
+      if (rtoken === this.mirror.protagonist) {
+        const moved = view.prevX !== actor.x || view.prevY !== actor.y;
+        view.animClockMs = moved ? 0 : view.animClockMs < 0 ? -1 : view.animClockMs + delta;
+        view.sprite.setFrame(frameOf(actor, { x: view.prevX, y: view.prevY }, view.animClockMs));
+        view.prevX = actor.x;
+        view.prevY = actor.y;
+      }
     }
     // 移除已消失的 actor
     for (const [rtoken, view] of this.views) {
