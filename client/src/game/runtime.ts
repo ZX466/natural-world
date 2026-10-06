@@ -7,7 +7,7 @@
  */
 import { WorldMirror } from './world-mirror';
 import { WsClient, type WsStatus } from '../net/ws';
-import { fetchWorldMap, assembleCollision } from '../net/worldApi';
+import { fetchWorldMap, assembleCollision, assembleGround } from '../net/worldApi';
 import { useUiStore, type InGameTime, type Speed } from '../store/uiStore';
 
 export const worldMirror = new WorldMirror();
@@ -44,8 +44,8 @@ class Runtime {
     }, 2500);
   }
 
-  /** 碰撞静态层走 HTTP（codex 意见 5）：缺它 handlePointer 的 map=null 守卫
-   *  吞掉一切点击（M7 修复的第二个断链——M0 起真实模式地图从未装入镜像）。 */
+  /** 静态层走 HTTP（codex 意见 5）：缺它 handlePointer 的 map=null 守卫
+   *  吞掉一切点击（M7 修复的第二个断链）。M7-T6 增地面层（瓦片渲染）。 */
   private async loadWorldMap(): Promise<void> {
     try {
       const raw = await fetchWorldMap();
@@ -54,6 +54,7 @@ class Runtime {
         h: raw.h,
         tileset: raw.tileset,
         collision: assembleCollision(raw.w, raw.h, raw.chunks),
+        ground: assembleGround(raw.w, raw.h, raw.chunks),
       });
     } catch {
       // 后端未起（mock 将接管）或网络失败：镜像保持 null，点击守卫维持

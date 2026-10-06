@@ -38,6 +38,8 @@ export interface MapStatic {
   tileset: string;
   /** 碰撞层走 HTTP 一次性加载（codex 意见 5：静态资产≠状态流）。M0 mock 用布尔网格。 */
   collision: Uint8Array;
+  /** M7-T6：地面 tile id 网格（u16，调色板值域）；mock 模式无此层（色块渲染回退）。 */
+  ground?: Uint16Array;
 }
 
 export class WorldMirror {

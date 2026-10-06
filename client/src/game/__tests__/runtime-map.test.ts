@@ -40,6 +40,7 @@ describe('runtime.start loads world map', () => {
         .fn()
         .mockResolvedValue({ w: 32, h: 32, tileset: 'grid', chunks: [] }),
       assembleCollision: (w: number, h: number) => new Uint8Array(w * h).fill(1),
+      assembleGround: (w: number, h: number) => new Uint16Array(w * h),
     }));
 
     const { runtime } = await import('../runtime');
@@ -50,17 +51,19 @@ describe('runtime.start loads world map', () => {
     expect(setMapSpy).toHaveBeenCalledTimes(1);
     const call = setMapSpy.mock.calls[0];
     if (!call) throw new Error('setMap 未被调用');
-    const map = call[0] as { w: number; h: number; collision: Uint8Array };
+    const map = call[0] as { w: number; h: number; collision: Uint8Array; ground?: Uint16Array };
     expect(map.w).toBe(32);
     expect(map.h).toBe(32);
     expect(map.collision.length).toBe(32 * 32);
     expect(map.collision[0]).toBe(1);
+    expect(map.ground?.length).toBe(32 * 32); // M7-T6：地面层同帧装入
   });
 
   it('fetchWorldMap 失败 → 不 setMap（map 保持 null，守卫继续生效）', async () => {
     vi.doMock('../../net/worldApi', () => ({
       fetchWorldMap: vi.fn().mockRejectedValue(new Error('backend down')),
       assembleCollision: vi.fn(),
+      assembleGround: vi.fn(),
     }));
 
     const { runtime } = await import('../runtime');

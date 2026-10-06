@@ -6,7 +6,33 @@
  * assembleCollision 是本次新增的地图数据组装核心，此处锁死其行为。
  */
 import { describe, expect, it } from 'vitest';
-import { assembleCollision, decodeCollisionB64 } from '../worldApi';
+import { assembleCollision, decodeCollisionB64, assembleGround, decodeGroundB64 } from '../worldApi';
+
+describe('decodeGroundB64 / assembleGround（M7-T6 u16 LE 地面层）', () => {
+  it('u16 小端解码（id=1,id=258）', () => {
+    // [1,0, 2,1] LE → [1, 258]
+    const b64 = btoa(String.fromCharCode(1, 0, 2, 1));
+    expect(Array.from(decodeGroundB64(b64))).toEqual([1, 258]);
+  });
+
+  it('chunk 组装偏移正确（chunk(1,0) 首格=全图 x=16）', () => {
+    const bytes = new Uint8Array(512);
+    for (let i = 0; i < 256; i++) bytes[i * 2] = 7; // 256 格全 id=7
+    const full = btoa(String.fromCharCode(...bytes));
+    const grid = assembleGround(32, 32, [{ cx: 1, cy: 0, ground_b64: full }]);
+    expect(grid[16]).toBe(7);
+    expect(grid[15]).toBe(0);
+  });
+
+  it('调色板大 id（如 561=tree）往返无损', () => {
+    const b64 = btoa(String.fromCharCode(0x11, 0x02)); // LE 0x0211 = 529? 校准：561=0x0231
+    void b64;
+    const bytes = new Uint8Array(2);
+    new DataView(bytes.buffer).setUint16(0, 561, true);
+    const enc = btoa(String.fromCharCode(...bytes));
+    expect(decodeGroundB64(enc)[0]).toBe(561);
+  });
+});
 
 describe('decodeCollisionB64', () => {
   it('解码 0/1 位序列', () => {

@@ -10,6 +10,8 @@ import type { WorldMirror } from '../world-mirror';
 const PIXEL_SCALE = 2; // 俯视像素调性，M0 固定 2x
 const TILE = 16;
 const INTERP_MS = 1000 / 60; // tick 间隔（60tps @1x；倍速插值由 sim 侧节奏吸收）
+const TILESET_KEY = 'sprout-tileset'; // 图集加载键（main.ts preload 同名）
+const GROUND_KEY = 'ground-composite'; // 预拼地面 CanvasTexture 键
 
 interface ActorView {
   sprite: Phaser.GameObjects.Rectangle;
@@ -24,6 +26,7 @@ export class WorldScene extends Phaser.Scene {
   private mirror: WorldMirror;
   private views = new Map<string, ActorView>();
   private mapLayer: Phaser.GameObjects.Graphics | null = null;
+  private groundImage: Phaser.GameObjects.Image | null = null;
   private nightOverlay: Phaser.GameObjects.Rectangle | null = null;
   private lastResetSeen = -1;
   private goalMarker: Phaser.GameObjects.Arc | null = null;
@@ -31,6 +34,19 @@ export class WorldScene extends Phaser.Scene {
   constructor(mirror: WorldMirror) {
     super({ key: 'world' });
     this.mirror = mirror;
+  }
+
+  preload(): void {
+    // M7-T6：图集与角色表（Vite public 静态服务；sim 只发 id 不发素材）。
+    this.load.image(TILESET_KEY, '/assets/tilesets/sprout-tileset.png');
+    this.load.spritesheet('chenmo', '/assets/actors/chenmo.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    this.load.spritesheet('villager', '/assets/actors/villager.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
   }
 
   create(): void {
@@ -48,9 +64,18 @@ export class WorldScene extends Phaser.Scene {
 
     this.scale.on('resize', () => this.redrawMap());
     this.redrawMap();
+    // 地图 HTTP 加载是异步的：真实模式下晚于镜像到达 → 轮询重绘（mock 即时 setMap 无需等待）
+    const waitMap = setInterval(() => {
+      if (this.mirror.map !== null) {
+        clearInterval(waitMap);
+        this.redrawMap();
+      }
+    }, 250);
+    this.events.once('shutdown', () => clearInterval(waitMap));
   }
 
-  /** M0：无 tileset 资产时以网格色块渲染（瓦片可通行=浅色，不可=深色）。 */
+  /** M0：无 tileset 资产时以网格色块渲染（瓦片可通行=浅色，不可=深色）。
+   *  M7-T6：tileset≠'grid' 且镜像带 ground 层 → 图集拼合渲染（色块层保持清空）。 */
   private redrawMap(): void {
     const g = this.mapLayer;
     const map = this.mirror.map;
@@ -62,12 +87,53 @@ export class WorldScene extends Phaser.Scene {
       g.fillRect(0, 0, 32 * TILE, 32 * TILE);
       return;
     }
+    if (map.tileset !== 'grid' && map.ground && this.textures.exists(TILESET_KEY)) {
+      this.renderTileset(map);
+      return;
+    }
     for (let y = 0; y < map.h; y += 1) {
       for (let x = 0; x < map.w; x += 1) {
         const walkable = map.collision[y * map.w + x] === 1;
         g.fillStyle(walkable ? 0x4a5d4e : 0x2a3038, 1);
         g.fillRect(x * TILE, y * TILE, TILE - 1, TILE - 1);
       }
+    }
+  }
+
+  /** 图集渲染（M7-T6）：ground id → 图集帧，预拼到一张 CanvasTexture 上，
+   *  再以单张 image 显示（整图 48×48×16px=768px 方；一次绘制零每帧成本）。
+   *  不可行方案记录：Phaser Graphics **无 drawImage**（tsc 实证）——
+   *  逐格 blitter 是备选，本方案更简单且静态层不重绘。 */
+  private renderTileset(map: NonNullable<WorldMirror['map']>): void {
+    const img = this.textures.get(TILESET_KEY).getSourceImage() as HTMLImageElement;
+    const cols = Math.floor(img.width / TILE);
+    const canvas = document.createElement('canvas');
+    canvas.width = map.w * TILE;
+    canvas.height = map.h * TILE;
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) return;
+    for (let y = 0; y < map.h; y += 1) {
+      for (let x = 0; x < map.w; x += 1) {
+        const id = map.ground![y * map.w + x] ?? 0;
+        ctx.drawImage(
+          img,
+          (id % cols) * TILE,
+          Math.floor(id / cols) * TILE,
+          TILE,
+          TILE,
+          x * TILE,
+          y * TILE,
+          TILE,
+          TILE,
+        );
+      }
+    }
+    if (this.textures.exists(GROUND_KEY)) this.textures.remove(GROUND_KEY);
+    this.textures.addCanvas(GROUND_KEY, canvas);
+    if (this.groundImage === null) {
+      this.groundImage = this.add.image(0, 0, GROUND_KEY).setOrigin(0).setDepth(0);
+    } else {
+      this.groundImage.setTexture(GROUND_KEY);
     }
   }
 
