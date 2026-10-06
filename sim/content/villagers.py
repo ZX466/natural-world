@@ -14,6 +14,7 @@ import hashlib
 import json
 
 from sim.npc.model import Need, NpcProfileData
+from sim.world.map import TileMap
 
 # ---------------------------------------------------------------------------
 # 名册常量（确定性：任何生成规则改动都会改变名册 → 需重审事件兼容性）
@@ -89,7 +90,7 @@ SPAWN_BASE: tuple[int, int] = (8, 16)
 
 
 def spawn_positions(
-    tile_map: object, *, base: tuple[int, int], count: int
+    tile_map: TileMap, *, base: tuple[int, int], count: int
 ) -> list[tuple[int, int]]:
     """确定性散布 count 个出生位：以 base 为心，按曼哈顿环半径从内向外扫描，
     同环内按 (x,y) 字典序；跳过 base 与已占位；不可走格跳过。"""
@@ -178,6 +179,6 @@ async def seed_villagers(session_factory) -> int:
         existing = set(existing_rows)
         missing = [p for p in roster if p.npc_id not in existing]
         for p in missing:
-            session.add(NpcProfile(**_profile_row(p)))  # type: ignore[arg-type]
+            session.add(NpcProfile(**_profile_row(p)))
         await session.commit()
         return len(missing)

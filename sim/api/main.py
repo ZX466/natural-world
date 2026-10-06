@@ -45,8 +45,9 @@ manager = ConnectionManager()
 # M7（R7）：创世名册——陈默 + 3 名占位村民（静止实体，AI 归 M2 装配线）。
 # 批次 B：占位村民退役，正式名册 50 村民（sim/content/villagers.py）入列——
 # 世界 = chenmo + 50 villager（51 实体）。
-GENESIS_ENTITIES: tuple[str, ...] = ("chenmo",) + tuple(
-    f"villager_{i + 1:02d}" for i in range(50)
+GENESIS_ENTITIES: tuple[str, ...] = (
+    "chenmo",
+    *(f"villager_{i + 1:02d}" for i in range(50)),
 )
 #: 出生点（build_town.py SPAWN 同源：药铺屋前空地；创世 (0,0) 落树墙内 → 事件搬运）
 SPAWN_TILE: tuple[int, int] = (8, 16)
@@ -94,7 +95,8 @@ async def build_loop() -> tuple[TickLoop, Any]:
     from sim.content.villagers import SPAWN_BASE, spawn_positions
 
     tile_map_for_spawn = _default_map()
-    positions = spawn_positions(tile_map_for_spawn, base=SPAWN_BASE, count=len(GENESIS_ENTITIES) - 1)
+    villager_count = len(GENESIS_ENTITIES) - 1
+    positions = spawn_positions(tile_map_for_spawn, base=SPAWN_BASE, count=villager_count)
     spawn_of: dict[str, tuple[int, int]] = {"chenmo": SPAWN_TILE}
     for eid, pos in zip(GENESIS_ENTITIES[1:], positions, strict=True):
         spawn_of[eid] = pos
@@ -149,11 +151,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sim.npc.sim_exec import npc_events_for_tick
     from sim.world.pathfinding import Pathfinder
 
-    seeded = await seed_villagers(session_factory)
+    seeded = await seed_villagers(store.session_factory)
     if seeded:
         logger.info("npc.seeded", count=seeded)
     npc_store = NpcStore(store)
-    npc_runtime, hidden_states = await assemble_runtime(npc_store)
+    npc_runtime, _hidden_states = await assemble_runtime(npc_store)
     pathfinder = Pathfinder(tile_map)
     app.state.npc_runtime = npc_runtime
 

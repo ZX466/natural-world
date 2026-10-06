@@ -33,7 +33,7 @@ class TestBusNpcActHandler:
 
         bus = build_default_bus()
         # 白盒哨兵：修复前 NPC_ACT 未注册，本断言红
-        assert EventKind.NPC_ACT in bus._handlers  # noqa: SLF001
+        assert EventKind.NPC_ACT in bus._handlers
         state = WorldState(world_seed=42)
         ev = npc_act_event(tick=1, npc_id="npc_01", action="wander", params={})
         result = bus.apply(state, ev, TickContext())
@@ -51,7 +51,9 @@ class TestBusNpcActHandler:
             ctx = TickContext()
             for ev in [
                 world_create_event(tick=0, seed=42, entity_ids=("npc_01",)),
-                move_event(tick=1, actor_id="npc_01", start=(0, 0), goal=(5, 5), path=((0, 0), (5, 5))),
+                move_event(
+                    tick=1, actor_id="npc_01", start=(0, 0), goal=(5, 5), path=((0, 0), (5, 5))
+                ),
                 *(
                     [npc_act_event(tick=1, npc_id="npc_01", action="wander", params={})]
                     if with_act
@@ -108,11 +110,10 @@ class TestPlanNpcMove:
         return loop
 
     def test_wander_produces_move_event(self) -> None:
+        from sim.api.main import _fallback_map
         from sim.core.events import EventKind
         from sim.npc.sim_exec import plan_npc_move
         from sim.world.pathfinding import Pathfinder
-
-        from sim.api.main import _fallback_map
 
         loop = self._wired_loop()
         pf = Pathfinder(_fallback_map())
@@ -124,23 +125,48 @@ class TestPlanNpcMove:
         goal = tuple(path[-1])
         assert _fallback_map().is_walkable(goal[0], goal[1])
 
-    def test_non_locomotion_actions_return_none(self) -> None:
+    def test_every_action_family_produces_locomotion(self) -> None:
+        """批次 B 执行面：全动作族都有「去做事的地方」位移面（镇子活性不依赖
+        wander 胜出——效用矩阵实测 wander 零票）。"""
+        from sim.api.main import _fallback_map
+        from sim.core.events import EventKind
         from sim.npc.sim_exec import plan_npc_move
         from sim.world.pathfinding import Pathfinder
-
-        from sim.api.main import _fallback_map
 
         loop = self._wired_loop()
         pf = Pathfinder(_fallback_map())
-        for action in ("eat", "rest", "work", "request_chat"):
-            assert plan_npc_move(loop.state, "npc_01", action, pf, seed=42, tick=100) is None
+        for action in ("eat", "rest", "work", "request_chat", "wander", "move"):
+            mv = plan_npc_move(loop.state, "npc_01", action, pf, seed=42, tick=100)
+            assert mv is not None, f"{action} 无位移面"
+            assert mv.event_type is EventKind.MOVE
+
+    def test_arrived_npc_wanders_on(self) -> None:
+        """已到站（goal==pos）→ 退化为闲逛目标（站桩兜底，镇子不停摆）。"""
+        from sim.api.main import _fallback_map
+        from sim.npc.sim_exec import EAT_SITE, plan_npc_move
+        from sim.world.pathfinding import Pathfinder
+
+        loop = self._wired_loop()
+        # 把实体瞬移到食摊（绕过寻路；仅测到站退化）
+        from sim.core.world import EntityState
+
+        loop.state = loop.state.model_copy(
+            update={
+                "entities": {
+                    "npc_01": EntityState(entity_id="npc_01", pos=EAT_SITE),
+                }
+            }
+        )
+        pf = Pathfinder(_fallback_map())
+        mv = plan_npc_move(loop.state, "npc_01", "eat", pf, seed=42, tick=100)
+        assert mv is not None
+        assert tuple(mv.payload["goal"]) != EAT_SITE
 
     def test_in_flight_path_blocks_new_move(self) -> None:
         """剩余 path 未耗尽 → 不再发 move（防抖）。"""
+        from sim.api.main import _fallback_map
         from sim.npc.sim_exec import plan_npc_move
         from sim.world.pathfinding import Pathfinder
-
-        from sim.api.main import _fallback_map
 
         loop = self._wired_loop()
         loop.issue_move("npc_01", [(5, 5), (9, 9)])  # 在途
@@ -148,10 +174,9 @@ class TestPlanNpcMove:
         assert plan_npc_move(loop.state, "npc_01", "wander", pf, seed=42, tick=100) is None
 
     def test_unknown_entity_returns_none(self) -> None:
+        from sim.api.main import _fallback_map
         from sim.npc.sim_exec import plan_npc_move
         from sim.world.pathfinding import Pathfinder
-
-        from sim.api.main import _fallback_map
 
         loop = self._wired_loop()
         pf = Pathfinder(_fallback_map())
@@ -175,11 +200,10 @@ class TestNpcEventsForTick:
         )
 
     def test_batch_contains_act_per_active_npc(self) -> None:
+        from sim.api.main import _fallback_map
         from sim.core.events import EventKind
         from sim.npc.sim_exec import npc_events_for_tick
         from sim.world.pathfinding import Pathfinder
-
-        from sim.api.main import _fallback_map
 
         loop = TestPlanNpcMove._wired_loop()
         acts = [
@@ -197,11 +221,10 @@ class TestNpcEventsForTick:
 
     def test_move_follows_its_own_act(self) -> None:
         """若产出 MOVE，必须紧跟同 NPC 的 NPC_ACT 之后（日志可读序）。"""
+        from sim.api.main import _fallback_map
         from sim.core.events import EventKind
         from sim.npc.sim_exec import npc_events_for_tick
         from sim.world.pathfinding import Pathfinder
-
-        from sim.api.main import _fallback_map
 
         loop = TestPlanNpcMove._wired_loop()
         batch = npc_events_for_tick(
@@ -335,7 +358,7 @@ class TestSeedVillagers:
         store = NpcStore(SqlEventStore(sf))
         profiles = self._run(store.materialize(None))
         assert set(profiles) == set(VILLAGER_IDS)
-        for nid, p in profiles.items():
+        for p in profiles.values():
             assert p.name
             assert p.lod == 1
             assert {n.name for n in p.needs} == {"hunger", "energy", "social"}
