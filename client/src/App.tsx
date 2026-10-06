@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { CanvasHost } from './ui/CanvasHost';
 import { ImpulseBar } from './ui/ImpulseBar';
 import { PanelHost } from './ui/PanelHost';
+import { SaveLoadPanel } from './ui/SaveLoadPanel';
 import { SettingsPage } from './ui/SettingsPage';
 import { TopBar } from './ui/TopBar';
 
@@ -24,6 +25,7 @@ export default function App(): ReactElement {
           <ImpulseBar />
         </div>
         <PanelHost />
+        <SaveLoadPanel />
       </div>
       {settingsOpen && <SettingsPage onClose={() => setSettingsOpen(false)} />}
     </div>

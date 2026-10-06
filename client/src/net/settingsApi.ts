@@ -20,7 +20,7 @@ export class SettingsApiError extends Error {
   }
 }
 
-async function readError(res: Response): Promise<SettingsApiError> {
+export async function readError(res: Response): Promise<SettingsApiError> {
   let detail = `请求失败（HTTP ${res.status}）`;
   try {
     const body: unknown = await res.json();

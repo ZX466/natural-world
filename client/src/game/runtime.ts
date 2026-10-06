@@ -137,6 +137,12 @@ class Runtime {
     this.ws?.send(move);
   }
 
+  /** 读档=分叉（批次 D4）：发 load_anchor，成功后服务端推「分叉告知 + 全量
+   *  快照」两帧——镜像重置与游标指针消费链路现成（ws.ts dispatch/session_state）。 */
+  loadAnchor(anchorId: string): void {
+    this.ws?.send({ type: 'load_anchor', channel: 'session', anchor_id: anchorId });
+  }
+
   /** 念头注入（ImpulseBar → sim player_impulse；批次 A）。
    *  客户端预校验：空白/超长即本地拒（不发帧、置 impulseError）；
    *  服务端 impulse_gate 拒收经 error 帧（ref=player_impulse）回同一 UI 位。
