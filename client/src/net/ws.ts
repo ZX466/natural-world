@@ -103,6 +103,12 @@ export class WsClient {
     switch (msg.type) {
       case 'full_snapshot':
         this.mirror.applySnapshot(msg.actors, msg.lights);
+        if (msg.weather) {
+          this.mirror.setWeather({
+            visual: msg.weather.visual,
+            ambientLight: msg.weather.ambient_light,
+          });
+        }
         if (msg.map) {
           // collision/ground 静态层走 HTTP（worldApi.ts），这里只消费 time
         }
@@ -112,6 +118,12 @@ export class WsClient {
       case 'state_delta':
         this.mirror.applyActorDeltas(msg.actors);
         if (msg.lights) this.mirror.applyLightDeltas(msg.lights);
+        if (msg.weather) {
+          this.mirror.setWeather({
+            visual: msg.weather.visual,
+            ambientLight: msg.weather.ambient_light,
+          });
+        }
         if (msg.time) worldClock.apply(msg.time); // M7-R3
         this.cb.onDelta(msg);
         break;

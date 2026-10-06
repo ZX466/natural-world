@@ -64,9 +64,9 @@ class TestWalkPacing:
 
     def test_replay_state_hash_stable(self) -> None:
         """带节拍的移动演进仍是确定性纯函数：同事件序列两遍 fold 同 hash。"""
-        from sim.core.world import TickContext, WorldState, build_default_bus
         from sim.core.clock import GameClock
         from sim.core.tick import TickLoop
+        from sim.core.world import WorldState, build_default_bus
 
         def run() -> str:
             loop = TickLoop(
