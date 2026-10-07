@@ -135,6 +135,7 @@ class TestSiteScatter:
         }
         assert goals != {(20, 20)}, "chat 目的地不应恒精确踩目标格"
         for g in goals:
+            assert g is not None, "chat 无位移面（目的地 None）"
             dist = abs(g[0] - 20) + abs(g[1] - 20)
             assert dist <= _SITE_SCATTER_RADIUS, (
                 f"chat 目的地 {g} 距目标人 {dist} 格（越出散点半径）"
