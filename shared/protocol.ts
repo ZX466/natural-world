@@ -150,6 +150,40 @@ export type paths = {
     readonly patch?: never;
     readonly trace?: never;
   };
+  readonly '/api/settings/profiles/models': {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly get?: never;
+    readonly put?: never;
+    /** 拉取对方模型清单（OpenAI 兼容 GET {base_url}/models；D13） */
+    readonly post: operations['listRemoteModels'];
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
+  readonly '/api/settings/profiles/test': {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly get?: never;
+    readonly put?: never;
+    /** 极小对话请求测连通性（max_tokens=1；D13） */
+    readonly post: operations['testConnection'];
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
   readonly '/api/world/map': {
     readonly parameters: {
       readonly query?: never;
@@ -340,6 +374,17 @@ export type components = {
       readonly h: number;
       readonly tileset: string;
       readonly w: number;
+    };
+    /** @description 拉取模型清单请求（OpenAI 兼容 GET {base_url}/models；api_key 只用于本次请求，不落库） */
+    readonly ModelListRequest: {
+      readonly api_key: string;
+      readonly base_url: string;
+    };
+    /** @description 拉取结果（失败也 200 + ok:false + reason；reason 永不含密钥材料） */
+    readonly ModelListResponse: {
+      readonly models: readonly string[];
+      readonly ok: boolean;
+      readonly reason?: string | null;
     };
     /** @description M1 独白三形态呈现（§8）；content 必须第一人称世界内语言、无数值无系统词，永不直接渲染 LLM 原始思维链 */
     readonly MonologueMessage: {
@@ -552,6 +597,19 @@ export type components = {
       readonly type: 'sync_request';
       readonly v: string;
       readonly ws_seq: number;
+    };
+    /** @description 连通性测试请求（极小对话 max_tokens=1，不烧钱；api_key 只用于本次请求） */
+    readonly TestConnectionRequest: {
+      readonly api_key: string;
+      readonly base_url: string;
+      readonly model: string;
+    };
+    /** @description 测试结果（失败也 200 + ok:false + reason；reason 永不含密钥材料） */
+    readonly TestConnectionResponse: {
+      /** @description 成功时为请求往返毫秒数 */
+      readonly latency_ms?: number | null;
+      readonly ok: boolean;
+      readonly reason?: string | null;
     };
     /** @description 戏内时间（服务端权威帧；day 从 1 起，phase 四枚举，集市日布尔） */
     readonly TimeInfo: {
@@ -952,6 +1010,56 @@ export interface operations {
         };
       };
       readonly 404: components['responses']['Problem'];
+      readonly 422: components['responses']['Problem'];
+    };
+  };
+  readonly listRemoteModels: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly requestBody: {
+      readonly content: {
+        readonly 'application/json': components['schemas']['ModelListRequest'];
+      };
+    };
+    readonly responses: {
+      /** @description models */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly 'application/json': components['schemas']['ModelListResponse'];
+        };
+      };
+      readonly 422: components['responses']['Problem'];
+    };
+  };
+  readonly testConnection: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly requestBody: {
+      readonly content: {
+        readonly 'application/json': components['schemas']['TestConnectionRequest'];
+      };
+    };
+    readonly responses: {
+      /** @description result */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly 'application/json': components['schemas']['TestConnectionResponse'];
+        };
+      };
       readonly 422: components['responses']['Problem'];
     };
   };

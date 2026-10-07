@@ -12,6 +12,8 @@ import {
   createProfile,
   deleteProfile,
   listProfiles,
+  listRemoteModels,
+  testConnection,
   updateProfile,
 } from '../net/settingsApi';
 
@@ -51,7 +53,6 @@ function formFrom(p: ProfileListItem): FormState {
 function errorText(e: unknown): string {
   if (e instanceof SettingsApiError) {
     if (e.status === 422) return `输入不合法（422）：${e.message}`;
-    if (e.status === 500) return `密钥服务不可用（500）：检查后端 LZ_MASTER_KEY 是否配置`;
     return `请求失败（${e.status}）：${e.message}`;
   }
   if (e instanceof TypeError) return '无法连接后端（sim 未启动？）';
@@ -63,6 +64,9 @@ export function SettingsPage({ onClose }: { onClose: () => void }): ReactElement
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // D13：拉取的模型清单（非空 = 模型字段变下拉）；测试连接结果
+  const [modelOptions, setModelOptions] = useState<string[]>([]);
+  const [testResult, setTestResult] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -119,6 +123,44 @@ export function SettingsPage({ onClose }: { onClose: () => void }): ReactElement
       await refresh();
     } catch (e) {
       setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** D13：拉取对方模型清单 → 模型字段变下拉。 */
+  async function onFetchModels(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    setTestResult(null);
+    try {
+      const out = await listRemoteModels(form.base_url.trim(), form.api_key);
+      if (out.ok) {
+        setModelOptions(out.models);
+        if (out.models.length > 0 && !out.models.includes(form.model)) {
+          set('model', out.models[0] ?? form.model);
+        }
+      } else {
+        setError(`拉取失败：${out.reason ?? '未知原因'}`);
+      }
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** D13：极小对话请求测连通性（max_tokens=1）。 */
+  async function onTestConnection(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      const out = await testConnection(form.base_url.trim(), form.model.trim(), form.api_key);
+      setTestResult(
+        out.ok ? `✓ 连通正常（${out.latency_ms ?? '?'}ms）` : `✗ ${out.reason ?? '未知原因'}`,
+      );
+    } catch (e) {
+      setTestResult(`✗ ${errorText(e)}`);
     } finally {
       setBusy(false);
     }
@@ -261,11 +303,28 @@ export function SettingsPage({ onClose }: { onClose: () => void }): ReactElement
             </label>
             <label className="block text-xs">
               模型
-              <input
-                className={inputCls}
-                value={form.model}
-                onChange={(e) => set('model', e.target.value)}
-              />
+              {modelOptions.length > 0 ? (
+                <select
+                  className={inputCls}
+                  value={form.model}
+                  onChange={(e) => set('model', e.target.value)}
+                >
+                  {modelOptions.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                  {form.model && !modelOptions.includes(form.model) && (
+                    <option value={form.model}>{form.model}</option>
+                  )}
+                </select>
+              ) : (
+                <input
+                  className={inputCls}
+                  value={form.model}
+                  onChange={(e) => set('model', e.target.value)}
+                />
+              )}
             </label>
             <label className="block text-xs">
               API Key{form.id !== null && <span className="text-stone-500">（留空则不修改）</span>}
@@ -277,6 +336,31 @@ export function SettingsPage({ onClose }: { onClose: () => void }): ReactElement
                 onChange={(e) => set('api_key', e.target.value)}
               />
             </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={busy || !form.base_url.trim() || !form.api_key}
+                onClick={() => void onFetchModels()}
+                className="rounded bg-stone-700 px-2 py-1 text-xs hover:bg-stone-600 disabled:opacity-40"
+              >
+                拉取模型
+              </button>
+              <button
+                type="button"
+                disabled={busy || !form.base_url.trim() || !form.model.trim() || !form.api_key}
+                onClick={() => void onTestConnection()}
+                className="rounded bg-stone-700 px-2 py-1 text-xs hover:bg-stone-600 disabled:opacity-40"
+              >
+                测试连接
+              </button>
+              {testResult !== null && (
+                <span
+                  className={`self-center text-xs ${testResult.startsWith('✓') ? 'text-emerald-400' : 'text-rose-400'}`}
+                >
+                  {testResult}
+                </span>
+              )}
+            </div>
             <div className="flex gap-2">
               <label className="block flex-1 text-xs">
                 温度

@@ -225,12 +225,22 @@ def load_profile_snapshot(
     max_tokens: int,
     api_key_enc: bytes,
 ) -> ProfileSnapshot:
-    """从 DB 行组装调用影子：此处一次性解密（K3：用完即丢，不落实例字段以外处）。"""
+    """从 DB 行组装调用影子：此处一次性解密（K3：用完即丢，不落实例字段以外处）。
+
+    CryptoError → LlmError（错误分类统一：调用方 driver 只认 LlmError 分类；
+    消息经 LlmError 边界无密钥材料——K4）。
+    """
+    from sim.core.persistence.crypto import CryptoError
+
+    try:
+        plain = decrypt_api_key(api_key_enc)
+    except CryptoError as exc:
+        raise LlmError("decrypt_failed", "api_key 解密失败") from exc
     return ProfileSnapshot(
         profile_name=profile_name,
         base_url=base_url,
         model=model,
         temperature=temperature,
         max_tokens=max_tokens,
-        api_key_plain=decrypt_api_key(api_key_enc),
+        api_key_plain=plain,
     )

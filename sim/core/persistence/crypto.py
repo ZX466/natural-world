@@ -1,7 +1,13 @@
 """LLM api_key 加密链路 — DESIGN §15 / docs/security/m1-checklist.md K1/K2/K4/K8。
 
-主密钥来源：环境变量 ``LZ_MASTER_KEY``（32 字节 url-safe base64，Fernet 格式）。
-缺失/格式非法时 **拒绝启动**（抛 CryptoError），禁止静默生成后写盘（K2）。
+主密钥来源（D13 三级引导）：
+  1. 环境变量 ``LZ_MASTER_KEY``（32 字节 url-safe base64，Fernet 格式）——优先，
+     显式配置零行为变化；
+  2. ``~/.linhe/master.key`` 文件（此前引导时自动生成持久化的）；
+  3. 都没有 → **自动生成并持久化**到该文件（K2 订正：单机本地部署下原「缺钥
+     拒启」把用户挡在门外；改为「生成后落固定文件」——密钥不丢 ⇒ 密文永远
+     可解，K2 原意「禁止静默生成**后即丢**」保住。env 格式非法仍硬拒——坏
+     key 是显式配置错误，不覆盖不绕过）。
 
 落库约定（K1）：
 - ``LLMProfile.api_key_enc`` 只存 Fernet 密文（以 ``gAAAA`` 开头）。
@@ -14,14 +20,19 @@
 
 from __future__ import annotations
 
+import binascii
 import os
 from collections.abc import MutableMapping
+from pathlib import Path
 from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
 
 # 环境变量名（codex K2 已定）
 MASTER_KEY_ENV = "LZ_MASTER_KEY"
+
+#: 引导密钥文件落点（D13：~/.linhe/master.key；测试 monkeypatch 此常量）
+_KEY_FILE = Path.home() / ".linhe" / "master.key"
 
 # 敏感键名（小写匹配，K8）。命中即整体替换为 ***。
 SENSITIVE_KEYS: frozenset[str] = frozenset(
@@ -58,32 +69,48 @@ class CryptoError(RuntimeError):
 
 
 def load_master_key(env: dict[str, str] | None = None) -> bytes:
-    """从环境变量读取并校验主密钥。
+    """三级引导读主密钥（D13）：env > 密钥文件 > 自动生成持久化。
 
-    来源优先级：显式传入的 ``env`` > ``os.environ``。
-    ``LZ_MASTER_KEY`` 必须存在且为合法 Fernet key（32 字节 url-safe base64）。
+    来源优先级：显式传入的 ``env`` > ``os.environ`` > ``_KEY_FILE`` > 生成。
+
+    - env 存在：必须为合法 Fernet key（非法 → CryptoError，**不**回退文件/
+      不生成——坏 key 是显式配置错误）；
+    - 文件存在：内容即 key（原样校验，非法报错）；
+    - 两者皆无：生成新 Fernet key 并写入 ``_KEY_FILE``（目录不存在则创建）。
 
     Raises:
-        CryptoError: 缺失或格式非法。错误信息不含密钥内容。
+        CryptoError: env 显式提供但格式非法，或文件内容非法。错误信息不含密钥内容。
     """
     source = env if env is not None else os.environ
     raw = source.get(MASTER_KEY_ENV)
-    if not raw:
-        msg = (
-            f"缺少主密钥环境变量 {MASTER_KEY_ENV}；拒绝启动。"
-            "请用密钥初始化 CLI 生成（Fernet.generate_key），不要静默生成后写盘。"
-        )
-        raise CryptoError(msg)
+    if raw:
+        key = raw.encode("utf-8") if isinstance(raw, str) else raw
+        try:
+            # Fernet 构造时会校验 key 格式（32B url-safe base64）
+            Fernet(key)
+        except (ValueError, TypeError) as exc:
+            # 不把 key 内容拼进异常（K4）
+            msg = f"{MASTER_KEY_ENV} 格式非法：需为 32 字节 url-safe base64 的 Fernet key。"
+            raise CryptoError(msg) from exc
+        return key
 
-    key = raw.encode("utf-8") if isinstance(raw, str) else raw
-    try:
-        # Fernet 构造时会校验 key 格式（32B url-safe base64）
-        Fernet(key)
-    except (ValueError, TypeError) as exc:
-        # 不把 key 内容拼进异常（K4）
-        msg = f"{MASTER_KEY_ENV} 格式非法：需为 32 字节 url-safe base64 的 Fernet key。"
-        raise CryptoError(msg) from exc
-    return key
+    if _KEY_FILE.exists():
+        file_key = _KEY_FILE.read_text(encoding="utf-8").strip()
+        if not file_key:
+            msg = f"密钥文件为空：{_KEY_FILE}。删除该文件可重新引导。"
+            raise CryptoError(msg)
+        try:
+            Fernet(file_key.encode("utf-8"))
+        except (ValueError, TypeError) as exc:
+            msg = f"密钥文件格式非法：{_KEY_FILE}（删除该文件可重新引导）。"
+            raise CryptoError(msg) from exc
+        return file_key.encode("utf-8")
+
+    # 都没有：生成并持久化（D13 K2 订正——密钥落固定文件即不丢，密文永远可解）
+    new_key = Fernet.generate_key()
+    _KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _KEY_FILE.write_text(new_key.decode("utf-8"), encoding="utf-8")
+    return new_key
 
 
 def get_fernet(env: dict[str, str] | None = None) -> Fernet:
@@ -107,12 +134,14 @@ def decrypt_api_key(ciphertext: bytes, env: dict[str, str] | None = None) -> str
     """解密 Fernet 密文 → api_key 明文（仅在 LLM 客户端发请求时调用，用完即丢，K3）。
 
     Raises:
-        CryptoError: 主密钥缺失/非法，或密文无法解密（InvalidToken）。错误信息不含明文。
+        CryptoError: 主密钥缺失/非法，或密文无法解密（InvalidToken/格式损坏）。
+        错误信息不含明文。
     """
     try:
         token = ciphertext.encode("utf-8") if isinstance(ciphertext, str) else ciphertext
         return get_fernet(env).decrypt(token).decode("utf-8")
-    except InvalidToken as exc:
+    except (InvalidToken, binascii.Error) as exc:
+        # binascii.Error = 密文连 base64 都不是（非 Fernet 形状）——同属「无法解密」
         msg = "api_key 解密失败：密文无效或主密钥不匹配。"
         raise CryptoError(msg) from exc
 

@@ -92,6 +92,68 @@
         }
       }
     },
+    "/api/settings/profiles/models": {
+      "post": {
+        "operationId": "listRemoteModels",
+        "summary": "拉取对方模型清单（OpenAI 兼容 GET {base_url}/models；D13）",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelListRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "models",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/settings/profiles/test": {
+      "post": {
+        "operationId": "testConnection",
+        "summary": "极小对话请求测连通性（max_tokens=1；D13）",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestConnectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestConnectionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/api/settings/profiles/{profile_id}": {
       "parameters": [
         {
@@ -1891,6 +1953,101 @@
           "api_key_hint": {
             "type": "string",
             "description": "仅掩码 sk-***last4；不是密钥，不能用于调用"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ModelListRequest": {
+        "type": "object",
+        "description": "拉取模型清单请求（OpenAI 兼容 GET {base_url}/models；api_key 只用于本次请求，不落库）",
+        "required": [
+          "base_url",
+          "api_key"
+        ],
+        "properties": {
+          "base_url": {
+            "type": "string",
+            "minLength": 1
+          },
+          "api_key": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "ModelListResponse": {
+        "type": "object",
+        "description": "拉取结果（失败也 200 + ok:false + reason；reason 永不含密钥材料）",
+        "required": [
+          "ok",
+          "models"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "TestConnectionRequest": {
+        "type": "object",
+        "description": "连通性测试请求（极小对话 max_tokens=1，不烧钱；api_key 只用于本次请求）",
+        "required": [
+          "base_url",
+          "model",
+          "api_key"
+        ],
+        "properties": {
+          "base_url": {
+            "type": "string",
+            "minLength": 1
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "api_key": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "TestConnectionResponse": {
+        "type": "object",
+        "description": "测试结果（失败也 200 + ok:false + reason；reason 永不含密钥材料）",
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "latency_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "成功时为请求往返毫秒数"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "additionalProperties": false

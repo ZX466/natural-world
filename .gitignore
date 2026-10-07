@@ -82,3 +82,6 @@ _rev_game_frames_0-11.png
 # D8 调色板分析临时图（根目录 *.png 已清理，防再生成）
 /tile_*.png
 /palette_fix_*.png
+
+# D13: LLM 主密钥引导文件（本机私有，绝不入库）
+.linhe/
