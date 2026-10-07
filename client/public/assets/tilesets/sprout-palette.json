@@ -9,7 +9,7 @@
   "cols": 40,
   "ground": {
     "grass_1": 0,
-    "grass_2": 2,
+    "grass_2": 1,
     "water": 16,
     "tree": 200,
     "farm_soil": 216,

@@ -161,6 +161,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _display_names: dict[str, str] = dict(zip(VILLAGER_IDS, VILLAGER_NAMES, strict=True))
     _display_names[CHENMO_ID] = "陈默"
 
+    # 批次 D10：头顶名字供数——快照 actor.name 出站（同源映射，感知真名一致）。
+    from sim.api.ws import set_display_names
+
+    set_display_names(_display_names)
+
     loop.attach_perception(
         lambda state, tick_events: run_perception_step(
             state, tile_map, tick_events, display_name_of=_display_names
@@ -205,6 +210,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     pathfinder = Pathfinder(tile_map)
     app.state.npc_runtime = npc_runtime
     monologue_last: dict[str, int] = {}
+    monologue_quota: dict[int, int] = {}  # D10：每节拍出镇配额账本（撞拍保险丝）
 
     def _npc_tick_hook(state: Any, tick: int) -> list[Any] | None:
         batch = npc_events_for_tick(
@@ -214,6 +220,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             pathfinder,
             seed=loop.state.world_seed,
             monologue_last=monologue_last,
+            monologue_quota=monologue_quota,
         )
         return batch or None
 

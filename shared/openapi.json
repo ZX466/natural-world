@@ -567,6 +567,10 @@
           },
           "tint": {
             "type": "integer"
+          },
+          "name": {
+            "type": "string",
+            "description": "戏内显示名（头顶名字供数；未装配则缺省）"
           }
         },
         "additionalProperties": false
@@ -604,6 +608,10 @@
           },
           "tint": {
             "type": "integer"
+          },
+          "name": {
+            "type": "string",
+            "description": "戏内显示名（头顶名字供数；未装配则缺省）"
           }
         },
         "additionalProperties": false

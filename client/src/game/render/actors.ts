@@ -37,15 +37,37 @@ export function facingRow(facing: Facing): number {
 
 /** C-2：chenmo.png 272×256 = **17 列**×16 行 @16px——Phaser spritesheet 线性帧号
  *  f = col + row*COLS。此前按 3 列算（row*3）→ 帧号全落表第 0 行，朝北 idle
- *  命中全透明帧（主角消失）。COLS 与 png 实宽绑定，换素材必同改。 */
-const CHENMO_COLS = 17;
-const FRAMES_PER_ROW = 3; // 步-站-步
+ *  命中全透明帧（主角消失）。COLS 与 png 实宽绑定，换素材必同改。
+ *  D10：具体数值搬进 CHENMO_SHEET（几何单源）。 */
+
+/** 帧表几何（D10 抽象：chenmo 17 列 3 帧 vs villager 4 列 4 帧共用一套换算）。 */
+export interface SheetGeometry {
+  /** 图集列数（png 宽 ÷ 16px；Phaser 线性帧号的行进因子） */
+  cols: number;
+  /** 行内参与 walk 环的帧数 */
+  framesPerRow: number;
+  /** 站立帧所在列（chenmo=1 中帧；villager=0） */
+  standCol?: number;
+}
+
+/** chenmo 几何（17 列 × 步-站-步） */
+export const CHENMO_SHEET: SheetGeometry = { cols: 17, framesPerRow: 3, standCol: 1 };
+/** villager 几何（NPC_test.png 64×128 = 4 列 × 8 行；每行 4 帧全参与行走环，
+ *  行序 下/上/右/左（R0-R3 目视定案，与 chenmo 同款）；R4-7 劳作姿势暂不用） */
+export const VILLAGER_SHEET: SheetGeometry = { cols: 4, framesPerRow: 4, standCol: 0 };
+
+/** 通用线性帧号：站立帧 row*cols+standCol；walk 环行内 framesPerRow 帧循环。
+ *  D10：walkFrame 的一般化（单入口防两套换算漂移——C-2 教训）。 */
+export function walkFrameFor(sheet: SheetGeometry, row: number, animClockMs: number): number {
+  const standCol = sheet.standCol ?? 0;
+  if (animClockMs < 0) return row * sheet.cols + standCol;
+  const phase = Math.floor(animClockMs / 150) % sheet.framesPerRow;
+  return row * sheet.cols + phase;
+}
 
 /** walk 循环帧号（线性 f = row*COLS + phase）。animClock<0 = 站立帧（col 1）。 */
 export function walkFrame(row: number, animClockMs: number): number {
-  if (animClockMs < 0) return row * CHENMO_COLS + 1;
-  const phase = Math.floor(animClockMs / 150) % FRAMES_PER_ROW;
-  return row * CHENMO_COLS + phase;
+  return walkFrameFor(CHENMO_SHEET, row, animClockMs);
 }
 
 /** Actor 当前逻辑帧号（合成入口：朝向行 + 动画帧）。 */

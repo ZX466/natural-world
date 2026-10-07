@@ -121,8 +121,10 @@ class TestWillingnessWiring:
         assert not bubbles_of(batch2, "npc_01"), "冷却（300 tick）内同一 NPC 不再开口"
 
     def test_after_cooldown_speaks_again(self) -> None:
+        """冷却过后再开口（D10 起冷却按 NPC 散布 [2400,9600) tick——
+        用 `_cooldown_ticks(npc)` 计算确过冷却的拍点，不假设固定 300）。"""
         from sim.api.main import _fallback_map
-        from sim.npc.sim_exec import npc_events_for_tick
+        from sim.npc.sim_exec import _cooldown_ticks, npc_events_for_tick
         from sim.world.pathfinding import Pathfinder
 
         pf = Pathfinder(_fallback_map())
@@ -135,8 +137,14 @@ class TestWillingnessWiring:
         npc_events_for_tick(
             runtime=runtime, state=state, tick=1100, pathfinder=pf, seed=42, monologue_last=last
         )
+        # 越过 npc_01 的散布冷却（≥2400 tick），冷却期外应再开口
         batch3 = npc_events_for_tick(
-            runtime=runtime, state=state, tick=1350, pathfinder=pf, seed=42, monologue_last=last
+            runtime=runtime,
+            state=state,
+            tick=1000 + _cooldown_ticks("npc_01"),
+            pathfinder=pf,
+            seed=42,
+            monologue_last=last,
         )
         assert _bubbles(batch3), "冷却过后再开口"
 

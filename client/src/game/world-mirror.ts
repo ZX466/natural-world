@@ -21,6 +21,8 @@ export interface MirrorActor {
   sprite: string;
   anim: string;
   tint?: number | undefined;
+  /** 批次 D10：戏内显示名（协议 1.4 可选字段；头顶名字供数） */
+  name?: string | undefined;
 }
 
 export interface MirrorLight {
@@ -92,6 +94,7 @@ export class WorldMirror {
           sprite: d.sprite ?? 'placeholder',
           anim: d.anim ?? 'idle',
           tint: d.tint,
+          name: d.name,
         });
         continue;
       }
@@ -101,6 +104,7 @@ export class WorldMirror {
       if (d.sprite !== undefined) cur.sprite = d.sprite;
       if (d.anim !== undefined) cur.anim = d.anim;
       if (d.tint !== undefined) cur.tint = d.tint;
+      if (d.name !== undefined) cur.name = d.name;
     }
   }
 

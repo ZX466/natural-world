@@ -1,8 +1,9 @@
 /**
- * client/src/ui/PanelHost.tsx — 右侧竖栏面板（批次 A UI）。
+ * client/src/ui/PanelHost.tsx — 右侧竖栏面板（批次 A UI；D10 分流）。
  *
- * 两块面板：心之声（独白流：thought/bubble/plan 全形态入流，环形缓冲
- * 最近 MONOLOGUE_CAP 条）+ 计划看板（state_delta.plan，有则展开无则收起）。
+ * 三块面板：心之声（陈默独白流：thought/plan 入流，环形缓冲
+ * 最近 MONOLOGUE_CAP 条）+ 街谈巷议（批次 D10：村民 bubble 公开嘟囔，
+ * CHATTER_CAP 条）+ 计划看板（state_delta.plan，有则展开无则收起）。
  * 出戏纪律：只渲染叙事文本，零数值零工程词。
  */
 import type { ReactElement } from 'react';
@@ -16,6 +17,7 @@ const FORM_LABEL: Record<MonologueEntry['form'], string> = {
 
 export function PanelHost(): ReactElement {
   const monologues = useUiStore((s) => s.monologues);
+  const chatter = useUiStore((s) => s.chatter);
   const plans = useUiStore((s) => s.plans);
 
   return (
@@ -38,6 +40,23 @@ export function PanelHost(): ReactElement {
               >
                 <span className="mr-1 text-[10px] text-amber-300/80">{FORM_LABEL[m.form]}</span>
                 {m.content}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      <section aria-label="街谈巷议" className="min-h-0">
+        <h2 className="mb-2 text-xs font-semibold tracking-widest text-stone-400">街谈巷议</h2>
+        {chatter.length === 0 ? (
+          <p className="text-xs leading-relaxed text-stone-500">镇上还很安静。</p>
+        ) : (
+          <ul className="space-y-2">
+            {chatter.map((c, i) => (
+              <li
+                key={`${i}-${c}`}
+                className="chatter-item rounded bg-stone-800/40 px-2.5 py-1.5 text-xs leading-relaxed text-stone-400"
+              >
+                {c}
               </li>
             ))}
           </ul>

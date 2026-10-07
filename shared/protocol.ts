@@ -174,6 +174,8 @@ export type components = {
     readonly Actor: {
       readonly anim: string;
       readonly facing: components['schemas']['Facing'];
+      /** @description 戏内显示名（头顶名字供数；未装配则缺省） */
+      readonly name?: string;
       readonly rtoken: components['schemas']['RToken'];
       readonly sprite: string;
       readonly tint?: number;
@@ -183,6 +185,8 @@ export type components = {
     readonly ActorDelta: {
       readonly anim?: string;
       readonly facing?: components['schemas']['Facing'];
+      /** @description 戏内显示名（头顶名字供数；未装配则缺省） */
+      readonly name?: string;
       /** @enum {string} */
       readonly op?: 'add' | 'remove';
       readonly rtoken: components['schemas']['RToken'];

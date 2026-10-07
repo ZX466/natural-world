@@ -116,8 +116,11 @@ class TestOutboundClean:
         assert "branch" not in text
         assert '"time"' in text  # 剥除闸没把 time 吃掉
 
-    def test_version_is_13(self):
-        assert _PROTOCOL_VERSION == "1.3"
+    def test_version_at_least_13(self):
+        """1.3 = M7 time 块与 ground_b64 引入版；后续 minor（1.4=D10 actor.name）
+        向后兼容——钉「不得回退到 1.3 之前」，不钉死具体版号（升版免改本钉）。"""
+        major, minor = (int(p) for p in _PROTOCOL_VERSION.split("."))
+        assert (major, minor) >= (1, 3)
 
 
 class TestGroundB64:

@@ -6,7 +6,15 @@
  */
 import Phaser from 'phaser';
 import type { WorldMirror } from '../world-mirror';
-import { facingRow, walkFrame, advanceAnimClock, inferFacing, type Facing } from '../render/actors';
+import {
+  facingRow,
+  walkFrame,
+  walkFrameFor,
+  advanceAnimClock,
+  inferFacing,
+  VILLAGER_SHEET,
+  type Facing,
+} from '../render/actors';
 import { useUiStore } from '../../store/uiStore';
 
 const PIXEL_SCALE = 3; // 批次 D8：2x→3x（48×48 镇铺满视口，人物可辨）
@@ -27,6 +35,8 @@ interface ActorView {
   animClockMs: number;
   /** H-3：最后非零朝向（停下沿用，不转身） */
   lastFacing: 'n' | 'e' | 's' | 'w';
+  /** D10：头顶戏内名（快照 actor.name；无 name 的 actor 无此对象） */
+  label: Phaser.GameObjects.Text | null;
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -171,7 +181,10 @@ export class WorldScene extends Phaser.Scene {
   private syncActorViews(delta: number): void {
     if (this.mirror.resetCount !== this.lastResetSeen) {
       // 镜像被重连重置：清空精灵池重建（codex 意见 9 的表现层配合）
-      for (const v of this.views.values()) v.sprite.destroy();
+      for (const v of this.views.values()) {
+        v.sprite.destroy();
+        v.label?.destroy();
+      }
       this.views.clear();
       this.lastResetSeen = this.mirror.resetCount;
     }
@@ -180,7 +193,7 @@ export class WorldScene extends Phaser.Scene {
       let view = this.views.get(rtoken);
       if (view === undefined) {
         const isProtagonist = rtoken === this.mirror.protagonist;
-        // M7-T7：矩形色块 → 真精灵（主角=chenmo 走环；村民=villager 站立帧）
+        // M7-T7：矩形色块 → 真精灵（主角=chenmo 走环；村民=villager 走环）
         const sprite = this.add
           .sprite(
             actor.x * TILE + TILE / 2,
@@ -189,7 +202,28 @@ export class WorldScene extends Phaser.Scene {
             0,
           )
           .setDepth(10);
-        view = { sprite, prevX: actor.x, prevY: actor.y, animClockMs: -1, lastFacing: 's' as Facing };
+        // 批次 D10：头顶戏内名（快照 actor.name 供数；canvas 内 Text——
+        // DESIGN §4 硬约束：Phaser 画 canvas 世界，React 画 canvas 外 UI）。
+        const label =
+          actor.name !== undefined
+            ? this.add
+                .text(
+                  actor.x * TILE + TILE / 2,
+                  actor.y * TILE - 4,
+                  actor.name,
+                  {
+                    fontFamily: 'sans-serif',
+                    fontSize: '9px',
+                    color: '#e7e0d0',
+                    stroke: '#1a1f14',
+                    strokeThickness: 2,
+                    resolution: 4,
+                  },
+                )
+                .setOrigin(0.5, 1)
+                .setDepth(11)
+            : null;
+        view = { sprite, prevX: actor.x, prevY: actor.y, animClockMs: -1, lastFacing: 's' as Facing, label };
         this.views.set(rtoken, view);
         if (isProtagonist) this.cameras.main.startFollow(sprite, true, 0.12, 0.12);
       }
@@ -198,24 +232,30 @@ export class WorldScene extends Phaser.Scene {
       // 相邻 tick 快照间线性插值（m0-client §3）
       view.sprite.x = Phaser.Math.Linear(view.sprite.x, targetX, t);
       view.sprite.y = Phaser.Math.Linear(view.sprite.y, targetY, t);
-      // R2：位移推断 anim/facing → 帧号（villager 无 walk 环，恒帧 0；R7 静止）
-      if (rtoken === this.mirror.protagonist) {
-        const moved = view.prevX !== actor.x || view.prevY !== actor.y;
-        // H-2：walk 累加/idle 归 -1（修前写反 → 循环死在第 0 帧）
-        view.animClockMs = advanceAnimClock(view.animClockMs, moved, delta);
-        // H-3：零位移沿用 lastFacing（停下不转身）；frameOf 只用方向行号
-        if (moved) {
-          view.lastFacing = inferFacing(actor.x - view.prevX, actor.y - view.prevY, view.lastFacing);
-        }
-        view.sprite.setFrame(walkFrame(facingRow(view.lastFacing), view.animClockMs));
-        view.prevX = actor.x;
-        view.prevY = actor.y;
+      view.label?.setPosition(view.sprite.x, view.sprite.y - TILE / 2 - 3);
+      // R2：位移推断 anim/facing → 帧号（D10：villager 4 列帧表启用行走环；
+      // 修前恒帧 0——素材有 4×8 走环/劳作表却只画迈步中间帧，人群看着呆滞）
+      const moved = view.prevX !== actor.x || view.prevY !== actor.y;
+      // H-2：walk 累加/idle 归 -1（修前写反 → 循环死在第 0 帧）
+      view.animClockMs = advanceAnimClock(view.animClockMs, moved, delta);
+      // H-3：零位移沿用 lastFacing（停下不转身）；frameOf 只用方向行号
+      if (moved) {
+        view.lastFacing = inferFacing(actor.x - view.prevX, actor.y - view.prevY, view.lastFacing);
       }
+      const row = facingRow(view.lastFacing);
+      view.sprite.setFrame(
+        rtoken === this.mirror.protagonist
+          ? walkFrame(row, view.animClockMs)
+          : walkFrameFor(VILLAGER_SHEET, row, view.animClockMs),
+      );
+      view.prevX = actor.x;
+      view.prevY = actor.y;
     }
     // 移除已消失的 actor
     for (const [rtoken, view] of this.views) {
       if (!this.mirror.actors.has(rtoken)) {
         view.sprite.destroy();
+        view.label?.destroy();
         this.views.delete(rtoken);
       }
     }

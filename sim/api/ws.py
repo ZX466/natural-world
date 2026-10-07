@@ -64,7 +64,7 @@ logger = structlog.get_logger(__name__)
 #: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
 #: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
 #: PlanDelta 封闭）；1.2 = 批次 E 只读诊断面进协议快照（M6-K2）——登记见 versioning.md §7。
-_PROTOCOL_VERSION = "1.3"
+_PROTOCOL_VERSION = "1.4"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 
 # K4 提案 §2.2/§3.2：五类 C→S 消息在此与 _CHANNEL_FOR **成对**注册
@@ -251,6 +251,28 @@ def _rtoken(entity_id: str) -> str:
     return "rt-" + hashlib.sha256(entity_id.encode()).hexdigest()[:12]
 
 
+#: 批次 D10：entity_id → 戏内显示名（{entity_id: 名}；lifespan 装配）。
+#: **名字是戏内事实可出站**（D8 感知真名同源裁定——感知层 display_name_of
+#: 已把真名给 prompt；头顶名字是同一位事实的呈现面，不破出戏边界）。
+#: None = 未装配（测试/旧调用）→ 快照零 name 键（协议 name 可选，向后兼容）。
+#: 模块级（同 _IMPULSE_TRIGGER 模式）：snapshot_payload 是同步纯函数，
+#: 不能读 app.state。
+_DISPLAY_NAMES: dict[str, str] | None = None
+
+
+def set_display_names(names: dict[str, str] | None) -> None:
+    """装配显示名映射（main.py lifespan 调用；None = 清除）。"""
+    global _DISPLAY_NAMES
+    _DISPLAY_NAMES = None if names is None else dict(names)
+
+
+def _display_name_of(entity_id: str) -> str | None:
+    name = (_DISPLAY_NAMES or {}).get(entity_id)
+    if name is None or name == entity_id:  # 防御：戏内名不得退化为 entity_id
+        return None
+    return name
+
+
 #: 批次 D7：天气日级视觉状态（确定性哈希抽签，同 fire 模式——无 RNG 流）。
 #: visual 协议封闭集 {clear, overcast, rain}；ambient_light 与昼夜色罩叠乘。
 _WEATHER_LIGHTS: dict[str, float] = {"clear": 1.0, "overcast": 0.9, "rain": 0.75}
@@ -387,20 +409,24 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
     """全量快照（full_snapshot）。rtoken 替身；无 tick/seed/内部 id。
 
     sprite 名也从 rtoken 派生（内部 entity_id 不可出网关——W 系列出戏边界）。
+    D10：actor 增可选 `name`（戏内显示名；装配了 _DISPLAY_NAMES 才带——
+    名字是戏内事实可出站，entity_id 仍禁出）。
     """
     actors = []
     for entity_id, entity in loop.state.entities.items():
         rt = _rtoken(entity_id)
-        actors.append(
-            {
-                "rtoken": rt,
-                "x": entity.pos[0],
-                "y": entity.pos[1],
-                "facing": "s",
-                "sprite": rt,
-                "anim": "idle",
-            }
-        )
+        actor: dict[str, Any] = {
+            "rtoken": rt,
+            "x": entity.pos[0],
+            "y": entity.pos[1],
+            "facing": "s",
+            "sprite": rt,
+            "anim": "idle",
+        }
+        name = _display_name_of(entity_id)
+        if name is not None:
+            actor["name"] = name
+        actors.append(actor)
     return {
         "type": "full_snapshot",
         "channel": "render",
@@ -427,6 +453,8 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
     会被 moved 过滤漏掉，故与 actors/lights 并列）。账本为空则**不发该键**
     （可选字段不制造噪声）；已清计划的实体发 `text:""`（前端收起看板）。
     rtoken 替身出网关；账本可能残留已注销实体 → 按世界表过滤。
+    D10：重连/新建连接期间 delta 可能先于快照到达——moved actor 同样带
+    `name`（可选；装配了显示名才带），防前端先建出无名精灵。
     """
     from sim.npc.plan_view import registry
 
@@ -435,7 +463,15 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
         entity = loop.state.entities.get(entity_id)
         if entity is None:
             continue
-        actors.append({"rtoken": _rtoken(entity_id), "x": entity.pos[0], "y": entity.pos[1]})
+        actor: dict[str, Any] = {
+            "rtoken": _rtoken(entity_id),
+            "x": entity.pos[0],
+            "y": entity.pos[1],
+        }
+        name = _display_name_of(entity_id)
+        if name is not None:
+            actor["name"] = name
+        actors.append(actor)
     payload: dict[str, Any] = {
         "type": "state_delta",
         "channel": "render",

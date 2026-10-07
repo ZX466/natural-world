@@ -94,6 +94,9 @@ _SUB_SCHEMAS: dict[str, dict[str, Any]] = {
             "facing": {"$ref": "#/components/schemas/Facing"},
             "anim": {"type": "string"},
             "tint": {"type": "integer"},
+            # D10（协议 1.4）：戏内显示名（可选）——名字是戏内事实可出站
+            # （D8 感知真名同源裁定）；头顶名字供数。entity_id 仍禁出站。
+            "name": {"type": "string", "description": "戏内显示名（头顶名字供数；未装配则缺省）"},
         },
         "additionalProperties": False,
     },
@@ -109,6 +112,7 @@ _SUB_SCHEMAS: dict[str, dict[str, Any]] = {
             "facing": {"$ref": "#/components/schemas/Facing"},
             "anim": {"type": "string"},
             "tint": {"type": "integer"},
+            "name": {"type": "string"},
         },
         "additionalProperties": False,
     },

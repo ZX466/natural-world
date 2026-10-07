@@ -58,12 +58,14 @@ def build() -> None:
     ground = [[0] * SIZE for _ in range(SIZE)]
     collision = [[True] * SIZE for _ in range(SIZE)]
 
-    # 草地底 + 确定性变体（算式选伪随机，产物 diff 稳定）
+    # 草地底 + 确定性变体（算式选伪随机，产物 diff 稳定）。
+    # D10：花变体降频 1/23 → 1/53（满地小蓝花抢戏，用户截图定罪）；泥土斑
+    # grass_alt 保持 1/11（目视低调，与底草同族）。
     for y in range(SIZE):
         for x in range(SIZE):
-            h = (x * 7 + y * 13) % 23
+            h = (x * 7 + y * 13) % 53
             ground[y][x] = ids["flower"] if h == 0 else (
-                ids["grass_alt"] if h % 11 == 0 else ids["grass"]
+                ids["grass_alt"] if (x * 7 + y * 13) % 11 == 0 else ids["grass"]
             )
 
     def fill(

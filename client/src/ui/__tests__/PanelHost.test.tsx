@@ -11,6 +11,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 const storeState = vi.hoisted(() => ({
   monologues: [] as { form: 'thought' | 'bubble' | 'plan'; content: string }[],
+  chatter: [] as string[],
   plans: [] as { rtoken: string; text: string }[],
 }));
 
@@ -27,6 +28,7 @@ function renderPanel(): string {
 describe('PanelHost', () => {
   beforeEach(() => {
     storeState.monologues = [];
+    storeState.chatter = [];
     storeState.plans = [];
   });
 

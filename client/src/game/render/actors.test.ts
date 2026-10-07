@@ -5,7 +5,7 @@
  * H-3：零位移沿用 lastFacing（停下不转身）。
  */
 import { describe, expect, it } from 'vitest';
-import { inferFacing, inferAnim, advanceAnimClock, walkFrame, facingRow } from './actors';
+import { inferFacing, inferAnim, advanceAnimClock, walkFrame, walkFrameFor, facingRow } from './actors';
 
 describe('inferFacing', () => {
   it.each([
@@ -67,5 +67,27 @@ describe('walkFrame（C-2 修复钉：17 列线性换算）', () => {
     expect(facingRow('n')).toBe(1);
     expect(facingRow('e')).toBe(2);
     expect(facingRow('w')).toBe(3);
+  });
+});
+
+describe('walkFrameFor（D10：villager 4 列帧表）', () => {
+  const VILLAGER = { cols: 4, framesPerRow: 4, walkPhases: [0, 1, 2, 3] } as const;
+
+  it('站立帧 = row*4 + 0（col 0 站立）', () => {
+    expect(walkFrameFor(VILLAGER, 0, -1)).toBe(0);
+    expect(walkFrameFor(VILLAGER, 1, -1)).toBe(4);
+    expect(walkFrameFor(VILLAGER, 3, -1)).toBe(12);
+  });
+  it('walk 环在行内 0..3 循环，不跨行', () => {
+    expect(walkFrameFor(VILLAGER, 1, 0)).toBe(4);
+    expect(walkFrameFor(VILLAGER, 1, 150)).toBe(5);
+    expect(walkFrameFor(VILLAGER, 1, 300)).toBe(6);
+    expect(walkFrameFor(VILLAGER, 1, 450)).toBe(7);
+    expect(walkFrameFor(VILLAGER, 1, 600)).toBe(4); // 回卷
+  });
+  it('chenmo 几何经同一入口结果不变（单入口防两套换算漂移）', () => {
+    const CHENMO = { cols: 17, framesPerRow: 3, standCol: 1 } as const;
+    expect(walkFrameFor(CHENMO, 0, -1)).toBe(1);
+    expect(walkFrameFor(CHENMO, 1, 150)).toBe(18);
   });
 });

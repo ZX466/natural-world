@@ -18,6 +18,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 
 #: §10 四档切分阈值（band 0/1/2/3 的上界，最后一档到 1.0）
@@ -86,13 +87,29 @@ def willingness_conflict(
     return WillingnessVerdict(score=score, band=_band_of(score))
 
 
-#: 各档独白模板（全部**自我怀疑**词面——§10「我干嘛要干这个」族；
-#: 禁「谁在指使/被操纵」族（出戏）。多模板按 band 轮换时用 (band, 分数微差)
-#: 决定，保证 C5；M4 初版每档 1 条，扩模板走 T4 词面复核）。
-_TEMPLATES: dict[int, str] = {
-    1: "这事我有点犯嘀咕——我平时可不这么办事。",
-    2: "说不上来为什么，就是不痛快。先磨蹭一会儿吧，我干嘛非要现在干这个。",
-    3: "这活儿我实在打怵。……先去别处转一圈，缓过来再说。",
+#: 各档独白模板池（全部**自我怀疑**词面——§10「我干嘛要干这个」族；
+#: 禁「谁在指使/被操纵」族（出戏）。D10 扩池：每档 ≥4 条，按 (band, npc_name)
+#: 确定性哈希选取（C5 同输入同输出）——D2 实证单模板 × 50 人 = 全镇合唱
+#: 同一句（「心之声凌乱」根因之一）。扩面时词面纪律随 T4 band 词表钉走。
+_TEMPLATES: dict[int, tuple[str, ...]] = {
+    1: (
+        "这事我有点犯嘀咕——我平时可不这么办事。",
+        "心里有点打鼓，这么干到底对不对？",
+        "不大情愿……可事到眼前，迟疑也是白迟疑。",
+        "说不出的不自在，今天这活儿我有点犹豫。",
+    ),
+    2: (
+        "说不上来为什么，就是不痛快。先磨蹭一会儿吧，我干嘛非要现在干这个。",
+        "这活儿讨价还价也没人听，磨蹭一会儿是一会儿。",
+        "越想越不痛快——凭什么是我来干这个？",
+        "不痛快。缓口气再动，我干嘛非要这么急。",
+    ),
+    3: (
+        "这活儿我实在打怵。……先去别处转一圈，缓过来再说。",
+        "不想干，真不想干。先走开透透气。",
+        "打怵得很，腿都沉了——先去别处绕绕，缓过来再说。",
+        "这事儿我先撂下。不缓过来我怕自己干砸。",
+    ),
 }
 
 
@@ -101,15 +118,22 @@ def willingness_expression(
 ) -> WillingnessExpression | None:
     """verdict → 戏内表现（band 0 无表现=None；独白不嵌 NPC 名=第一人称铁律）。
 
-    `npc_name` 当前只用于未来第二人称调试层（M4 不消费）；签名收它是因为
-    装配层调用点已持有，避免 M5 加参破调用。
+    D10：模板从池中按 (band, npc_name) 确定性哈希选取——不同 npc 说法岔开
+    （同输入恒同输出，C5）；`npc_name` 兼作选取键（仍不进文本）。
     """
-    _ = npc_name  # 见 docstring：预留，不进文本
     if verdict.band <= 0:
         return None
-    template = _TEMPLATES[verdict.band]
+    pool = _TEMPLATES[verdict.band]
+    idx = _pick_index(npc_name, len(pool))
+    template = pool[idx]
     return WillingnessExpression(
         band=verdict.band,
         monologue=template,
         defers=verdict.band >= 3,
     )
+
+
+def _pick_index(npc_name: str, pool_size: int) -> int:
+    """(npc_name) → 池内下标（sha256 截断取模；确定性，无 RNG 状态流）。"""
+    digest = hashlib.sha256(npc_name.encode("utf-8")).digest()
+    return int.from_bytes(digest[0:4], "big") % pool_size
