@@ -349,6 +349,8 @@ export type components = {
       readonly content: string;
       /** @enum {string} */
       readonly form: 'bubble' | 'thought' | 'plan';
+      /** @description 说话人戏内名（仅 bubble 署名；thought/plan 不带） */
+      readonly name?: string;
       /**
        * @description discriminator enum property added by openapi-typescript
        * @enum {string}

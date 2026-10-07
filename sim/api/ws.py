@@ -64,7 +64,7 @@ logger = structlog.get_logger(__name__)
 #: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
 #: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
 #: PlanDelta 封闭）；1.2 = 批次 E 只读诊断面进协议快照（M6-K2）——登记见 versioning.md §7。
-_PROTOCOL_VERSION = "1.4"
+_PROTOCOL_VERSION = "1.5"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 
 # K4 提案 §2.2/§3.2：五类 C→S 消息在此与 _CHANNEL_FOR **成对**注册
@@ -491,13 +491,16 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
     return payload
 
 
-def monologue_payload(form: str, content: str) -> dict[str, Any]:
+def monologue_payload(form: str, content: str, *, name: str | None = None) -> dict[str, Any]:
     """独白帧（monologue，narrative 通道；§8 三形态）。
 
     帧只含 form + content（ws-protocol §4.2 W7 字段最小化：**无 rtoken/actor**）。
     投递面由 `route_monologue` 按 form 决定，不进载荷（出戏边界）。
+    D12：bubble 可带 `name`（说话人戏内名，可选）——bubble 是**外在可观察面**
+    （路人看见谁在嘟囔），署名不破 W7（rtoken/内部 id 仍禁出；thought 私密面
+    保持无 name——心里话无「谁在说」的观察面）。
     """
-    return {
+    frame: dict[str, Any] = {
         "type": "monologue",
         "channel": "narrative",
         "v": _PROTOCOL_VERSION,
@@ -505,6 +508,9 @@ def monologue_payload(form: str, content: str) -> dict[str, Any]:
         "form": form,
         "content": content,
     }
+    if name is not None:
+        frame["name"] = name
+    return frame
 
 
 def monologue_events_to_frames(events: list[WorldEvent]) -> list[tuple[str, dict[str, Any]]]:
@@ -513,18 +519,17 @@ def monologue_events_to_frames(events: list[WorldEvent]) -> list[tuple[str, dict
     事件是真相来源（§14，进事件日志可重放）；本函数只做「事件 → 投递单元」的
     投影，**不改内容**（逐位一致：帧 content 即事件 payload content）。actor_id
     从事件 actor_id 取（路由用，不出网关——帧里没有它）。
+    D12：bubble 帧附说话人戏内名（外在可观察面署名；查不到映射则不带——
+    entity_id 不得退化出站）。
     """
     frames: list[tuple[str, dict[str, Any]]] = []
     for e in events:
         if e.event_type is not EventKind.NPC_MONOLOGUE:
             continue
         payload = e.payload
-        frames.append(
-            (
-                e.actor_id,
-                monologue_payload(str(payload["form"]), str(payload["content"])),
-            )
-        )
+        form = str(payload["form"])
+        name = _display_name_of(e.actor_id) if form == "bubble" else None
+        frames.append((e.actor_id, monologue_payload(form, str(payload["content"]), name=name)))
     return frames
 
 

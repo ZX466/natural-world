@@ -12,7 +12,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 const storeState = vi.hoisted(() => ({
   monologues: [] as { form: 'thought' | 'bubble' | 'plan'; content: string }[],
-  chatter: [] as string[],
+  chatter: [] as { name: string | null; content: string }[],
   plans: [] as { rtoken: string; text: string }[],
 }));
 
@@ -40,9 +40,13 @@ describe('PanelHost 街谈巷议（批次 D10）', () => {
     expect(html).toContain('计划');
   });
 
-  it('chatter 条目渲染在街谈巷议节', () => {
-    storeState.chatter = ['这事我有点犯嘀咕。', '先磨蹭一会儿吧。'];
+  it('chatter 条目渲染在街谈巷议节（署名 + 内容）', () => {
+    storeState.chatter = [
+      { name: '赵铁柱', content: '这事我有点犯嘀咕。' },
+      { name: null, content: '先磨蹭一会儿吧。' },
+    ];
     const html = renderPanel();
+    expect(html).toContain('赵铁柱：');
     expect(html).toContain('这事我有点犯嘀咕。');
     expect(html).toContain('先磨蹭一会儿吧。');
   });

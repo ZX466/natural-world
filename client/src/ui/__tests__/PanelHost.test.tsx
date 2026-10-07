@@ -11,7 +11,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 const storeState = vi.hoisted(() => ({
   monologues: [] as { form: 'thought' | 'bubble' | 'plan'; content: string }[],
-  chatter: [] as string[],
+  chatter: [] as { name: string | null; content: string }[],
   plans: [] as { rtoken: string; text: string }[],
 }));
 

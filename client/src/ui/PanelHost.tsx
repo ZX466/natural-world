@@ -53,10 +53,13 @@ export function PanelHost(): ReactElement {
           <ul className="space-y-2">
             {chatter.map((c, i) => (
               <li
-                key={`${i}-${c}`}
+                key={`${i}-${c.content}`}
                 className="chatter-item rounded bg-stone-800/40 px-2.5 py-1.5 text-xs leading-relaxed text-stone-400"
               >
-                {c}
+                {c.name !== null && (
+                  <span className="mr-1 text-[10px] text-stone-300">{c.name}：</span>
+                )}
+                {c.content}
               </li>
             ))}
           </ul>

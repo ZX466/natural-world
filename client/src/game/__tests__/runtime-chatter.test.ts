@@ -16,7 +16,7 @@ function mockDeps() {
     lastImpulseCue: null as string | null,
     impulseError: null as string | null,
     monologues: [] as { form: string; content: string }[],
-    chatter: [] as string[],
+    chatter: [] as { name: string | null; content: string }[],
     plans: [] as { rtoken: string; text: string }[],
     setWsStatus: (s: string) => {
       store.wsStatus = s;
@@ -33,8 +33,8 @@ function mockDeps() {
     pushMonologue: (form: string, content: string) => {
       store.monologues = [...store.monologues, { form, content }];
     },
-    pushChatter: (content: string) => {
-      store.chatter = [...store.chatter, content];
+    pushChatter: (name: string | null, content: string) => {
+      store.chatter = [...store.chatter, { name, content }];
     },
     setPlans: (p: { rtoken: string; text: string }[]) => {
       store.plans = p;
@@ -102,8 +102,8 @@ function installWsMock(callbacks: Record<string, unknown>, sent: Record<string, 
   }));
 }
 
-describe('runtime monologue 分流（批次 D10）', () => {
-  it('bubble → 街谈巷议（不进心之声）', async () => {
+describe('runtime monologue 分流（批次 D10/D12）', () => {
+  it('bubble → 街谈巷议（署名随行；不进心之声）', async () => {
     const { store } = mockDeps();
     const callbacks: Record<string, unknown> = {};
     const sent: Record<string, unknown>[] = [];
@@ -116,9 +116,17 @@ describe('runtime monologue 分流（批次 D10）', () => {
     const { runtime } = await import('../runtime');
     runtime.start();
 
-    const onMonologue = callbacks.onMonologue as (msg: { form: string; content: string }) => void;
-    onMonologue({ form: 'bubble', content: '这事我有点犯嘀咕。' });
-    expect(store.chatter).toEqual(['这事我有点犯嘀咕。']);
+    const onMonologue = callbacks.onMonologue as (msg: {
+      form: string;
+      content: string;
+      name?: string;
+    }) => void;
+    onMonologue({ form: 'bubble', content: '这事我有点犯嘀咕。', name: '赵铁柱' });
+    onMonologue({ form: 'bubble', content: '无名嘟囔。' });
+    expect(store.chatter).toEqual([
+      { name: '赵铁柱', content: '这事我有点犯嘀咕。' },
+      { name: null, content: '无名嘟囔。' },
+    ]);
     expect(store.monologues).toEqual([]);
   });
 

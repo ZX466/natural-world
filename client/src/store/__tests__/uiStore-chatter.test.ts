@@ -11,39 +11,42 @@ import { CHATTER_CAP, useUiStore } from '../uiStore';
 
 const RESET = {
   monologues: [] as { form: 'bubble' | 'thought' | 'plan'; content: string }[],
-  chatter: [] as string[],
+  chatter: [] as { name: string | null; content: string }[],
   plans: [] as { rtoken: string; text: string }[],
   impulseError: null as string | null,
   lastImpulseCue: null as string | null,
 };
 
-describe('uiStore 街谈巷议（批次 D10）', () => {
+describe('uiStore 街谈巷议（批次 D10/D12）', () => {
   beforeEach(() => {
     useUiStore.setState(RESET);
   });
 
   it('pushChatter 追加且不可变（新数组）', () => {
-    useUiStore.getState().pushChatter('这事我有点犯嘀咕。');
+    useUiStore.getState().pushChatter('赵铁柱', '这事我有点犯嘀咕。');
     const before = useUiStore.getState().chatter;
-    useUiStore.getState().pushChatter('先磨蹭一会儿吧。');
+    useUiStore.getState().pushChatter(null, '先磨蹭一会儿吧。');
     const after = useUiStore.getState().chatter;
-    expect(after).toEqual(['这事我有点犯嘀咕。', '先磨蹭一会儿吧。']);
+    expect(after).toEqual([
+      { name: '赵铁柱', content: '这事我有点犯嘀咕。' },
+      { name: null, content: '先磨蹭一会儿吧。' },
+    ]);
     expect(before).not.toBe(after);
   });
 
   it('chatter 环形上限：超过 CHATTER_CAP 丢最旧', () => {
     for (let i = 0; i <= CHATTER_CAP; i += 1) {
-      useUiStore.getState().pushChatter(String(i));
+      useUiStore.getState().pushChatter(null, String(i));
     }
     const chatter = useUiStore.getState().chatter;
     expect(chatter).toHaveLength(CHATTER_CAP);
-    expect(chatter[0]).toBe('1');
+    expect(chatter[0]?.content).toBe('1');
   });
 
   it('monologues 与 chatter 互不污染（分流面独立）', () => {
     useUiStore.getState().pushMonologue('thought', '心里话');
-    useUiStore.getState().pushChatter('街上的嘟囔');
+    useUiStore.getState().pushChatter('李阿婆', '街上的嘟囔');
     expect(useUiStore.getState().monologues).toEqual([{ form: 'thought', content: '心里话' }]);
-    expect(useUiStore.getState().chatter).toEqual(['街上的嘟囔']);
+    expect(useUiStore.getState().chatter).toEqual([{ name: '李阿婆', content: '街上的嘟囔' }]);
   });
 });

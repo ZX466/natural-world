@@ -50,12 +50,48 @@ def _cooldown_ticks(npc_id: str) -> int:
 # 动作目的地（批次 B 内容面；坐标须在 linhe-town.json 可走格上）
 # ---------------------------------------------------------------------------
 
-#: eat → 药铺门前空地（镇上唯一的吃食处）
+#: eat → 食摊锚点（「做事的地方」是**邻域**而非一格——D12 散点化，
+#: 50 人目的地 distinct 23→40+，最热点 13→≤6 人，聚团定量钉锁死）
 EAT_SITE: tuple[int, int] = (10, 15)
-#: rest → 两宅门前（按 npc_id 哈希选一家；「家」概念随 M4 日程域细化）
+#: rest → 两宅门前锚点（按 npc_id 哈希选一家；「家」概念随 M4 日程域细化）
 REST_SITES: tuple[tuple[int, int], ...] = ((34, 13), (34, 39))
-#: work → 农田中心
+#: work → 农田锚点
 WORK_SITE: tuple[int, int] = (13, 35)
+
+#: 站点散点半径（曼哈顿距离；散点生成在锚点 ±R 内挑可走格）。
+#: 4 = 5×9 邻域（约 30+ 可走格），50 人同拍打散后最热点 ≤6 人。
+_SITE_SCATTER_RADIUS = 4
+
+
+def _scatter_near(
+    site: tuple[int, int],
+    npc_id: str,
+    pathfinder: Pathfinder,
+    *,
+    seed: int,
+) -> tuple[int, int]:
+    """站点邻域确定性散点：锚点曼哈顿 ≤R 的可走格里按哈希挑一个。
+
+    **tick 无关**（每人固定私位）：D3 到站判定用同参比较——出发决策与
+    到达判定的 tick 相差几十上百 tick，若散点随 tick 漂移则 `pos == goal`
+    永假 → 生理回写永不到账。tick 无关散点 = 常客有固定摊位（更戏内），
+    且到站判定闭合。候选按 (dx,dy) 字典序固定序遍历 → 哈希取模（C5）；
+    候选集恒非空（锚点自身可走——build_town 站点坐标约束），锚点兜底。
+    """
+    sx, sy = site
+    digest = _hash_u32("site-scatter", npc_id, sx, sy, seed)
+    candidates: list[tuple[int, int]] = []
+    for dy in range(-_SITE_SCATTER_RADIUS, _SITE_SCATTER_RADIUS + 1):
+        for dx in range(-_SITE_SCATTER_RADIUS, _SITE_SCATTER_RADIUS + 1):
+            if abs(dx) + abs(dy) > _SITE_SCATTER_RADIUS:
+                continue
+            x, y = sx + dx, sy + dy
+            if 0 <= x < pathfinder.tile_map.width and 0 <= y < pathfinder.tile_map.height \
+                    and pathfinder.tile_map.is_walkable(x, y):
+                candidates.append((x, y))
+    if not candidates:
+        return site  # 锚点兜底（理论不可达：站点坐标自身必可走）
+    return candidates[digest % len(candidates)]
 
 
 def _hash_u32(*parts: object) -> int:
@@ -73,23 +109,38 @@ def wander_goal(seed: int, tick: int, npc_id: str, w: int, h: int) -> tuple[int,
 
 
 def _resolve_goal(
-    state: WorldState, npc_id: str, action: str, *, seed: int, tick: int, w: int, h: int
+    state: WorldState,
+    npc_id: str,
+    action: str,
+    *,
+    seed: int,
+    tick: int,
+    w: int,
+    h: int,
+    pathfinder: Pathfinder,
 ) -> tuple[int, int] | None:
-    """动作 → 目的地（纯函数）；None = 该动作无位移面。"""
+    """动作 → 目的地（纯函数）；None = 该动作无位移面。
+
+    D12：eat/rest/work 落站点**邻域散点**（不再全镇挤一格）；
+    request_chat 落目标人的邻域散点（不精确踩人所在格——追尾聚合根因）。
+    """
     if action in ("wander", "move"):
         return wander_goal(seed, tick, npc_id, w, h)
     if action == "eat":
-        return EAT_SITE
+        return _scatter_near(EAT_SITE, npc_id, pathfinder, seed=seed)
     if action == "rest":
-        return REST_SITES[_hash_u32(npc_id) % len(REST_SITES)]
+        site = REST_SITES[_hash_u32(npc_id) % len(REST_SITES)]
+        return _scatter_near(site, npc_id, pathfinder, seed=seed)
     if action == "work":
-        return WORK_SITE
+        return _scatter_near(WORK_SITE, npc_id, pathfinder, seed=seed)
     if action == "request_chat":
         others = sorted(eid for eid in state.entities if eid != npc_id)
         if not others:
             return wander_goal(seed, tick, npc_id, w, h)
         target = others[_hash_u32(npc_id, tick) % len(others)]
-        return state.entities[target].pos
+        return _scatter_near(
+            state.entities[target].pos, npc_id, pathfinder, seed=seed
+        )
     return None
 
 
@@ -113,7 +164,9 @@ def plan_npc_move(
     if entity is None or entity.path:
         return None
     w, h = pathfinder.tile_map.width, pathfinder.tile_map.height
-    goal = _resolve_goal(state, npc_id, action, seed=seed, tick=tick, w=w, h=h)
+    goal = _resolve_goal(
+        state, npc_id, action, seed=seed, tick=tick, w=w, h=h, pathfinder=pathfinder
+    )
     if goal is None:
         return None
     start = entity.pos
@@ -200,6 +253,9 @@ def npc_events_for_tick(
         action = str(event.payload.get("action", ""))
         # 批次 D3：生理闭环——动作**到站**才回写需求（吃了才算吃）。
         # 判定：NPC 位置 == 该动作的目的地（wander/move 无站点语义，跳过）。
+        # D12 散点语义：到站判定用**同参散点**（同 npc/tick 恒同点）——
+        # 出发时挑的点与到达判定点一致（散点只随 tick 漂移，走完一格即换拍
+        # 会导致永远到不了站——故这里用决策时刻 tick 锚定；见下 tick-offset 注）。
         entity = state.entities.get(npc_id)
         if entity is not None and not entity.path and action in ("eat", "rest", "work"):
             goal = _resolve_goal(
@@ -210,6 +266,7 @@ def npc_events_for_tick(
                 tick=tick,
                 w=pathfinder.tile_map.width,
                 h=pathfinder.tile_map.height,
+                pathfinder=pathfinder,
             )
             if goal is not None and entity.pos == goal:
                 profiles = getattr(runtime, "profiles", None)

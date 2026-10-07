@@ -54,8 +54,9 @@ class Runtime {
         // 批次 D10 分流：bubble = 村民的公开嘟囔（头顶气泡的文本投影）→
         // 街谈巷议；thought/plan = 陈默的心声 → 心之声面板。
         // monologue 帧无 actor 字段（W7 字段最小化），语义路由按 form 定。
+        // D12：bubble 帧可选 name（说话人戏内名）随行进署名。
         if (msg.form === 'bubble') {
-          useUiStore.getState().pushChatter(msg.content);
+          useUiStore.getState().pushChatter(msg.name ?? null, msg.content);
         } else {
           useUiStore.getState().pushMonologue(msg.form, msg.content);
         }

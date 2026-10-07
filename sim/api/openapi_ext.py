@@ -394,6 +394,13 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
                 "type": "string",
                 "description": "第一人称叙事化独白，无数值无系统词",
             },
+            # D12（协议 1.5）：bubble 署名（说话人戏内名，可选）——bubble 是
+            # 外在可观察面（路人看见谁在嘟囔），署名不破 W7（无 rtoken/entity_id）；
+            # thought 私密面不带。
+            "name": {
+                "type": "string",
+                "description": "说话人戏内名（仅 bubble 署名；thought/plan 不带）",
+            },
         },
         ["form", "content"],
         description="M1 独白三形态呈现（§8）；content 必须第一人称世界内语言、"

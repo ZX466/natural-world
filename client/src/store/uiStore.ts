@@ -23,6 +23,12 @@ export interface MonologueEntry {
   content: string;
 }
 
+/** 街谈巷议条目（批次 D12：bubble 署名——「谁在说」可读；无名退化为匿名） */
+export interface ChatterEntry {
+  name: string | null;
+  content: string;
+}
+
 /** 戏内时间白名单——本 store 允许暴露的全部世界派生字段。 */
 export interface InGameTime {
   day: number;
@@ -44,8 +50,9 @@ interface UiState {
   /** 独白流（环形缓冲，上限 MONOLOGUE_CAP；只进面板文本，高频位置数据不在此） */
   monologues: MonologueEntry[];
   /** 街谈巷议（批次 D10：村民公开自语 bubble 专属环形缓冲——村民的嘟囔
-   *  是镇上的公开声音，不是陈默的内心活动；与 monologues 分流防刷屏） */
-  chatter: string[];
+   *  是镇上的公开声音，不是陈默的内心活动；与 monologues 分流防刷屏。
+   *  D12：条目带署名） */
+  chatter: ChatterEntry[];
   /** 计划看板（state_delta.plan 整组替换；空 = 收起） */
   plans: PlanDelta[];
   /** impulse 入站 error 帧玩家可见文案（仅 ref=player_impulse 置位） */
@@ -56,7 +63,7 @@ interface UiState {
   setPaused: (p: boolean) => void;
   setLastImpulseCue: (cue: string | null) => void;
   pushMonologue: (form: MonologueForm, content: string) => void;
-  pushChatter: (content: string) => void;
+  pushChatter: (name: string | null, content: string) => void;
   setPlans: (plans: PlanDelta[]) => void;
   setImpulseError: (e: string | null) => void;
 }
@@ -78,8 +85,8 @@ export const useUiStore = create<UiState>((set) => ({
   setLastImpulseCue: (lastImpulseCue) => set({ lastImpulseCue }),
   pushMonologue: (form, content) =>
     set((s) => ({ monologues: [...s.monologues, { form, content }].slice(-MONOLOGUE_CAP) })),
-  pushChatter: (content) =>
-    set((s) => ({ chatter: [...s.chatter, content].slice(-CHATTER_CAP) })),
+  pushChatter: (name, content) =>
+    set((s) => ({ chatter: [...s.chatter, { name, content }].slice(-CHATTER_CAP) })),
   setPlans: (plans) => set({ plans }),
   setImpulseError: (impulseError) => set({ impulseError }),
 }));
