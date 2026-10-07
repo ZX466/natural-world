@@ -43,6 +43,7 @@ describe('runtime mock lifecycle（H-4）', () => {
   it('status open → worldClock.start 且 stopMock 清定时器', async () => {
     let statusCb: ((s: string) => void) | null = null;
     vi.doMock('../../net/ws', () => ({
+      setControlStateSink: vi.fn(), // D11：runtime 顶层装配调用
       WsClient: class {
         constructor(_u: string, _m: unknown, cb: { onStatus: (s: string) => void }) {
           statusCb = cb.onStatus;

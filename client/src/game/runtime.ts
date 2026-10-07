@@ -6,7 +6,7 @@
  * 「可走动 + 昼夜调色 + 重连重置」。sim 起来后删掉 mock 分支即切真实。
  */
 import { WorldMirror } from './world-mirror';
-import { WsClient, type WsStatus } from '../net/ws';
+import { WsClient, setControlStateSink, type WsStatus } from '../net/ws';
 import { fetchWorldMap, assembleCollision, assembleGround } from '../net/worldApi';
 import { worldClock } from './clock';
 import { useUiStore, type InGameTime, type Speed } from '../store/uiStore';
@@ -69,6 +69,20 @@ class Runtime {
       onError: (msg) => {
         // 仅 impulse 来源的 error 入玩家可见位；其他 ref（load_anchor 等）当前无 UI 面
         if (msg.ref === 'player_impulse') useUiStore.getState().setImpulseError(msg.message);
+      },
+      onControlAck: (msg) => {
+        // 批次 D11：控制回执权威面——pause/resume/set_speed 后服务端真值回写
+        // store（TopBar 暂停按钮文案 + 倍速高亮跟随）。applied=false 当前协议
+        // 恒 true（8.1 占位）；错误路径走 error 帧不经此处。
+        const store = useUiStore.getState();
+        if (msg.paused !== undefined && msg.paused !== null) {
+          store.setPaused(msg.paused);
+        }
+        if (msg.speed !== undefined && msg.speed !== null) {
+          store.setSpeed(msg.speed as Speed);
+        }
+        // fast_forward 的 ack 不带 speed/paused：受理即终态（世界已推进完），
+        // 无本地状态可回写（全量快照随后由 dispatch 的 snapshot 分支消费）。
       },
     });
     this.ws.connect();
@@ -227,3 +241,11 @@ class Runtime {
 }
 
 export const runtime = new Runtime();
+
+// D11：session_state 帧的 speed/paused 权威消费（ws.ts 不直接依赖 store——
+// 经 sink 注入；重连/读档后 TopBar 与服务端真实状态对齐）。
+setControlStateSink((speed, paused) => {
+  const store = useUiStore.getState();
+  if (speed !== null) store.setSpeed(speed as Speed);
+  if (paused !== null) store.setPaused(paused);
+});

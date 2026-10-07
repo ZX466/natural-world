@@ -24,6 +24,7 @@ describe('runtime.start loads world map', () => {
       },
     }));
     vi.doMock('../../net/ws', () => ({
+      setControlStateSink: vi.fn(), // D11：runtime 顶层装配调用
       WsClient: class {
         connect(): void {}
         send(_m: unknown): void {}

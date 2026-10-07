@@ -6,6 +6,7 @@
  * 指数退避重连；戏内通道收到的未知消息类型静默忽略（versioning.md 铁律）。
  */
 import type {
+  ControlAckMessage,
   FullSnapshotMessage,
   ImpulseFeedbackMessage,
   MonologueMessage,
@@ -18,6 +19,23 @@ import { worldClock } from '../game/clock';
 
 const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
+
+/** session_state.speed/paused → uiStore 的单一出口（D11）。
+ *  ws.ts 不直接 import uiStore（net↔store 分层，runtime 已是桥）；经回调
+ *  注入，由 runtime 装配。null = 帧未表达该字段（保持现状）。 */
+export interface ControlStateSink {
+  (speed: number | null, paused: boolean | null): void;
+}
+let controlStateSink: ControlStateSink | null = null;
+
+/** runtime 装配点（session_state 帧的 speed/paused 消费面）。 */
+export function setControlStateSink(sink: ControlStateSink | null): void {
+  controlStateSink = sink;
+}
+
+function useControlState(speed: number, paused: boolean): void {
+  controlStateSink?.(speed, paused);
+}
 
 /**
  * WS 信封 `v`（versioning.md §1：major.minor，当前 1.2）。
@@ -41,6 +59,9 @@ export interface WsCallbacks {
   onImpulseFeedback?: (msg: ImpulseFeedbackMessage) => void;
   /** 批次 A：协议 error 帧（ref 定位来源；player_impulse 由 runtime 消费） */
   onError?: (msg: WsErrorMessage) => void;
+  /** 批次 D11：控制回执权威面（pause/resume/set_speed 的 speed/paused 真值；
+   *  修前无此回调 → control_ack 被 default 吞 → 前端 paused/speed 永不更新） */
+  onControlAck?: (msg: ControlAckMessage) => void;
 }
 
 export class WsClient {
@@ -128,8 +149,17 @@ export class WsClient {
         this.cb.onDelta(msg);
         break;
       case 'session_state':
-        // M5-K3 会话首帧（刻度/暂停态/游标）；M7：time 可选随帧同步
+        // M5-K3 会话首帧（刻度/暂停态/游标）；M7：time 可选随帧同步。
+        // D11：speed/paused 是服务端权威值——消费它们（修前只同步时钟，
+        // 重连后 TopBar 高亮/暂停按钮文案与真实状态脱节）。
+        useControlState(msg.speed, msg.paused);
         if (msg.time) worldClock.apply(msg.time);
+        break;
+      case 'control_ack':
+        // D11：控制回执（pause/resume/set_speed 的权威 speed/paused）——
+        // 修前被 default 静默吞掉：暂停后按钮文字不变（永远「暂停」）、
+        // 倍速高亮不跟随，用户观感「暂停后无法继续/倍速无反馈」。
+        this.cb.onControlAck?.(msg as ControlAckMessage);
         break;
       case 'monologue':
         this.cb.onMonologue?.(msg as MonologueMessage);

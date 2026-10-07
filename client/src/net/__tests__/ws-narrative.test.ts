@@ -18,6 +18,7 @@ function makeClient() {
     onMonologue: vi.fn(),
     onImpulseFeedback: vi.fn(),
     onError: vi.fn(),
+    onControlAck: vi.fn(),
   };
   const client = new WsClient('ws://test', {} as WorldMirror, cb);
   // dispatch 是私有方法；单测经类型断言直调（帧 JSON 字符串入）
@@ -75,7 +76,7 @@ describe('WsClient dispatch 叙事消息（批次 A）', () => {
       JSON.stringify({
         type: 'error',
         channel: 'error',
-        v: '1.3',
+        v: '1.4',
         ws_seq: 0,
         ref: 'player_impulse',
         code: 'bad_impulse',
@@ -85,6 +86,25 @@ describe('WsClient dispatch 叙事消息（批次 A）', () => {
     expect(cb.onError).toHaveBeenCalledTimes(1);
     expect(cb.onError).toHaveBeenCalledWith(
       expect.objectContaining({ ref: 'player_impulse', message: '这个念头进不去。' }),
+    );
+  });
+
+  it('control_ack → onControlAck（D11：暂停/倍速权威回执，修前被 default 吞）', () => {
+    const { cb, dispatch } = makeClient();
+    dispatch(
+      JSON.stringify({
+        type: 'control_ack',
+        channel: 'control',
+        v: '1.4',
+        ws_seq: 0,
+        action: 'pause',
+        applied: true,
+        paused: true,
+      }),
+    );
+    expect(cb.onControlAck).toHaveBeenCalledTimes(1);
+    expect(cb.onControlAck).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'pause', applied: true, paused: true }),
     );
   });
 

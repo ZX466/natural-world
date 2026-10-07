@@ -85,6 +85,7 @@ const MOCK_OTHERS = (): void => {
 
 function installWsMock(callbacks: Record<string, unknown>, sent: Record<string, unknown>[]) {
   vi.doMock('../../net/ws', () => ({
+    setControlStateSink: vi.fn(), // D11：runtime 顶层装配调用（本测试不消费）
     WsClient: class {
       constructor(
         _u: string,
