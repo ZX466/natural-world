@@ -7,7 +7,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from sim.core.persistence.npc_store import NpcStore
+from sim.core.persistence.power_store import PowerState
 from sim.npc.contract import HiddenState
 from sim.npc.runtime import NpcRuntime
 from sim.npc.utility import UtilityModel
@@ -29,3 +32,28 @@ async def assemble_runtime(
     hidden = {nid: hidden_rows.get(nid, HiddenState.empty()) for nid in profiles}
     runtime = NpcRuntime(profiles=profiles, utility=UtilityModel(n_npc=len(profiles)))
     return runtime, hidden
+
+
+def attach_power(
+    runtime: NpcRuntime, states: Mapping[str, PowerState]
+) -> None:
+    """权力快照装配（M4-D15 补线：M6 批次 C 机制 → 实况面开闸）。
+
+    PowerStore.materialize 产物 → runtime.power（效用面权力列偏置随即生效，
+    utility.py: power × POWER_MAX_BIAS 只加社交两列）。装配语义：
+
+    - **空表 = 不赋**：无行（或全为在册外 id）保持 None——「无行 ≡ 0」库口径
+      下 0 值权力与 None 打分逐位相等（test_m6_power_utility 已钉），装配面
+      逐位同旧，不破既有确定性钉（C5）；
+    - **只认在册 id**：跨分支残留行（profiles 外）不进快照（装配面只服务
+      实况在册人员，幽灵 id 拒之门外）；
+    - 纯内存赋值，零 IO（物化由调用方 async 完成——本模块不做 SQL）。
+    """
+    snapshot = {
+        nid: float(state.power_level)
+        for nid, state in states.items()
+        if nid in runtime.profiles
+    }
+    if not snapshot:
+        return
+    runtime.power = snapshot

@@ -207,6 +207,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sim.agent.will import synthesize_verdict
 
     npc_runtime.willingness_of = synthesize_verdict
+    # 批次 D15 补线①：权力供数——core.persistence.power_store.PowerStore 物化 →
+    # runtime.power（效用面权力列偏置开闸；空表 = 不赋 = 逐位同旧，
+    # 见 assemble.attach_power 契约）。
+    from sim.core.persistence.power_store import PowerStore
+    from sim.npc.assemble import attach_power
+
+    attach_power(
+        npc_runtime,
+        await PowerStore(store).materialize(None),
+    )
     pathfinder = Pathfinder(tile_map)
     app.state.npc_runtime = npc_runtime
     monologue_last: dict[str, int] = {}
@@ -295,6 +305,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         assert isinstance(frame, PerceptionFrame)
         return frame.narrated()
 
+    # 批次 D15 补线②：陈默记忆切片——感知叙述经 write() 闸门入记忆
+    # （observe），决策前检索 top-k 进 prompt（recall → memory_entries）；
+    # 补线③日切反思共用本 pipeline。进程内记忆（M4 口径，见 agent.chenmo_memory）。
+    from sim.agent.chenmo_memory import observe as _mem_observe
+    from sim.agent.chenmo_memory import recall as _mem_recall
+    from sim.content.protagonist import CHENMO_ID
+    from sim.llm.memory_scan import MemoryWritePipeline
+
+    memory_pipeline = MemoryWritePipeline()  # 缺省 InMemoryStore（进程内）
+    _ = CHENMO_ID  # 反思 npc_ids 用（见补线③）
     driver = ChenmoDriver(
         anchor=build_anchor(),
         llm=llm_client,
@@ -326,7 +346,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             if not driver.take_requested() and not due:
                 continue
             last = now
-            await driver.decide_once(loop.state, loop.state.tick)
+            # D15：先记后忆——感知叙述过闸门入记忆，检索 top-k 进决策 prompt
+            # （感知文本同轮复用，不二次投影）。
+            _perception_text = _chenmo_perception()
+            if _perception_text:
+                _mem_observe(memory_pipeline, _perception_text, tick=loop.state.tick)
+            await driver.decide_once(
+                loop.state,
+                loop.state.tick,
+                memory_entries=_mem_recall(memory_pipeline, now_tick=loop.state.tick),
+                perception_text=_perception_text,
+            )
             driver.execute_pending(loop, pathfinder=pathfinder)
 
     app.state.chenmo_task = asyncio.create_task(_chenmo_loop())
@@ -449,12 +479,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.drain_pending_loads = _drain_loads
     app.state.load_outcomes = load_outcomes
     # driver 在 _drain_loads 定义之后创建（case B 接线：drain_loads 生产调用点）
+    # 批次 D15 补线③：日切反思挂载——世界循环日切钩子把当日 event 素材
+    # 压成 reason 摘要（write() 闸门照扫；无素材零产物是常态路径）。
+    from sim.npc.reflection import make_day_switch_reflector
+
+    _day_reflector = make_day_switch_reflector(memory_pipeline, npc_ids=(CHENMO_ID,))
     app.state.driver = asyncio.create_task(
         run_world_driver(
             loop,
             manager,
             tile_map,
             on_flush,
+            on_day_switch=_day_reflector,
             drain_loads=_drain_loads,
         )
     )
