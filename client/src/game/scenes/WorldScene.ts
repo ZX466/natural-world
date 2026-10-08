@@ -9,7 +9,7 @@ import type { WorldMirror } from '../world-mirror';
 import {
   facingRow,
   walkFrame,
-  walkFrameFor,
+  villagerFrame,
   advanceAnimClock,
   inferFacing,
   VILLAGER_SHEET,
@@ -49,6 +49,8 @@ export class WorldScene extends Phaser.Scene {
   private rainDrops: { x: number; y: number; speed: number }[] = [];
   private lastResetSeen = -1;
   private goalMarker: Phaser.GameObjects.Arc | null = null;
+  /** D14 头顶气泡 Text 池（键=戏内名；mirror.bubbles 驱动增删） */
+  private bubbleTexts = new Map<string, Phaser.GameObjects.Text>();
 
   constructor(mirror: WorldMirror) {
     super({ key: 'world' });
@@ -171,11 +173,47 @@ export class WorldScene extends Phaser.Scene {
     this.game.events.emit('client:move_request', { x: wx, y: wy });
   }
 
-  update(_time: number, delta: number): void {
+  update(time: number, delta: number): void {
     this.syncActorViews(delta);
     this.syncCamera();
     this.syncOverlay();
     this.syncRain(delta);
+    this.syncBubbles(time);
+  }
+
+  /** D14 头顶气泡：mirror.bubbles（name→text/到期）→ Text 池增删/跟随。 */
+  private syncBubbles(nowMs: number): void {
+    if (this.mirror.pruneBubbles(nowMs)) {
+      // 过期清理：池里有而账本没有的 → 销毁
+      for (const [name, text] of this.bubbleTexts) {
+        if (!this.mirror.bubbles.has(name)) {
+          text.destroy();
+          this.bubbleTexts.delete(name);
+        }
+      }
+    }
+    for (const [name, bubble] of this.mirror.bubbles) {
+      let text = this.bubbleTexts.get(name);
+      if (text === undefined) {
+        text = this.add
+          .text(0, 0, bubble.text, {
+            fontFamily: 'sans-serif',
+            fontSize: '10px',
+            color: '#f0ead8',
+            backgroundColor: '#000000aa',
+            padding: { x: 3, y: 1 },
+            resolution: 4,
+            wordWrap: { width: 140 },
+          })
+          .setOrigin(0.5, 1)
+          .setDepth(12);
+        this.bubbleTexts.set(name, text);
+      }
+      // 跟随同名精灵（actor.name ↔ 气泡键；找不到就先挂原地）
+      const actor = [...this.mirror.actors.values()].find((a) => a.name === name);
+      const view = actor ? this.views.get(actor.rtoken) : undefined;
+      if (view) text.setPosition(view.sprite.x, view.sprite.y - TILE - 2);
+    }
   }
 
   private syncActorViews(delta: number): void {
@@ -186,6 +224,8 @@ export class WorldScene extends Phaser.Scene {
         v.label?.destroy();
       }
       this.views.clear();
+      for (const t of this.bubbleTexts.values()) t.destroy();
+      this.bubbleTexts.clear();
       this.lastResetSeen = this.mirror.resetCount;
     }
     const t = Math.min(1, delta / INTERP_MS);
@@ -243,10 +283,12 @@ export class WorldScene extends Phaser.Scene {
         view.lastFacing = inferFacing(actor.x - view.prevX, actor.y - view.prevY, view.lastFacing);
       }
       const row = facingRow(view.lastFacing);
+      // D14：村民姿势——静止 + work/eat/rest/chat → 劳作姿势行（R4-7）；
+      // 行走中 → 四向走环。主角仍走 chenmo 走环（素材无姿势行）。
       view.sprite.setFrame(
         rtoken === this.mirror.protagonist
           ? walkFrame(row, view.animClockMs)
-          : walkFrameFor(VILLAGER_SHEET, row, view.animClockMs),
+          : villagerFrame(VILLAGER_SHEET, moved ? 'walk' : (actor.anim ?? 'idle'), view.lastFacing, view.animClockMs),
       );
       view.prevX = actor.x;
       view.prevY = actor.y;

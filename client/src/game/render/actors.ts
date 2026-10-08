@@ -53,8 +53,33 @@ export interface SheetGeometry {
 /** chenmo 几何（17 列 × 步-站-步） */
 export const CHENMO_SHEET: SheetGeometry = { cols: 17, framesPerRow: 3, standCol: 1 };
 /** villager 几何（NPC_test.png 64×128 = 4 列 × 8 行；每行 4 帧全参与行走环，
- *  行序 下/上/右/左（R0-R3 目视定案，与 chenmo 同款）；R4-7 劳作姿势暂不用） */
+ *  行序 下/上/右/左（R0-R3 目视定案，与 chenmo 同款）；R4-7 劳作姿势——
+ *  D14 启用：work/eat/rest/chat 静止时切对应姿势行） */
 export const VILLAGER_SHEET: SheetGeometry = { cols: 4, framesPerRow: 4, standCol: 0 };
+
+/** D14：劳作姿势 → 素材行号（R4-R7；目视定案逐行对应，行走/未知退 R0-R3 走环）。 */
+const POSE_ROW: Record<string, number> = {
+  work: 4,
+  eat: 5,
+  rest: 6,
+  chat: 7,
+};
+
+/** villager 帧号合成：行走中（animClock≥0）→ facing 走环；静止 → 劳作姿势行
+ *  站立帧（work/eat/rest/chat），walk/idle 姿势 = facing 走环站立帧。 */
+export function villagerFrame(
+  sheet: SheetGeometry,
+  anim: string,
+  facing: Facing,
+  animClockMs: number,
+): number {
+  if (animClockMs >= 0) {
+    return walkFrameFor(sheet, facingRow(facing), animClockMs); // 行走环
+  }
+  const poseRow = POSE_ROW[anim];
+  if (poseRow !== undefined) return poseRow * sheet.cols + (sheet.standCol ?? 0);
+  return walkFrameFor(sheet, facingRow(facing), -1); // walk/idle/未知 → 站立帧
+}
 
 /** 通用线性帧号：站立帧 row*cols+standCol；walk 环行内 framesPerRow 帧循环。
  *  D10：walkFrame 的一般化（单入口防两套换算漂移——C-2 教训）。 */

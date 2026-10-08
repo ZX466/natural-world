@@ -62,6 +62,23 @@ WORK_SITE: tuple[int, int] = (13, 35)
 #: 4 = 5×9 邻域（约 30+ 可走格），50 人同拍打散后最热点 ≤6 人。
 _SITE_SCATTER_RADIUS = 4
 
+#: D14：动作 → 呈现用 anim 词（前端姿势行选择；villager 素材行序
+#: R0-R3=四向走环 / R4-7=劳作姿势——work/eat/rest/chat 各有站姿差异）。
+#: wander/move 是行走态（前端按位移自动播走环，不依赖本字段）。
+_ANIM_OF_ACTION: dict[str, str] = {
+    "work": "work",
+    "eat": "eat",
+    "rest": "rest",
+    "request_chat": "chat",
+    "wander": "walk",
+    "move": "walk",
+}
+
+
+def anim_of_action(action: str) -> str:
+    """动作 → anim 词（未知动作退化为 walk——fail-soft 不崩前端）。"""
+    return _ANIM_OF_ACTION.get(action, "walk")
+
 
 def _scatter_near(
     site: tuple[int, int],
@@ -103,9 +120,55 @@ def wander_goal(seed: int, tick: int, npc_id: str, w: int, h: int) -> tuple[int,
     """确定性闲逛目标：(seed, tick, npc_id) 哈希散布进 [0,w)×[0,h)。
 
     同输入恒同输出（无随机流）；不同 npc_id 散布开（sha256 雪崩）。
+    D14 后 wander 位移面改走 `wander_near`（邻域化）；本函数保留给
+    wander/move 的兜底调用点（D14 起 plan_npc_move 不再退化闲逛，
+    只剩测试/兼容消费）。
     """
     digest = _hash_u32(seed, tick, npc_id)
     return (digest % w, (digest // w) % h)
+
+
+#: D14 闲逛半径（曼哈顿）：闲逛不再横穿小镇——从「家」出门走走就回。
+_WANDER_RADIUS = 6
+
+
+def wander_near(
+    home: tuple[int, int],
+    npc_id: str,
+    pathfinder: Pathfinder,
+    *,
+    seed: int,
+    tick: int,
+) -> tuple[int, int] | None:
+    """D14 邻域闲逛目标：home 曼哈顿 ≤R 的可走格（排除原格），哈希挑一个。
+
+    候选按 (dx,dy) 字典序固定序 → 哈希取模（C5）。候选空（围死）→ None。
+    """
+    hx, hy = home
+    digest = _hash_u32("wander-near", npc_id, seed, tick)
+    candidates: list[tuple[int, int]] = []
+    for dy in range(-_WANDER_RADIUS, _WANDER_RADIUS + 1):
+        for dx in range(-_WANDER_RADIUS, _WANDER_RADIUS + 1):
+            if abs(dx) + abs(dy) > _WANDER_RADIUS or (dx == 0 and dy == 0):
+                continue
+            x, y = hx + dx, hy + dy
+            if 0 <= x < pathfinder.tile_map.width and 0 <= y < pathfinder.tile_map.height \
+                    and pathfinder.tile_map.is_walkable(x, y):
+                candidates.append((x, y))
+    if not candidates:
+        return None
+    return candidates[digest % len(candidates)]
+
+
+def _site_anchor_of(action: str, npc_id: str) -> tuple[int, int] | None:
+    """动作 → 站点锚点（rest 按 npc 选宅；其他动作唯一锚点；None=无站点）。"""
+    if action == "eat":
+        return EAT_SITE
+    if action == "rest":
+        return REST_SITES[_hash_u32(npc_id) % len(REST_SITES)]
+    if action == "work":
+        return WORK_SITE
+    return None
 
 
 def _resolve_goal(
@@ -125,18 +188,22 @@ def _resolve_goal(
     request_chat 落目标人的邻域散点（不精确踩人所在格——追尾聚合根因）。
     """
     if action in ("wander", "move"):
-        return wander_goal(seed, tick, npc_id, w, h)
-    if action == "eat":
-        return _scatter_near(EAT_SITE, npc_id, pathfinder, seed=seed)
-    if action == "rest":
-        site = REST_SITES[_hash_u32(npc_id) % len(REST_SITES)]
-        return _scatter_near(site, npc_id, pathfinder, seed=seed)
-    if action == "work":
-        return _scatter_near(WORK_SITE, npc_id, pathfinder, seed=seed)
+        # D14：闲逛邻域化——从当前位置出门走走（≤R），不再全图散布。
+        entity = state.entities.get(npc_id)
+        if entity is None:
+            return None
+        return wander_near(entity.pos, npc_id, pathfinder, seed=seed, tick=tick)
+    if action in ("eat", "rest", "work"):
+        anchor = _site_anchor_of(action, npc_id)
+        assert anchor is not None  # 三动作恒有锚点
+        return _scatter_near(anchor, npc_id, pathfinder, seed=seed)
     if action == "request_chat":
         others = sorted(eid for eid in state.entities if eid != npc_id)
         if not others:
-            return wander_goal(seed, tick, npc_id, w, h)
+            entity = state.entities.get(npc_id)
+            if entity is None:
+                return None
+            return wander_near(entity.pos, npc_id, pathfinder, seed=seed, tick=tick)
         target = others[_hash_u32(npc_id, tick) % len(others)]
         return _scatter_near(
             state.entities[target].pos, npc_id, pathfinder, seed=seed
@@ -155,38 +222,60 @@ def plan_npc_move(
 ) -> WorldEvent | None:
     """单个动作 → move_event（去「做事的地方」）；不该动/动不了 → None。
 
+    D14 移动纪律（「NPC 随便移动」根治）：
     - 未知实体 / 在途（剩余 path 未耗尽）→ None（防抖）；
-    - goal == 当前位（已到站）→ 退化为闲逛目标（站桩兜底，镇子不停摆）；
-    - 不可达 → 退化为闲逛；再不可达 → None（fail-soft，不刷错误日志）。
+    - **到站停留**：eat/rest/work/request_chat 已在目的地 → None——人在
+      饭摊就站着吃（需求回写驱动停留时长），不再「到站即被赶去全图闲逛」
+      （D2 起「goal==pos → 退化为闲逛」是全镇横穿的主犯）；
+    - 不可达 → None（原地待着，**不再**退化为全图闲逛——错上加错）；
+    - wander/move 无站点语义 → 邻域闲逛目标（wander_near）。
     返回的 move_event **不入流**（无 enqueue）——调用方决定入流时机与 tick。
     """
     entity = state.entities.get(npc_id)
     if entity is None or entity.path:
         return None
     w, h = pathfinder.tile_map.width, pathfinder.tile_map.height
-    goal = _resolve_goal(
-        state, npc_id, action, seed=seed, tick=tick, w=w, h=h, pathfinder=pathfinder
-    )
-    if goal is None:
-        return None
     start = entity.pos
-    if goal == start:
-        goal = wander_goal(seed, tick, npc_id, w, h)
+    if action in ("eat", "rest", "work", "request_chat"):
+        goal = _resolve_goal(
+            state, npc_id, action, seed=seed, tick=tick, w=w, h=h, pathfinder=pathfinder
+        )
+        if goal is None:
+            return None
+        # D14 到站判定（放宽到散点邻域）：人在自己私位**或锚点邻域内**
+        # 都算到站——「他在饭摊边上」就该站着吃，而不是被差遣到隔壁格
+        # （修前 goal==pos 判定：散点私位 ≠ 锚点 → 人在锚点仍被赶走）。
+        if action != "request_chat":
+            from sim.npc.sim_exec import _site_anchor_of
+
+            anchor = _site_anchor_of(action, npc_id)
+            if anchor is not None:
+                dist = abs(start[0] - anchor[0]) + abs(start[1] - anchor[1])
+                if dist <= _SITE_SCATTER_RADIUS:
+                    return None  # 到站停留（停留由需求回写驱动）
         if goal == start:
             return None
+        try:
+            path = pathfinder.find(start, goal)
+        except ValueError:
+            return None  # D14：不可达原地待着（不再退化全图闲逛）
+        return move_event(
+            tick=0,  # tick 由调用方改写（issue 时点）；工厂校验 path 完整性
+            actor_id=npc_id,
+            start=start,
+            goal=path[-1],
+            path=path,
+        )
+    # wander/move：邻域闲逛（无站点语义；目标即出发地邻域）
+    goal = wander_near(start, npc_id, pathfinder, seed=seed, tick=tick)
+    if goal is None or goal == start:
+        return None
     try:
         path = pathfinder.find(start, goal)
     except ValueError:
-        # 目的地不可达 → 退化为闲逛（离散布点也可能落进围合区）
-        fallback = wander_goal(seed, tick, npc_id, w, h)
-        if fallback == start:
-            return None
-        try:
-            path = pathfinder.find(start, fallback)
-        except ValueError:
-            return None
+        return None
     return move_event(
-        tick=0,  # tick 由调用方改写（issue 时点）；工厂校验 path 完整性
+        tick=0,
         actor_id=npc_id,
         start=start,
         goal=path[-1],
@@ -252,25 +341,15 @@ def npc_events_for_tick(
         npc_id = str(event.payload.get("npc_id", ""))
         action = str(event.payload.get("action", ""))
         # 批次 D3：生理闭环——动作**到站**才回写需求（吃了才算吃）。
-        # 判定：NPC 位置 == 该动作的目的地（wander/move 无站点语义，跳过）。
-        # D12 散点语义：到站判定用**同参散点**（同 npc/tick 恒同点）——
-        # 出发时挑的点与到达判定点一致（散点只随 tick 漂移，走完一格即换拍
-        # 会导致永远到不了站——故这里用决策时刻 tick 锚定；见下 tick-offset 注）。
+        # D14 到站口径与 plan_npc_move 同源：人在站点锚点邻域（≤散点半径）
+        # 即视为到站——散点私位与锚点的偏差不再让回写漏账。
         entity = state.entities.get(npc_id)
         if entity is not None and not entity.path and action in ("eat", "rest", "work"):
-            goal = _resolve_goal(
-                state,
-                npc_id,
-                action,
-                seed=seed,
-                tick=tick,
-                w=pathfinder.tile_map.width,
-                h=pathfinder.tile_map.height,
-                pathfinder=pathfinder,
-            )
-            if goal is not None and entity.pos == goal:
-                profiles = getattr(runtime, "profiles", None)
-                if profiles is not None and npc_id in profiles:
+            anchor = _site_anchor_of(action, npc_id)
+            profiles = getattr(runtime, "profiles", None)
+            if anchor is not None and profiles is not None and npc_id in profiles:
+                dist = abs(entity.pos[0] - anchor[0]) + abs(entity.pos[1] - anchor[1])
+                if dist <= _SITE_SCATTER_RADIUS:
                     from sim.npc.needs import apply_remedy
 
                     p = profiles[npc_id]

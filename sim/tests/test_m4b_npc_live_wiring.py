@@ -141,13 +141,14 @@ class TestPlanNpcMove:
             assert mv.event_type is EventKind.MOVE
 
     def test_arrived_npc_wanders_on(self) -> None:
-        """已到站（goal==pos）→ 退化为闲逛目标（站桩兜底，镇子不停摆）。"""
+        """已到站 → 停留（D14 移动纪律：到站不再被赶去闲逛——「随便移动」
+        根治的语义翻转点；停留时长由需求回写驱动）。"""
         from sim.api.main import _fallback_map
         from sim.npc.sim_exec import EAT_SITE, plan_npc_move
         from sim.world.pathfinding import Pathfinder
 
         loop = self._wired_loop()
-        # 把实体瞬移到食摊（绕过寻路；仅测到站退化）
+        # 把实体瞬移到食摊锚点（绕过寻路；仅测到站停留）
         from sim.core.world import EntityState
 
         loop.state = loop.state.model_copy(
@@ -158,9 +159,9 @@ class TestPlanNpcMove:
             }
         )
         pf = Pathfinder(_fallback_map())
-        mv = plan_npc_move(loop.state, "npc_01", "eat", pf, seed=42, tick=100)
-        assert mv is not None
-        assert tuple(mv.payload["goal"]) != EAT_SITE
+        assert plan_npc_move(loop.state, "npc_01", "eat", pf, seed=42, tick=100) is None, (
+            "D14：已到食摊 → 停住（修前退化为全图闲逛）"
+        )
 
     def test_in_flight_path_blocks_new_move(self) -> None:
         """剩余 path 未耗尽 → 不再发 move（防抖）。"""

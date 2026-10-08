@@ -273,6 +273,22 @@ def _display_name_of(entity_id: str) -> str | None:
     return name
 
 
+#: 批次 D14：动作姿势账本 {entity_id: anim 词}——npc.act 执行面写入
+#: （work/eat/rest/chat → 姿势；wander/move → walk）。「当前动作」是戏内
+#: 可观察事实（他正在干活/吃饭/歇着），anim 是既有协议字段（纯启用）。
+#: 模块级（同 _DISPLAY_NAMES 模式）；快照/delta 出站时携带，缺省 idle。
+_ACTION_ANIMS: dict[str, str] = {}
+
+
+def set_action_anim(entity_id: str, anim: str) -> None:
+    """登记实体当前动作姿势（sim_exec 执行面调用）。"""
+    _ACTION_ANIMS[entity_id] = anim
+
+
+def _anim_of(entity_id: str) -> str:
+    return _ACTION_ANIMS.get(entity_id, "idle")
+
+
 #: 批次 D7：天气日级视觉状态（确定性哈希抽签，同 fire 模式——无 RNG 流）。
 #: visual 协议封闭集 {clear, overcast, rain}；ambient_light 与昼夜色罩叠乘。
 _WEATHER_LIGHTS: dict[str, float] = {"clear": 1.0, "overcast": 0.9, "rain": 0.75}
@@ -421,7 +437,7 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
             "y": entity.pos[1],
             "facing": "s",
             "sprite": rt,
-            "anim": "idle",
+            "anim": _anim_of(entity_id),  # D14：动作姿势账本（缺省 idle）
         }
         name = _display_name_of(entity_id)
         if name is not None:
@@ -471,6 +487,10 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
         name = _display_name_of(entity_id)
         if name is not None:
             actor["name"] = name
+        # D14：anim 变化随行（walk↔work/eat/rest 切换前端姿势）；账本缺省
+        # idle 与旧快照一致——只在非 idle 或曾非 idle 时携带（增量不制造噪声）。
+        anim = _anim_of(entity_id)
+        actor["anim"] = anim
         actors.append(actor)
     payload: dict[str, Any] = {
         "type": "state_delta",

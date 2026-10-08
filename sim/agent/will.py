@@ -137,3 +137,88 @@ def _pick_index(npc_name: str, pool_size: int) -> int:
     """(npc_name) → 池内下标（sha256 截断取模；确定性，无 RNG 状态流）。"""
     digest = hashlib.sha256(npc_name.encode("utf-8")).digest()
     return int.from_bytes(digest[0:4], "big") % pool_size
+
+
+# ---------------------------------------------------------------------------
+# D14 真实意愿合成（替换「全队共享 band=1 占位」——D9 遗留正主）
+# ---------------------------------------------------------------------------
+
+#: 需求冲突阈值：紧迫度超过它却没在做对应补救动作 → 冲突。
+#: 与 needs.py DEFAULT_DECAYS 的 threshold 同源口径（0.7/0.7/0.8）。
+_NEED_THRESHOLD: dict[str, float] = {"hunger": 0.7, "energy": 0.7, "social": 0.8}
+
+#: 需求 → 其补救动作（needs.py remedy_action 同源）。
+_NEED_REMEDY: dict[str, str] = {
+    "hunger": "eat",
+    "energy": "rest",
+    "social": "request_chat",
+}
+
+#: 动作 → 性格违背的 (ocean 维下标, "高才冲突"/"低才冲突") 描述。
+#: OCEAN 序 = openness/conscientiousness/extraversion/agreeableness/neuroticism。
+#: 社交列（request_chat）违背 extraversion；劳作列（work）违背 conscientiousness。
+_ACTION_PERSONALITY: dict[str, tuple[int, bool]] = {
+    "request_chat": (2, False),  # 内向（低 E）被拉去聊天 → 冲突
+    "work": (1, True),  # 低 C（懒散）被派活 → 冲突
+}
+
+
+def _phase_of_tick(tick: int) -> str:
+    """tick → day phase（calendar.phase_of_day 同源；此处独立小表防循环导入）。"""
+    hour = (tick // 3600) % 24
+    if 5 <= hour < 7:
+        return "dawn"
+    if 7 <= hour < 17:
+        return "day"
+    if 17 <= hour < 19:
+        return "dusk"
+    return "night"
+
+
+def synthesize_verdict(profile: object, action: str, *, tick: int) -> WillingnessVerdict:
+    """逐人真实意愿合成（纯函数，C5）：性格违背 + 需求冲突 + 处境不合。
+
+    **主档语义**（D14，替代 §10 加权和的实况供数版）：加权和在
+    sum(w)=1、band1 界 0.3 的体系下单维贡献 ≤0.25——「E=5 被拉去聊天」
+    这种现实强冲突数学上永远沉在 band0，与「单维强冲突即迟疑」的现实
+    语义矛盾。改为：band = 最强单维的主档（0.3/0.6/0.8 界同 §10），
+    多维中档叠加升一档（封 3）。frozen verdict 形状不变；「最终都执行」
+    不变（verdict 不改动作）。
+    """
+    needs = getattr(profile, "needs", ())
+    ocean = getattr(profile, "ocean", (50.0, 50.0, 50.0, 50.0, 50.0))
+
+    # 三个冲突维各自归一到 [0,1]（0.3/0.6/0.8 界复用 WILLINGNESS_BANDS）
+    dims: list[float] = []
+
+    # 1. 性格违背：低 E 被拉去聊天 / 低 C 被派活（中性 50 起算，极端 1.0）
+    spec = _ACTION_PERSONALITY.get(action)
+    if spec is not None:
+        idx, _conflicts_when_low = spec
+        score = float(ocean[idx]) if idx < len(ocean) else 50.0
+        dims.append(max(0.0, (50.0 - score) / 50.0))
+
+    # 2. 需求冲突：越阈值的需求没被当前动作补救（超出量归一）
+    for n in needs:
+        threshold = _NEED_THRESHOLD.get(n.name)
+        if threshold is None:
+            continue
+        if float(n.value) >= threshold and action != _NEED_REMEDY.get(n.name):
+            dims.append((float(n.value) - threshold) / (1.0 - threshold))
+
+    # 3. 处境不合：深夜干活 / 白天补觉（作息错配）
+    phase = _phase_of_tick(tick)
+    if phase == "night" and action == "work":
+        dims.append(0.8)
+    elif phase == "day" and action == "rest":
+        dims.append(0.6)
+
+    if not dims:
+        return WillingnessVerdict(score=0.0, band=0)
+
+    # 主档 = 最强单维；中档（≥0.3）维度 ≥2 个 → 升一档（叠加升级，封 3）
+    strongest = max(dims)
+    band = _band_of(strongest)
+    if band < 3 and sum(1 for d in dims if d >= WILLINGNESS_BANDS[0]) >= 2:
+        band += 1
+    return WillingnessVerdict(score=strongest, band=band)

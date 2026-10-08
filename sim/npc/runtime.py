@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
-from sim.agent.will import WillingnessVerdict, willingness_expression
+from sim.agent.will import WillingnessVerdict, synthesize_verdict, willingness_expression
 from sim.core.events import (
     WorldEvent,
     hidden_emerge_event,
@@ -30,6 +30,10 @@ from sim.npc.contract import HiddenState
 from sim.npc.model import NpcProfileData
 from sim.npc.needs import advance_needs
 from sim.npc.utility import UtilityModel, evaluate_batch
+
+#: D14 默认逐人意愿合成器（(profile, action, tick) → verdict）。
+#: 模块级常量供测试 monkeypatch（test_m4d14_defers 用）。
+_VERDICT_OF_DEFAULT = synthesize_verdict
 
 
 @dataclass
@@ -51,6 +55,7 @@ class NpcRuntime:
     profiles: dict[str, NpcProfileData]
     utility: UtilityModel
     willingness: WillingnessVerdict | None = None
+    willingness_of: object | None = None
     power: dict[str, float] | None = None
     _order: list[str] = field(default_factory=list, init=False)
 
@@ -142,8 +147,15 @@ class NpcRuntime:
             # M4-B3 意愿面（DESIGN §10「但最终都执行」）：verdict 只产表现
             # （band≥1 → NPC_MONOLOGUE），不改 action/params——决策结果与
             # 无意愿管线逐位一致（test_m4_b3_wiring 钉死）。
-            if self.willingness is not None:
-                expr = willingness_expression(self.willingness, npc_name=nid)
+            # D14 双模式：willingness_of（逐人真实合成，主路径）优先；
+            # willingness（全队共享占位，旧钉兼容）次之；都 None = 无意愿面。
+            verdict: WillingnessVerdict | None = None
+            if self.willingness_of is not None:
+                verdict = self.willingness_of(advanced[nid], d.action, tick=tick)  # type: ignore[operator]
+            elif self.willingness is not None:
+                verdict = self.willingness
+            if verdict is not None:
+                expr = willingness_expression(verdict, npc_name=nid)
                 if expr is not None:
                     events.append(
                         npc_monologue_event(
@@ -153,6 +165,21 @@ class NpcRuntime:
                             content=expr.monologue,
                         )
                     )
+                    # D14：band=3 defers → 计划看板（K8 §3 生产写入点）——
+                    # 「先做别的再绕回来」是外在可观察的计划面。
+                    if expr.defers:
+                        from sim.npc.plan_view import set_plan_from_expression
+
+                        action_label = {
+                            "work": "干活",
+                            "eat": "吃点东西",
+                            "rest": "歇口气",
+                            "request_chat": "找人说话",
+                        }.get(d.action, d.action)
+                        set_plan_from_expression(
+                            nid, f"先去别处，等会儿再{action_label}",
+                            band=verdict.band, defers=True,
+                        )
 
         self.profiles = advanced
         return events

@@ -54,6 +54,9 @@ function installMirrorMock() {
       applyActorDeltas: vi.fn(),
       applyLightDeltas: vi.fn(),
       reset: vi.fn(),
+      setBubble: vi.fn(), // D14 头顶气泡
+      pruneBubbles: vi.fn().mockReturnValue(false),
+      bubbles: new Map(),
       actors: new Map(),
       protagonist: null as string | null,
     };
@@ -64,6 +67,9 @@ function installMirrorMock() {
         applyActorDeltas = mirrorMethods.applyActorDeltas;
         applyLightDeltas = mirrorMethods.applyLightDeltas;
         reset = mirrorMethods.reset;
+        setBubble = mirrorMethods.setBubble;
+        pruneBubbles = mirrorMethods.pruneBubbles;
+        bubbles = mirrorMethods.bubbles;
         actors = mirrorMethods.actors;
         protagonist = mirrorMethods.protagonist;
       },

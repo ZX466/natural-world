@@ -201,12 +201,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("npc.seeded", count=seeded)
     npc_store = NpcStore(store)
     npc_runtime, _hidden_states = await assemble_runtime(npc_store)
-    # 批次 D2：村民意愿面（band≥1 → bubble 独白；节流 300 tick/人）。
-    # 无 power 值（M6 权力面未接实况）→ verdict 全队共享占位（温和冲突档），
-    # 真实意愿合成随权力/需求闭环批次接入。
-    from sim.agent.will import WillingnessVerdict
+    # 批次 D14：真实意愿面——逐人合成（性格/需求/处境 → band 全谱），
+    # 替换 D2 的全队 band=1 占位（「四句循环」根因收口）。最终都执行
+    # （§10）：verdict 只产独白/defers，不改效用决策。
+    from sim.agent.will import synthesize_verdict
 
-    npc_runtime.willingness = WillingnessVerdict(score=0.4, band=1)
+    npc_runtime.willingness_of = synthesize_verdict
     pathfinder = Pathfinder(tile_map)
     app.state.npc_runtime = npc_runtime
     monologue_last: dict[str, int] = {}
@@ -222,6 +222,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             monologue_last=monologue_last,
             monologue_quota=monologue_quota,
         )
+        # 批次 D14：npc.act → 动作姿势账本（快照/delta 的 anim 字段供数）。
+        from sim.api.ws import set_action_anim
+        from sim.npc.sim_exec import anim_of_action
+
+        for event in batch or []:
+            if getattr(event, "event_type", None) is not None and getattr(
+                event.event_type, "value", ""
+            ) == "npc.act":
+                npc_id = str(event.payload.get("npc_id", ""))
+                if npc_id:
+                    set_action_anim(npc_id, anim_of_action(str(event.payload.get("action", ""))))
         return batch or None
 
     loop.attach_npc_runtime(_npc_tick_hook)

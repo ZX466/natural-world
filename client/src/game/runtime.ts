@@ -18,6 +18,8 @@ const MOCK_TICK_MS = 1000 / 60;
 /** player_impulse.text 上限（PlayerImpulseMessage schema maxLength 64 同源） */
 export const IMPULSE_MAX_LEN = 64;
 const IMPULSE_TOO_LONG_MSG = '话说得太长了，说不清。';
+/** D14 头顶气泡停留时长（ms；阅读 15 字约 4s，取整档） */
+export const BUBBLE_DURATION_MS = 4000;
 
 function phaseOf(hour: number): InGameTime['phase'] {
   if (hour >= 5 && hour < 7) return 'dawn';
@@ -51,12 +53,16 @@ class Runtime {
         if (msg.plan) useUiStore.getState().setPlans([...msg.plan]);
       },
       onMonologue: (msg) => {
-        // 批次 D10 分流：bubble = 村民的公开嘟囔（头顶气泡的文本投影）→
-        // 街谈巷议；thought/plan = 陈默的心声 → 心之声面板。
+        // 批次 D10 分流：bubble = 村民的公开嘟囔 → 街谈巷议 + 头顶气泡（D14）；
+        // thought/plan = 陈默的心声 → 心之声面板。
         // monologue 帧无 actor 字段（W7 字段最小化），语义路由按 form 定。
         // D12：bubble 帧可选 name（说话人戏内名）随行进署名。
         if (msg.form === 'bubble') {
           useUiStore.getState().pushChatter(msg.name ?? null, msg.content);
+          // D14：头顶气泡（有署名才冒——无名嘟囔无处定位）
+          if (msg.name) {
+            worldMirror.setBubble(msg.name, msg.content, BUBBLE_DURATION_MS, Date.now());
+          }
         } else {
           useUiStore.getState().pushMonologue(msg.form, msg.content);
         }

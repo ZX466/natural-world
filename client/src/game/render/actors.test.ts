@@ -5,7 +5,16 @@
  * H-3：零位移沿用 lastFacing（停下不转身）。
  */
 import { describe, expect, it } from 'vitest';
-import { inferFacing, inferAnim, advanceAnimClock, walkFrame, walkFrameFor, facingRow } from './actors';
+import {
+  inferFacing,
+  inferAnim,
+  advanceAnimClock,
+  walkFrame,
+  walkFrameFor,
+  facingRow,
+  VILLAGER_SHEET,
+  villagerFrame,
+} from './actors';
 
 describe('inferFacing', () => {
   it.each([
@@ -67,6 +76,25 @@ describe('walkFrame（C-2 修复钉：17 列线性换算）', () => {
     expect(facingRow('n')).toBe(1);
     expect(facingRow('e')).toBe(2);
     expect(facingRow('w')).toBe(3);
+  });
+});
+
+describe('villagerFrame（D14：劳作姿势行）', () => {
+  it('work/eat/rest/chat → 姿势行 R4-7 站立帧（idle 时）', () => {
+    // villager 素材 R4-R7 = 劳作姿势（目视定案）；idle 姿势取各姿势行 standCol
+    expect(villagerFrame(VILLAGER_SHEET, 'work', 's', -1)).toBe(4 * 4 + 0); // R4
+    expect(villagerFrame(VILLAGER_SHEET, 'eat', 's', -1)).toBe(5 * 4 + 0); // R5
+    expect(villagerFrame(VILLAGER_SHEET, 'rest', 's', -1)).toBe(6 * 4 + 0); // R6
+    expect(villagerFrame(VILLAGER_SHEET, 'chat', 's', -1)).toBe(7 * 4 + 0); // R7
+  });
+  it('walk/idle → 四向走环（R0-R3，D10 语义不变）', () => {
+    expect(villagerFrame(VILLAGER_SHEET, 'walk', 's', -1)).toBe(0 * 4 + 0);
+    expect(villagerFrame(VILLAGER_SHEET, 'idle', 'n', -1)).toBe(1 * 4 + 0);
+    // 走动中：facing 行 + animClock 环
+    expect(villagerFrame(VILLAGER_SHEET, 'walk', 'e', 150)).toBe(2 * 4 + 1);
+  });
+  it('未知 anim → 走环（fail-soft）', () => {
+    expect(villagerFrame(VILLAGER_SHEET, 'unknown', 's', -1)).toBe(0 * 4 + 0);
   });
 });
 

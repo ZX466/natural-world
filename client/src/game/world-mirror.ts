@@ -54,6 +54,25 @@ export class WorldMirror {
   resetCount = 0;
   /** 戏内天气（批次 D7）：日级视觉状态（服务端权威，快照/delta 随行） */
   weather = { visual: 'clear', ambientLight: 1.0 };
+  /** D14 头顶气泡：{戏内名: {text, 到期时刻 ms}}（bubble 独白按 name 落） */
+  bubbles = new Map<string, { text: string; expiresAt: number }>();
+
+  /** 记一条头顶气泡（D14；durationMs 由调用方给，WorldScene 逐帧清理过期） */
+  setBubble(name: string, text: string, durationMs: number, nowMs: number): void {
+    this.bubbles.set(name, { text, expiresAt: nowMs + durationMs });
+  }
+
+  /** 到期气泡清理（WorldScene update 每帧调；返回是否清了东西）。 */
+  pruneBubbles(nowMs: number): boolean {
+    let pruned = false;
+    for (const [name, b] of this.bubbles) {
+      if (b.expiresAt <= nowMs) {
+        this.bubbles.delete(name);
+        pruned = true;
+      }
+    }
+    return pruned;
+  }
 
   applySnapshot(
     actors: readonly Actor[],
