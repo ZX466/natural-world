@@ -173,5 +173,6 @@ class TestTilesetName:
         from sim.api.ws import _tileset_name
         from sim.world.map import TileMap
 
-        assert _tileset_name(TileMap(width=48, height=48)) == "zelda_like_v1"
+        assert _tileset_name(TileMap(width=96, height=96)) == "zelda_like_v1"  # D16 扩图
+        assert _tileset_name(TileMap(width=48, height=48)) == "grid"  # 旧尺寸不再特判
         assert _tileset_name(TileMap(width=32, height=32)) == "grid"

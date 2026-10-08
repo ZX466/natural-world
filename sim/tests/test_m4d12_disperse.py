@@ -26,13 +26,16 @@ class TestSiteScatter:
     """站点邻域散点：同拍同动作的人不再挤同一格。"""
 
     def test_eat_goals_scatter_in_neighborhood(self) -> None:
-        """12 个 NPC 同时 eat → 目的地 distinct 数 ≥6（修前 = 1 格全堆）。"""
-        from sim.api.main import _fallback_map
+        """12 个 NPC 同时 eat → 目的地 distinct 数 ≥6（修前 = 1 格全堆）。
+
+        D16：定籍站点在 96×96 真图上（fallback 32 图装不下片区坐标，
+        旧夹具图会人为塌缩散点）。"""
         from sim.core.world import EntityState, WorldState
         from sim.npc.sim_exec import _resolve_goal
+        from sim.world.map import TileMap
         from sim.world.pathfinding import Pathfinder
 
-        pf = Pathfinder(_fallback_map())
+        pf = Pathfinder(TileMap.from_json_file(_TOWN_JSON))
         w, h = pf.tile_map.width, pf.tile_map.height
         state = WorldState(
             world_seed=42,
@@ -49,13 +52,15 @@ class TestSiteScatter:
         ]
         distinct = len(set(goals))
         assert distinct >= 6, f"12 人 eat 目的地只 {distinct} 格（站点散点失效）"
-        # 全部落在食摊邻域（曼哈顿 ≤4）——散点不是乱跑
-        from sim.npc.sim_exec import EAT_SITE
+        # 全部落在**本人片区**食摊邻域（曼哈顿 ≤4）——D16 定籍制：站点=片区站点
+        from sim.npc.sim_exec import _site_anchor_of
 
-        for g in goals:
+        for i, g in enumerate(goals):
             assert g is not None
-            assert abs(g[0] - EAT_SITE[0]) + abs(g[1] - EAT_SITE[1]) <= 4, (
-                f"eat 散点 {g} 越出食摊邻域"
+            anchor = _site_anchor_of("eat", f"npc_{i + 1:02d}")
+            assert anchor is not None
+            assert abs(g[0] - anchor[0]) + abs(g[1] - anchor[1]) <= 4, (
+                f"eat 散点 {g} 越出 npc_{i + 1:02d} 片区食摊 {anchor} 邻域"
             )
 
     def test_eat_scatter_is_deterministic(self) -> None:

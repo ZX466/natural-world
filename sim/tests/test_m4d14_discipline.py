@@ -55,26 +55,32 @@ class TestArrivalStays:
     """到站停留：已在目的地 → 不再被赶走。"""
 
     def test_arrived_eat_stays(self) -> None:
-        from sim.npc.sim_exec import EAT_SITE, plan_npc_move
+        from sim.npc.sim_exec import _site_anchor_of, plan_npc_move
 
         pf = _town_pf()
-        state = _state_at(npc_01=EAT_SITE)
+        anchor = _site_anchor_of("eat", "npc_01")
+        assert anchor is not None
+        state = _state_at(npc_01=anchor)
         assert plan_npc_move(state, "npc_01", "eat", pf, seed=42, tick=1000) is None, (
-            "已到食摊 → 停住（修前退化为全图闲逛 = 随便移动主犯）"
+            "已到本人片区食摊 → 停住（D16 定籍：站点=片区站点）"
         )
 
     def test_arrived_rest_stays(self) -> None:
-        from sim.npc.sim_exec import REST_SITES, plan_npc_move
+        from sim.npc.sim_exec import _site_anchor_of, plan_npc_move
 
         pf = _town_pf()
-        state = _state_at(npc_01=REST_SITES[0])
+        anchor = _site_anchor_of("rest", "npc_01")
+        assert anchor is not None
+        state = _state_at(npc_01=anchor)
         assert plan_npc_move(state, "npc_01", "rest", pf, seed=42, tick=1000) is None
 
     def test_arrived_work_stays(self) -> None:
-        from sim.npc.sim_exec import WORK_SITE, plan_npc_move
+        from sim.npc.sim_exec import _site_anchor_of, plan_npc_move
 
         pf = _town_pf()
-        state = _state_at(npc_01=WORK_SITE)
+        anchor = _site_anchor_of("work", "npc_01")
+        assert anchor is not None
+        state = _state_at(npc_01=anchor)
         assert plan_npc_move(state, "npc_01", "work", pf, seed=42, tick=1000) is None
 
     def test_not_arrived_still_moves(self) -> None:
@@ -112,19 +118,20 @@ class TestWanderNearby:
         assert a == b
 
     def test_wander_move_uses_nearby(self) -> None:
-        """wander 动作的位移面走邻域（修前全图）。"""
-        from sim.npc.sim_exec import _WANDER_RADIUS, plan_npc_move
+        """wander 动作的位移面走邻域（D16 升级：邻域=本人片区锚点邻域）。"""
+        from sim.npc.sim_exec import _WANDER_RADIUS, home_base_of, plan_npc_move
 
         pf = _town_pf()
         state = _state_at(npc_01=(8, 16))
+        home = home_base_of("npc_01")
         for i in range(10):
             mv = plan_npc_move(state, "npc_01", "wander", pf, seed=42, tick=1000 + i)
             assert mv is not None
             raw_goal = mv.payload["goal"]
             assert isinstance(raw_goal, (list, tuple)) and len(raw_goal) >= 2
             goal = (int(raw_goal[0]), int(raw_goal[1]))
-            dist = abs(goal[0] - 8) + abs(goal[1] - 16)
-            assert dist <= _WANDER_RADIUS, f"wander 目标 {goal} 距家 {dist}（越出邻域）"
+            dist = abs(goal[0] - home[0]) + abs(goal[1] - home[1])
+            assert dist <= _WANDER_RADIUS, f"wander 目标 {goal} 距定籍点 {dist}（越出邻域）"
 
     def test_unreachable_returns_none_no_wild_wander(self) -> None:
         """目的地不可达 → None（原地待着）；修前退化为全图闲逛。"""
@@ -135,9 +142,11 @@ class TestWanderNearby:
         # 不可达路径不再产生「退化为 wander」的第二个 move（结构性钉：
         # plan_npc_move 对 site 动作只发「朝解析目标」的 move，永不夹带
         # wander 兜底）。用「已到站」+「不可达」两态覆盖即可，此处钉到站态。
-        from sim.npc.sim_exec import EAT_SITE
+        from sim.npc.sim_exec import _site_anchor_of
 
-        state = _state_at(npc_01=EAT_SITE)
+        anchor = _site_anchor_of("eat", "npc_01")
+        assert anchor is not None
+        state = _state_at(npc_01=anchor)
         assert plan_npc_move(state, "npc_01", "eat", pf, seed=42, tick=1) is None
 
 

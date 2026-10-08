@@ -62,6 +62,62 @@ WORK_SITE: tuple[int, int] = (13, 35)
 #: 4 = 5×9 邻域（约 30+ 可走格），50 人同拍打散后最热点 ≤6 人。
 _SITE_SCATTER_RADIUS = 4
 
+# ---------------------------------------------------------------------------
+# D16 定籍领地（「每个 npc 在固定的区域呆着」——用户验收口径）
+# ---------------------------------------------------------------------------
+
+#: 五片区锚点（build_town.py 96×96 布局同源，锚点自身必须可走）：
+#: 中心镇集 / 西村 / 东村 / 南村 / 北村——每区一宅（rest=自家门前）。
+HOME_BASES: tuple[tuple[int, int], ...] = (
+    (28, 42),   # 中心镇集（药铺/食摊一带）
+    (14, 68),   # 西村（西村宅前）
+    (82, 38),   # 东村（东村宅前，水塘上方）
+    (46, 86),   # 南村（南村宅前，农田带）
+    (78, 75),   # 北村（北村宅前，水塘下方）
+)
+
+#: 领地内散步半径（曼哈顿）：闲逛只在本人片区 ±R 内——「一部分区域乱走」
+#: 的根因收口（D14 的 wander_near(entity.pos) 锚定当前位置，随机游走逐拍
+#: 累积仍会漂出街区；定籍后目标恒落本片区，漂移不再累积）。
+_TERRITORY_RADIUS = 10
+
+
+def home_base_of(npc_id: str) -> tuple[int, int]:
+    """npc_id → 定籍片区锚点（纯函数：sha256 截断取模，C5 同输入同输出）。
+
+    定籍是**表现面确定性**（不出事件、不进世界态），与 D12 散点、D10 冷却
+    同族。50 人按哈希自然分布到五片区（test 钉 ≥3 片区防挤一区）。
+    """
+    digest = _hash_u32("home-base", npc_id)
+    return HOME_BASES[digest % len(HOME_BASES)]
+
+
+#: 片区 → 本区站点（eat/rest/work 全部落本人片区——不再全镇挤唯一摊）。
+#: 布局与 build_town.py 96×96 同源：rest=本区宅门前；eat=本区路旁食摊；
+#: work=南村农田带（农活集中在南村，其余区走田埂路去——劳作是跨街的，
+#: 去程也是「在片区间活动」的戏内图景）。
+_TERRITORY_EAT: dict[tuple[int, int], tuple[int, int]] = {
+    (28, 42): (30, 46),   # 中心镇集：食摊
+    (14, 68): (20, 62),   # 西村：十字路西南口
+    (82, 38): (76, 38),   # 东村：宅前路旁
+    (46, 86): (40, 80),   # 南村：农田带路旁
+    (78, 75): (56, 47),   # 北村：十字路口东段（就近镇集）
+}
+_TERRITORY_REST: dict[tuple[int, int], tuple[int, int]] = {
+    (28, 42): (28, 41),   # 中心区 → 中心住宅门前
+    (14, 68): (14, 67),   # 西村 → 西村宅门前
+    (82, 38): (82, 37),   # 东村 → 东村宅门前
+    (46, 86): (48, 85),   # 南村 → 南村宅门前
+    (78, 75): (78, 73),   # 北村 → 北村宅门前
+}
+_TERRITORY_WORK: dict[tuple[int, int], tuple[int, int]] = {
+    (28, 42): (26, 76),   # 中心区 → 农田北缘
+    (14, 68): (26, 76),   # 西村 → 农田北缘
+    (82, 38): (26, 76),   # 东村 → 农田北缘
+    (46, 86): (26, 80),   # 南村 → 农田心（就近）
+    (78, 75): (26, 76),   # 北村 → 农田北缘
+}
+
 #: D14：动作 → 呈现用 anim 词（前端姿势行选择；villager 素材行序
 #: R0-R3=四向走环 / R4-7=劳作姿势——work/eat/rest/chat 各有站姿差异）。
 #: wander/move 是行走态（前端按位移自动播走环，不依赖本字段）。
@@ -161,13 +217,16 @@ def wander_near(
 
 
 def _site_anchor_of(action: str, npc_id: str) -> tuple[int, int] | None:
-    """动作 → 站点锚点（rest 按 npc 选宅；其他动作唯一锚点；None=无站点）。"""
+    """动作 → 站点锚点（D16 定籍制：eat/rest/work 全部落**本人片区**站点；
+    None=无站点）。片区锚点表缺项时退回全镇站点（fail-safe 不炸）。
+    """
+    home = home_base_of(npc_id)
     if action == "eat":
-        return EAT_SITE
+        return _TERRITORY_EAT.get(home, EAT_SITE)
     if action == "rest":
-        return REST_SITES[_hash_u32(npc_id) % len(REST_SITES)]
+        return _TERRITORY_REST.get(home, REST_SITES[0])
     if action == "work":
-        return WORK_SITE
+        return _TERRITORY_WORK.get(home, WORK_SITE)
     return None
 
 
@@ -185,14 +244,12 @@ def _resolve_goal(
     """动作 → 目的地（纯函数）；None = 该动作无位移面。
 
     D12：eat/rest/work 落站点**邻域散点**（不再全镇挤一格）；
-    request_chat 落目标人的邻域散点（不精确踩人所在格——追尾聚合根因）。
+    D16：站点=本人片区站点（定籍制）；闲逛锚定**本片区**（不再锚定当前
+    位置——随机游走漂移收口）；request_chat 仍跨片区（社交不缩水）。
     """
     if action in ("wander", "move"):
-        # D14：闲逛邻域化——从当前位置出门走走（≤R），不再全图散布。
-        entity = state.entities.get(npc_id)
-        if entity is None:
-            return None
-        return wander_near(entity.pos, npc_id, pathfinder, seed=seed, tick=tick)
+        # D16：闲逛锚定本人片区（人在片区外先走回家再溜达——归巢语义）。
+        return wander_near(home_base_of(npc_id), npc_id, pathfinder, seed=seed, tick=tick)
     if action in ("eat", "rest", "work"):
         anchor = _site_anchor_of(action, npc_id)
         assert anchor is not None  # 三动作恒有锚点
@@ -200,10 +257,9 @@ def _resolve_goal(
     if action == "request_chat":
         others = sorted(eid for eid in state.entities if eid != npc_id)
         if not others:
-            entity = state.entities.get(npc_id)
-            if entity is None:
-                return None
-            return wander_near(entity.pos, npc_id, pathfinder, seed=seed, tick=tick)
+            return wander_near(
+                home_base_of(npc_id), npc_id, pathfinder, seed=seed, tick=tick
+            )
         target = others[_hash_u32(npc_id, tick) % len(others)]
         return _scatter_near(
             state.entities[target].pos, npc_id, pathfinder, seed=seed
@@ -229,6 +285,8 @@ def plan_npc_move(
       （D2 起「goal==pos → 退化为闲逛」是全镇横穿的主犯）；
     - 不可达 → None（原地待着，**不再**退化为全图闲逛——错上加错）；
     - wander/move 无站点语义 → 邻域闲逛目标（wander_near）。
+    D16 定籍领地：eat/rest/wander 全部锚定本人片区（home_base_of）——
+    「一部分区域乱走」的根因收口；request_chat 仍跨片区（社交不缩水）。
     返回的 move_event **不入流**（无 enqueue）——调用方决定入流时机与 tick。
     """
     entity = state.entities.get(npc_id)
@@ -266,8 +324,8 @@ def plan_npc_move(
             goal=path[-1],
             path=path,
         )
-    # wander/move：邻域闲逛（无站点语义；目标即出发地邻域）
-    goal = wander_near(start, npc_id, pathfinder, seed=seed, tick=tick)
+    # wander/move：D16 定籍闲逛——目标锚定本人片区（人在片区外=归巢途中）
+    goal = wander_near(home_base_of(npc_id), npc_id, pathfinder, seed=seed, tick=tick)
     if goal is None or goal == start:
         return None
     try:

@@ -28,8 +28,8 @@ def palette_ground_ids() -> set[int]:
 
 
 class TestTownMap:
-    def test_dimensions_48(self, town: TileMap):
-        assert town.width == 48 and town.height == 48
+    def test_dimensions_96(self, town: TileMap):
+        assert town.width == 96 and town.height == 96
 
     def test_ground_ids_within_palette(self, town: TileMap, palette_ground_ids: set[int]):
         """R5 防漂移钉：地图引用的每个 tile id 必须在调色板值域内。"""
@@ -40,16 +40,16 @@ class TestTownMap:
         assert not unknown, f"地图使用了调色板外的 tile id: {sorted(unknown)}"
 
     def test_spawn_walkable(self, town: TileMap):
-        """主角出生点 (8,16) 可通行（build_town SPAWN 同源依赖）。"""
-        assert town.is_walkable(8, 16)
+        """主角出生点 (16,32) 可通行（build_town SPAWN 同源依赖，D16 扩图）。"""
+        assert town.is_walkable(16, 32)
 
     def test_border_impassable(self, town: TileMap):
         """四周树林墙：边界格不可走（防走出图）。"""
-        for i in range(48):
+        for i in range(96):
             assert not town.is_walkable(i, 0)
-            assert not town.is_walkable(i, 47)
+            assert not town.is_walkable(i, 95)
             assert not town.is_walkable(0, i)
-            assert not town.is_walkable(47, i)
+            assert not town.is_walkable(95, i)
 
     def test_has_variety(self, town: TileMap):
         """至少 6 种不同 tile（草变体+路+水+农田+建筑，防「全草地」退化）。"""

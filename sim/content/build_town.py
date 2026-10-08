@@ -1,18 +1,26 @@
-"""sim/content/build_town.py — 临河镇 48×48 地图构建（M7-T3，R6 确定性）。
+"""sim/content/build_town.py — 临河镇 96×96 地图构建（M7-T3 起家，D16 扩图）。
 
 读调色板取 tile id（R5 单源：client/public/assets/tilesets/sprout-palette.json），
 写内部格式 JSON（TileMap.from_json_file 可加载）。重跑幂等、产物可 diff——
 **禁用 random**，草变体用确定性算式。
 
-布局（48×48，格坐标 x→右 y→下，全部矩形具名可审）：
+布局（96×96，D16：面积 ×4 + 五片区——「每 npc 固定区域」的空间底座，
+格坐标 x→右 y→下，全部矩形具名可审）：
 - 边界 2 格树墙（不可走）；
 - 草地底（含确定性花/草丛变体）；
-- 十字土路：横 y=23-24 全宽，纵 x=23-24 全高；
-- 药铺（主角家）：(6,8)-(14,14)，屋顶 3 行 + 墙 4 行 + 门格 (10,14) 可走；
-- 住宅×2：(30,6)-(38,12) 与 (30,32)-(38,38)，同构；
-- 农田：(8,30)-(18,40)；
-- 水塘：(36,20)-(45,28)（不可走）；
-- 主角出生点 (8,8) 保证草地可走。
+- 十字土路：横 y=47-48 全宽，纵 x=47-48 全高（中心镇集）；
+- 药铺（主角家）：(12,16)-(20,22)，屋顶 3 行 + 墙 4 行 + 门格 (16,22) 可走；
+- 中心片区：住宅 (24,34)-(32,40)（镇集南）；
+- 西村片区：住宅 (10,60)-(18,66)；
+- 东村片区：住宅 (78,30)-(86,36)（水塘上方）；
+- 南村片区：农田 (16,72)-(36,88)、住宅 (44,78)-(52,84)；
+- 北村片区：水塘 (72,40)-(90,45) 与 (72,54)-(90,61)（不可走）、住宅 (74,66)-(82,72)；
+- 零散石头（确定性点位）。
+
+片区锚点（sim/npc/sim_exec.HOME_BASES 同源——定籍制空间底座，五区，
+每区一宅：rest=自家门前）：
+中心 (28,42) / 西村 (14,68) / 东村 (82,38) / 南村 (46,86) / 北村 (78,75)
+——锚点自身必须可走（`_scatter_near` 锚点兜底依赖）。
 """
 
 from __future__ import annotations
@@ -21,9 +29,9 @@ import json
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-SIZE = 48
+SIZE = 96
 CHUNK = 16
-SPAWN = (8, 16)  # 药铺屋前空地（屋体 y=8-14，出生点必须屋外开阔草——原 (8,8) 嵌在屋顶内被困）
+SPAWN = (16, 32)  # 药铺屋前空地（屋体 y=16-22，出生点必须屋外开阔草）
 
 # 调色板角色名 → sprout-palette.json ground 键（改名先改调色板，本脚本报缺名即回改）
 PALETTE_NAMES: dict[str, str] = {
@@ -42,14 +50,9 @@ PALETTE_NAMES: dict[str, str] = {
 
 
 def load_palette_ids() -> dict[str, int]:
-    """调色板单源读取（R5）：角色名 → tile index。缺名即 fail-loud。"""
-    palette = json.loads(
-        (REPO / "client" / "public" / "assets" / "tilesets" / "sprout-palette.json")
-        .read_text(encoding="utf-8")
-    )
-    missing = set(PALETTE_NAMES.values()) - set(palette["ground"])
-    if missing:
-        raise KeyError(f"调色板缺 tile: {missing}——先补 build_palette.py 的 TERRAIN")
+    """调色板 JSON → 角色名 → tile id（缺名即 KeyError——管线报缺回改）。"""
+    palette_path = REPO / "client" / "public" / "assets" / "tilesets" / "sprout-palette.json"
+    palette = json.loads(palette_path.read_text(encoding="utf-8"))
     return {role: palette["ground"][name] for role, name in PALETTE_NAMES.items()}
 
 
@@ -83,9 +86,9 @@ def build() -> None:
     fill(0, 0, 1, SIZE - 1, "tree", walkable=False)
     fill(SIZE - 2, 0, SIZE - 1, SIZE - 1, "tree", walkable=False)
 
-    # 十字路
-    fill(2, 23, SIZE - 3, 24, "path")
-    fill(23, 2, 24, SIZE - 3, "path")
+    # 十字路（中心镇集：横纵各 2 格宽）
+    fill(2, 47, SIZE - 3, 48, "path")
+    fill(47, 2, 48, SIZE - 3, "path")
 
     # 药铺（主角家）：屋顶 3 行 + 墙 4 行 + 门格
     def house(x0: int, y0: int, door_x: int) -> None:
@@ -94,17 +97,20 @@ def build() -> None:
         ground[y0 + 6][door_x] = ids["door"]
         collision[y0 + 6][door_x] = True
 
-    house(6, 8, 10)    # 药铺
-    house(30, 6, 34)   # 住宅一
-    house(30, 32, 34)  # 住宅二
+    house(12, 16, 16)  # 药铺（主角家）
+    house(24, 34, 28)  # 中心片区住宅（镇集南）
+    house(10, 60, 14)  # 西村住宅
+    house(78, 30, 82)  # 东村住宅（水塘上方）
+    house(44, 78, 48)  # 南村住宅
+    house(74, 66, 78)  # 北村住宅（水塘下方）
 
-    # 农田与水塘（M-1：水塘让出横路 y=23-24——路在先、水在后会覆盖，改为避开路段）
-    fill(8, 30, 18, 40, "farm")
-    fill(36, 20, 45, 21, "water", walkable=False)
-    fill(36, 25, 45, 28, "water", walkable=False)
+    # 农田（南村）与水塘两块（北村；避开十字路 y=47-48 与东村宅 y=30-36）
+    fill(16, 72, 36, 88, "farm")
+    fill(72, 40, 90, 45, "water", walkable=False)
+    fill(72, 54, 90, 61, "water", walkable=False)
 
     # 零散石头（确定性点位）
-    for sx, sy in ((16, 17), (27, 30), (12, 20), (40, 12), (33, 42)):
+    for sx, sy in ((30, 30), (56, 24), (24, 56), (68, 72), (84, 20), (12, 40), (52, 44)):
         ground[sy][sx] = ids["stone"]
 
     # 出生点保证可走草地

@@ -599,12 +599,14 @@ def map_static_payload(tile_map: TileMap) -> dict[str, Any]:
 
 
 def _tileset_name(tile_map: TileMap) -> str:
-    """真实小镇图（48×48）→ 'zelda_like_v1'；占位图 → 'grid'（前端色块开关，C-1）。
+    """真实小镇图（96×96，D16 扩图）→ 'zelda_like_v1'；占位图 → 'grid'
+    （前端色块开关，C-1）。
 
-    判据用尺寸而非引用传递（map_static_payload 无 app 上下文）；48×48 恰是
-    build_town.py 产物尺寸，占位图恒 32×32——两值是内容常量而非魔数。
+    判据用尺寸而非引用传递（map_static_payload 无 app 上下文）；96×96 恰是
+    build_town.py 产物尺寸（D16 起家 48×48，扩图后同函数同步），占位图恒
+    32×32——两值是内容常量而非魔数。
     """
-    return "zelda_like_v1" if (tile_map.width, tile_map.height) == (48, 48) else "grid"
+    return "zelda_like_v1" if (tile_map.width, tile_map.height) == (96, 96) else "grid"
 
 
 def handle_client_message(

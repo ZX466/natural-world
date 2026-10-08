@@ -19,7 +19,7 @@ class TestDefaultMap:
         from sim.api.main import _default_map
 
         m = _default_map()
-        assert m.width == 48 and m.height == 48
+        assert m.width == 96 and m.height == 96  # D16 扩图
         assert m.is_walkable(*SPAWN)
         assert not m.is_walkable(0, 0)  # 树林墙
 

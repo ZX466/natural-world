@@ -15,8 +15,11 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import pytest
+
+_TOWN_JSON = Path(__file__).resolve().parents[2] / "sim" / "content" / "linhe-town.json"
 
 pytestmark = pytest.mark.t1
 
@@ -110,31 +113,36 @@ class TestPlanNpcMove:
         return loop
 
     def test_wander_produces_move_event(self) -> None:
-        from sim.api.main import _fallback_map
+        # D16：定籍锚点在 96×96 真图上（fallback 32 图装不下片区坐标）。
+
         from sim.core.events import EventKind
         from sim.npc.sim_exec import plan_npc_move
+        from sim.world.map import TileMap
         from sim.world.pathfinding import Pathfinder
 
+        town = TileMap.from_json_file(_TOWN_JSON)
         loop = self._wired_loop()
-        pf = Pathfinder(_fallback_map())
+        pf = Pathfinder(town)
         mv = plan_npc_move(loop.state, "npc_01", "wander", pf, seed=42, tick=100)
         assert mv is not None and mv.event_type is EventKind.MOVE
         assert mv.payload["entity_id"] == "npc_01"
         path = mv.payload["path"]
         assert tuple(path[0]) == (5, 5)  # 起点即实体当前位置（model_dump 后 list）
         goal = tuple(path[-1])
-        assert _fallback_map().is_walkable(goal[0], goal[1])
+        assert town.is_walkable(goal[0], goal[1])
 
     def test_every_action_family_produces_locomotion(self) -> None:
         """批次 B 执行面：全动作族都有「去做事的地方」位移面（镇子活性不依赖
         wander 胜出——效用矩阵实测 wander 零票）。"""
-        from sim.api.main import _fallback_map
+
         from sim.core.events import EventKind
         from sim.npc.sim_exec import plan_npc_move
+        from sim.world.map import TileMap
         from sim.world.pathfinding import Pathfinder
 
+        town = TileMap.from_json_file(_TOWN_JSON)
         loop = self._wired_loop()
-        pf = Pathfinder(_fallback_map())
+        pf = Pathfinder(town)
         for action in ("eat", "rest", "work", "request_chat", "wander", "move"):
             mv = plan_npc_move(loop.state, "npc_01", action, pf, seed=42, tick=100)
             assert mv is not None, f"{action} 无位移面"
@@ -144,17 +152,19 @@ class TestPlanNpcMove:
         """已到站 → 停留（D14 移动纪律：到站不再被赶去闲逛——「随便移动」
         根治的语义翻转点；停留时长由需求回写驱动）。"""
         from sim.api.main import _fallback_map
-        from sim.npc.sim_exec import EAT_SITE, plan_npc_move
+        from sim.npc.sim_exec import _site_anchor_of, plan_npc_move
         from sim.world.pathfinding import Pathfinder
 
         loop = self._wired_loop()
-        # 把实体瞬移到食摊锚点（绕过寻路；仅测到站停留）
+        # 把实体瞬移到本人片区食摊锚点（绕过寻路；仅测到站停留；D16 定籍）
         from sim.core.world import EntityState
 
+        eat_anchor = _site_anchor_of("eat", "npc_01")
+        assert eat_anchor is not None
         loop.state = loop.state.model_copy(
             update={
                 "entities": {
-                    "npc_01": EntityState(entity_id="npc_01", pos=EAT_SITE),
+                    "npc_01": EntityState(entity_id="npc_01", pos=eat_anchor),
                 }
             }
         )
