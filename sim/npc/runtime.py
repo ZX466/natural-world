@@ -138,8 +138,17 @@ class NpcRuntime:
             power_values = [
                 max(-1.0, min(1.0, float(self.power.get(nid, 0.0)))) for nid in active_ids
             ]
+        # D19 作息：决策节拍判相位——夜相非生存动作压分（凌晨全村睡觉；
+        # schedule.current_slot 纯函数，相位由 tick 决定与画像无关，C5）。
+        from sim.core.calendar import DayPhase
+        from sim.npc.schedule import current_slot
+
+        night = current_slot(tick).phase is DayPhase.NIGHT
         decisions = evaluate_batch(
-            [advanced[nid] for nid in active_ids], self.utility, power=power_values
+            [advanced[nid] for nid in active_ids],
+            self.utility,
+            power=power_values,
+            night_bias=night,
         )
 
         # 3. 事件产出：params 只带白名单键（eat/rest/wander/move 无参数动作 → 空 params）

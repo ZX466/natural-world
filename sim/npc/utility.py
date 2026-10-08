@@ -57,6 +57,10 @@ POWER_MAX_BIAS: Final[float] = 0.18
 #: 权力偏置作用的动作列（社交/活动族；生存列零触碰）
 _POWER_SOCIAL_ACTIONS: Final[tuple[str, ...]] = ("request_chat", "wander")
 
+#: D19 作息罚量（夜相非生存动作压幅）：与 POWER_MAX_BIAS 同量级（0.18）——
+#: 足以在低需求时让 rest 胜出、不足以压垮顶格生存需求（eat 例外钉锁死）。
+_NIGHT_ACTION_PENALTY: Final[float] = 0.18
+
 
 @dataclass(frozen=True)
 class UtilityDecision:
@@ -106,6 +110,8 @@ def utility_scores_matrix(
     profiles: list[NpcProfileData],
     model: UtilityModel,
     power: list[float] | None = None,
+    *,
+    night_bias: bool = False,
 ) -> np.ndarray:
     """50 NPC 全量打分：需求加权和 + 外向偏置 → (n_npc, n_actions) float32。
 
@@ -114,6 +120,10 @@ def utility_scores_matrix(
     power（M6 批次 C 接线）：与 profiles 等长的权力值（[-1,1]；None = 无权力面，
     打分逐位同旧）。作为**效用额外列**参与打分（P10 红线：向量化，禁逐人
     replace/chaotic_at）——偏置 = power × POWER_MAX_BIAS，只加社交两列。
+
+    night_bias（D19 作息接线）：夜相位面——True 时非生存非 rest 动作列压
+    _NIGHT_ACTION_PENALTY（凌晨全村睡觉；False=与旧管线逐位一致，调用方
+    判相位传入）。eat/rest 生存与恢复列零触碰（夜里饿照吃）。
     """
     needs = model._needs_matrix(profiles)  # (n, 3)
     weights = model._weights_matrix(profiles)  # (n, 3)
@@ -142,6 +152,16 @@ def utility_scores_matrix(
         for action in _POWER_SOCIAL_ACTIONS:
             col = model.action_index[action]
             scores[:, col] = scores[:, col] + bias
+
+    # D19 作息列（night_bias=True）：非生存（eat）非恢复（rest）列统一压罚量
+    # ——夜相该睡觉；work/wander/request_chat/move 全压（封闭枚举向量化）。
+    # 注意与 power 面平级（power=None 时作息罚仍生效——两面独立）。
+    if night_bias:
+        for action in ACTION_ORDER:
+            if action in ("eat", "rest"):
+                continue
+            col = model.action_index[action]
+            scores[:, col] = scores[:, col] - np.float32(_NIGHT_ACTION_PENALTY)
     return scores
 
 
@@ -149,12 +169,14 @@ def evaluate_batch(
     profiles: list[NpcProfileData],
     model: UtilityModel,
     power: list[float] | None = None,
+    *,
+    night_bias: bool = False,
 ) -> list[UtilityDecision]:
     """批量评估 → 每 NPC 一个 UtilityDecision（argmax；scores 全量随行供审计）。
 
     power（M6 批次 C）：透传给打分矩阵（None = 无权力面，行为逐位同旧）。
     """
-    scores = utility_scores_matrix(profiles, model, power=power)
+    scores = utility_scores_matrix(profiles, model, power=power, night_bias=night_bias)
     best = scores.argmax(axis=1)
     return [
         UtilityDecision(

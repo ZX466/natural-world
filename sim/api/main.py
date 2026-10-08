@@ -90,15 +90,15 @@ async def build_loop() -> tuple[TickLoop, Any]:
     store = SqlEventStore(session_factory)
     loop = TickLoop(clock=_make_clock(), bus=build_default_bus(), state=WorldState(world_seed=42))
     loop.enqueue(world_create_event(tick=0, seed=42, entity_ids=GENESIS_ENTITIES))
-    # 批次 B：创世村民搬运走**确定性散布**（villagers.spawn_positions——环形向外
-    # 找可走格，重跑逐位一致）。50 条 move 事件（C4 唯一写路径）。
-    from sim.content.villagers import SPAWN_BASE, spawn_positions
+    # 批次 B（D19 换调）：创世村民出生=**定籍点邻域**（territory_spawn_positions
+    # ——人一落地就在自己村里，无开局大迁徙挤巷；D18 写的函数本批接线）。
+    from sim.content.villagers import territory_spawn_positions
 
     tile_map_for_spawn = _default_map()
-    villager_count = len(GENESIS_ENTITIES) - 1
-    positions = spawn_positions(tile_map_for_spawn, base=SPAWN_BASE, count=villager_count)
+    roster = list(GENESIS_ENTITIES[1:])
+    positions = territory_spawn_positions(tile_map_for_spawn, roster)
     spawn_of: dict[str, tuple[int, int]] = {"chenmo": SPAWN_TILE}
-    for eid, pos in zip(GENESIS_ENTITIES[1:], positions, strict=True):
+    for eid, pos in positions.items():
         spawn_of[eid] = pos
     for eid in GENESIS_ENTITIES:
         loop.issue_move(eid, [(0, 0), spawn_of[eid]])
