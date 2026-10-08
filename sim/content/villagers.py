@@ -97,7 +97,7 @@ def spawn_positions(
     bx, by = base
     taken: set[tuple[int, int]] = {base}
     out: list[tuple[int, int]] = []
-    for r in range(1, 64):  # 48×48 图上界内必然穷尽
+    for r in range(1, 64):  # 63 环理论容量 ~8064 格；96 图实测上界 6760（D16 后仍充裕）
         ring: list[tuple[int, int]] = []
         for x in range(bx - r, bx + r + 1):
             for y in (by - r, by + r):
