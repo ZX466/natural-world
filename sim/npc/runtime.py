@@ -31,6 +31,17 @@ from sim.npc.model import NpcProfileData
 from sim.npc.needs import advance_needs
 from sim.npc.utility import UtilityModel, evaluate_batch
 
+
+#: band3 推迟计划的动作语境标签（D18：看板区分「等会儿再干活/找人/吃饭」
+#: ——修前看板单句复读，语境让计划可读；纯函数，未知动作退回原词）。
+def _defer_label(action: str) -> str:
+    return {
+        "work": "干活",
+        "eat": "吃点东西",
+        "rest": "歇口气",
+        "request_chat": "找人说话",
+    }.get(action, action)
+
 #: D14 默认逐人意愿合成器（(profile, action, tick) → verdict）。
 #: 模块级常量供测试 monkeypatch（test_m4d14_defers 用）。
 _VERDICT_OF_DEFAULT = synthesize_verdict
@@ -170,15 +181,11 @@ class NpcRuntime:
                     if expr.defers:
                         from sim.npc.plan_view import set_plan_from_expression
 
-                        action_label = {
-                            "work": "干活",
-                            "eat": "吃点东西",
-                            "rest": "歇口气",
-                            "request_chat": "找人说话",
-                        }.get(d.action, d.action)
                         set_plan_from_expression(
-                            nid, f"先去别处，等会儿再{action_label}",
-                            band=verdict.band, defers=True,
+                            nid,
+                            f"先去别处，等会儿再{_defer_label(d.action)}",
+                            band=verdict.band,
+                            defers=True,
                         )
 
         self.profiles = advanced

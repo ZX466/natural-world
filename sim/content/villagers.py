@@ -89,6 +89,51 @@ def build_roster() -> tuple[NpcProfileData, ...]:
 SPAWN_BASE: tuple[int, int] = (8, 16)
 
 
+def territory_spawn_positions(
+    tile_map: TileMap, roster: list[str]
+) -> dict[str, tuple[int, int]]:
+    """出生=定籍点（D18）：每人落本人片区锚点邻域可走格（曼哈顿 ≤6 内确定性
+    挑位，同环内 (x,y) 字典序；锚点被占向外退）。
+
+    修前：全员从 SPAWN_BASE（药铺）环形散布 → 开局全员同向走回五片区=挤巷
+    大迁徙。定籍出生后人就在村里，无迁徙。占位冲突按 roster 序先到先得
+    （确定性，C5）。
+    """
+    from sim.npc.sim_exec import home_base_of
+
+    taken: set[tuple[int, int]] = set()
+    out: dict[str, tuple[int, int]] = {}
+    for nid in roster:
+        home = home_base_of(nid)
+        hx, hy = home
+        placed: tuple[int, int] | None = None
+        for r in range(7):
+            ring: list[tuple[int, int]] = []
+            for x in range(hx - r, hx + r + 1):
+                for y in (hy - r, hy + r):
+                    ring.append((x, y))
+            for y in range(hy - r + 1, hy + r):
+                ring.extend([(hx - r, y), (hx + r, y)])
+            for pos in sorted(set(ring)):
+                x, y = pos
+                if pos in taken:
+                    continue
+                if not (0 <= x < tile_map.width and 0 <= y < tile_map.height):
+                    continue
+                if not tile_map.is_walkable(x, y):
+                    continue
+                placed = pos
+                break
+            if placed is not None:
+                break
+        if placed is None:
+            msg = f"定籍出生无位: {nid} @ {home}"
+            raise ValueError(msg)
+        taken.add(placed)
+        out[nid] = placed
+    return out
+
+
 def spawn_positions(
     tile_map: TileMap, *, base: tuple[int, int], count: int
 ) -> list[tuple[int, int]]:

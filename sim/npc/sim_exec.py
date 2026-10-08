@@ -83,13 +83,39 @@ _TERRITORY_RADIUS = 10
 
 
 def home_base_of(npc_id: str) -> tuple[int, int]:
-    """npc_id → 定籍片区锚点（纯函数：sha256 截断取模，C5 同输入同输出）。
+    """npc_id → 定籍片区锚点（纯函数：均衡轮转 + 区内确定性，C5 同输入同输出）。
 
-    定籍是**表现面确定性**（不出事件、不进世界态），与 D12 散点、D10 冷却
-    同族。50 人按哈希自然分布到五片区（test 钉 ≥3 片区防挤一区）。
+    D18 均衡制：先按 npc_id 序**轮转均分**到五区（每区人数相等——首版纯哈希
+    实测 14/14/10/6/6，中心区仍挤），区序由 sha256 决定打散名字与区的直觉
+    关联（C5：同 id 恒同区）。定籍是**表现面确定性**（不出事件、不进世界态），
+    与 D12 散点、D10 冷却同族。
     """
-    digest = _hash_u32("home-base", npc_id)
-    return HOME_BASES[digest % len(HOME_BASES)]
+    idx = _TERRITORY_ORDER.get(npc_id)
+    if idx is None:
+        # 名册外 id（测试/未来扩员）：退回哈希分布（均衡钉只管 50 人正册）
+        digest = _hash_u32("home-base", npc_id)
+        return HOME_BASES[digest % len(HOME_BASES)]
+    return HOME_BASES[idx]
+
+
+#: D18 均衡定籍表：50 人正册 → 区序（每区 10 人；区序=sha256(npc_id) 洗牌后的
+#: 确定性轮转——首次构建时排序生成，之后硬编为常量（重跑逐位一致）。
+_DISTRICT_SIZES = 10  # 每区人数（50 人 ÷ 5 区）
+
+_D4 = hashlib.sha256
+
+
+def _home_digest(nid: str) -> int:
+    return int.from_bytes(_D4(f"home-base:{nid}".encode()).digest()[:4], "big")
+
+
+_sorted_ids = sorted(
+    (_home_digest(f"villager_{i:02d}"), f"villager_{i:02d}") for i in range(1, 51)
+)
+_TERRITORY_ORDER = {
+    nid: (rank // _DISTRICT_SIZES) % len(HOME_BASES)
+    for rank, (_digest, nid) in enumerate(_sorted_ids)
+}
 
 
 #: 片区 → 本区站点（eat/rest/work 全部落本人片区——不再全镇挤唯一摊）。
@@ -99,9 +125,9 @@ def home_base_of(npc_id: str) -> tuple[int, int]:
 _TERRITORY_EAT: dict[tuple[int, int], tuple[int, int]] = {
     (28, 42): (30, 46),   # 中心镇集：食摊
     (14, 68): (20, 62),   # 西村：十字路西南口
-    (82, 38): (76, 38),   # 东村：宅前路旁
+    (82, 38): (70, 38),   # 东村：村口路旁（D18：本区吃饭，不再走去镇集）
     (46, 86): (40, 80),   # 南村：农田带路旁
-    (78, 75): (56, 47),   # 北村：十字路口东段（就近镇集）
+    (78, 75): (70, 72),   # 北村：村口（D18：本区吃饭，不再走去镇集）
 }
 _TERRITORY_REST: dict[tuple[int, int], tuple[int, int]] = {
     (28, 42): (28, 41),   # 中心区 → 中心住宅门前
@@ -230,6 +256,22 @@ def _site_anchor_of(action: str, npc_id: str) -> tuple[int, int] | None:
     return None
 
 
+def _chat_target_of(state: WorldState, npc_id: str, *, tick: int) -> str | None:
+    """聊天目标选择（D18 本区化）：同片区人优先，同区无人 → 跨区兜底。
+
+    修前从全镇 50 人哈希挑 1——多人同拍抽中同一目标即全村互吸（聚团主源）。
+    同区候选按 id 序 + 哈希挑（C5）；同区仅自己 → None（无目标）。
+    """
+    others = sorted(eid for eid in state.entities if eid != npc_id)
+    if not others:
+        return None
+    home = home_base_of(npc_id)
+    same = [eid for eid in others if home_base_of(eid) == home]
+    if same:
+        return same[_hash_u32("chat-target", npc_id, tick) % len(same)]
+    return others[_hash_u32("chat-target", npc_id, tick) % len(others)]
+
+
 def _resolve_goal(
     state: WorldState,
     npc_id: str,
@@ -255,12 +297,11 @@ def _resolve_goal(
         assert anchor is not None  # 三动作恒有锚点
         return _scatter_near(anchor, npc_id, pathfinder, seed=seed)
     if action == "request_chat":
-        others = sorted(eid for eid in state.entities if eid != npc_id)
-        if not others:
+        target = _chat_target_of(state, npc_id, tick=tick)
+        if target is None:
             return wander_near(
                 home_base_of(npc_id), npc_id, pathfinder, seed=seed, tick=tick
             )
-        target = others[_hash_u32(npc_id, tick) % len(others)]
         return _scatter_near(
             state.entities[target].pos, npc_id, pathfinder, seed=seed
         )

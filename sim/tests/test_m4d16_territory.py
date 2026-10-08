@@ -149,7 +149,11 @@ class TestHomeBases:
 class TestPlanMoveTerritory:
     def test_eat_uses_territory_anchor(self) -> None:
         """eat 目的地 ∈ 本人片区饭摊邻域（不在 (10,15) 全镇独摊）。"""
-        from sim.npc.sim_exec import _SITE_SCATTER_RADIUS, home_base_of, plan_npc_move
+        from sim.npc.sim_exec import (
+            _SITE_SCATTER_RADIUS,
+            _site_anchor_of,
+            plan_npc_move,
+        )
 
         pf = _town_pf()
         state = _state_at(villager_01=(5, 5))
@@ -158,9 +162,12 @@ class TestPlanMoveTerritory:
         )
         assert event is not None
         goal = cast("tuple[int, int]", event.payload["goal"])  # payload 值 object → 收窄
-        home = home_base_of("villager_01")
-        assert abs(goal[0] - home[0]) + abs(goal[1] - home[1]) <= 12, (
-            "eat 目的地应在本片区邻域（含散点半径）"
+        # 真实语义：eat 目的地 ∈ 本片区**食摊锚**散点邻域（≤散点半径）——
+        # 锚到定籍点的距离由布局表负责（D18 起各区自配食摊，不再跨镇吃饭）。
+        anchor = _site_anchor_of("eat", "villager_01")
+        assert anchor is not None
+        assert abs(goal[0] - anchor[0]) + abs(goal[1] - anchor[1]) <= _SITE_SCATTER_RADIUS, (
+            f"eat 散点 {goal} 越出本区食摊 {anchor} 邻域"
         )
         assert _SITE_SCATTER_RADIUS > 0
 
