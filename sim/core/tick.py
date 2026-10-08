@@ -63,12 +63,23 @@ class TickLoop:
     _perception_hook: PerceptionHook | None = field(default=None, repr=False, compare=False)
     # 批次 B：NPC 决策钩子（每 _NPC_DECISION_INTERVAL tick 一次）
     _npc_hooks: list[NpcRuntimeHook] = field(default_factory=list, repr=False, compare=False)
+    # D17 视觉雾：主角已揭示 chunk 全集（实例账本；重放=按 fog.reveal 事件流
+    # 重建——事件是真相，账本只是实况缓存；不入 state_hash）。
+    fog_seen: set[tuple[int, int]] = field(default_factory=set)
 
     def advance_frame(self, real_dt: float) -> int:
         """喂入真实秒数，推进 0..N 个 tick（catch-up 封顶）。返回推进数。"""
         n = min(self.clock.advance(real_dt), _MAX_TICKS_PER_FRAME)
         for _ in range(n):
             self._tick_once()
+        # D17 视觉雾：本帧主角新踏入块 → 一条 fog.reveal 入流（帧末聚合，
+        # 同帧多格只发一条；账本清空供下帧增量——WS 投影 drain 同源）。
+        if self.context.fog_revealed:
+            from sim.core.events import fog_reveal_event
+
+            chunks = tuple(sorted(self.context.fog_revealed))
+            self.enqueue(fog_reveal_event(tick=self.state.tick, chunks=chunks))
+            self.context.fog_revealed.clear()
         return n
 
     def _tick_once(self) -> None:
@@ -141,6 +152,9 @@ class TickLoop:
             for event in batch:
                 self.enqueue(event)
 
+    #: D17 视觉雾：只揭示**主角**踏入的 chunk（迷雾=陈默观察面，村民不揭示）。
+    _FOG_PROTAGONIST_ID = "chenmo"
+
     def _step_entity_movement(self) -> None:
         """沿路径走一格（批次 D1 行走节拍：非每 tick 一步）。
 
@@ -161,6 +175,14 @@ class TickLoop:
             rest = entity.path[1:]
             moved[entity_id] = entity.model_copy(update={"pos": nxt, "path": rest})
             self.pending_delta_entity_ids.add(entity_id)
+            # D17 视觉雾：主角踏入新 chunk → 帧内增量记 ctx.fog_revealed，
+            # 已揭示全集=实例账本 fog_seen（重放按 fog.reveal 事件流重建——
+            # 事件是真相；村民踏入不揭示，迷雾=陈默观察面）。
+            if entity_id == self._FOG_PROTAGONIST_ID:
+                chunk = (nxt[0] // 16, nxt[1] // 16)
+                if chunk not in self.fog_seen:
+                    self.fog_seen.add(chunk)
+                    self.context.fog_revealed.add(chunk)
         if moved:
             self.state = self.state.model_copy(
                 update={"entities": {**self.state.entities, **moved}}

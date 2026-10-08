@@ -290,11 +290,18 @@ export type components = {
     };
     /** @enum {string} */
     readonly Facing: 'n' | 'e' | 's' | 'w';
+    readonly FogState: {
+      readonly revealed: readonly {
+        readonly cx: number;
+        readonly cy: number;
+      }[];
+    };
     readonly FullSnapshotMessage: {
       readonly actors: readonly components['schemas']['Actor'][];
       /** @enum {string} */
       readonly channel: 'render';
       readonly combat?: components['schemas']['CombatInfo'] | null;
+      readonly fog?: components['schemas']['FogState'];
       readonly lights: readonly components['schemas']['Light'][];
       readonly map: components['schemas']['MapInfo'];
       readonly structures: readonly components['schemas']['Structure'][];
@@ -555,6 +562,7 @@ export type components = {
       readonly actors: readonly components['schemas']['ActorDelta'][];
       /** @enum {string} */
       readonly channel: 'render';
+      readonly fog?: components['schemas']['FogState'];
       readonly lights?: readonly components['schemas']['LightDelta'][];
       readonly plan?: readonly components['schemas']['PlanDelta'][];
       readonly structures?: readonly components['schemas']['StructureDelta'][];

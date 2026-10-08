@@ -64,7 +64,7 @@ logger = structlog.get_logger(__name__)
 #: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
 #: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
 #: PlanDelta 封闭）；1.2 = 批次 E 只读诊断面进协议快照（M6-K2）——登记见 versioning.md §7。
-_PROTOCOL_VERSION = "1.5"
+_PROTOCOL_VERSION = "1.6"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 
 # K4 提案 §2.2/§3.2：五类 C→S 消息在此与 _CHANNEL_FOR **成对**注册
@@ -457,9 +457,27 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
             "tileset": _tileset_name(tile_map),  # C-1：真实图带图集名（快照与 HTTP 同源）
         },
         "weather": weather_payload(loop.state.tick, loop.state.world_seed),
+        # D17 视觉雾：已揭示 chunk 全集（重连/读档重同步；账本空=刚起步常态，
+        # 仍带空表——快照是全量语义，前端不用区分「无键/空键」两态）。
+        "fog": _fog_snapshot(loop),
         "combat": None,
         "time": _time_payload(loop.state.tick),
     }
+
+
+def _fog_revealed_payload(chunks: set[tuple[int, int]]) -> dict[str, Any]:
+    """揭示集 → 帧形（预研稿 §3.3）：{"revealed": [{cx, cy}, …]}，字典序确定（C5）。"""
+    return {
+        "revealed": [
+            {"cx": cx, "cy": cy}
+            for cx, cy in sorted(chunks)
+        ]
+    }
+
+
+def _fog_snapshot(loop: TickLoop) -> dict[str, Any]:
+    """快照雾形：已揭示全集（实例账本 fog_seen；重放=事件流投影同源）。"""
+    return _fog_revealed_payload(getattr(loop, "fog_seen", set()))
 
 
 def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
@@ -508,6 +526,11 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
     ]
     if plan_items:
         payload["plan"] = plan_items
+    # D17 视觉雾：本帧有新揭示才带（可选字段不制造噪声）；账本由 run_world_driver
+    # 帧末 drain（内核 advance_frame 聚合入流后清空前，投影与事件同帧）。
+    fog_chunks: set[tuple[int, int]] = getattr(loop.context, "fog_revealed", set()) or set()
+    if fog_chunks:
+        payload["fog"] = _fog_revealed_payload(fog_chunks)
     return payload
 
 

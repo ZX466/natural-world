@@ -51,6 +51,10 @@ export class WorldScene extends Phaser.Scene {
   private goalMarker: Phaser.GameObjects.Arc | null = null;
   /** D14 头顶气泡 Text 池（键=戏内名；mirror.bubbles 驱动增删） */
   private bubbleTexts = new Map<string, Phaser.GameObjects.Text>();
+  /** D17 视觉雾：未揭示区压暗罩（chunk 粒度矩形；揭示集变化才重绘） */
+  private fogOverlay: Phaser.GameObjects.Graphics | null = null;
+  /** 雾罩脏标记：mirror.fog 引用计数变化才重绘（揭示只增——size 即版本） */
+  private lastFogSize = -1;
 
   constructor(mirror: WorldMirror) {
     super({ key: 'world' });
@@ -80,6 +84,8 @@ export class WorldScene extends Phaser.Scene {
     // 批次 D7：雨层（短雨丝 Graphics；雨落动画在 update 里逐帧推进）
     this.rainLayer = this.add.graphics().setScrollFactor(0).setDepth(99);
     this.goalMarker = this.add.circle(0, 0, 3, 0xffd75e).setVisible(false).setDepth(50);
+    // D17 视觉雾罩：遮地形（depth 5 < 实体 10）——未揭示区压暗，踏入即揭。
+    this.fogOverlay = this.add.graphics().setDepth(5);
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.handlePointer(pointer);
@@ -179,6 +185,28 @@ export class WorldScene extends Phaser.Scene {
     this.syncOverlay();
     this.syncRain(delta);
     this.syncBubbles(time);
+    this.syncFog();
+  }
+
+  /** D17 视觉雾：未揭示 chunk 压暗（揭示只增→size 变化才重绘，静态层零每帧成本）。 */
+  private syncFog(): void {
+    const g = this.fogOverlay;
+    const map = this.mirror.map;
+    if (g === null || map === null) return;
+    if (this.mirror.fog.size === this.lastFogSize) return;
+    this.lastFogSize = this.mirror.fog.size;
+    g.clear();
+    const CHUNK = 16;
+    const totalChunksX = Math.ceil(map.w / CHUNK);
+    const totalChunksY = Math.ceil(map.h / CHUNK);
+    if (this.mirror.fog.size === 0 && totalChunksX === 0) return;
+    g.fillStyle(0x06080f, 0.82);
+    for (let cy = 0; cy < totalChunksY; cy += 1) {
+      for (let cx = 0; cx < totalChunksX; cx += 1) {
+        if (this.mirror.fog.has(`${cx},${cy}`)) continue;
+        g.fillRect(cx * CHUNK * TILE, cy * CHUNK * TILE, CHUNK * TILE, CHUNK * TILE);
+      }
+    }
   }
 
   /** D14 头顶气泡：mirror.bubbles（name→text/到期）→ Text 池增删/跟随。 */

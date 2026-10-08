@@ -342,4 +342,5 @@ class TestRegression:
             "v", "ws_seq", "channel", "type",
             "map", "lights", "actors", "structures", "weather", "combat",
             "time",  # M7（1.3）
+            "fog",  # D17（1.6）：视觉雾全集（可选键）
         }

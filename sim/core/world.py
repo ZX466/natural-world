@@ -55,12 +55,18 @@ class WorldState(BaseModel):
 
 
 class TickContext(BaseModel):
-    """tick 内共享上下文：时间尺开关 + RNG 抽签状态缓存（不入快照）。"""
+    """tick 内共享上下文：时间尺开关 + RNG 抽签状态缓存（不入快照）。
+
+    fog_revealed（D17 视觉雾）：本帧主角新踏入的 chunk 账本（WS 投影 drain
+    后清空）——迷雾是观察者投影不进世界态（裁 40-4：事件即真相），账本只
+    服务「事件已入流后 delta/snapshot 投影何时带 fog 键」。
+    """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     combat_active: bool = False
     rng_cache: dict[str, Any] = Field(default_factory=dict)
+    fog_revealed: set = Field(default_factory=set)
 
     def with_combat(self, active: bool) -> TickContext:
         return self.model_copy(update={"combat_active": active})
@@ -191,6 +197,13 @@ def _apply_npc_monologue(state: WorldState, event: WorldEvent, ctx: TickContext)
     return ApplyResult(state=state)
 
 
+def _apply_fog_reveal(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    """迷雾揭示折叠：no-op 状态层（裁 40-4：迷雾是事件即真相的观察者投影，
+    不进 state_hash；揭示集由投影侧 fold_fog_reveal 按事件流重建——同
+    _apply_npc_act 口径：注册 handler 即可重放，状态零变更）。"""
+    return ApplyResult(state=state)
+
+
 def _apply_fire_event(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
     """FIRE_*（批次 D5 接线）：火灾记录进事件日志，状态层 no-op。
 
@@ -218,5 +231,6 @@ def build_default_bus() -> EventBus:
     bus.register(EventKind.NPC_ACT, _apply_npc_act)
     bus.register(EventKind.NPC_MONOLOGUE, _apply_npc_monologue)
     bus.register(EventKind.FIRE_IGNITED, _apply_fire_event)
+    bus.register(EventKind.FOG_REVEAL, _apply_fog_reveal)
     bus.register(EventKind.FIRE_EXTINGUISHED, _apply_fire_event)
     return bus

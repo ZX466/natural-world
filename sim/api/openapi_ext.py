@@ -163,6 +163,27 @@ _SUB_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         "additionalProperties": False,
     },
+    "FogState": {
+        "type": "object",
+        "required": ["revealed"],
+        "properties": {
+            # D17（1.6）：本帧新揭示（delta）/已揭示全集（snapshot）的 chunk
+            # 坐标——整数对，零枚举零内部数值（出戏边界预核 D-10）。
+            "revealed": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["cx", "cy"],
+                    "properties": {
+                        "cx": {"type": "integer"},
+                        "cy": {"type": "integer"},
+                    },
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "additionalProperties": False,
+    },
     "Weather": {
         "type": "object",
         "required": ["visual", "ambient_light"],
@@ -342,6 +363,8 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
             "combat": _oneof_null({"$ref": "#/components/schemas/CombatInfo"}),
             # M7（1.3）：time 权威帧（R3）——快照必带
             "time": {"$ref": "#/components/schemas/TimeInfo"},
+            # D17（1.6）：视觉雾快照全集（重连/读档重同步；空集=刚起步常态）
+            "fog": {"$ref": "#/components/schemas/FogState"},
         },
         # 快照口径：combat optional（可为 null=无战斗）
         ["map", "lights", "actors", "structures", "weather", "time"],
@@ -367,6 +390,8 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
             "weather": {"$ref": "#/components/schemas/Weather"},
             # M7（1.3）：time 权威帧（R3）——delta 必带（每帧重同步）
             "time": {"$ref": "#/components/schemas/TimeInfo"},
+            # D17（1.6）：视觉雾增量（**可选**——只在本帧有新揭示时出现）
+            "fog": {"$ref": "#/components/schemas/FogState"},
         },
         ["actors", "time"],
     ),

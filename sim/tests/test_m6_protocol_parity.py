@@ -35,7 +35,19 @@ SNAPSHOT = REPO_ROOT / "shared" / "openapi.json"
 #: ② `state_delta` 字段面白名单（render 通道的可见世界变化载体）。
 #: **闭合**=不在表里的键不许出现（防「顺手加个 fauna[]/power[]」）。
 STATE_DELTA_WHITELIST: frozenset[str] = frozenset(
-    {"v", "ws_seq", "channel", "type", "actors", "lights", "structures", "plan", "weather", "time"}
+    {
+        "v",
+        "ws_seq",
+        "channel",
+        "type",
+        "actors",
+        "lights",
+        "structures",
+        "plan",
+        "weather",
+        "time",
+        "fog",  # D17（1.6）：视觉雾增量（迷雾 B 案落地，例外转正）
+    }
 )
 
 #: **预登记例外**：迷雾视觉 B 案要给 `state_delta` 加**可选** `fog={revealed:[{cx,cy}]}`
@@ -84,7 +96,11 @@ SYSTEMATIC_LIVE_ONLY: dict[tuple[str, str], dict[str, str]] = {}
 
 #: 结构性 live-only schemas（FastAPI 自动校验模型，快照按体例不收——裁 42-2 已裁「422 不进快照
 #: 之外的情形」不再新增；这两张是 FastAPI 的**自动**模型，不归协议面管）。
-SYSTEMATIC_LIVE_ONLY_SCHEMAS: frozenset[str] = frozenset({"HTTPValidationError", "ValidationError"})
+#: D17（1.6）：FogState 是 openapi_ext 注入的 WS 消面子 schema（live 侧经
+#: ext.install 注入、快照手工维护——两处同形，parity 白名单登记其存在性差异）。
+SYSTEMATIC_LIVE_ONLY_SCHEMAS: frozenset[str] = frozenset(
+    {"HTTPValidationError", "ValidationError", "FogState"}
+)
 
 #: 结构性 snapshot-only schemas（手工补的 WS 信封，live 无对应——`WsEnvelope` 是刻意保留的文档面）。
 SYSTEMATIC_SNAPSHOT_ONLY_SCHEMAS: frozenset[str] = frozenset({"WsEnvelope"})
@@ -200,18 +216,19 @@ class TestStateDeltaFieldSurface:
         schema = snap["components"]["schemas"]["StateDeltaMessage"]
         assert schema.get("additionalProperties") is False, schema.get("additionalProperties")
 
-    def test_reserved_fog_not_present_yet(
-        self, specs: tuple[dict[str, Any], dict[str, Any]]
-    ) -> None:
-        """**例外登记的现状**：`fog` 仍是「预登记但未落地」。
+    def test_fog_slot_shape(self, specs: tuple[dict[str, Any], dict[str, Any]]) -> None:
+        """**D17（1.6）B 案已落地**：`fog` 槽位形状封闭且引用 FogState。
 
-        B 案落地时本钉会红（提示把 `STATE_DELTA_RESERVED_OPTIONAL` 的例外转正），
-        B 案裁掉时只需删 `STATE_DELTA_RESERVED_OPTIONAL` 里的 `fog`——两条路都有提示。
+        （原「预登记未落地」现状钉在 B 案落地时按其设计转正为正向钉——
+        形状对齐 openapi_ext 与 shared/openapi.json 两处同源。）
         """
         _live, snap = specs
-        props = set(snap["components"]["schemas"]["StateDeltaMessage"]["properties"])
-        if "fog" in STATE_DELTA_RESERVED_OPTIONAL:
-            assert "fog" not in props, (
-                "state_delta 已含 fog——迷雾视觉 B 案落地了：请把 "
-                "STATE_DELTA_RESERVED_OPTIONAL 的例外转正进白名单并更新本钉说明"
-            )
+        props = snap["components"]["schemas"]["StateDeltaMessage"]["properties"]
+        assert "fog" in props, "B 案已落地，fog 槽位必须在"
+        assert props["fog"]["$ref"] == "#/components/schemas/FogState"
+        fog = snap["components"]["schemas"]["FogState"]
+        assert fog["additionalProperties"] is False
+        assert fog["required"] == ["revealed"]
+        item = fog["properties"]["revealed"]["items"]
+        assert item["required"] == ["cx", "cy"]
+        assert item["additionalProperties"] is False

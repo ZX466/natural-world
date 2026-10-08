@@ -270,6 +270,7 @@ class TestOutOfCharacterBoundary:
             "weather",
             "combat",
             "time",  # M7（1.3）：时钟权威帧（R3）——安全评审随本 CR：五键全为戏内事实
+            "fog",  # D17（1.6）：视觉雾快照全集（chunk 坐标整数对，戏内观察面事实）
         }
         for actor in payload["actors"]:
             # D10（1.4）：`name` 可选（戏内显示名，装配了映射才带；entity_id 仍禁出）

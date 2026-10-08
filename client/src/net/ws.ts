@@ -45,7 +45,7 @@ function useControlState(speed: number, paused: boolean): void {
  * `sim/tests/test_protocol_version.py` 的跨树钉锁死
  * （本文件是**第二落点**，真相源在 ws.py；改一处必改另一处）。
  */
-const PROTOCOL_VERSION = '1.5';
+const PROTOCOL_VERSION = '1.6';
 
 export type WsStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
 
@@ -133,6 +133,7 @@ export class WsClient {
         if (msg.map) {
           // collision/ground 静态层走 HTTP（worldApi.ts），这里只消费 time
         }
+        if (msg.fog) this.mirror.revealFog(msg.fog.revealed); // D17 快照全集
         if (msg.time) worldClock.apply(msg.time); // M7-R3：时钟权威帧
         this.cb.onSnapshot(msg);
         break;
@@ -145,6 +146,7 @@ export class WsClient {
             ambientLight: msg.weather.ambient_light,
           });
         }
+        if (msg.fog) this.mirror.revealFog(msg.fog.revealed); // D17 增量揭示
         if (msg.time) worldClock.apply(msg.time); // M7-R3
         this.cb.onDelta(msg);
         break;

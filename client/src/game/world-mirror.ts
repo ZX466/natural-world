@@ -56,6 +56,13 @@ export class WorldMirror {
   weather = { visual: 'clear', ambientLight: 1.0 };
   /** D14 头顶气泡：{戏内名: {text, 到期时刻 ms}}（bubble 独白按 name 落） */
   bubbles = new Map<string, { text: string; expiresAt: number }>();
+  /** D17 视觉雾：已揭示 chunk 全集（'cx,cy' 键；快照=全集重置，delta=并集） */
+  fog = new Set<string>();
+
+  /** 揭示块并集（delta 增量 / 快照全量共用；重连重置走 clear） */
+  revealFog(chunks: readonly { cx: number; cy: number }[]): void {
+    for (const c of chunks) this.fog.add(`${c.cx},${c.cy}`);
+  }
 
   /** 记一条头顶气泡（D14；durationMs 由调用方给，WorldScene 逐帧清理过期） */
   setBubble(name: string, text: string, durationMs: number, nowMs: number): void {
@@ -78,8 +85,12 @@ export class WorldMirror {
     actors: readonly Actor[],
     lights: readonly Light[],
     weather?: { visual: string; ambientLight: number },
+    fog?: { revealed: readonly { cx: number; cy: number }[] },
   ): void {
     if (weather) this.weather = { ...weather };
+    // D17：快照雾=全量重置（重连/读档重同步；无 fog 键=服务端旧版/未揭示→清空）
+    this.fog.clear();
+    if (fog) this.revealFog(fog.revealed);
     this.actors.clear();
     for (const a of actors) {
       this.actors.set(a.rtoken, { ...a });
@@ -142,6 +153,7 @@ export class WorldMirror {
   reset(): void {
     this.actors.clear();
     this.lights.clear();
+    this.fog.clear(); // D17：重连重置雾（快照随后重灌全集）
     this.protagonist = null;
     this.resetCount += 1;
   }
