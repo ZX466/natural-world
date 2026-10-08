@@ -22,8 +22,12 @@ from typing import Any
 
 import pytest
 
-import sim.api.openapi_ext as ext
 from sim.api.main import app
+
+# 注意：勿在此顶层 import sim.api.openapi_ext——它顶层 `from sim.api.main
+# import app`，而 main 底部才 from openapi_ext import install；测试先 import
+# ext 会在模块半初始化态收循环 ImportError（生产入口 main 先启动无恙）。
+# 需要 install() 时在 main 已加载后函数内动态取（见 _live）。
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SNAPSHOT = REPO_ROOT / "shared" / "openapi.json"
@@ -42,7 +46,9 @@ STATE_DELTA_RESERVED_OPTIONAL: frozenset[str] = frozenset({"fog"})
 
 
 def _live() -> dict[str, Any]:
-    """**线上真实** spec：必须先跑 `openapi_ext.install()`（main.py:170 同一入口）。"""
+    """**线上真实** spec：必须先跑 `openapi_ext.install()`（main.py 同一入口）。"""
+    import sim.api.openapi_ext as ext  # main 已加载完毕，函数内 import 安全
+
     ext.install()
     return app.openapi()
 
