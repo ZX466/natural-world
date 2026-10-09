@@ -62,6 +62,19 @@ def retell_template(speaker_name: str, content: str) -> str:
     return f"听{speaker_name}说，{content}"
 
 
+#: E3 谋生：work 到站计酬（一次 5 文；冷却 [3600, 10800) tick = 60~180 游戏分
+#: ——防同拍连刷；工钱是戏内事实，数额可出站）。
+_WAGE_AMOUNT = 5
+_WAGE_COOLDOWN_MIN_TICKS = 3600
+_WAGE_COOLDOWN_SPAN_TICKS = 7200
+
+
+def _wage_cooldown_ticks(npc_id: str) -> int:
+    """npc_id → 计酬冷却（tick）：[MIN, MIN+SPAN) 均匀散布（C5 哈希）。"""
+    span = _hash_u32("wage-cooldown", npc_id) % _WAGE_COOLDOWN_SPAN_TICKS
+    return _WAGE_COOLDOWN_MIN_TICKS + span
+
+
 def _cooldown_ticks(npc_id: str) -> int:
     """npc_id → 冷却时长（tick）：[MIN, MIN+SPAN) 均匀散布（sha256 截断，C5）。"""
     digest = hashlib.sha256(f"monologue-cooldown:{npc_id}".encode()).digest()
@@ -469,6 +482,8 @@ def npc_events_for_tick(
     display_name_of: Mapping[str, str] | None = None,
     chat_ledger: object | None = None,
     retell_last: dict[str, int] | None = None,
+    wage_last: dict[str, int] | None = None,
+    coin_ledger: object | None = None,
 ) -> list[WorldEvent]:
     """一个决策节拍的事件批次：NpcRuntime.tick → NPC_ACT 批次 + MOVE 交错。
 
@@ -531,6 +546,30 @@ def npc_events_for_tick(
 
                     p = profiles[npc_id]
                     profiles[npc_id] = replace(p, needs=apply_remedy(p.needs, action))
+            # E3 谋生：work 到站计酬（到站才发——没到田里没有工钱，D3 口径）。
+            if (
+                action == "work"
+                and anchor is not None
+                and entity is not None
+                and not entity.path
+                and wage_last is not None
+                and coin_ledger is not None
+            ):
+                dist = abs(entity.pos[0] - anchor[0]) + abs(entity.pos[1] - anchor[1])
+                if dist <= _SITE_SCATTER_RADIUS:
+                    last_w = wage_last.get(npc_id, -(_WAGE_COOLDOWN_MIN_TICKS + _WAGE_COOLDOWN_SPAN_TICKS))
+                    if tick - last_w >= _wage_cooldown_ticks(npc_id):
+                        wage_last[npc_id] = tick
+                        from sim.core.events import coin_grant_event
+                        from sim.world.economy import CoinLedger
+
+                        assert isinstance(coin_ledger, CoinLedger)
+                        coin_ledger.apply_grant(npc_id, _WAGE_AMOUNT, tick=tick)
+                        events.append(
+                            coin_grant_event(
+                                tick=tick, owner_id=npc_id, delta=_WAGE_AMOUNT, note="wage:work"
+                            )
+                        )
         # 批次 E1：request_chat 到站开口——UtilityDecision.target 恒空（D18 的
         # 目标只算进目的地解析），开口判定用 _chat_target_of 现算（与目的地
         # 解析同源，C5 纯函数）；冷却账本由调用方持有（同 monologue_last 模式）。

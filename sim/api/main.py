@@ -241,6 +241,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     chat_ledger = ChatLedger()
     app.state.chat_ledger = chat_ledger
     chat_last: dict[str, int] = {}
+    # 批次 E3：全镇余额账本（村民工钱 + 陈默买卖共享一份账）。
+    from sim.world.economy import CoinLedger
+
+    coin_ledger = CoinLedger()
+    app.state.coin_ledger = coin_ledger
+    wage_last: dict[str, int] = {}
 
     def _npc_tick_hook(state: Any, tick: int) -> list[Any] | None:
         batch = npc_events_for_tick(
@@ -254,6 +260,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             chat_last=chat_last,
             display_name_of=_display_names,
             chat_ledger=chat_ledger,
+            wage_last=wage_last,
+            coin_ledger=coin_ledger,
         )
         # 批次 D14：npc.act → 动作姿势账本（快照/delta 的 anim 字段供数）。
         from sim.api.ws import set_action_anim
@@ -344,6 +352,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         profile_provider=_active_profile_snapshot_provider(),
         perception_provider=_chenmo_perception,
         display_name_of=_display_names.get,  # 批次 E1：talk_to 台词用戏内名
+        economy_provider=lambda: (coin_ledger, loop.state.world_seed),  # 批次 E3
     )
     app.state.chenmo_driver = driver
     set_impulse_trigger(driver.request_decision)
