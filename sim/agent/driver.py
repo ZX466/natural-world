@@ -52,6 +52,7 @@ class ChenmoDriver:
         llm: LlmClient,
         profile_provider: Callable[[], ProfileSnapshot | None],
         perception_provider: Callable[[], str] | None = None,
+        display_name_of: Callable[[str], str | None] | None = None,
     ) -> None:
         self._anchor = anchor
         self._llm = llm
@@ -59,6 +60,9 @@ class ChenmoDriver:
         # 批次 D6：实况感知投影供数（main.py 装配：chenmo 感知帧 → narrated()）。
         # None = 无感知面（测试/降级，[处境] 段省略——既有行为）。
         self._perception_provider = perception_provider
+        # 批次 E1：戏内名映射注入（entity_id → 戏内名；分层红线：agent 域禁
+        # import sim.api，名字映射由 main.py 装配传入 _display_names.get）。
+        self._display_name_of = display_name_of or (lambda _eid: None)
         self._gate = IntentGate()
         self._pending: deque[Intent] = deque()
         # impulse 置位（ws handler 在事件循环线程调，driver 循环也在事件循环——
@@ -169,6 +173,10 @@ class ChenmoDriver:
                 # 寻路失败 → 意图不整条丢弃：落 thought 独白（心里想去，脚下去不了
                 # —— 模型给的格子可能在屋顶/树墙内）。真实交付失败由下一轮重规划。
                 logger.info("chenmo.move_unreachable_fallback", goal=str(intent.target_pos))
+            elif intent.action == "talk_to" and intent.target_id is not None:
+                self._issue_talk(loop, pathfinder, actor_id, intent)
+            elif intent.action == "investigate" and intent.target_pos is not None:
+                self._issue_investigate(loop, pathfinder, actor_id, intent.target_pos)
             from sim.core.events import npc_monologue_event
 
             loop.enqueue(
@@ -181,6 +189,57 @@ class ChenmoDriver:
             )
             executed += 1
         return executed
+
+    def _issue_talk(
+        self, loop: TickLoop, pathfinder: object, actor_id: str, intent: Intent
+    ) -> None:
+        """talk_to：走向目标（寻路可达才发 MOVE）+ npc.chat 事件（批次 E1）。
+
+        台词走模板池（C5 确定性）；对方听得见 → chat 是外在可观察面。
+        """
+        from sim.agent.dialogue import template_line
+        from sim.core.events import npc_chat_event
+
+        state = loop.state
+        target = state.entities.get(intent.target_id)
+        actor = state.entities.get(actor_id)
+        if target is None or actor is None:
+            return
+        # 走向目标：曼哈顿 > 2 格才需要 MOVE（贴脸直接说）
+        dx, dy = target.pos[0] - actor.pos[0], target.pos[1] - actor.pos[1]
+        if abs(dx) + abs(dy) > 2:
+            from sim.world.pathfinding import Pathfinder
+
+            if isinstance(pathfinder, Pathfinder):
+                try:
+                    path = pathfinder.find(actor.pos, target.pos)
+                    loop.issue_move(actor_id, list(path))
+                except ValueError:
+                    pass  # 不可达：原地喊话（fail-soft，聊天仍发生）
+        listener_name = self._display_name_of(intent.target_id) or intent.target_id
+        line = template_line(actor_id, listener_name, state.tick)
+        loop.enqueue(
+            npc_chat_event(
+                tick=state.tick, npc_id=actor_id, to_id=intent.target_id, line=line
+            )
+        )
+
+    def _issue_investigate(
+        self, loop: TickLoop, pathfinder: object, actor_id: str, target_pos: tuple[int, int]
+    ) -> None:
+        """investigate：走过去看一眼（位移即落地；观察产物由感知层接管）。"""
+        from sim.world.pathfinding import Pathfinder
+
+        if not isinstance(pathfinder, Pathfinder):
+            return
+        actor = loop.state.entities.get(actor_id)
+        if actor is None:
+            return
+        try:
+            path = pathfinder.find(actor.pos, target_pos)
+            loop.issue_move(actor_id, list(path))
+        except ValueError:
+            pass  # 不可达：原地张望（独白仍出——fail-soft 同 move_to 口径）
 
     @staticmethod
     def _issue_move(
