@@ -15,9 +15,10 @@ wander 零票——本执行面让**全部动作族**都产生走动，镇子活
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from dataclasses import replace
 
-from sim.core.events import WorldEvent, move_event
+from sim.core.events import WorldEvent, move_event, npc_chat_event
 from sim.core.world import WorldState
 from sim.world.pathfinding import Pathfinder
 
@@ -38,6 +39,17 @@ _MONOLOGUE_COOLDOWN_SPAN_TICKS = 7200
 #: D10 每决策节拍全镇 bubble 出镇上限（保险丝：冷却散布仍有概率撞拍；
 #: 50 人同拍开口最多放行 2 条，其余静默丢——表现面节流，非世界真相）。
 _MONOLOGUE_QUOTA_PER_BEAT = 2
+
+#: E1 聊天冷却（D10 同手法：按 NPC 散布防齐射）。[1800, 7200) tick =
+#: 30~120 游戏分——同 NPC 两次面对面聊天最小间隔。
+_CHAT_COOLDOWN_MIN_TICKS = 1800
+_CHAT_COOLDOWN_SPAN_TICKS = 5400
+
+
+def _chat_cooldown_ticks(npc_id: str) -> int:
+    """npc_id → 聊天冷却时长（tick）：[MIN, MIN+SPAN) 均匀散布（C5 哈希）。"""
+    span = _hash_u32("chat-cooldown", npc_id) % _CHAT_COOLDOWN_SPAN_TICKS
+    return _CHAT_COOLDOWN_MIN_TICKS + span
 
 
 def _cooldown_ticks(npc_id: str) -> int:
@@ -443,6 +455,8 @@ def npc_events_for_tick(
     seed: int,
     monologue_last: dict[str, int] | None = None,
     monologue_quota: dict[int, int] | None = None,
+    chat_last: dict[str, int] | None = None,
+    display_name_of: Mapping[str, str] | None = None,
 ) -> list[WorldEvent]:
     """一个决策节拍的事件批次：NpcRuntime.tick → NPC_ACT 批次 + MOVE 交错。
 
@@ -505,6 +519,34 @@ def npc_events_for_tick(
 
                     p = profiles[npc_id]
                     profiles[npc_id] = replace(p, needs=apply_remedy(p.needs, action))
+        # 批次 E1：request_chat 到站开口——UtilityDecision.target 恒空（D18 的
+        # 目标只算进目的地解析），开口判定用 _chat_target_of 现算（与目的地
+        # 解析同源，C5 纯函数）；冷却账本由调用方持有（同 monologue_last 模式）。
+        if (
+            action == "request_chat"
+            and entity is not None
+            and not entity.path
+            and chat_last is not None
+        ):
+            target_id = _chat_target_of(state, npc_id, tick=tick)
+            if target_id is not None:
+                tgt = state.entities[target_id]
+                dist = abs(entity.pos[0] - tgt.pos[0]) + abs(entity.pos[1] - tgt.pos[1])
+                if dist <= 2:  # 贴身（散点半径内）才算到站
+                    last = chat_last.get(
+                        npc_id, -(_CHAT_COOLDOWN_MIN_TICKS + _CHAT_COOLDOWN_SPAN_TICKS)
+                    )
+                    if tick - last >= _chat_cooldown_ticks(npc_id):
+                        chat_last[npc_id] = tick
+                        from sim.agent.dialogue import template_line
+
+                        listener = (display_name_of or {}).get(target_id, target_id)
+                        line = template_line(npc_id, listener, tick)
+                        events.append(
+                            npc_chat_event(
+                                tick=tick, npc_id=npc_id, to_id=target_id, line=line
+                            )
+                        )
         mv = plan_npc_move(
             state,
             npc_id,
