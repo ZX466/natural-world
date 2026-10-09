@@ -28,9 +28,22 @@ from sim.npc.hidden import HiddenProfile, hidden_leak_scan
 
 logger = structlog.get_logger(__name__)
 
-#: M1 支持动作白名单外的动作（build/demolish 等无引擎支撑）一律拒绝。
+#: 支持动作白名单（批次 E 收口：buy/sell/build 执行面已就位——E3 买卖、
+#: E4 建造；demolish/use 仍无引擎支撑，一律拒绝）。
 M1_SUPPORTED_ACTIONS = frozenset(
-    {"move_to", "wait", "talk_to", "take", "give", "flee", "investigate", "attack"}
+    {
+        "move_to",
+        "wait",
+        "talk_to",
+        "take",
+        "give",
+        "flee",
+        "investigate",
+        "attack",
+        "buy",
+        "sell",
+        "build",
+    }
 )
 
 #: talk_to / take 等目标动作的目标最大距离（M1 简化：视觉半径内语义）。
@@ -80,7 +93,15 @@ class IntentGate:
             intent.target_id is None and intent.target_pos is None
         ):
             return GateVerdict(False, "missing_target")
-        if intent.target_id is not None and intent.target_id not in state.entities:
+        # buy/sell：target_id 是**货名**（herb/salve/meal）非实体——不查实体表
+        # （E3 价目表校验在执行面 buy_price/_GOOD_INDEX；闸门只查缺省）。
+        if intent.action in ("buy", "sell") and intent.target_id is None:
+            return GateVerdict(False, "missing_target")
+        if (
+            intent.action not in ("buy", "sell")
+            and intent.target_id is not None
+            and intent.target_id not in state.entities
+        ):
             return GateVerdict(False, "unknown_target")
         if intent.target_pos is not None:
             x, y = intent.target_pos

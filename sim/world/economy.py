@@ -47,6 +47,10 @@ class CoinLedger:
     def balance_of(self, owner: str) -> int:
         return self._balances.get(owner, 0)
 
+    def reset(self) -> None:
+        """清空全部余额（读档=分叉：账本是本分支投影，分叉即失效——review I2）。"""
+        self._balances.clear()
+
     def apply_grant(self, owner: str, delta: int, *, tick: int) -> bool:
         """入账/出账（tick 供将来记账扩展；当前纯余额）。False=余额不足拒绝。"""
         current = self._balances.get(owner, 0)

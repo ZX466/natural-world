@@ -203,14 +203,18 @@ class ChenmoDriver:
                 self._issue_flee(loop, pathfinder, actor_id, intent.target_id)
             from sim.core.events import npc_monologue_event
 
-            loop.enqueue(
-                npc_monologue_event(
-                    tick=loop.state.tick + 1,
-                    npc_id=actor_id,
-                    form="thought",
-                    content=intent.reason,
+            # 批次 E（review M3）：buy/sell/build/attack 的 handler 已出**结果**
+            # 独白（买了/没买成/伤了/杀了）——尾部 reason（动机）独白对这四类
+            # 不重发（一意图两条 thought 是面板噪声）；其余动作 reason 即独白。
+            if intent.action not in ("buy", "sell", "build", "attack"):
+                loop.enqueue(
+                    npc_monologue_event(
+                        tick=loop.state.tick + 1,
+                        npc_id=actor_id,
+                        form="thought",
+                        content=intent.reason,
+                    )
                 )
-            )
             executed += 1
         # 战斗尺过期退出（E6：意图队列清空后检查——窗口过完恢复原倍率）。
         if self._combat_until_tick is not None and loop.state.tick >= self._combat_until_tick:
@@ -302,6 +306,7 @@ class ChenmoDriver:
         from sim.core.events import coin_grant_event, npc_monologue_event
         from sim.world.economy import CoinLedger
 
+        assert self._build is not None  # 调用分支已保证（pyright 收窄）
         build_runtime = self._build()
         pos = intent.target_pos
         assert pos is not None
@@ -333,7 +338,6 @@ class ChenmoDriver:
                 )
             )
             return
-        ledger.apply_grant(actor_id, -0, tick=tick)  # no-op（保持账本 tick 语义）
         loop.enqueue(
             coin_grant_event(tick=tick, owner_id=actor_id, delta=-cost, note="build:shed")
         )

@@ -238,13 +238,38 @@ def _apply_structure_event(state: WorldState, event: WorldEvent, ctx: TickContex
 
     结构投影（structures 表）与占格（tile_changed）由 NpcStore 投影缝 /
     BuildRuntime 实况侧承担；世界态不含结构（同火场口径——事件材料足以
-    重放观察面）。no-op ⇒ 重放安全（C5）。
+    重放观察面）。no-op ⇒ 重放安全（C5）。schema 校验随 kind 分派（M1 修复：
+    畸形 payload 拒绝而非静默折算——同 chat/coin 口径）。
     """
+    from sim.core.events import (
+        StructureCheckpointPayload,
+        StructureCollapsedPayload,
+        StructureCompletedPayload,
+        StructureRemovedPayload,
+        StructureStartedPayload,
+    )
+
+    _STRUCTURE_VALIDATORS = {
+        EventKind.STRUCTURE_STARTED: StructureStartedPayload,
+        EventKind.STRUCTURE_CHECKPOINT: StructureCheckpointPayload,
+        EventKind.STRUCTURE_COMPLETED: StructureCompletedPayload,
+        EventKind.STRUCTURE_COLLAPSED: StructureCollapsedPayload,
+        EventKind.STRUCTURE_REMOVED: StructureRemovedPayload,
+    }
+    model = _STRUCTURE_VALIDATORS.get(event.event_type)
+    if model is not None:
+        model.model_validate(event.payload)
     return ApplyResult(state=state)
 
 
 def _apply_material_event(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
-    """MATERIAL_*（E4 前置一并注册——事件族同源；余额投影归 NpcStore）。"""
+    """MATERIAL_*（E4 前置一并注册——事件族同源；余额投影归 NpcStore）。
+
+    schema 校验（M1 修复）：MaterialMovedPayload 显式验证（畸形拒绝）。
+    """
+    from sim.core.events import MaterialMovedPayload
+
+    MaterialMovedPayload.model_validate(event.payload)
     return ApplyResult(state=state)
 
 

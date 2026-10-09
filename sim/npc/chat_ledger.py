@@ -60,3 +60,8 @@ class ChatLedger:
 
     def __len__(self) -> int:
         return len(self._relations)
+
+    def reset(self) -> None:
+        """清空关系与记忆（读档=分叉：账本是本分支投影，分叉即失效——review I2）。"""
+        self._relations.clear()
+        self._memories.clear()

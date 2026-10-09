@@ -83,8 +83,9 @@ class TestGatePreCheck:
         assert v.accepted
 
     def test_unsupported_action_rejected(self):
-        """M1 无引擎支撑的动作（build）拒绝。"""
-        intent = Intent(action="build", target_pos=(7, 7), reason="盖个棚子")
+        """无引擎支撑的动作（demolish）拒绝——批次 E 收口后 build/buy/sell
+        已有执行面进白名单，本钉仍须指向一个真无引擎的动作。"""
+        intent = Intent(action="demolish", target_pos=(7, 7), reason="拆了它")
         v = IntentGate().validate(intent, STATE, "chenmo")
         assert not v.accepted and v.reason == "unsupported_action"
 
@@ -121,7 +122,7 @@ class TestHallucinationIsolation:
         state = make_state({"chenmo": (5, 5), "merchant": (8, 5)})
         snapshot_before = state.state_hash()
         bad_intents = [
-            Intent(action="build", target_pos=(7, 7), reason="x"),
+            Intent(action="demolish", target_pos=(7, 7), reason="x"),
             Intent(action="talk_to", target_id="ghost", reason="x"),
             Intent(action="move_to", target_pos=(-1, -1), reason="x"),
         ]

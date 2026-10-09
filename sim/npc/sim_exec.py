@@ -44,6 +44,8 @@ _MONOLOGUE_QUOTA_PER_BEAT = 2
 #: 30~120 游戏分——同 NPC 两次面对面聊天最小间隔。
 _CHAT_COOLDOWN_MIN_TICKS = 1800
 _CHAT_COOLDOWN_SPAN_TICKS = 5400
+#: 到站开口半径（曼哈顿；review I1：开口对象=此邻域内最近者）。
+_CHAT_ARRIVAL_RADIUS = 2
 
 
 def _chat_cooldown_ticks(npc_id: str) -> int:
@@ -305,6 +307,24 @@ def _chat_target_of(state: WorldState, npc_id: str, *, tick: int) -> str | None:
     if same:
         return same[_hash_u32("chat-target", npc_id, tick) % len(same)]
     return others[_hash_u32("chat-target", npc_id, tick) % len(others)]
+
+
+def _nearest_other(entity: object, state: WorldState) -> str | None:
+    """到站邻域内最近的其他人（review I1：开口对象与寻路目的地脱钩——
+    「走到了谁面前就跟谁说」）。曼哈顿 ≤2 内按距离取最近；并列按 id 序
+    （C5 确定性）；无人在邻域 → None（走了全程没人可说，静默是常态路径）。
+    """
+    nearest: str | None = None
+    nearest_dist = _CHAT_ARRIVAL_RADIUS + 1
+    eid_self = getattr(entity, "entity_id", "")
+    for eid, other in sorted(state.entities.items()):
+        if eid == eid_self:
+            continue
+        dist = abs(other.pos[0] - entity.pos[0]) + abs(other.pos[1] - entity.pos[1])
+        if dist <= _CHAT_ARRIVAL_RADIUS and dist < nearest_dist:
+            nearest = eid
+            nearest_dist = dist
+    return nearest
 
 
 def _resolve_goal(
@@ -571,66 +591,64 @@ def npc_events_for_tick(
                                 tick=tick, owner_id=npc_id, delta=_WAGE_AMOUNT, note="wage:work"
                             )
                         )
-        # 批次 E1：request_chat 到站开口——UtilityDecision.target 恒空（D18 的
-        # 目标只算进目的地解析），开口判定用 _chat_target_of 现算（与目的地
-        # 解析同源，C5 纯函数）；冷却账本由调用方持有（同 monologue_last 模式）。
+        # 批次 E1：request_chat 到站开口。**开口对象 = 到站邻域内最近的其他人**
+        # （review I1 修复：决策 tick 与开口 tick 相差几十 tick,哈希含 tick 的
+        # _chat_target_of 重算会选出另一个目标——走了全程却对不上人。到站邻域
+        # 最近者 = 「走到了谁面前就跟谁说」,与寻路目的地脱钩但戏内自洽）。
         if (
             action == "request_chat"
             and entity is not None
             and not entity.path
             and chat_last is not None
         ):
-            target_id = _chat_target_of(state, npc_id, tick=tick)
+            target_id = _nearest_other(entity, state)
             if target_id is not None:
-                tgt = state.entities[target_id]
-                dist = abs(entity.pos[0] - tgt.pos[0]) + abs(entity.pos[1] - tgt.pos[1])
-                if dist <= 2:  # 贴身（散点半径内）才算到站
-                    last = chat_last.get(
-                        npc_id, -(_CHAT_COOLDOWN_MIN_TICKS + _CHAT_COOLDOWN_SPAN_TICKS)
-                    )
-                    if tick - last >= _chat_cooldown_ticks(npc_id):
-                        chat_last[npc_id] = tick
-                        from sim.agent.dialogue import template_line
+                last = chat_last.get(
+                    npc_id, -(_CHAT_COOLDOWN_MIN_TICKS + _CHAT_COOLDOWN_SPAN_TICKS)
+                )
+                if tick - last >= _chat_cooldown_ticks(npc_id):
+                    chat_last[npc_id] = tick
+                    from sim.agent.dialogue import template_line
 
-                        listener = (display_name_of or {}).get(target_id, target_id)
-                        line = template_line(npc_id, listener, tick)
-                        events.append(
-                            npc_chat_event(
-                                tick=tick, npc_id=npc_id, to_id=target_id, line=line
-                            )
+                    listener = (display_name_of or {}).get(target_id, target_id)
+                    line = template_line(npc_id, listener, tick)
+                    events.append(
+                        npc_chat_event(
+                            tick=tick, npc_id=npc_id, to_id=target_id, line=line
                         )
-                        # E2：聊天落账本——好感漂移 + 双方记忆（进程内 runtime 态）。
-                        if chat_ledger is not None:
-                            from sim.npc.chat_ledger import ChatLedger
+                    )
+                    # E2：聊天落账本——好感漂移 + 双方记忆（进程内 runtime 态）。
+                    if chat_ledger is not None:
+                        from sim.npc.chat_ledger import ChatLedger
 
-                            assert isinstance(chat_ledger, ChatLedger)
-                            chat_ledger.adjust(npc_id, target_id, kind="chat")
-                            # E2 retell：开口同拍，学舌**开口前**已记住的旧闻
-                            # （本拍的话对方刚听过——复读不传播新信息；流言=
-                            # 传播先前获得的内容，故先取旧记忆再落新记忆）。
-                            _prior_mems = chat_ledger.memories_of(npc_id)
-                            chat_ledger.remember(npc_id, line, tick=tick)
-                            chat_ledger.remember(target_id, line, tick=tick)
-                            if retell_last is not None and _prior_mems:
-                                cool = _RETELL_COOLDOWN_MIN_TICKS + (
-                                    _hash_u32("retell-cooldown", npc_id)
-                                    % _RETELL_COOLDOWN_SPAN_TICKS
-                                )
-                                last_r = retell_last.get(npc_id, -(cool + 1))
-                                if tick - last_r >= cool:
-                                    retell_last[npc_id] = tick
-                                    _tick_src, _content = _prior_mems[-1]
-                                    _speaker = (display_name_of or {}).get(npc_id, npc_id)
-                                    _line = retell_template(_speaker, _content)
-                                    events.append(
-                                        npc_monologue_event(
-                                            tick=tick,
-                                            npc_id=npc_id,
-                                            form="bubble",
-                                            content=_line,
-                                        )
+                        assert isinstance(chat_ledger, ChatLedger)
+                        chat_ledger.adjust(npc_id, target_id, kind="chat")
+                        # E2 retell：开口同拍，学舌**开口前**已记住的旧闻
+                        # （本拍的话对方刚听过——复读不传播新信息；流言=
+                        # 传播先前获得的内容，故先取旧记忆再落新记忆）。
+                        _prior_mems = chat_ledger.memories_of(npc_id)
+                        chat_ledger.remember(npc_id, line, tick=tick)
+                        chat_ledger.remember(target_id, line, tick=tick)
+                        if retell_last is not None and _prior_mems:
+                            cool = _RETELL_COOLDOWN_MIN_TICKS + (
+                                _hash_u32("retell-cooldown", npc_id)
+                                % _RETELL_COOLDOWN_SPAN_TICKS
+                            )
+                            last_r = retell_last.get(npc_id, -(cool + 1))
+                            if tick - last_r >= cool:
+                                retell_last[npc_id] = tick
+                                _tick_src, _content = _prior_mems[-1]
+                                _speaker = (display_name_of or {}).get(npc_id, npc_id)
+                                _line = retell_template(_speaker, _content)
+                                events.append(
+                                    npc_monologue_event(
+                                        tick=tick,
+                                        npc_id=npc_id,
+                                        form="bubble",
+                                        content=_line,
                                     )
-                                    chat_ledger.adjust(npc_id, target_id, kind="retell")
+                                )
+                                chat_ledger.adjust(npc_id, target_id, kind="retell")
         mv = plan_npc_move(
             state,
             npc_id,

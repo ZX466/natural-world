@@ -64,6 +64,10 @@ class CombatLedger:
     def hp_of(self, entity_id: str) -> int:
         return self._hp.get(entity_id, _DEFAULT_HP)
 
+    def reset(self) -> None:
+        """清空 hp 账本（读档=分叉：旧分支 hp 残留会「一刀秒杀」——review I2）。"""
+        self._hp.clear()
+
     def apply_attack(self, attacker: str, target: str, *, tick: int, seed: int) -> AttackOutcome:
         """结算并扣血；hp 归零 → outcome=kill（死亡事件由调用方发——C4）。"""
         out = settle_attack(attacker, target, tick=tick, seed=seed)

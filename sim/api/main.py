@@ -241,6 +241,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     chat_ledger = ChatLedger()
     app.state.chat_ledger = chat_ledger
     chat_last: dict[str, int] = {}
+    retell_last: dict[str, int] = {}  # 批次 E2：学舌冷却账本（调用方持有）
     # 批次 E3：全镇余额账本（村民工钱 + 陈默买卖共享一份账）。
     from sim.world.economy import CoinLedger
 
@@ -268,7 +269,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             for ev in events:
                 if ev.event_type.value == "structure.started":
                     sid = str(ev.payload.get("structure_id", ""))
-                    build_tiles_log[sid] = [tuple(t) for t in ev.payload.get("tiles", [])]
+                    raw_tiles = ev.payload.get("tiles") or ()
+                    build_tiles_log[sid] = [tuple(t) for t in raw_tiles]
                 elif ev.event_type.value == "structure.completed":
                     sid = str(ev.payload.get("structure_id", ""))
                     set_structure_phase(sid, build_tiles_log.get(sid, []), "built")
@@ -288,6 +290,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             chat_last=chat_last,
             display_name_of=_display_names,
             chat_ledger=chat_ledger,
+            retell_last=retell_last,  # 批次 E2：学舌通路（review C3 修复）
             wage_last=wage_last,
             coin_ledger=coin_ledger,
         )
@@ -374,6 +377,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     memory_pipeline = MemoryWritePipeline()  # 缺省 InMemoryStore（进程内）
     _ = CHENMO_ID  # 反思 npc_ids 用（见补线③）
+    # 批次 E6：战斗账本（hp 进程内；死亡走 npc.death 事件——C4 零新增 kind）。
+    from sim.agent.combat_exec import CombatLedger
+
+    combat_ledger = CombatLedger()
+    app.state.combat_ledger = combat_ledger
     driver = ChenmoDriver(
         anchor=build_anchor(),
         llm=llm_client,
@@ -382,6 +390,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         display_name_of=_display_names.get,  # 批次 E1：talk_to 台词用戏内名
         economy_provider=lambda: (coin_ledger, loop.state.world_seed),  # 批次 E3
         build_runtime_provider=lambda: build_runtime,  # 批次 E4
+        combat_provider=lambda: (combat_ledger, loop.state.world_seed),  # 批次 E6
     )
     app.state.chenmo_driver = driver
     set_impulse_trigger(driver.request_decision)
@@ -520,6 +529,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     flush_in_flight=on_flush_async,
                     register_child=register_new_branch,
                 )
+                # 批次 E（review I2 修复）：读档=分叉 → 进程内 runtime 账本全部
+                # 清零——旧分支的 hp/余额/关系/冷却跨分支残留会造成「一刀秒杀」
+                # /「凭空余财」（账本是**本分支**的世界状态投影，分叉即失效）。
+                # 火场账本既有同款清理由 fork 编排层承担；本批账本在此收口。
+                combat_ledger.reset()
+                coin_ledger.reset()
+                chat_ledger.reset()
+                build_tiles_log.clear()
+                monologue_last.clear()
+                monologue_quota.clear()
+                chat_last.clear()
+                retell_last.clear()
+                wage_last.clear()
+                logger.info("fork.runtime_ledgers_reset", anchor_id=anchor_id)
                 logger.info("fork.load_completed", anchor_id=anchor_id)
                 load_outcomes.append((anchor_id, True))
             except Exception as exc:
