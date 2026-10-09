@@ -61,6 +61,10 @@ export class WorldScene extends Phaser.Scene {
   private fogOverlay: Phaser.GameObjects.Graphics | null = null;
   /** 雾罩脏标记：mirror.fog 引用计数变化才重绘（揭示只增——size 即版本） */
   private lastFogSize = -1;
+  /** E7 建筑投影层（depth 4 < 雾 5——雾罩未揭示区连建筑一起压暗） */
+  private structureLayer: Phaser.GameObjects.Graphics | null = null;
+  /** 建筑投影脏标记：structures.size 变化才重绘 */
+  private lastStructureCount = -1;
 
   constructor(mirror: WorldMirror) {
     super({ key: 'world' });
@@ -92,6 +96,8 @@ export class WorldScene extends Phaser.Scene {
     this.goalMarker = this.add.circle(0, 0, 3, 0xffd75e).setVisible(false).setDepth(50);
     // D17 视觉雾罩：遮地形（depth 5 < 实体 10）——未揭示区压暗，踏入即揭。
     this.fogOverlay = this.add.graphics().setDepth(5);
+    // E7 建筑投影层：完工结构占格（depth 4 < 雾 5——未揭示区的建筑同被压暗）
+    this.structureLayer = this.add.graphics().setDepth(4);
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.handlePointer(pointer);
@@ -192,6 +198,22 @@ export class WorldScene extends Phaser.Scene {
     this.syncRain(delta);
     this.syncBubbles(time);
     this.syncFog();
+    this.syncStructures();
+  }
+
+  /** E7 建筑投影：完工结构画深棕占格（size 变化才重绘——静态层零每帧成本）。 */
+  private syncStructures(): void {
+    const g = this.structureLayer;
+    if (g === null) return;
+    if (this.mirror.structures.size === this.lastStructureCount) return;
+    this.lastStructureCount = this.mirror.structures.size;
+    g.clear();
+    for (const structure of this.mirror.structures.values()) {
+      for (const [x, y] of structure.tiles) {
+        g.fillStyle(0x6b4f2a, structure.phase === 'built' ? 0.92 : 0.5);
+        g.fillRect(x * TILE, y * TILE, TILE - 1, TILE - 1);
+      }
+    }
   }
 
   /** D17 视觉雾：未揭示 chunk 压暗（揭示只增→size 变化才重绘，静态层零每帧成本）。 */

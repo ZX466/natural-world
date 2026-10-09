@@ -64,7 +64,7 @@ logger = structlog.get_logger(__name__)
 #: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
 #: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
 #: PlanDelta 封闭）；1.2 = 批次 E 只读诊断面进协议快照（M6-K2）——登记见 versioning.md §7。
-_PROTOCOL_VERSION = "1.6"
+_PROTOCOL_VERSION = "1.7"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 
 # K4 提案 §2.2/§3.2：五类 C→S 消息在此与 _CHANNEL_FOR **成对**注册
@@ -450,7 +450,7 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
         "ws_seq": 0,
         "actors": actors,
         "lights": [],
-        "structures": [],
+        "structures": _structures_snapshot_payload(),  # E7：真实投影（空账本=空数组，同旧形）
         "map": {
             "w": tile_map.width,
             "h": tile_map.height,
@@ -473,6 +473,80 @@ def _fog_revealed_payload(chunks: set[tuple[int, int]]) -> dict[str, Any]:
             for cx, cy in sorted(chunks)
         ]
     }
+
+
+# ---------------------------------------------------------------------------
+# 批次 E7：structures 投影账本（StructureDelta 形——M 面预留协议复用）
+# ---------------------------------------------------------------------------
+
+#: {structure_id: {"tiles": [(x,y)...], "phase": 词}} —— 事件侧（BuildRuntime 钩子）
+#: 经 set_structure_phase 登记；出站面在此唯一收口（rtoken 替身、增量过滤）。
+_STRUCTURES: dict[str, dict[str, Any]] = {}
+_structures_broadcast: dict[str, str] | None = None  # {structure_id: phase} 上次出站基准
+
+
+def set_structure_phase(structure_id: str, tiles: list[tuple[int, int]], phase: str) -> None:
+    """登记/更新结构相位（build hook 写入点；phase ∈ built|collapsing|rubble）。"""
+    _STRUCTURES[structure_id] = {"tiles": sorted(tiles), "phase": phase}
+
+
+def reset_structures() -> None:
+    """测试辅助：清空账本与广播基准。"""
+    global _structures_broadcast
+    _STRUCTURES.clear()
+    _structures_broadcast = None
+
+
+def _structure_rtoken(structure_id: str) -> str:
+    """structure_id → 出站替身（同 _rtoken 口径；id 不得出站）。"""
+    return f"st-{structure_id}"
+
+
+def _structures_delta_rows() -> list[dict[str, Any]]:
+    """增量行：相位有变化的格子 → StructureDelta 形（op=add upsert；排序确定）。"""
+    global _structures_broadcast
+    base = _structures_broadcast or {}
+    rows: list[dict[str, Any]] = []
+    for sid in sorted(_STRUCTURES):
+        entry = _STRUCTURES[sid]
+        if base.get(sid) == entry["phase"]:
+            continue
+        for x, y in entry["tiles"]:
+            rows.append(
+                {
+                    "op": "add",
+                    "rtoken": _structure_rtoken(sid),
+                    "x": x,
+                    "y": y,
+                    "phase": entry["phase"],
+                }
+            )
+    _structures_broadcast = {sid: e["phase"] for sid, e in _STRUCTURES.items()}
+    return rows
+
+
+def _structures_delta_payload() -> list[dict[str, Any]]:
+    return _structures_delta_rows()
+
+
+def _structures_snapshot_payload() -> list[dict[str, Any]]:
+    """快照全量（重连重同步）；副作用：标记为已广播基准。"""
+    global _structures_broadcast
+    rows: list[dict[str, Any]] = []
+    for sid in sorted(_STRUCTURES):
+        entry = _STRUCTURES[sid]
+        for x, y in entry["tiles"]:
+            rows.append(
+                {
+                    "op": "add",
+                    "rtoken": _structure_rtoken(sid),
+                    "x": x,
+                    "y": y,
+                    "phase": entry["phase"],
+                }
+            )
+    _structures_broadcast = {sid: e["phase"] for sid, e in _STRUCTURES.items()}
+    return rows
 
 
 def _fog_snapshot(loop: TickLoop) -> dict[str, Any]:
@@ -531,6 +605,10 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
     fog_chunks: set[tuple[int, int]] = getattr(loop.context, "fog_revealed", set()) or set()
     if fog_chunks:
         payload["fog"] = _fog_revealed_payload(fog_chunks)
+    # 批次 E7：结构相位变化才带（可选字段；M 面预留 StructureDelta 形）。
+    structures_delta = _structures_delta_rows()
+    if structures_delta:
+        payload["structures"] = structures_delta
     return payload
 
 

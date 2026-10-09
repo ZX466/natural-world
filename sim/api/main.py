@@ -253,12 +253,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     build_runtime = BuildRuntime(tile_map, seed=loop.state.world_seed)
     app.state.build_runtime = build_runtime
 
+    # 批次 E7：structure_id → tiles（started 时记；completed 时投影 built——
+    # StructureDelta phase 枚举无 building,在建工地不投影,完工才画）。
+    build_tiles_log: dict[str, list[tuple[int, int]]] = {}
+
     def _build_tick_hook(state: Any, tick: int) -> list[Any] | None:
         events = build_runtime.on_tick(tick)
         if events:
             # TILE_CHANGED → 寻路缓存失效（§14 chunk 失效；图换新实例后
             # pathfinder 需感知——observe_map 对齐新几何）。
             pathfinder.observe_map(build_runtime.tile_map)
+            from sim.api.ws import set_structure_phase
+
+            for ev in events:
+                if ev.event_type.value == "structure.started":
+                    sid = str(ev.payload.get("structure_id", ""))
+                    build_tiles_log[sid] = [tuple(t) for t in ev.payload.get("tiles", [])]
+                elif ev.event_type.value == "structure.completed":
+                    sid = str(ev.payload.get("structure_id", ""))
+                    set_structure_phase(sid, build_tiles_log.get(sid, []), "built")
         return events or None
 
     loop.attach_npc_runtime(_build_tick_hook)
