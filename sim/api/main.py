@@ -234,6 +234,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.npc_runtime = npc_runtime
     monologue_last: dict[str, int] = {}
     monologue_quota: dict[int, int] = {}  # D10：每节拍出镇配额账本（撞拍保险丝）
+    # 批次 E2/E1：聊天账本（关系漂移+记忆环形缓冲）+ 聊天冷却账本——
+    # 调用方持有（跨拍记忆态，同 monologue_last 口径；不进重放面）。
+    from sim.npc.chat_ledger import ChatLedger
+
+    chat_ledger = ChatLedger()
+    app.state.chat_ledger = chat_ledger
+    chat_last: dict[str, int] = {}
 
     def _npc_tick_hook(state: Any, tick: int) -> list[Any] | None:
         batch = npc_events_for_tick(
@@ -244,6 +251,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             seed=loop.state.world_seed,
             monologue_last=monologue_last,
             monologue_quota=monologue_quota,
+            chat_last=chat_last,
+            display_name_of=_display_names,
+            chat_ledger=chat_ledger,
         )
         # 批次 D14：npc.act → 动作姿势账本（快照/delta 的 anim 字段供数）。
         from sim.api.ws import set_action_anim
@@ -333,6 +343,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         llm=llm_client,
         profile_provider=_active_profile_snapshot_provider(),
         perception_provider=_chenmo_perception,
+        display_name_of=_display_names.get,  # 批次 E1：talk_to 台词用戏内名
     )
     app.state.chenmo_driver = driver
     set_impulse_trigger(driver.request_decision)
@@ -364,10 +375,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             _perception_text = _chenmo_perception()
             if _perception_text:
                 _mem_observe(memory_pipeline, _perception_text, tick=loop.state.tick)
+            # 批次 E2：[记忆] 段双源——检索 top-k 为主，当日对话记忆（ledger
+            # 最新 3 条）排前（最新鲜的社交事实优先）。
+            from sim.agent.chenmo_memory import merge_ledger_entries
+
+            _ledger_texts = tuple(text for _, text in chat_ledger.memories_of(CHENMO_ID)[-3:])
             await driver.decide_once(
                 loop.state,
                 loop.state.tick,
-                memory_entries=_mem_recall(memory_pipeline, now_tick=loop.state.tick),
+                memory_entries=merge_ledger_entries(
+                    _mem_recall(memory_pipeline, now_tick=loop.state.tick),
+                    _ledger_texts,
+                    top_k=3,
+                ),
                 perception_text=_perception_text,
             )
             driver.execute_pending(loop, pathfinder=pathfinder)

@@ -85,3 +85,17 @@ def _hits(
     """共享检索核：retrieve 纯基础分（无 scorers——偏差挂载缝留 cognition）。"""
     query = MemoryQuery(npc_id=CHENMO_ID, now_tick=now_tick, top_k=top_k)
     return tuple(retrieve(pipeline, query))
+
+
+def merge_ledger_entries(
+    base: tuple[str, ...], ledger_texts: tuple[str, ...], *, top_k: int
+) -> tuple[str, ...]:
+    """[记忆] 段双源合并（批次 E2）：ledger（当日对话，最新鲜）排前，截 top_k。
+
+    去重保序（同文本只留 ledger 侧）；C5 纯函数——同输入同输出。
+    """
+    if not ledger_texts:
+        return tuple(base)[:top_k]
+    seen: set[str] = set(ledger_texts)
+    merged = tuple(ledger_texts) + tuple(t for t in base if t not in seen)
+    return merged[:top_k]
