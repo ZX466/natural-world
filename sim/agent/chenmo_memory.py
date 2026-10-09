@@ -82,9 +82,15 @@ def _hits(
     now_tick: int,
     top_k: int,
 ) -> tuple[MemoryHit, ...]:
-    """共享检索核：retrieve 纯基础分（无 scorers——偏差挂载缝留 cognition）。"""
+    """共享检索核（批次 E5）：retrieve + 偏差 scorers——非理性框架回接（§8）。
+
+    确认偏误/情绪一致性两钩子进陈默检索链（CognitionParams 缺省装配）；
+    村民检索不动（sim/npc/memory 调用方仍传 scorers=() 纯基础分）。
+    """
+    from sim.agent.cognition import CognitionParams
+
     query = MemoryQuery(npc_id=CHENMO_ID, now_tick=now_tick, top_k=top_k)
-    return tuple(retrieve(pipeline, query))
+    return tuple(retrieve(pipeline, query, scorers=CognitionParams().retrieval_scorers()))
 
 
 def merge_ledger_entries(
