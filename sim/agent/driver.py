@@ -74,6 +74,9 @@ class ChenmoDriver:
         self._combat = combat_provider
         self._gate = IntentGate()
         self._pending: deque[Intent] = deque()
+        # 批次 E6 战斗尺（§9）：attack 命中 → 进战斗尺 60 tick；过期即退出。
+        # None = 不在战斗尺；issue_combat_scale 发既有 combat.scale_change 事件。
+        self._combat_until_tick: int | None = None
         # impulse 置位（ws handler 在事件循环线程调，driver 循环也在事件循环——
         # 单线程语义本就安全；锁是防御性的，防将来跨线程调用）
         self._requested_lock = threading.Lock()
@@ -208,6 +211,10 @@ class ChenmoDriver:
                 )
             )
             executed += 1
+        # 战斗尺过期退出（E6：意图队列清空后检查——窗口过完恢复原倍率）。
+        if self._combat_until_tick is not None and loop.state.tick >= self._combat_until_tick:
+            self._combat_until_tick = None
+            loop.issue_combat_scale(False)
         return executed
 
     def _issue_talk(
@@ -388,6 +395,10 @@ class ChenmoDriver:
                     content=help_line(attacker_name, tick=tick),
                 )
             )
+        # 战斗尺（Task 12）：命中/击杀 → 进慢镜 60 tick（miss 不切——没交上手）。
+        if out.outcome in ("hit", "kill"):
+            self._combat_until_tick = tick + 60
+            loop.issue_combat_scale(True)
 
     def _issue_flee(
         self, loop: TickLoop, pathfinder: object, actor_id: str, threat_id: str
