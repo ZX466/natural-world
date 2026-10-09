@@ -53,6 +53,7 @@ class ChenmoDriver:
         profile_provider: Callable[[], ProfileSnapshot | None],
         perception_provider: Callable[[], str] | None = None,
         display_name_of: Callable[[str], str | None] | None = None,
+        economy_provider: Callable[[], tuple[object, int]] | None = None,
     ) -> None:
         self._anchor = anchor
         self._llm = llm
@@ -63,6 +64,8 @@ class ChenmoDriver:
         # 批次 E1：戏内名映射注入（entity_id → 戏内名；分层红线：agent 域禁
         # import sim.api，名字映射由 main.py 装配传入 _display_names.get）。
         self._display_name_of = display_name_of or (lambda _eid: None)
+        # 批次 E3：经济面注入（() -> (CoinLedger, world_seed)）；None = 无买卖面。
+        self._economy = economy_provider
         self._gate = IntentGate()
         self._pending: deque[Intent] = deque()
         # impulse 置位（ws handler 在事件循环线程调，driver 循环也在事件循环——
@@ -177,6 +180,9 @@ class ChenmoDriver:
                 self._issue_talk(loop, pathfinder, actor_id, intent)
             elif intent.action == "investigate" and intent.target_pos is not None:
                 self._issue_investigate(loop, pathfinder, actor_id, intent.target_pos)
+            elif intent.action in ("buy", "sell") and intent.target_id is not None:
+                if self._economy is not None:
+                    self._issue_trade(loop, intent)
             from sim.core.events import npc_monologue_event
 
             loop.enqueue(
@@ -221,6 +227,48 @@ class ChenmoDriver:
         loop.enqueue(
             npc_chat_event(
                 tick=state.tick, npc_id=actor_id, to_id=intent.target_id, line=line
+            )
+        )
+
+    def _issue_trade(self, loop: TickLoop, intent: Intent) -> None:
+        """buy/sell：查价 → 余额判定 → coin.grant 事件 + 独白结果（E3 最小面）。
+
+        target_id 存货名（herb/salve/meal）。买不起=零 grant + 叙事独白
+        （fail-soft：买不起是戏内常态，不是错误）。铜钱数额是戏内事实可出站。
+        """
+        from sim.core.events import coin_grant_event, npc_monologue_event
+        from sim.world.economy import _GOOD_INDEX, buy_price
+
+        good = _GOOD_INDEX.get(intent.target_id or "")
+        if good is None:
+            return
+        actor_id = self._anchor.entity_id
+        ledger, seed = self._economy()
+        tick = loop.state.tick
+        price = buy_price(good.id, tick=tick, seed=seed)
+        if intent.action == "buy":
+            ok = ledger.apply_grant(actor_id, -price, tick=tick)
+            if ok:
+                loop.enqueue(
+                    coin_grant_event(
+                        tick=tick, owner_id=actor_id, delta=-price, note=f"buy:{good.id}"
+                    )
+                )
+                content = f"这剂{good.name}花了{price}文，值。"
+            else:
+                content = f"摸遍全身也凑不齐这{price}文，{good.name}先记着吧。"
+        else:  # sell：E3 简化——卖=凭手艺挣工钱口径（无库存面），得半价
+            earned = max(1, price // 2)
+            ledger.apply_grant(actor_id, earned, tick=tick)
+            loop.enqueue(
+                coin_grant_event(
+                    tick=tick, owner_id=actor_id, delta=earned, note=f"sell:{good.id}"
+                )
+            )
+            content = f"出手一批{good.name}，进账{earned}文。"
+        loop.enqueue(
+            npc_monologue_event(
+                tick=tick + 1, npc_id=actor_id, form="thought", content=content
             )
         )
 

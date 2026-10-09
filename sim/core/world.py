@@ -209,6 +209,14 @@ def _apply_npc_chat(state: WorldState, event: WorldEvent, ctx: TickContext) -> A
     return ApplyResult(state=state)
 
 
+def _apply_coin_grant(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    """COIN_GRANT（批次 E3）：账单记录，余额归 runtime CoinLedger（重放安全 no-op）。"""
+    from sim.core.events import CoinGrantPayload
+
+    CoinGrantPayload.model_validate(event.payload)  # schema 校验；无状态效果
+    return ApplyResult(state=state)
+
+
 def _apply_fog_reveal(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
     """迷雾揭示折叠：no-op 状态层（裁 40-4：迷雾是事件即真相的观察者投影，
     不进 state_hash；揭示集由投影侧 fold_fog_reveal 按事件流重建——同
@@ -243,6 +251,7 @@ def build_default_bus() -> EventBus:
     bus.register(EventKind.NPC_ACT, _apply_npc_act)
     bus.register(EventKind.NPC_MONOLOGUE, _apply_npc_monologue)
     bus.register(EventKind.NPC_CHAT, _apply_npc_chat)
+    bus.register(EventKind.COIN_GRANT, _apply_coin_grant)
     bus.register(EventKind.FIRE_IGNITED, _apply_fire_event)
     bus.register(EventKind.FOG_REVEAL, _apply_fog_reveal)
     bus.register(EventKind.FIRE_EXTINGUISHED, _apply_fire_event)

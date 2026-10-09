@@ -37,6 +37,7 @@ from sim.core.events import (
     MovePayload,
     NpcActPayload,
     NpcChatPayload,
+    CoinGrantPayload,
     NpcDeathPayload,
     NpcLodChangePayload,
     NpcMonologuePayload,
@@ -89,6 +90,7 @@ PAYLOAD_MODELS: dict[EventKind, type[BaseModel]] = {
     EventKind.MATERIAL_MOVED: MaterialMovedPayload,
     EventKind.NPC_MONOLOGUE: NpcMonologuePayload,
     EventKind.NPC_CHAT: NpcChatPayload,
+    EventKind.COIN_GRANT: CoinGrantPayload,
 }
 
 
