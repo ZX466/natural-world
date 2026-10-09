@@ -2,14 +2,11 @@
 
 from pathlib import Path
 
-import pytest
-
 from sim.agent.build_exec import BuildRuntime
 from sim.core.calendar import TICKS_PER_GAME_DAY
 from sim.core.events import EventKind, structure_started_event, tile_changed_event
 from sim.core.world import TickContext, WorldState, build_default_bus
 from sim.world.map import TileMap
-from sim.world.pathfinding import Pathfinder
 
 _TOWN = Path("sim/content/linhe-town.json")
 
@@ -178,7 +175,8 @@ def test_build_intent_costs_coins():
     tile_map = TileMap.from_json_file(_TOWN)
     pos = _find_open_2x2(tile_map)
     state = WorldState(
-        world_seed=42, entities={"chenmo": EntityState(entity_id="chenmo", pos=(pos[0], pos[1] + 3))}
+        world_seed=42,
+        entities={"chenmo": EntityState(entity_id="chenmo", pos=(pos[0], pos[1] + 3))},
     )
     loop = TickLoop(clock=GameClock(speed=1.0), bus=build_default_bus(), state=state)
     led = CoinLedger()
@@ -220,7 +218,8 @@ def test_build_intent_insufficient_coins():
     tile_map = TileMap.from_json_file(_TOWN)
     pos = _find_open_2x2(tile_map)
     state = WorldState(
-        world_seed=42, entities={"chenmo": EntityState(entity_id="chenmo", pos=(pos[0], pos[1] + 3))}
+        world_seed=42,
+        entities={"chenmo": EntityState(entity_id="chenmo", pos=(pos[0], pos[1] + 3))},
     )
     loop = TickLoop(clock=GameClock(speed=1.0), bus=build_default_bus(), state=state)
     led = CoinLedger()  # 0 文

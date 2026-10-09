@@ -39,7 +39,7 @@ class ChatLedger:
             raise ValueError(f"未知互动类型: {kind!r}")
         field, delta = _RULES[kind]
         row = self._relations.setdefault(owner, {}).setdefault(
-            other, {f: 0.0 for f in _FIELDS}
+            other, dict.fromkeys(_FIELDS, 0.0)
         )
         row[field] = min(1.0, max(0.0, row[field] + delta))
 

@@ -2,7 +2,13 @@
 
 from dataclasses import is_dataclass
 
-from sim.agent.combat_exec import HELP_TEMPLATES, AttackOutcome, CombatLedger, help_line, settle_attack
+from sim.agent.combat_exec import (
+    HELP_TEMPLATES,
+    AttackOutcome,
+    CombatLedger,
+    help_line,
+    settle_attack,
+)
 from sim.llm.prompts.banned_words import scan
 
 

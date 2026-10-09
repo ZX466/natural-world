@@ -110,6 +110,6 @@ def test_investigate_moves_toward_target_pos():
 
 
 def test_template_pool_all_clean():
-    for tick in range(0, 50):
+    for tick in range(50):
         line = template_line("chenmo", "张三", tick)
         assert not scan(line).hits, f"tick={tick} 模板词面违规: {line}"

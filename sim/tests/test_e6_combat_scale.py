@@ -7,7 +7,6 @@ from sim.core.clock import GameClock
 from sim.core.events import EventKind
 from sim.core.tick import TickLoop
 from sim.core.world import EntityState, WorldState, build_default_bus
-from sim.llm.client import ProfileSnapshot
 
 
 class _AlwaysHitLedger:

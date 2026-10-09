@@ -43,7 +43,8 @@ def test_villager_with_memory_retells_on_chat_beat():
     rt_events = [npc_act_event(tick=0, npc_id="villager_01", action="request_chat")]
 
     class _FakeRuntime:
-        profiles: dict = {}
+        def __init__(self) -> None:
+            self.profiles: dict = {}
 
         def tick(self, tick):
             return list(rt_events)
@@ -59,11 +60,14 @@ def test_villager_with_memory_retells_on_chat_beat():
         display_name_of={"villager_01": "赵铁柱", "villager_02": "钱小满"},
         chat_ledger=ledger,
     )
-    retells = [
-        e
-        for e in events
-        if e.event_type.value == "npc.monologue" and "听说" not in str(e.payload.get("content", "")) and str(e.payload.get("content", "")).startswith("听")
-    ]
+
+    def _is_retell(e) -> bool:
+        if e.event_type.value != "npc.monologue":
+            return False
+        content = str(e.payload.get("content", ""))
+        return content.startswith("听") and "听说" not in content
+
+    retells = [e for e in events if _is_retell(e)]
     assert len(retells) == 1
     content = retells[0].payload["content"]
     assert content == "听赵铁柱说，东边着火了"
@@ -94,7 +98,8 @@ def test_retell_cooldown_blocks_repeat():
     rt_events = [npc_act_event(tick=0, npc_id="villager_01", action="request_chat")]
 
     class _FakeRuntime:
-        profiles: dict = {}
+        def __init__(self) -> None:
+            self.profiles: dict = {}
 
         def tick(self, tick):
             return list(rt_events)
@@ -114,6 +119,7 @@ def test_retell_cooldown_blocks_repeat():
     retells = [
         e
         for e in events
-        if e.event_type.value == "npc.monologue" and str(e.payload.get("content", "")).startswith("听")
+        if e.event_type.value == "npc.monologue"
+        and str(e.payload.get("content", "")).startswith("听")
     ]
     assert not retells

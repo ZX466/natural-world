@@ -13,7 +13,6 @@ from dataclasses import dataclass
 
 from sim.core.calendar import TICKS_PER_GAME_DAY
 from sim.core.events import (
-    EventKind,
     WorldEvent,
     structure_checkpoint_event,
     structure_completed_event,
@@ -70,9 +69,14 @@ class BuildRuntime:
         """2×2 选格 → started 事件（None=格不可走/已有工地）。"""
         if self._site is not None:
             return None
+        # 行主序生成（y 优先——瓦片语义；schema _canonical_tiles 会再归一化为
+        # sorted 元组序，此处序只影响生成序、不影响落库形）。
         tiles = sorted(
-            ((pos[0] + dx, pos[1] + dy) for dx in range(BUILD_TILES) for dy in range(BUILD_TILES)),
-            key=lambda t: (t[1], t[0]),  # 行主序（y 优先——瓦片语义；structure 校验只要求排序且不重复）
+            (
+                (pos[0] + dx, pos[1] + dy)
+                for dx in range(BUILD_TILES)
+                for dy in range(BUILD_TILES)
+            ),
         )
         if not all(self.tile_map.is_walkable(x, y) for x, y in tiles):
             return None

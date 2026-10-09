@@ -2,7 +2,6 @@
 
 from sim.agent.chenmo_memory import _hits
 from sim.llm.memory_scan import InMemoryStore, MemoryWritePipeline
-from sim.npc.memory import MemoryQuery, retrieve
 
 
 def _pipeline_with(entries: list[tuple[str, float]]):
@@ -10,7 +9,12 @@ def _pipeline_with(entries: list[tuple[str, float]]):
     pipe = MemoryWritePipeline(store=store)
     for text, imp in entries:
         pipe.write(
-            npc_id="chenmo", content=text, source="event", event_seq=100, importance=imp, emotion_tag=None
+            npc_id="chenmo",
+            content=text,
+            source="event",
+            event_seq=100,
+            importance=imp,
+            emotion_tag=None,
         )
     return pipe
 

@@ -1,6 +1,5 @@
 """E3：最小经济——coin.grant 事件 + CoinLedger 余额 + 价目表。"""
 
-import pytest
 
 from sim.core.events import EventKind, coin_grant_event
 from sim.core.persistence.event_validation import PAYLOAD_MODELS, validate_store_row

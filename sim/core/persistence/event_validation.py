@@ -23,6 +23,7 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from sim.core.events import (
+    CoinGrantPayload,
     CombatScaleChangePayload,
     EcologyShiftPayload,
     EntropyInjectPayload,
@@ -37,7 +38,6 @@ from sim.core.events import (
     MovePayload,
     NpcActPayload,
     NpcChatPayload,
-    CoinGrantPayload,
     NpcDeathPayload,
     NpcLodChangePayload,
     NpcMonologuePayload,

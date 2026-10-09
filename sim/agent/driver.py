@@ -20,6 +20,7 @@ from __future__ import annotations
 import threading
 from collections import deque
 from collections.abc import Callable
+from typing import Any
 
 import structlog
 
@@ -53,9 +54,9 @@ class ChenmoDriver:
         profile_provider: Callable[[], ProfileSnapshot | None],
         perception_provider: Callable[[], str] | None = None,
         display_name_of: Callable[[str], str | None] | None = None,
-        economy_provider: Callable[[], tuple[object, int]] | None = None,
-        build_runtime_provider: Callable[[], object] | None = None,
-        combat_provider: Callable[[], tuple[object, int]] | None = None,
+        economy_provider: Callable[[], tuple[Any, int]] | None = None,
+        build_runtime_provider: Callable[[], Any] | None = None,
+        combat_provider: Callable[[], tuple[Any, int]] | None = None,
     ) -> None:
         self._anchor = anchor
         self._llm = llm
@@ -228,7 +229,10 @@ class ChenmoDriver:
         from sim.core.events import npc_chat_event
 
         state = loop.state
-        target = state.entities.get(intent.target_id)
+        target_id = intent.target_id
+        if target_id is None:  # pyright 收窄（调用分支已保证非 None）
+            return
+        target = state.entities.get(target_id)
         actor = state.entities.get(actor_id)
         if target is None or actor is None:
             return
@@ -243,11 +247,11 @@ class ChenmoDriver:
                     loop.issue_move(actor_id, list(path))
                 except ValueError:
                     pass  # 不可达：原地喊话（fail-soft，聊天仍发生）
-        listener_name = self._display_name_of(intent.target_id) or intent.target_id
+        listener_name = self._display_name_of(target_id) or target_id
         line = template_line(actor_id, listener_name, state.tick)
         loop.enqueue(
             npc_chat_event(
-                tick=state.tick, npc_id=actor_id, to_id=intent.target_id, line=line
+                tick=state.tick, npc_id=actor_id, to_id=target_id, line=line
             )
         )
 
@@ -261,7 +265,7 @@ class ChenmoDriver:
         from sim.world.economy import _GOOD_INDEX, buy_price
 
         good = _GOOD_INDEX.get(intent.target_id or "")
-        if good is None:
+        if good is None or self._economy is None:
             return
         actor_id = self._anchor.entity_id
         ledger, seed = self._economy()
@@ -301,6 +305,7 @@ class ChenmoDriver:
         build_runtime = self._build()
         pos = intent.target_pos
         assert pos is not None
+        assert self._economy is not None  # 调用分支已保证
         ledger, _seed = self._economy()
         assert isinstance(ledger, CoinLedger)
         tick = loop.state.tick
@@ -350,6 +355,8 @@ class ChenmoDriver:
         from sim.agent.combat_exec import help_line
         from sim.core.events import npc_death_event, npc_monologue_event
 
+        if self._combat is None:  # 调用分支已保证（pyright 收窄）
+            return
         ledger, seed = self._combat()
         target = intent.target_id
         if target not in loop.state.entities:

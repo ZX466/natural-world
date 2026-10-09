@@ -557,7 +557,8 @@ def npc_events_for_tick(
             ):
                 dist = abs(entity.pos[0] - anchor[0]) + abs(entity.pos[1] - anchor[1])
                 if dist <= _SITE_SCATTER_RADIUS:
-                    last_w = wage_last.get(npc_id, -(_WAGE_COOLDOWN_MIN_TICKS + _WAGE_COOLDOWN_SPAN_TICKS))
+                    _wage_never = -(_WAGE_COOLDOWN_MIN_TICKS + _WAGE_COOLDOWN_SPAN_TICKS)
+                    last_w = wage_last.get(npc_id, _wage_never)
                     if tick - last_w >= _wage_cooldown_ticks(npc_id):
                         wage_last[npc_id] = tick
                         from sim.core.events import coin_grant_event
