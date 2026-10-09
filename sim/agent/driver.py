@@ -55,6 +55,7 @@ class ChenmoDriver:
         display_name_of: Callable[[str], str | None] | None = None,
         economy_provider: Callable[[], tuple[object, int]] | None = None,
         build_runtime_provider: Callable[[], object] | None = None,
+        combat_provider: Callable[[], tuple[object, int]] | None = None,
     ) -> None:
         self._anchor = anchor
         self._llm = llm
@@ -69,6 +70,8 @@ class ChenmoDriver:
         self._economy = economy_provider
         # 批次 E4：施工面注入（() -> BuildRuntime）；None = 无建造面。
         self._build = build_runtime_provider
+        # 批次 E6：战斗面注入（() -> (CombatLedger, world_seed)）；None = 无攻击面。
+        self._combat = combat_provider
         self._gate = IntentGate()
         self._pending: deque[Intent] = deque()
         # impulse 置位（ws handler 在事件循环线程调，driver 循环也在事件循环——
@@ -189,6 +192,11 @@ class ChenmoDriver:
             elif intent.action == "build" and intent.target_pos is not None:
                 if self._build is not None and self._economy is not None:
                     self._issue_build(loop, actor_id, intent)
+            elif intent.action == "attack" and intent.target_id is not None:
+                if self._combat is not None:
+                    self._issue_attack(loop, actor_id, intent)
+            elif intent.action == "flee" and intent.target_id is not None:
+                self._issue_flee(loop, pathfinder, actor_id, intent.target_id)
             from sim.core.events import npc_monologue_event
 
             loop.enqueue(
@@ -326,6 +334,81 @@ class ChenmoDriver:
                 content="地块我看好了，明天起木料，搭个棚子。",
             )
         )
+
+    def _issue_attack(self, loop: TickLoop, actor_id: str, intent: Intent) -> None:
+        """attack：确定性结算 → hp 账本 → 死亡走 npc.death（E6 最小面）。
+
+        hp/伤害数值零出戏（独白只有叙事）；命中后呼救是外在可观察 bubble。
+        """
+        from sim.agent.combat_exec import help_line
+        from sim.core.events import npc_death_event, npc_monologue_event
+
+        ledger, seed = self._combat()
+        target = intent.target_id
+        if target not in loop.state.entities:
+            return  # 目标不在场（闸门 revalidate 也会拦——双保险）
+        tick = loop.state.tick
+        out = ledger.apply_attack(actor_id, target, tick=tick, seed=seed)
+        target_name = self._display_name_of(target) or target
+        attacker_name = self._display_name_of(actor_id) or actor_id
+        if out.outcome == "kill":
+            loop.enqueue(npc_death_event(tick=tick, entity_id=target))
+            loop.enqueue(
+                npc_monologue_event(
+                    tick=tick + 1,
+                    npc_id=actor_id,
+                    form="thought",
+                    content=f"看着{target_name}倒下去，我的手一直在抖。",
+                )
+            )
+        elif out.outcome == "miss":
+            loop.enqueue(
+                npc_monologue_event(
+                    tick=tick + 1,
+                    npc_id=actor_id,
+                    form="thought",
+                    content=f"这一下挥空了，{target_name}躲开了。",
+                )
+            )
+        else:
+            loop.enqueue(
+                npc_monologue_event(
+                    tick=tick + 1,
+                    npc_id=actor_id,
+                    form="thought",
+                    content=f"我伤了{target_name}，他退了半步。",
+                )
+            )
+            # 呼救：被袭者 bubble（广播面——路人都听得见）
+            loop.enqueue(
+                npc_monologue_event(
+                    tick=tick + 1,
+                    npc_id=target,
+                    form="bubble",
+                    content=help_line(attacker_name, tick=tick),
+                )
+            )
+
+    def _issue_flee(
+        self, loop: TickLoop, pathfinder: object, actor_id: str, threat_id: str
+    ) -> None:
+        """flee：背离威胁 4 格反向寻路（不可达=原地——fail-soft）。"""
+        from sim.world.pathfinding import Pathfinder
+
+        if not isinstance(pathfinder, Pathfinder):
+            return
+        actor = loop.state.entities.get(actor_id)
+        threat = loop.state.entities.get(threat_id)
+        if actor is None or threat is None:
+            return
+        dx = 4 if actor.pos[0] >= threat.pos[0] else -4
+        dy = 4 if actor.pos[1] >= threat.pos[1] else -4
+        goal = (max(0, actor.pos[0] + dx), max(0, actor.pos[1] + dy))
+        try:
+            path = pathfinder.find(actor.pos, goal)
+            loop.issue_move(actor_id, list(path))
+        except ValueError:
+            pass  # 不可达：原地（独白仍出）
 
     def _issue_investigate(
         self, loop: TickLoop, pathfinder: object, actor_id: str, target_pos: tuple[int, int]
