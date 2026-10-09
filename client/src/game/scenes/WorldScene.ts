@@ -28,6 +28,12 @@ const GROUND_KEY = 'ground-composite'; // 预拼地面 CanvasTexture 键
 
 interface ActorView {
   sprite: Phaser.GameObjects.Sprite;
+  /** 快照对快照插值基准（D20 漂移修）：上一快照的逻辑格 + 到达时刻——
+   *  精灵在 [snapAtMs, snapAtMs+INTERP_MS) 内从 prev 线性走到最新快照格，
+   *  到点即停；修前是帧对帧指数逼近（永远落后渐近=滑行漂移感）。 */
+  fromX: number;
+  fromY: number;
+  snapAtMs: number;
   /** 上一帧逻辑格（anim/facing 推断输入，R2） */
   prevX: number;
   prevY: number;
@@ -180,7 +186,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
-    this.syncActorViews(delta);
+    this.syncActorViews(delta, time);
     this.syncCamera();
     this.syncOverlay();
     this.syncRain(delta);
@@ -244,7 +250,7 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  private syncActorViews(delta: number): void {
+  private syncActorViews(delta: number, timeMs: number): void {
     if (this.mirror.resetCount !== this.lastResetSeen) {
       // 镜像被重连重置：清空精灵池重建（codex 意见 9 的表现层配合）
       for (const v of this.views.values()) {
@@ -256,7 +262,6 @@ export class WorldScene extends Phaser.Scene {
       this.bubbleTexts.clear();
       this.lastResetSeen = this.mirror.resetCount;
     }
-    const t = Math.min(1, delta / INTERP_MS);
     for (const [rtoken, actor] of this.mirror.actors) {
       let view = this.views.get(rtoken);
       if (view === undefined) {
@@ -291,15 +296,34 @@ export class WorldScene extends Phaser.Scene {
                 .setOrigin(0.5, 1)
                 .setDepth(11)
             : null;
-        view = { sprite, prevX: actor.x, prevY: actor.y, animClockMs: -1, lastFacing: 's' as Facing, label };
+        view = {
+          sprite,
+          fromX: actor.x,
+          fromY: actor.y,
+          snapAtMs: 0,
+          prevX: actor.x,
+          prevY: actor.y,
+          animClockMs: -1,
+          lastFacing: 's' as Facing,
+          label,
+        };
         this.views.set(rtoken, view);
         if (isProtagonist) this.cameras.main.startFollow(sprite, true, 0.12, 0.12);
       }
+      // D20 漂移修：快照对快照插值——逻辑格变化时以「此刻」为起点、
+      // 从上一快照格线性走到新快照格（INTERP_MS 走完，到点即停）；
+      // 修前的帧对帧指数逼近每帧只走剩余距离的 t 比例 → 永远落后
+      // 目标渐近=滑行漂移感。位置未变时保持原地（不重复计时）。
+      if (view.prevX !== actor.x || view.prevY !== actor.y) {
+        view.fromX = view.sprite.x;
+        view.fromY = view.sprite.y;
+        view.snapAtMs = timeMs;
+      }
+      const k = Math.min(1, (timeMs - view.snapAtMs) / INTERP_MS);
       const targetX = actor.x * TILE + TILE / 2;
       const targetY = actor.y * TILE + TILE / 2;
-      // 相邻 tick 快照间线性插值（m0-client §3）
-      view.sprite.x = Phaser.Math.Linear(view.sprite.x, targetX, t);
-      view.sprite.y = Phaser.Math.Linear(view.sprite.y, targetY, t);
+      view.sprite.x = view.fromX + (targetX - view.fromX) * k;
+      view.sprite.y = view.fromY + (targetY - view.fromY) * k;
       view.label?.setPosition(view.sprite.x, view.sprite.y - TILE / 2 - 3);
       // R2：位移推断 anim/facing → 帧号（D10：villager 4 列帧表启用行走环；
       // 修前恒帧 0——素材有 4×8 走环/劳作表却只画迈步中间帧，人群看着呆滞）

@@ -84,8 +84,21 @@ async def build_loop() -> tuple[TickLoop, Any]:
     """组装世界：store（建表）+ bus + TickLoop + 创世 + 出生点搬运。返回 (loop, store)。"""
     from sqlalchemy.ext.asyncio import create_async_engine
 
-    engine = create_async_engine("sqlite+aiosqlite:///world.db")
+    # D20：SQLite 写并发止血（用户实测 POST /api/anchors 500 database is locked
+    # ——同步 anchors 写面与 aiosqlite 驱动事务撞锁即硬炸）。WAL 允许读写并行、
+    # busy_timeout 让写者等锁而不是立刻炸；不改变单写者语义（flush 串行契约不动）。
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///world.db",
+        connect_args={"timeout": 10.0},  # sqlite3 busy_timeout（秒）
+    )
     await init_database(engine)  # 开发库快速起步；生产走 alembic upgrade head
+    # D20：WAL 日志模式（库级持久设置，一次即可）——读写并行、写锁等待
+    # 而非硬炸；与 connect_args timeout 构成双层止血（根治在写事务收口，
+    # anchors.py 头注已立案归 kilo/Claude 面）。
+    from sqlalchemy import text
+
+    async with engine.begin() as conn:
+        await conn.execute(text("PRAGMA journal_mode=WAL"))
     session_factory = create_session_factory(engine)
     store = SqlEventStore(session_factory)
     loop = TickLoop(clock=_make_clock(), bus=build_default_bus(), state=WorldState(world_seed=42))

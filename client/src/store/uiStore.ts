@@ -13,7 +13,7 @@ import type { WsStatus } from '../net/ws';
 export const MONOLOGUE_CAP = 20;
 
 /** 街谈巷议环形缓冲上限（批次 D10：村民 bubble 与陈默心声分流；超过丢最旧） */
-export const CHATTER_CAP = 12;
+export const CHATTER_CAP = 8; // D20：嘟囔池收紧——12 条已足以把心之声挤出首屏
 
 export type MonologueForm = 'bubble' | 'thought' | 'plan';
 

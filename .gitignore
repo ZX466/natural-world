@@ -46,6 +46,8 @@ saves/
 logs/
 *.log
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 
 # Dot-folders: per user rule #4 ALL dot-prefixed folders stay out of git EXCEPT .orca.

@@ -25,7 +25,7 @@ export function PanelHost(): ReactElement {
       id="panel-host"
       className="flex w-64 shrink-0 flex-col gap-3 overflow-y-auto border-l border-stone-700 bg-stone-900/95 p-3"
     >
-      <section aria-label="心之声" className="min-h-0">
+      <section aria-label="心之声" className="min-h-0 shrink-0">
         <h2 className="mb-2 text-xs font-semibold tracking-widest text-stone-400">心之声</h2>
         {monologues.length === 0 ? (
           <p className="text-xs leading-relaxed text-stone-500">
@@ -45,7 +45,7 @@ export function PanelHost(): ReactElement {
           </ul>
         )}
       </section>
-      <section aria-label="街谈巷议" className="min-h-0">
+      <section aria-label="街谈巷议" className="min-h-0 flex-1 overflow-y-auto">
         <h2 className="mb-2 text-xs font-semibold tracking-widest text-stone-400">街谈巷议</h2>
         {chatter.length === 0 ? (
           <p className="text-xs leading-relaxed text-stone-500">镇上还很安静。</p>

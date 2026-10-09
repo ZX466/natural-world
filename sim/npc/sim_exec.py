@@ -308,6 +308,56 @@ def _resolve_goal(
     return None
 
 
+#: 路径扰动半径（每段尝试的垂直偏移距离，格）。
+_JITTER_OFFSET = 1
+#: 扰动最小路径长度（≤2 格不扰——端点约束高、收益低）。
+_JITTER_MIN_LEN = 3
+
+
+def _jitter_path(
+    path: tuple[tuple[int, int], ...],
+    npc_id: str,
+    *,
+    tick: int,
+    pathfinder: Pathfinder,
+) -> tuple[tuple[int, int], ...]:
+    """确定性路径扰动（D20 治「固定轨迹」列车化）：同 OD 的 A* 最短路人人
+    同一条街；本函数在中间格按 (npc_id, tick) 哈希做**局部横向绕行**——
+    每隔 _JITTER_STEP 格尝试向垂直方向偏移一格再折回（若两侧都可走则哈希
+    挑一侧，一侧可走则绕该侧，都不可走保持原格）。
+
+    C5：哈希纯函数、无随机；起终点不动；长度上界 = 基线 ×1.6 +1（钉）。
+    扰动只发生在**可走格之间**——寻路面不新增不可达。
+    """
+    if len(path) < _JITTER_MIN_LEN:
+        return path
+    digest = _hash_u32("path-jitter", npc_id, tick)
+    step = 3 + (digest % 2)  # 每 3-4 格一个扰动点（步长哈希微变，路线不齐步）
+    out: list[tuple[int, int]] = [path[0]]
+    i = 1
+    while i < len(path) - 1:
+        x, y = path[i]
+        # 扰动判定：段首格才尝试（步长节奏）；基线相邻格方向决定垂直向
+        if (i - 1) % step == 0 and i + 1 < len(path) - 1:
+            px, py = path[i - 1]
+            dx, dy = x - px, y - py
+            # 垂直方向两个候选
+            cands = [(x - dy, y - dx), (x + dy, y + dx)]
+            walkable = [c for c in cands if pathfinder.tile_map.is_walkable(*c)]
+            if walkable:
+                pick = walkable[(digest >> 8) % len(walkable)]
+                # 绕行：当前格 → 偏移格 → 回到当前格（两格换一格的三拍）
+                out.append(pick)
+        out.append((x, y))
+        i += 1
+    out.append(path[-1])
+    # 长度上界护栏（理论 1.5x 内，防御性 clamp 到钉值）
+    base_len = len(path)
+    if len(out) > int(base_len * 1.6) + 1:
+        return path
+    return tuple(out)
+
+
 def plan_npc_move(
     state: WorldState,
     npc_id: str,
@@ -358,6 +408,7 @@ def plan_npc_move(
             path = pathfinder.find(start, goal)
         except ValueError:
             return None  # D14：不可达原地待着（不再退化全图闲逛）
+        path = _jitter_path(path, npc_id, tick=tick, pathfinder=pathfinder)  # D20 轨迹扰动
         return move_event(
             tick=0,  # tick 由调用方改写（issue 时点）；工厂校验 path 完整性
             actor_id=npc_id,
@@ -373,6 +424,7 @@ def plan_npc_move(
         path = pathfinder.find(start, goal)
     except ValueError:
         return None
+    path = _jitter_path(path, npc_id, tick=tick, pathfinder=pathfinder)  # D20 轨迹扰动
     return move_event(
         tick=0,
         actor_id=npc_id,
