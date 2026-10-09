@@ -15,7 +15,7 @@ export default function App(): ReactElement {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-stone-950">
+    <div className="od-app flex h-screen w-screen flex-col">
       <TopBar onOpenSettings={() => setSettingsOpen(true)} />
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">

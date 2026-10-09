@@ -5,6 +5,7 @@
  * 最近 MONOLOGUE_CAP 条）+ 街谈巷议（批次 D10：村民 bubble 公开嘟囔，
  * CHATTER_CAP 条）+ 计划看板（state_delta.plan，有则展开无则收起）。
  * 出戏纪律：只渲染叙事文本，零数值零工程词。
+ * 版式：宣纸竖栏，墨字 + 朱印（见 ui.css）。
  */
 import type { ReactElement } from 'react';
 import { useUiStore, type MonologueEntry } from '../store/uiStore';
@@ -21,61 +22,48 @@ export function PanelHost(): ReactElement {
   const plans = useUiStore((s) => s.plans);
 
   return (
-    <aside
-      id="panel-host"
-      className="flex w-64 shrink-0 flex-col gap-3 overflow-y-auto border-l border-stone-700 bg-stone-900/95 p-3"
-    >
-      <section aria-label="心之声" className="min-h-0 shrink-0">
-        <h2 className="mb-2 text-xs font-semibold tracking-widest text-stone-400">心之声</h2>
+    <aside id="panel-host" className="od-panelhost">
+      <section aria-label="心之声" className="od-panel od-panel--voice">
+        <span className="od-panel__pin" aria-hidden="true" />
+        <h2 className="od-panel__title">心之声</h2>
         {monologues.length === 0 ? (
-          <p className="text-xs leading-relaxed text-stone-500">
-            陈默心里还很安静。
-          </p>
+          <p className="od-panel__empty">陈默心里还很安静。</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="od-voice-list">
             {monologues.map((m, i) => (
-              <li
-                key={`${i}-${m.content}`}
-                className="rounded bg-stone-800/70 px-2.5 py-1.5 text-xs leading-relaxed text-stone-200"
-              >
-                <span className="mr-1 text-[10px] text-amber-300/80">{FORM_LABEL[m.form]}</span>
+              <li key={`${i}-${m.content}`} className="od-voice">
+                <span className="od-voice__tag">{FORM_LABEL[m.form]}</span>
                 {m.content}
               </li>
             ))}
           </ul>
         )}
       </section>
-      <section aria-label="街谈巷议" className="min-h-0 flex-1 overflow-y-auto">
-        <h2 className="mb-2 text-xs font-semibold tracking-widest text-stone-400">街谈巷议</h2>
+      <section aria-label="街谈巷议" className="od-panel od-panel--chatter">
+        <span className="od-panel__pin" aria-hidden="true" />
+        <h2 className="od-panel__title">街谈巷议</h2>
         {chatter.length === 0 ? (
-          <p className="text-xs leading-relaxed text-stone-500">镇上还很安静。</p>
+          <p className="od-panel__empty">镇上还很安静。</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="od-chatter-list">
             {chatter.map((c, i) => (
-              <li
-                key={`${i}-${c.content}`}
-                className="chatter-item rounded bg-stone-800/40 px-2.5 py-1.5 text-xs leading-relaxed text-stone-400"
-              >
-                {c.name !== null && (
-                  <span className="mr-1 text-[10px] text-stone-300">{c.name}：</span>
-                )}
+              <li key={`${i}-${c.content}`} className="chatter-item od-chatter">
+                {c.name !== null && <span className="od-chatter__name">{c.name}：</span>}
                 {c.content}
               </li>
             ))}
           </ul>
         )}
       </section>
-      <section aria-label="计划" className="min-h-0">
-        <h2 className="mb-2 text-xs font-semibold tracking-widest text-stone-400">计划</h2>
+      <section aria-label="计划" className="od-panel od-panel--plan">
+        <span className="od-panel__pin" aria-hidden="true" />
+        <h2 className="od-panel__title">计划</h2>
         {plans.length === 0 ? (
-          <p className="text-xs text-stone-500">还没有什么打算。</p>
+          <p className="od-panel__empty">还没有什么打算。</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="od-plan-list">
             {plans.map((p) => (
-              <li
-                key={p.rtoken}
-                className="plan-item rounded bg-stone-800/70 px-2.5 py-1.5 text-xs leading-relaxed text-stone-300"
-              >
+              <li key={p.rtoken} className="plan-item od-plan">
                 {p.text}
               </li>
             ))}

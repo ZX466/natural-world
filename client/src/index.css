@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './ui/ui.css';
 
 /* Phaser canvas 填满 CanvasHost；body 不滚（世界由摄像机管）。 */
 html,
