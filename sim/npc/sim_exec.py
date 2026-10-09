@@ -18,7 +18,7 @@ import hashlib
 from collections.abc import Mapping
 from dataclasses import replace
 
-from sim.core.events import WorldEvent, move_event, npc_chat_event
+from sim.core.events import WorldEvent, move_event, npc_chat_event, npc_monologue_event
 from sim.core.world import WorldState
 from sim.world.pathfinding import Pathfinder
 
@@ -50,6 +50,16 @@ def _chat_cooldown_ticks(npc_id: str) -> int:
     """npc_id → 聊天冷却时长（tick）：[MIN, MIN+SPAN) 均匀散布（C5 哈希）。"""
     span = _hash_u32("chat-cooldown", npc_id) % _CHAT_COOLDOWN_SPAN_TICKS
     return _CHAT_COOLDOWN_MIN_TICKS + span
+
+
+#: E2 retell 冷却：[3600, 14400) tick = 60~240 游戏分（学舌比聊天更稀）。
+_RETELL_COOLDOWN_MIN_TICKS = 3600
+_RETELL_COOLDOWN_SPAN_TICKS = 10800
+
+
+def retell_template(speaker_name: str, content: str) -> str:
+    """转述模板（外在可观察面：路人听见 A 向 B 学舌）。"""
+    return f"听{speaker_name}说，{content}"
 
 
 def _cooldown_ticks(npc_id: str) -> int:
@@ -458,6 +468,7 @@ def npc_events_for_tick(
     chat_last: dict[str, int] | None = None,
     display_name_of: Mapping[str, str] | None = None,
     chat_ledger: object | None = None,
+    retell_last: dict[str, int] | None = None,
 ) -> list[WorldEvent]:
     """一个决策节拍的事件批次：NpcRuntime.tick → NPC_ACT 批次 + MOVE 交错。
 
@@ -554,8 +565,32 @@ def npc_events_for_tick(
 
                             assert isinstance(chat_ledger, ChatLedger)
                             chat_ledger.adjust(npc_id, target_id, kind="chat")
+                            # E2 retell：开口同拍，学舌**开口前**已记住的旧闻
+                            # （本拍的话对方刚听过——复读不传播新信息；流言=
+                            # 传播先前获得的内容，故先取旧记忆再落新记忆）。
+                            _prior_mems = chat_ledger.memories_of(npc_id)
                             chat_ledger.remember(npc_id, line, tick=tick)
                             chat_ledger.remember(target_id, line, tick=tick)
+                            if retell_last is not None and _prior_mems:
+                                cool = _RETELL_COOLDOWN_MIN_TICKS + (
+                                    _hash_u32("retell-cooldown", npc_id)
+                                    % _RETELL_COOLDOWN_SPAN_TICKS
+                                )
+                                last_r = retell_last.get(npc_id, -(cool + 1))
+                                if tick - last_r >= cool:
+                                    retell_last[npc_id] = tick
+                                    _tick_src, _content = _prior_mems[-1]
+                                    _speaker = (display_name_of or {}).get(npc_id, npc_id)
+                                    _line = retell_template(_speaker, _content)
+                                    events.append(
+                                        npc_monologue_event(
+                                            tick=tick,
+                                            npc_id=npc_id,
+                                            form="bubble",
+                                            content=_line,
+                                        )
+                                    )
+                                    chat_ledger.adjust(npc_id, target_id, kind="retell")
         mv = plan_npc_move(
             state,
             npc_id,
