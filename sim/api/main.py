@@ -247,6 +247,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     coin_ledger = CoinLedger()
     app.state.coin_ledger = coin_ledger
     wage_last: dict[str, int] = {}
+    # 批次 E4：施工 runtime（事件为真相；每 tick 推进 checkpoint/完工）。
+    from sim.agent.build_exec import BuildRuntime
+
+    build_runtime = BuildRuntime(tile_map, seed=loop.state.world_seed)
+    app.state.build_runtime = build_runtime
+
+    def _build_tick_hook(state: Any, tick: int) -> list[Any] | None:
+        events = build_runtime.on_tick(tick)
+        if events:
+            # TILE_CHANGED → 寻路缓存失效（§14 chunk 失效；图换新实例后
+            # pathfinder 需感知——observe_map 对齐新几何）。
+            pathfinder.observe_map(build_runtime.tile_map)
+        return events or None
+
+    loop.attach_npc_runtime(_build_tick_hook)
 
     def _npc_tick_hook(state: Any, tick: int) -> list[Any] | None:
         batch = npc_events_for_tick(
@@ -353,6 +368,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         perception_provider=_chenmo_perception,
         display_name_of=_display_names.get,  # 批次 E1：talk_to 台词用戏内名
         economy_provider=lambda: (coin_ledger, loop.state.world_seed),  # 批次 E3
+        build_runtime_provider=lambda: build_runtime,  # 批次 E4
     )
     app.state.chenmo_driver = driver
     set_impulse_trigger(driver.request_decision)

@@ -54,6 +54,7 @@ class ChenmoDriver:
         perception_provider: Callable[[], str] | None = None,
         display_name_of: Callable[[str], str | None] | None = None,
         economy_provider: Callable[[], tuple[object, int]] | None = None,
+        build_runtime_provider: Callable[[], object] | None = None,
     ) -> None:
         self._anchor = anchor
         self._llm = llm
@@ -66,6 +67,8 @@ class ChenmoDriver:
         self._display_name_of = display_name_of or (lambda _eid: None)
         # 批次 E3：经济面注入（() -> (CoinLedger, world_seed)）；None = 无买卖面。
         self._economy = economy_provider
+        # 批次 E4：施工面注入（() -> BuildRuntime）；None = 无建造面。
+        self._build = build_runtime_provider
         self._gate = IntentGate()
         self._pending: deque[Intent] = deque()
         # impulse 置位（ws handler 在事件循环线程调，driver 循环也在事件循环——
@@ -183,6 +186,9 @@ class ChenmoDriver:
             elif intent.action in ("buy", "sell") and intent.target_id is not None:
                 if self._economy is not None:
                     self._issue_trade(loop, intent)
+            elif intent.action == "build" and intent.target_pos is not None:
+                if self._build is not None and self._economy is not None:
+                    self._issue_build(loop, actor_id, intent)
             from sim.core.events import npc_monologue_event
 
             loop.enqueue(
@@ -269,6 +275,55 @@ class ChenmoDriver:
         loop.enqueue(
             npc_monologue_event(
                 tick=tick + 1, npc_id=actor_id, form="thought", content=content
+            )
+        )
+
+    def _issue_build(self, loop: TickLoop, actor_id: str, intent: Intent) -> None:
+        """build：扣工料（余额不足=不开工）→ structure.started + 独白（E4）。"""
+        from sim.core.events import coin_grant_event, npc_monologue_event
+        from sim.world.economy import CoinLedger
+
+        build_runtime = self._build()
+        pos = intent.target_pos
+        assert pos is not None
+        ledger, _seed = self._economy()
+        assert isinstance(ledger, CoinLedger)
+        tick = loop.state.tick
+        cost = build_runtime.build_cost
+        if not ledger.apply_grant(actor_id, -cost, tick=tick):
+            loop.enqueue(
+                npc_monologue_event(
+                    tick=tick + 1,
+                    npc_id=actor_id,
+                    form="thought",
+                    content=f"手里凑不齐这{cost}文的工料钱，搭棚的事再缓缓。",
+                )
+            )
+            return
+        started = build_runtime.start(actor_id, pos, tick=tick)
+        if started is None:
+            # 扣款退回（格不可走/已有工地——钱货两讫原则：没开工不收钱）
+            ledger.apply_grant(actor_id, cost, tick=tick)
+            loop.enqueue(
+                npc_monologue_event(
+                    tick=tick + 1,
+                    npc_id=actor_id,
+                    form="thought",
+                    content="这块地使不得了，另寻去处吧。",
+                )
+            )
+            return
+        ledger.apply_grant(actor_id, -0, tick=tick)  # no-op（保持账本 tick 语义）
+        loop.enqueue(
+            coin_grant_event(tick=tick, owner_id=actor_id, delta=-cost, note="build:shed")
+        )
+        loop.enqueue(started)
+        loop.enqueue(
+            npc_monologue_event(
+                tick=tick + 1,
+                npc_id=actor_id,
+                form="thought",
+                content="地块我看好了，明天起木料，搭个棚子。",
             )
         )
 

@@ -233,10 +233,29 @@ def _apply_fire_event(state: WorldState, event: WorldEvent, ctx: TickContext) ->
     return ApplyResult(state=state)
 
 
+def _apply_structure_event(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    """STRUCTURE_*（批次 E4 实况接线）：施工记录进事件日志，状态层 no-op。
+
+    结构投影（structures 表）与占格（tile_changed）由 NpcStore 投影缝 /
+    BuildRuntime 实况侧承担；世界态不含结构（同火场口径——事件材料足以
+    重放观察面）。no-op ⇒ 重放安全（C5）。
+    """
+    return ApplyResult(state=state)
+
+
+def _apply_material_event(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    """MATERIAL_*（E4 前置一并注册——事件族同源；余额投影归 NpcStore）。"""
+    return ApplyResult(state=state)
+
+
 def _apply_tile_changed(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
-    """M3 预留：M0 地图静态，收到即拒绝。"""
-    msg = "tile_changed 在 M0 未启用（可变地图底座是 M3）"
-    raise NotImplementedError(msg)
+    """TILE_CHANGED（批次 E4 启用，替换 M0 的 NotImplementedError 占位）：
+    瓦片变更是表现/寻路面（TileMap frozen 几何由 BuildRuntime 实况重建），
+    状态层 no-op（实体位置不在 tile 上、WorldState 无瓦片字段）。"""
+    from sim.core.events import TileChangedPayload
+
+    TileChangedPayload.model_validate(event.payload)
+    return ApplyResult(state=state)
 
 
 def build_default_bus() -> EventBus:
@@ -252,6 +271,12 @@ def build_default_bus() -> EventBus:
     bus.register(EventKind.NPC_MONOLOGUE, _apply_npc_monologue)
     bus.register(EventKind.NPC_CHAT, _apply_npc_chat)
     bus.register(EventKind.COIN_GRANT, _apply_coin_grant)
+    bus.register(EventKind.STRUCTURE_STARTED, _apply_structure_event)
+    bus.register(EventKind.STRUCTURE_CHECKPOINT, _apply_structure_event)
+    bus.register(EventKind.STRUCTURE_COMPLETED, _apply_structure_event)
+    bus.register(EventKind.STRUCTURE_COLLAPSED, _apply_structure_event)
+    bus.register(EventKind.STRUCTURE_REMOVED, _apply_structure_event)
+    bus.register(EventKind.MATERIAL_MOVED, _apply_material_event)
     bus.register(EventKind.FIRE_IGNITED, _apply_fire_event)
     bus.register(EventKind.FOG_REVEAL, _apply_fog_reveal)
     bus.register(EventKind.FIRE_EXTINGUISHED, _apply_fire_event)
