@@ -457,6 +457,7 @@ def npc_events_for_tick(
     monologue_quota: dict[int, int] | None = None,
     chat_last: dict[str, int] | None = None,
     display_name_of: Mapping[str, str] | None = None,
+    chat_ledger: object | None = None,
 ) -> list[WorldEvent]:
     """一个决策节拍的事件批次：NpcRuntime.tick → NPC_ACT 批次 + MOVE 交错。
 
@@ -547,6 +548,14 @@ def npc_events_for_tick(
                                 tick=tick, npc_id=npc_id, to_id=target_id, line=line
                             )
                         )
+                        # E2：聊天落账本——好感漂移 + 双方记忆（进程内 runtime 态）。
+                        if chat_ledger is not None:
+                            from sim.npc.chat_ledger import ChatLedger
+
+                            assert isinstance(chat_ledger, ChatLedger)
+                            chat_ledger.adjust(npc_id, target_id, kind="chat")
+                            chat_ledger.remember(npc_id, line, tick=tick)
+                            chat_ledger.remember(target_id, line, tick=tick)
         mv = plan_npc_move(
             state,
             npc_id,
