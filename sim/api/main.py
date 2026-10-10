@@ -189,15 +189,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from sim.core.flush import flush_events
 
         await flush_events(store, events)
+        async with store.session_factory() as session:
+            await memory_store.flush(session)
+            await session.commit()
 
     async def on_flush_async() -> None:
         from sim.core.flush import flush_events
 
         await flush_events(store, loop.drain_events())
+        async with store.session_factory() as session:
+            await memory_store.flush(session)
+            await session.commit()
 
     app.state.loop = loop
     app.state.store = store
     app.state.tile_map = tile_map
+
+    from sim.core.persistence.async_memory_store import AsyncMemoryStore
+
+    memory_store = AsyncMemoryStore(branch_id=await store.current_branch_id())
+    async with store.session_factory() as session:
+        await memory_store.hydrate(session)
+    app.state.memory_store = memory_store
 
     # ── 批次 B：NPC 装配进实况世界 ──────────────────────────────────
     # 1) 播种 50 村民 profile（幂等；库已有则零行）；
@@ -394,7 +407,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sim.content.protagonist import CHENMO_ID
     from sim.llm.memory_scan import MemoryWritePipeline
 
-    memory_pipeline = MemoryWritePipeline()  # 缺省 InMemoryStore（进程内）
+    memory_pipeline = MemoryWritePipeline(store=memory_store)
     _ = CHENMO_ID  # 反思 npc_ids 用（见补线③）
     # 批次 E6：战斗账本（hp 进程内；死亡走 npc.death 事件——C4 零新增 kind）。
     from sim.agent.combat_exec import CombatLedger

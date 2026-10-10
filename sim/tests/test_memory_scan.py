@@ -32,6 +32,21 @@ def _write(pipeline: MemoryWritePipeline, content: str, **kw) -> WriteResult:
 
 
 class TestS1Guard:
+    def test_pipeline_write_callback_receives_only_admitted_entry(self):
+        from sim.llm.memory_scan import MemoryWritePipeline
+
+        seen = []
+        pipeline = MemoryWritePipeline(on_write=seen.append)
+        result = pipeline.write(
+            npc_id="chenmo",
+            content="今天在药铺学会了辨认草药。",
+            source="event",
+            event_seq=1,
+            importance=0.5,
+            emotion_tag=None,
+        )
+        assert result.accepted is True
+        assert seen == [result.entry]
     def test_write_is_only_entry(self):
         """write() 返回结构化结果；条目只能经它产生。"""
         p = MemoryWritePipeline()
