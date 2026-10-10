@@ -19,11 +19,35 @@ class AsyncMemoryStore(InMemoryStore):
         self._pending.append(entry)
         return entry
 
+    def attach_branch(self, branch_id: str | None) -> None:
+        """重新绑定当前世界线；unbound→branch 空转水，branch→branch 硬清零。"""
+
+        if branch_id is None:
+            return
+        if self.branch_id == branch_id:
+            return
+        was_unbound = self.branch_id == "unbound"
+        self.branch_id = branch_id
+        self.reset()
+        if was_unbound:
+            self._pending.clear()
+
+    def reset(self) -> None:
+        """读档=分叉：清空本分支进程态与待落库条目（C6：新分支从零起步）。"""
+
+        super().reset()
+        self._pending.clear()
+
+    async def hydrate_if_empty(self, session: AsyncSession) -> None:
+        """unbound→branch / 未知重启后的惰性水合（已有进程态绝不覆盖）。"""
+
+        if self._entries or self.branch_id == "unbound":
+            return
+        await self.hydrate(session)
+
     async def hydrate(self, session: AsyncSession) -> None:
         rows = (
-            await session.execute(
-                select(NpcMemory).where(NpcMemory.branch_id == self.branch_id)
-            )
+            await session.execute(select(NpcMemory).where(NpcMemory.branch_id == self.branch_id))
         ).scalars()
         for row in rows:
             entry = self._make_entry_from_row(row)
@@ -59,7 +83,7 @@ class AsyncMemoryStore(InMemoryStore):
             entry_id=row.entry_id,
             npc_id=row.npc_id,
             content=row.content,
-            source=row.source,
+            source=row.source,  # type: ignore[arg-type]
             event_seq=row.event_seq,
             importance=row.importance,
             emotion_tag=row.emotion_tag,

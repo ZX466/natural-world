@@ -189,17 +189,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from sim.core.flush import flush_events
 
         await flush_events(store, events)
-        async with store.session_factory() as session:
-            await memory_store.flush(session)
-            await session.commit()
+        branch_id = await store.current_branch_id_or_none()
+        if branch_id is not None:
+            if memory_store.branch_id != branch_id:
+                memory_store.attach_branch(branch_id)
+            async with store.session_factory() as session:
+                await memory_store.hydrate_if_empty(session)
+                await memory_store.flush(session)
+                await session.commit()
 
     async def on_flush_async() -> None:
         from sim.core.flush import flush_events
 
         await flush_events(store, loop.drain_events())
-        async with store.session_factory() as session:
-            await memory_store.flush(session)
-            await session.commit()
+        branch_id = await store.current_branch_id_or_none()
+        if branch_id is not None:
+            if memory_store.branch_id != branch_id:
+                memory_store.attach_branch(branch_id)
+            async with store.session_factory() as session:
+                await memory_store.hydrate_if_empty(session)
+                await memory_store.flush(session)
+                await session.commit()
 
     app.state.loop = loop
     app.state.store = store
@@ -207,9 +217,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     from sim.core.persistence.async_memory_store import AsyncMemoryStore
 
-    memory_store = AsyncMemoryStore(branch_id=await store.current_branch_id())
-    async with store.session_factory() as session:
-        await memory_store.hydrate(session)
+    branch_id = await store.current_branch_id_or_none()
+    memory_store = AsyncMemoryStore(branch_id=branch_id or "unbound")
+    if branch_id is not None:
+        async with store.session_factory() as session:
+            await memory_store.hydrate(session)
     app.state.memory_store = memory_store
 
     # ── 批次 B：NPC 装配进实况世界 ──────────────────────────────────
@@ -306,9 +318,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if chenmo is not None:
             for npc_id, _profile in npc_runtime.profiles.items():
                 entity = state.entities.get(npc_id)
-                nearby = entity is not None and abs(entity.pos[0] - chenmo.pos[0]) + abs(
-                    entity.pos[1] - chenmo.pos[1]
-                ) <= 3
+                nearby = (
+                    entity is not None
+                    and abs(entity.pos[0] - chenmo.pos[0]) + abs(entity.pos[1] - chenmo.pos[1]) <= 3
+                )
                 npc_runtime.update_lod(npc_id, in_interaction=nearby, tick=tick)
         batch = npc_events_for_tick(
             npc_runtime,
@@ -585,6 +598,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 chat_last.clear()
                 retell_last.clear()
                 wage_last.clear()
+                memory_store.attach_branch(await store.current_branch_id_or_none())
                 logger.info("fork.runtime_ledgers_reset", anchor_id=anchor_id)
                 logger.info("fork.load_completed", anchor_id=anchor_id)
                 load_outcomes.append((anchor_id, True))

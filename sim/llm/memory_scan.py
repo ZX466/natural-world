@@ -201,6 +201,11 @@ class InMemoryStore:
             if e.npc_id == npc_id and e.superseded_by is None and e.invalid_reason is None:
                 yield e
 
+    def reset(self) -> None:
+        """清空进程内条目（读档=分叉时的 runtime 账本收口；仅内存态，不改库）。"""
+
+        self._entries.clear()
+
     def __len__(self) -> int:
         return len(self._entries)
 

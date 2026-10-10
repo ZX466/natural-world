@@ -178,6 +178,14 @@ class SqlEventStore:
                 "追加即污染被弃时间线）"
             )
 
+    async def current_branch_id_or_none(self) -> str | None:
+        """当前分支可选读：零行 ⇒ ``None``（不 guess，不回退默认分支）。"""
+
+        try:
+            return await self.current_branch_id()
+        except NoCurrentBranchError:
+            return None
+
     async def current_branch_id(self) -> str:
         """当前活跃分支 id —— **R-4.1 真源读入口**（表 ``branches.is_current``）。
 
