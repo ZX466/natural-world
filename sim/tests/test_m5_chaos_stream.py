@@ -13,7 +13,7 @@ import numpy as np
 
 from sim.core.entropy import EntropyMixer
 from sim.core.rng import RngRegistry
-from sim.world.chaos import CHAOS_STREAM, chaotic, chaotic_at
+from sim.world.chaos import CHAOS_STREAM, ChaosState, chaotic, chaotic_at, encounter_due
 
 
 def _rng(seed: int = 42) -> RngRegistry:
@@ -46,6 +46,28 @@ class TestChaoticDeterminism:
         v = chaotic("chaos", _rng())
         assert type(v) is float
         assert not isinstance(v, np.generic)
+
+
+def test_adverse_chain_is_bounded_and_deterministic():
+    state = ChaosState()
+    state = state.adverse("fire")
+    state = state.adverse("miss")
+    assert 0.0 < state.chain <= 1.0
+    assert state == ChaosState().adverse("fire").adverse("miss")
+    assert state.cool(2).chain < state.chain
+
+
+def test_encounter_window_uses_hidden_chain_only():
+    seed = next(
+        value
+        for value in range(1000)
+        if encounter_due(seed=value, tick=86_400, chaos=ChaosState(chain=1.0))
+        and not encounter_due(seed=value, tick=86_400, chaos=ChaosState(chain=0.0))
+    )
+    assert encounter_due(seed=seed, tick=86_400, chaos=ChaosState(chain=1.0)) is True
+    assert encounter_due(seed=seed, tick=86_400, chaos=ChaosState(chain=0.0)) is False
+    assert encounter_due(seed=42, tick=86_400, chaos=ChaosState(), entropy_roll=0.0) is True
+    assert encounter_due(seed=42, tick=86_400, chaos=ChaosState(chain=1), entropy_roll=0.5) is False
 
 
 class TestChaoticAtTickVariance:

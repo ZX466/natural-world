@@ -391,6 +391,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         entropy_mixer, event = entropy_mixer.mix(stream, tick=tick)
         return event
 
+    loop.attach_entropy(_combat_entropy)
+
     driver = ChenmoDriver(
         anchor=build_anchor(),
         llm=llm_client,

@@ -38,6 +38,7 @@ from sim.api.ws import (
 from sim.core.events import (
     EventKind,
     NpcMonologuePayload,
+    npc_chat_event,
     npc_monologue_event,
 )
 from sim.npc.plan_view import (
@@ -144,6 +145,11 @@ class TestFrameProjection:
         assert frame["form"] == "thought"
         assert frame["content"] == "我干嘛要干这个"
         assert "ws_seq" in frame and frame["ws_seq"] == 0
+
+    def test_chat_events_project_to_bubble_frames(self) -> None:
+        event = npc_chat_event(tick=1, npc_id="n", to_id="m", line="你好")
+        frames = monologue_events_to_frames([event])
+        assert frames == [("n", monologue_payload("bubble", "你好", name=None))]
 
     def test_frame_has_no_actor_or_rtoken(self) -> None:
         """W7 字段最小化：独白帧只含 form+content，无 actor/rtoken（出戏边界）。"""

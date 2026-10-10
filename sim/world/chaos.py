@@ -23,6 +23,7 @@ preserved 体系内复核。
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 from typing import Final
 
 import numpy as np
@@ -31,6 +32,46 @@ from sim.core.rng import RngRegistry
 
 #: 混沌流名（DESIGN §11「确定性混沌」的注册流）。
 CHAOS_STREAM: Final = "chaos"
+ENCOUNTER_STREAM: Final = "world.encounter"
+
+
+@dataclass(frozen=True)
+class ChaosState:
+    """Hidden adverse-event chain; never serialize to perception, prompt, or WS."""
+
+    chain: float = 0.0
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.chain <= 1.0:
+            raise ValueError("chaos chain must be in [0, 1]")
+
+    def adverse(self, kind: str) -> ChaosState:
+        if not kind:
+            raise ValueError("adverse event kind must be non-empty")
+        return ChaosState(min(1.0, self.chain + 0.25))
+
+    def cool(self, ticks: int = 1) -> ChaosState:
+        if ticks < 0:
+            raise ValueError("ticks must be non-negative")
+        return ChaosState(max(0.0, self.chain - 0.05 * ticks))
+
+
+def encounter_due(
+    *, seed: int, tick: int, chaos: ChaosState, entropy_roll: float | None = None
+) -> bool:
+    """One daily encounter opportunity; adversity raises probability to 35%."""
+    if tick < 0:
+        raise ValueError("tick must be non-negative")
+    if tick % 86_400 != 0:
+        return False
+    if entropy_roll is None:
+        digest = hashlib.sha256(f"encounter:{seed}:{tick}".encode()).digest()
+        draw = int.from_bytes(digest[:8], "big") / 2**64
+    else:
+        if not 0.0 <= entropy_roll < 1.0:
+            raise ValueError("entropy_roll must be in [0, 1)")
+        draw = entropy_roll
+    return draw < 0.05 + 0.30 * chaos.chain
 
 #: 确定性抽样的缓存键前缀（与 RngRegistry.generator 的抽签缓存隔离——
 #: chaotic 不推进抽签进度，缓存生命周期=单次调用即可，无跨 tick 状态）。

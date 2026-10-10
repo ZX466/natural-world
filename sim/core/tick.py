@@ -14,6 +14,7 @@ from sim.core.entropy import EntropyMixer
 from sim.core.events import WorldEvent, combat_scale_event, move_event
 from sim.core.rng import RngRegistry
 from sim.core.world import EventBus, TickContext, WorldState
+from sim.world.chaos import ENCOUNTER_STREAM, ChaosState, encounter_due
 from sim.world.pathfinding import Pathfinder
 
 _MAX_TICKS_PER_FRAME = 240  # 16x = 960 tick/s 上限按 4s catch-up → 单帧封顶
@@ -33,6 +34,7 @@ def entity_move_phase(entity_id: str) -> int:
     import zlib
 
     return zlib.crc32(entity_id.encode()) % _MOVE_TICKS_PER_TILE
+
 
 # 感知装配钩子签名：(state, tick_events) -> dict[rtoken, frame]。
 # 返回值 value 用 object 避免内核 import 感知域（内核零依赖感知，钩子由外层注入）；
@@ -66,6 +68,10 @@ class TickLoop:
     # D17 视觉雾：主角已揭示 chunk 全集（实例账本；重放=按 fog.reveal 事件流
     # 重建——事件是真相，账本只是实况缓存；不入 state_hash）。
     fog_seen: set[tuple[int, int]] = field(default_factory=set)
+    chaos: ChaosState = field(default_factory=ChaosState)
+    _entropy_hook: Callable[[str, int], WorldEvent] | None = field(
+        default=None, repr=False, compare=False
+    )
 
     def advance_frame(self, real_dt: float) -> int:
         """喂入真实秒数，推进 0..N 个 tick（catch-up 封顶）。返回推进数。"""
@@ -85,6 +91,7 @@ class TickLoop:
     def _tick_once(self) -> None:
         """固定执行序：0 熵注入（M5 批次 A 接线）→ 1 实体移动 → 2 定时任务（M0 空）→ 3 感知。"""
         self._maybe_daily_reseed()
+        self._maybe_encounter_entropy()
         self._step_entity_movement()
         self._run_npc_runtime()  # 批次 B：定时任务挂载点兑现（决策节拍）
         self._run_perception()
@@ -134,6 +141,40 @@ class TickLoop:
     def attach_perception(self, hook: PerceptionHook) -> None:
         """注入感知装配钩子：签名 (state, tick_events) -> dict[rtoken, frame]。"""
         self._perception_hook = hook
+
+    def attach_entropy(self, hook: Callable[[str, int], WorldEvent]) -> None:
+        """Attach external entropy collector; material remains event-only."""
+        self._entropy_hook = hook
+
+    def _maybe_encounter_entropy(self) -> None:
+        if self.state.tick % 86_400 != 0 or len(self.state.entities) < 2:
+            self.chaos = self.chaos.cool()
+            return
+        if self._entropy_hook is None:
+            self.chaos = self.chaos.cool()
+            return
+        event = self._entropy_hook(ENCOUNTER_STREAM, self.state.tick)
+        self.enqueue(event)
+        material = bytes.fromhex(str(event.payload["material"]))
+        roll = int.from_bytes(material, "big") / (1 << (8 * len(material)))
+        if encounter_due(
+            seed=self.state.world_seed,
+            tick=self.state.tick,
+            chaos=self.chaos,
+            entropy_roll=roll,
+        ):
+            from sim.core.events import npc_chat_event
+
+            first, second = sorted(self.state.entities)[:2]
+            self.enqueue(
+                npc_chat_event(
+                    tick=self.state.tick,
+                    npc_id=first,
+                    to_id=second,
+                    line="路边有人叫住了你。",
+                )
+            )
+            self.chaos = self.chaos.cool()
 
     def attach_npc_runtime(self, hook: NpcRuntimeHook) -> None:
         """追加 NPC 钩子（批次 B；多槽列表——D5 教训：单槽时第二个挂载者
