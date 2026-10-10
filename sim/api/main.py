@@ -299,9 +299,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from sim.npc.sim_exec import anim_of_action
 
         for event in batch or []:
-            if getattr(event, "event_type", None) is not None and getattr(
-                event.event_type, "value", ""
-            ) == "npc.act":
+            if (
+                getattr(event, "event_type", None) is not None
+                and getattr(event.event_type, "value", "") == "npc.act"
+            ):
                 npc_id = str(event.payload.get("npc_id", ""))
                 if npc_id:
                     set_action_anim(npc_id, anim_of_action(str(event.payload.get("action", ""))))
@@ -379,9 +380,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _ = CHENMO_ID  # 反思 npc_ids 用（见补线③）
     # 批次 E6：战斗账本（hp 进程内；死亡走 npc.death 事件——C4 零新增 kind）。
     from sim.agent.combat_exec import CombatLedger
+    from sim.core.entropy import EntropyMixer
 
     combat_ledger = CombatLedger()
     app.state.combat_ledger = combat_ledger
+    entropy_mixer = EntropyMixer(rng=RngRegistry(world_seed=loop.state.world_seed))
+
+    def _combat_entropy(stream: str, tick: int):
+        nonlocal entropy_mixer
+        entropy_mixer, event = entropy_mixer.mix(stream, tick=tick)
+        return event
+
     driver = ChenmoDriver(
         anchor=build_anchor(),
         llm=llm_client,
@@ -391,6 +400,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         economy_provider=lambda: (coin_ledger, loop.state.world_seed),  # 批次 E3
         build_runtime_provider=lambda: build_runtime,  # 批次 E4
         combat_provider=lambda: (combat_ledger, loop.state.world_seed),  # 批次 E6
+        entropy_provider=_combat_entropy,
     )
     app.state.chenmo_driver = driver
     set_impulse_trigger(driver.request_decision)

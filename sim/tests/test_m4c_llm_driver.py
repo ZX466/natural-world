@@ -85,7 +85,14 @@ class _FakeLlm:
         self._content = result_content
         self._error = error
 
-    async def complete(self, profile: Any, messages: list[dict[str, str]]) -> _FakeResult:
+    async def complete(
+        self,
+        profile: Any,
+        messages: list[dict[str, str]],
+        decision: Any = None,
+        *,
+        max_tokens_override: int | None = None,
+    ) -> _FakeResult:
         self.calls += 1
         self.last_messages = messages
         if self._error is not None:

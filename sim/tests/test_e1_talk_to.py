@@ -1,6 +1,6 @@
 """E1：talk_to/investigate 执行面——闸门放行的对话/张望终于落地成事件。"""
 
-from sim.agent.dialogue import template_line
+from sim.agent.dialogue import template_line, validate_provider_line
 from sim.agent.driver import ChenmoDriver
 from sim.content.protagonist import build_anchor
 from sim.core.clock import GameClock
@@ -59,6 +59,12 @@ def test_execute_talk_to_produces_chat_and_monologue():
     kinds = [e.event_type.value for e in loop.drain_events()]
     assert "npc.chat" in kinds
     assert "npc.monologue" in kinds
+
+
+def test_dialogue_provider_line_is_normalized_and_filtered():
+    assert validate_provider_line("  hello   there  ") == "hello there"
+    assert validate_provider_line("who is AI?") is None
+    assert validate_provider_line("x" * 161) is None
 
 
 def test_chat_line_uses_display_name_and_passes_banned_scan():

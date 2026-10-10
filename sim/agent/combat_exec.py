@@ -37,9 +37,31 @@ class AttackOutcome:
     outcome: str  # "hit" | "miss" | "kill"
     damage: int
     target_hp: int
+    critical: bool = False
 
 
-def settle_attack(attacker: str, target: str, *, tick: int, seed: int) -> AttackOutcome:
+def needs_critical_entropy(attacker: str, target: str, *, tick: int, seed: int) -> bool:
+    digest = hashlib.sha256(f"combat:{attacker}:{target}:{tick}:{seed}".encode()).digest()
+    return int.from_bytes(digest[:4], "big") % 100 >= 80
+
+
+def entropy_roll(material_hex: str) -> float:
+    """Map recorded inject material to a replayable unit roll."""
+    from sim.core.events import EntropyInjectPayload
+
+    payload = EntropyInjectPayload(stream="combat.critical", material=material_hex)
+    material = bytes.fromhex(payload.material)
+    return int.from_bytes(material, "big") / (1 << (8 * len(material)))
+
+
+def settle_attack(
+    attacker: str,
+    target: str,
+    *,
+    tick: int,
+    seed: int,
+    entropy_roll: float | None = None,
+) -> AttackOutcome:
     """纯结算（不改账本）：25% miss / 55% hit(2-4) / 20% crit(6-9)。
 
     hp 口径：本函数按**满血**算 target_hp（纯函数不读账本）；账本扣血由
@@ -50,9 +72,12 @@ def settle_attack(attacker: str, target: str, *, tick: int, seed: int) -> Attack
     if roll < 25:
         return AttackOutcome(outcome="miss", damage=0, target_hp=_DEFAULT_HP)
     dmg = 2 + int.from_bytes(digest[4:8], "big") % 3
-    if roll >= 80:
+    critical = roll >= 80 and (entropy_roll is None or entropy_roll < 0.2)
+    if critical:
         dmg = 6 + int.from_bytes(digest[8:12], "big") % 4
-    return AttackOutcome(outcome="hit", damage=dmg, target_hp=max(0, _DEFAULT_HP - dmg))
+    return AttackOutcome(
+        outcome="hit", damage=dmg, target_hp=max(0, _DEFAULT_HP - dmg), critical=critical
+    )
 
 
 class CombatLedger:
@@ -68,13 +93,27 @@ class CombatLedger:
         """清空 hp 账本（读档=分叉：旧分支 hp 残留会「一刀秒杀」——review I2）。"""
         self._hp.clear()
 
-    def apply_attack(self, attacker: str, target: str, *, tick: int, seed: int) -> AttackOutcome:
+    def apply_attack(
+        self,
+        attacker: str,
+        target: str,
+        *,
+        tick: int,
+        seed: int,
+        entropy_roll: float | None = None,
+    ) -> AttackOutcome:
         """结算并扣血；hp 归零 → outcome=kill（死亡事件由调用方发——C4）。"""
-        out = settle_attack(attacker, target, tick=tick, seed=seed)
+        out = settle_attack(
+            attacker, target, tick=tick, seed=seed, entropy_roll=entropy_roll
+        )
         if out.outcome == "miss":
             return out
         new_hp = max(0, self.hp_of(target) - out.damage)
         self._hp[target] = new_hp
         if new_hp == 0:
-            return AttackOutcome(outcome="kill", damage=out.damage, target_hp=0)
-        return AttackOutcome(outcome="hit", damage=out.damage, target_hp=new_hp)
+            return AttackOutcome(
+                outcome="kill", damage=out.damage, target_hp=0, critical=out.critical
+            )
+        return AttackOutcome(
+            outcome="hit", damage=out.damage, target_hp=new_hp, critical=out.critical
+        )
