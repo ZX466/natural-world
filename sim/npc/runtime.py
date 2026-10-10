@@ -69,6 +69,7 @@ class NpcRuntime:
     willingness_of: object | None = None
     power: dict[str, float] | None = None
     _order: list[str] = field(default_factory=list, init=False)
+    _lod_events: list[WorldEvent] = field(default_factory=list, init=False, repr=False)
 
     def __post_init__(self) -> None:
         # 固定 NPC 序（dict 序可能因物化顺序漂移；排序保证 C5 确定性）
@@ -100,7 +101,8 @@ class NpcRuntime:
         随世界循环接线批次补齐（witnessed 判定须三要素齐，空 witnesses 自然
         不构成目击，fail-closed）。
         """
-        events: list[WorldEvent] = []
+        events: list[WorldEvent] = list(self._lod_events)
+        self._lod_events.clear()
 
         # 0. 隐藏档触发窗口重估（每拍；hidden.py §2 纯函数）+ E1 浮现事件
         if hidden_states is not None:
@@ -199,3 +201,24 @@ class NpcRuntime:
 
         self.profiles = advanced
         return events
+
+    def update_lod(self, npc_id: str, *, in_interaction: bool, tick: int) -> None:
+        """Promote nearby NPCs to L2, demote idle L2 to L1 through events."""
+        profile = self.profiles.get(npc_id)
+        if profile is None:
+            return
+        target = 2 if in_interaction else (1 if profile.lod == 2 else profile.lod)
+        if target == profile.lod:
+            return
+        from sim.core.events import npc_lod_change_event
+
+        self.profiles[npc_id] = profile.with_lod(target)
+        self._lod_events.append(
+            npc_lod_change_event(
+                tick=tick,
+                npc_id=npc_id,
+                from_lod=profile.lod,
+                to_lod=target,
+                reason="interaction" if in_interaction else "interaction_end",
+            )
+        )

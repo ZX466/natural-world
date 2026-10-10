@@ -257,6 +257,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 批次 E7：structure_id → tiles（started 时记；completed 时投影 built——
     # StructureDelta phase 枚举无 building,在建工地不投影,完工才画）。
     build_tiles_log: dict[str, list[tuple[int, int]]] = {}
+    from sim.world.maintenance import WorldMaintenance
+
+    matter_ledger = await npc_store.materialize_matter()
+    structure_snapshots = await npc_store.materialize_structures()
+    maintenance = WorldMaintenance(ledger=matter_ledger, structures=structure_snapshots)
 
     def _build_tick_hook(state: Any, tick: int) -> list[Any] | None:
         events = build_runtime.on_tick(tick)
@@ -278,7 +283,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     loop.attach_npc_runtime(_build_tick_hook)
 
+    def _maintenance_tick_hook(state: Any, tick: int) -> list[Any] | None:
+        return maintenance.tick(tick=tick, seed=state.world_seed) or None
+
+    loop.attach_maintenance(_maintenance_tick_hook)
+
     def _npc_tick_hook(state: Any, tick: int) -> list[Any] | None:
+        chenmo = state.entities.get(CHENMO_ID)
+        if chenmo is not None:
+            for npc_id, _profile in npc_runtime.profiles.items():
+                entity = state.entities.get(npc_id)
+                nearby = entity is not None and abs(entity.pos[0] - chenmo.pos[0]) + abs(
+                    entity.pos[1] - chenmo.pos[1]
+                ) <= 3
+                npc_runtime.update_lod(npc_id, in_interaction=nearby, tick=tick)
         batch = npc_events_for_tick(
             npc_runtime,
             state,

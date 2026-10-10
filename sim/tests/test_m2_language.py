@@ -27,6 +27,16 @@ def _profile(**kw) -> LanguageProfile:
 
 
 class TestLanguageProfile:
+    def test_species_profiles_exist_for_animal_line(self) -> None:
+        from sim.perception.profiles import CAT, DOG, HUMAN, RAVEN
+
+        assert {p.species for p in (HUMAN, CAT, DOG, RAVEN)} == {
+            "human", "cat", "dog", "raven"
+        }
+        assert CAT.hearing_radius > 0
+        assert DOG.hearing_radius > 0
+        assert RAVEN.vision_radius > 0
+
     def test_from_json_roundtrip(self) -> None:
         """0004 夹具 JSON 形 → LanguageProfile（数据层命名对齐）。"""
         import json

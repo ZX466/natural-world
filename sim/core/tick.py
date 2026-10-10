@@ -45,6 +45,7 @@ PerceptionHook = Callable[[WorldState, list[WorldEvent]], "Mapping[str, object]"
 # 返回批次由 TickLoop 经 enqueue 逐条入流（C4 唯一写路径）；None/空 = 本拍无事。
 # 与 PerceptionHook 同纪律：内核零依赖 npc 域，实现由装配层注入（main.py）。
 NpcRuntimeHook = Callable[[WorldState, int], "list[WorldEvent] | None"]
+MaintenanceHook = Callable[[WorldState, int], "list[WorldEvent] | None"]
 
 
 @dataclass
@@ -65,6 +66,9 @@ class TickLoop:
     _perception_hook: PerceptionHook | None = field(default=None, repr=False, compare=False)
     # 批次 B：NPC 决策钩子（每 _NPC_DECISION_INTERVAL tick 一次）
     _npc_hooks: list[NpcRuntimeHook] = field(default_factory=list, repr=False, compare=False)
+    _maintenance_hooks: list[MaintenanceHook] = field(
+        default_factory=list, repr=False, compare=False
+    )
     # D17 视觉雾：主角已揭示 chunk 全集（实例账本；重放=按 fog.reveal 事件流
     # 重建——事件是真相，账本只是实况缓存；不入 state_hash）。
     fog_seen: set[tuple[int, int]] = field(default_factory=set)
@@ -94,6 +98,7 @@ class TickLoop:
         self._maybe_encounter_entropy()
         self._step_entity_movement()
         self._run_npc_runtime()  # 批次 B：定时任务挂载点兑现（决策节拍）
+        self._run_maintenance()
         self._run_perception()
         # 预留挂载点（M1+：L1 效用 / Intent 执行时二次校验）
         self.state = self.state.model_copy(update={"tick": self.state.tick + 1})
@@ -181,6 +186,17 @@ class TickLoop:
         静默顶掉第一个（NPC 决策钩子被火灾钩子覆盖，村民全体静止 4 小时
         无人发觉）。序=挂载序（固定执行序语义：先决策后火灾）。"""
         self._npc_hooks.append(hook)
+
+    def attach_maintenance(self, hook: MaintenanceHook) -> None:
+        """Attach per-tick world maintenance after NPC decisions."""
+        self._maintenance_hooks.append(hook)
+
+    def _run_maintenance(self) -> None:
+        for hook in self._maintenance_hooks:
+            batch = hook(self.state, self.state.tick)
+            if batch:
+                for event in batch:
+                    self.enqueue(event)
 
     def _run_npc_runtime(self) -> None:
         """定时任务挂载点（M0 预留 → 批次 B 兑现）：决策节拍驱动全部 NPC 钩子。"""
