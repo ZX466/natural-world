@@ -106,9 +106,7 @@ def test_critical_attack_records_entropy_event():
         entropy_provider=entropy_provider,
     )
     tick = next(
-        t
-        for t in range(1000)
-        if needs_critical_entropy("chenmo", "villager_01", tick=t, seed=42)
+        t for t in range(1000) if needs_critical_entropy("chenmo", "villager_01", tick=t, seed=42)
     )
     loop.state = loop.state.model_copy(update={"tick": tick})
     driver._pending.append(

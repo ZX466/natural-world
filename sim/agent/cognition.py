@@ -117,6 +117,7 @@ class CognitionParams:
 
     def retrieval_scorers(self) -> tuple[Scorer, ...]:
         """检索缝钩子序列（顺序固定，C5：先确认偏误后情绪一致性）。"""
+
         def sunk(_entry: MemoryEntry, _query: MemoryQuery) -> float:
             return sunk_cost_bonus(self.sunk_investment, 0.0)
 

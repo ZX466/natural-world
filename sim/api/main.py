@@ -11,7 +11,7 @@ import uuid
 from collections import deque
 from collections.abc import AsyncIterator, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -299,8 +299,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             for ev in events:
                 if ev.event_type.value == "structure.started":
                     sid = str(ev.payload.get("structure_id", ""))
-                    raw_tiles = ev.payload.get("tiles") or ()
-                    build_tiles_log[sid] = [tuple(t) for t in raw_tiles]
+                    raw_tiles = cast("Sequence[Sequence[int]]", ev.payload.get("tiles") or ())
+                    build_tiles_log[sid] = [(int(t[0]), int(t[1])) for t in raw_tiles]
                 elif ev.event_type.value == "structure.completed":
                     sid = str(ev.payload.get("structure_id", ""))
                     set_structure_phase(sid, build_tiles_log.get(sid, []), "built")

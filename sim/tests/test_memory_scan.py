@@ -47,6 +47,7 @@ class TestS1Guard:
         )
         assert result.accepted is True
         assert seen == [result.entry]
+
     def test_write_is_only_entry(self):
         """write() 返回结构化结果；条目只能经它产生。"""
         p = MemoryWritePipeline()

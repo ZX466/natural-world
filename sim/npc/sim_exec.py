@@ -19,7 +19,7 @@ from collections.abc import Mapping
 from dataclasses import replace
 
 from sim.core.events import WorldEvent, move_event, npc_chat_event, npc_monologue_event
-from sim.core.world import WorldState
+from sim.core.world import EntityState, WorldState
 from sim.world.pathfinding import Pathfinder
 
 # ---------------------------------------------------------------------------
@@ -309,7 +309,7 @@ def _chat_target_of(state: WorldState, npc_id: str, *, tick: int) -> str | None:
     return others[_hash_u32("chat-target", npc_id, tick) % len(others)]
 
 
-def _nearest_other(entity: object, state: WorldState) -> str | None:
+def _nearest_other(entity: EntityState, state: WorldState) -> str | None:
     """到站邻域内最近的其他人（review I1：开口对象与寻路目的地脱钩——
     「走到了谁面前就跟谁说」）。曼哈顿 ≤2 内按距离取最近；并列按 id 序
     （C5 确定性）；无人在邻域 → None（走了全程没人可说，静默是常态路径）。

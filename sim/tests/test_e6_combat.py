@@ -23,9 +23,7 @@ def test_settle_deterministic():
 
 def test_critical_candidate_uses_recorded_entropy():
     tick = next(
-        t
-        for t in range(1000)
-        if needs_critical_entropy("chenmo", "villager_03", tick=t, seed=42)
+        t for t in range(1000) if needs_critical_entropy("chenmo", "villager_03", tick=t, seed=42)
     )
     critical = settle_attack("chenmo", "villager_03", tick=tick, seed=42, entropy_roll=0.1)
     ordinary = settle_attack("chenmo", "villager_03", tick=tick, seed=42, entropy_roll=0.9)

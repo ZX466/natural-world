@@ -27,6 +27,7 @@ def _state_work_at_site() -> WorldState:
     from sim.npc.sim_exec import _site_anchor_of
 
     anchor = _site_anchor_of("work", "villager_10")
+    assert anchor is not None  # work 有站点锚点（_site_anchor_of 契约）
     ax, ay = anchor
     return WorldState(
         world_seed=42,

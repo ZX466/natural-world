@@ -106,7 +106,9 @@ class TestRetrievalIntegration:
         )
         scorers = params.retrieval_scorers()
         assert {scorer.name for scorer in scorers} >= {
-            "sunk_cost", "trauma_avoidance", "drunkenness"
+            "sunk_cost",
+            "trauma_avoidance",
+            "drunkenness",
         }
         entry = _entry("memory", "fire destroyed my home", importance=0.5)
         query = MemoryQuery(npc_id="chenmo", context="fire", top_k=1)

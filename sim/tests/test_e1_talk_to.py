@@ -1,5 +1,7 @@
 """E1：talk_to/investigate 执行面——闸门放行的对话/张望终于落地成事件。"""
 
+from typing import cast
+
 from sim.agent.dialogue import template_line, validate_provider_line
 from sim.agent.driver import ChenmoDriver
 from sim.content.protagonist import build_anchor
@@ -79,7 +81,7 @@ def test_chat_line_uses_display_name_and_passes_banned_scan():
     events = loop.drain_events()
     chats = [e for e in events if e.event_type.value == "npc.chat"]
     assert len(chats) == 1
-    line = chats[0].payload["line"]
+    line = cast("str", chats[0].payload["line"])
     assert "赵铁柱" in line  # 称呼用戏内名（非 entity_id 出站）
     assert not scan(line).hits
 

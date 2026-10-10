@@ -103,9 +103,7 @@ class CombatLedger:
         entropy_roll: float | None = None,
     ) -> AttackOutcome:
         """结算并扣血；hp 归零 → outcome=kill（死亡事件由调用方发——C4）。"""
-        out = settle_attack(
-            attacker, target, tick=tick, seed=seed, entropy_roll=entropy_roll
-        )
+        out = settle_attack(attacker, target, tick=tick, seed=seed, entropy_roll=entropy_roll)
         if out.outcome == "miss":
             return out
         new_hp = max(0, self.hp_of(target) - out.damage)

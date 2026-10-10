@@ -73,6 +73,7 @@ def encounter_due(
         draw = entropy_roll
     return draw < 0.05 + 0.30 * chaos.chain
 
+
 #: 确定性抽样的缓存键前缀（与 RngRegistry.generator 的抽签缓存隔离——
 #: chaotic 不推进抽签进度，缓存生命周期=单次调用即可，无跨 tick 状态）。
 
