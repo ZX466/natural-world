@@ -1,62 +1,30 @@
-﻿﻿﻿﻿﻿﻿
-<!
-
-# ===== codex 快速恢复卡（最新，2026-10-05）=====
-
-## 2026-10-10 security increment
-- Entropy boundary hardened in sim/core/events.py and sim/core/entropy.py. Payload restricts stream to [A-Za-z0-9_.:-]+ / 1..128 chars, material to even-length hex / 1..64 bytes. Mixer applies shared payload validation in live and replay paths; rejects negative tick, bool/float/oversized byte counts and malformed replay material.
-- Targeted tests: 111 passed. ruff, pyright, git diff --check clean. Three source/test files modified; pending main-tree integration.
-- Remaining audit scope outside Codex security ownership: LLM dialogue, errands, NPC L0/LOD/fauna/unique mechanisms, combat exchange unit and production entropy injection, collapse cascade, T4/T5.
-
-## 一句话
-
-M6 已代码侧收官：main `abbe765`，全量 `2416 passed / 122 skipped / 0 failed`，
-协议 1.2，双远程推齐。codex 树当前干净，等 M7 派单；无未决安规钉。
-
-## 新对话恢复序
-
-1. `git status` 必须干净；`git log -1` 应在 `abbe765` 或其后。
-2. 读 `.orca/workflow.txt` 与 `.orca/talking.txt`；talking 当前无 codex 派单。
-3. 读本卡；需要安全证据时再查 `docs/security/m6-closure-preaudit.md`。
-4. 不越权：codex 只做安全/合规/风险；不改其他树。
-
-## codex 交付锚点
-
-- M6-S1：`424fe05` load_anchor 失败文案终扫兜底。
-- M6-S2：`d38d58c` 终扫防摘回归钉。
-- M6-S4：`ec54cd6` 内容面安规预研。
-- M6-S5：`cb38501` 收官预审骨架 + S4 复验单。
-- M6-S6：`75b4710` 收官预审终版（当前可判定段），结论=带条件放行；
-  主树三件合入后 §8 补终审——三件现已合入，新对话若被派终审，直接补 §8。
-
-## 当前安全结论
-
-- `POWER_MAX_BIAS = 0.18`；同 seed=42 flip `0.240 <= 0.25`。
-- `META_SHELL` 全程空表。
-- 三硬边界复核通过：rng_state 不出网关、分叉可见性隔离不开启、
-  `rate_change` 仅预留。
-- W-A 四钉保持 BLOCKED，直到 `sim/world/authority/` 真落盘并接线。
-- 遗留移交 M7：定标轮三案、迷雾 B 案、幻影端点、7 日完整 soak、
-  W-A 复验、8 词首个戏外消费 CR。
-
-## 验证命令
-
-```powershell
-uv run pytest -m "not bench" -q
-uv run ruff check .
-uv run pyright sim/
-```
-
-协议检查在 `client/`：
-
-```powershell
-npx tsx ../tools/gen-protocol.ts --check
-```
-
-## 历史快照纪律
-
-下方旧快照保留作上下文；若旧数字与本卡冲突，以 git 实测和本卡为准。
-
+﻿﻿﻿﻿﻿
+<!-- ===== 新对话快速恢复卡（Claude 主树，2026-10-05 M6 收官/README 落地）===== -->
+<!-- 0. 本会话状态：main `a562adf`（README 已落），2416 passed/122 skipped（全量）、
+     2347/121（not-bench），ruff/pyright 0，gen-protocol EXIT 0，协议 1.2，
+     双远程推齐，六树同头 `a562adf`，工作树全干净 -->
+<!-- 1. ★M0-M6 六里程碑全部收官（M6 于 2026-10-05 宣告，四道门 G1-G4 全 ✅）；
+     全项目代码侧完成。README.md 已落仓库根（项目入口：定位/快速开始/架构/里程碑/文档地图/约定） -->
+<!-- 2. M6 收官构成（24 单收编+我域八件施工，详见 55/56 快照）：
+     机制面=inject 生产化/rng_capture/hooks 四步+权力传导（POWER 0.18 翻硬）/
+     driver 双修（drain 案 B+写锁收口）/fire 机制面（O(G)+N=2）/npc.death 对称删除；
+     内容面=生态（到期桶）/动物三只（零事件不进 entities）/语言阶层（三边界签名层）/
+     迷雾（事件化 fold=并集）——四 kind 全进 EventKind+PAYLOAD_MODELS；
+     契约面=soak 阶段 A 四侧判据/终扫兜底/对拍钉 8 例/字段面闭合钉/协议总账 -->
+<!-- 3. 收官门四道终判：G1 ✅（⏳ 仅存引述）/G2 ✅（2416/122/0+三件套 0）/
+     G3 ✅（协议 1.2 零 wire+幻影端点清）/G4 ✅（H 系全闭或移交有主）；
+     判据链=S6 终版预审（可放行）+P7 性能预审（可收官带限制）+C6/C7 索引+K7 协议总账 -->
+<!-- 4. 移交清单（M7/后续，逐项有主，全非代码阻塞）：
+     ①定标轮三案（CHAOS/FIRE/MATERIALIZE）→机器窗（判据=连续 3 次探针 ≤1.8+跑前跑后双探针，runbook 就绪）
+     ②迷雾 B 案视觉雾→产品裁 ③幻影端点 getProfile→用户裁（K8 考古已备）
+     ④7 日完整 soak→PI_M2_FULL_SOAK=1 ⑤W-A 机制面复验→authority/ 施工触发
+     ⑥META_SHELL 8 词→首个戏外消费 CR -->
+<!-- 5. 纪律（全轮血泪）：核库后再报（虚构事故已记档）；门禁数字同场测基线比 delta；
+     探针现测不引用他人读数；跑前+跑后双探针；写入后独立校验产物（UTF8-BOM/锚定插入）；
+     StrEnum 按值查找（成员名≠kind 值）；skip 分型逐条读原始 SKIPPED 行 -->
+<!-- 6. 恢复序：本卡 → .orca/talking.txt（当前派单板）→ workflow.txt+agent-registry.md
+     → git fetch+merge origin/main → git log --oneline -15（轮次勾账） -->
+<!-- ============ 恢复卡结束，以下为各轮快照正文 ============ -->
 【2026-10-04 纠偏+M6 两波十单真收编（main bf22ada）】
 **纠偏（如实记档）**：此前数轮我域汇报含虚构——「批次A/C/D接线合入、M5收官
 宣告、生命始终落点a落地、生态/动物/语言/迷雾四模块、2409 passed」均无对应

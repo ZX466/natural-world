@@ -6,13 +6,20 @@
  * 「可走动 + 昼夜调色 + 重连重置」。sim 起来后删掉 mock 分支即切真实。
  */
 import { WorldMirror } from './world-mirror';
-import { WsClient, type WsStatus } from '../net/ws';
+import { WsClient, setControlStateSink, type WsStatus } from '../net/ws';
+import { fetchWorldMap, assembleCollision, assembleGround } from '../net/worldApi';
+import { worldClock } from './clock';
 import { useUiStore, type InGameTime, type Speed } from '../store/uiStore';
 
 export const worldMirror = new WorldMirror();
 
 const SIM_WS_URL = 'ws://127.0.0.1:8000/ws';
 const MOCK_TICK_MS = 1000 / 60;
+/** player_impulse.text 上限（PlayerImpulseMessage schema maxLength 64 同源） */
+export const IMPULSE_MAX_LEN = 64;
+const IMPULSE_TOO_LONG_MSG = '话说得太长了，说不清。';
+/** D14 头顶气泡停留时长（ms；阅读 15 字约 4s，取整档） */
+export const BUBBLE_DURATION_MS = 4000;
 
 function phaseOf(hour: number): InGameTime['phase'] {
   if (hour >= 5 && hour < 7) return 'dawn';
@@ -31,15 +38,93 @@ class Runtime {
 
   start(): void {
     this.ws = new WsClient(SIM_WS_URL, worldMirror, {
-      onStatus: (status: WsStatus) => useUiStore.getState().setWsStatus(status),
+      onStatus: (status: WsStatus) => {
+        useUiStore.getState().setWsStatus(status);
+        // H-4：真实连接到达 → 停 mock（假时钟/假地图反盖真实数据的竞态根除）；
+        // H-1：真实链路起 clock（世界静止无 delta 时前端时钟仍平滑推进，R3）。
+        if (status === 'open') {
+          this.stopMock();
+          worldClock.start();
+        }
+      },
       onSnapshot: () => useUiStore.getState().setWsStatus('open'),
-      onDelta: () => {},
+      onDelta: (msg) => {
+        // 批次 A：计划看板（delta 即全量替换语义，sim 侧 PlanDelta[] 无增删协议）
+        if (msg.plan) useUiStore.getState().setPlans([...msg.plan]);
+      },
+      onMonologue: (msg) => {
+        // 批次 D10 分流：bubble = 村民的公开嘟囔 → 街谈巷议 + 头顶气泡（D14）；
+        // thought/plan = 陈默的心声 → 心之声面板。
+        // monologue 帧无 actor 字段（W7 字段最小化），语义路由按 form 定。
+        // D12：bubble 帧可选 name（说话人戏内名）随行进署名。
+        if (msg.form === 'bubble') {
+          useUiStore.getState().pushChatter(msg.name ?? null, msg.content);
+          // D14：头顶气泡（有署名才冒——无名嘟囔无处定位）
+          if (msg.name) {
+            worldMirror.setBubble(msg.name, msg.content, BUBBLE_DURATION_MS, Date.now());
+          }
+        } else {
+          useUiStore.getState().pushMonologue(msg.form, msg.content);
+        }
+      },
+      onImpulseFeedback: (msg) => {
+        const store = useUiStore.getState();
+        store.setLastImpulseCue(msg.cue);
+        store.setImpulseError(null);
+        store.pushMonologue(msg.reaction_monologue.form, msg.reaction_monologue.content);
+      },
+      onError: (msg) => {
+        // 仅 impulse 来源的 error 入玩家可见位；其他 ref（load_anchor 等）当前无 UI 面
+        if (msg.ref === 'player_impulse') useUiStore.getState().setImpulseError(msg.message);
+      },
+      onControlAck: (msg) => {
+        // 批次 D11：控制回执权威面——pause/resume/set_speed 后服务端真值回写
+        // store（TopBar 暂停按钮文案 + 倍速高亮跟随）。applied=false 当前协议
+        // 恒 true（8.1 占位）；错误路径走 error 帧不经此处。
+        const store = useUiStore.getState();
+        if (msg.paused !== undefined && msg.paused !== null) {
+          store.setPaused(msg.paused);
+        }
+        if (msg.speed !== undefined && msg.speed !== null) {
+          store.setSpeed(msg.speed as Speed);
+        }
+        // fast_forward 的 ack 不带 speed/paused：受理即终态（世界已推进完），
+        // 无本地状态可回写（全量快照随后由 dispatch 的 snapshot 分支消费）。
+      },
     });
     this.ws.connect();
+    this.loadWorldMap();
     // sim 未就绪 → 2.5s 后仍无连接则进 mock（验收不受 TASK-C05 进度阻塞）
     setTimeout(() => {
       if (useUiStore.getState().wsStatus !== 'open') this.startMock();
     }, 2500);
+  }
+
+  /** H-4：mock 停转（定时器清空 + 计数归零；sendControl/requestMove 的 mock
+   *  分支以 mockTimer===null 判定，清空即自然切回真实链路）。 */
+  private stopMock(): void {
+    if (this.mockTimer !== null) {
+      clearInterval(this.mockTimer);
+      this.mockTimer = null;
+      this.mockTick = 0;
+    }
+  }
+
+  /** 静态层走 HTTP（codex 意见 5）：缺它 handlePointer 的 map=null 守卫
+   *  吞掉一切点击（M7 修复的第二个断链）。M7-T6 增地面层（瓦片渲染）。 */
+  private async loadWorldMap(): Promise<void> {
+    try {
+      const raw = await fetchWorldMap();
+      worldMirror.setMap({
+        w: raw.w,
+        h: raw.h,
+        tileset: raw.tileset,
+        collision: assembleCollision(raw.w, raw.h, raw.chunks),
+        ground: assembleGround(raw.w, raw.h, raw.chunks),
+      });
+    } catch {
+      // 后端未起（mock 将接管）或网络失败：镜像保持 null，点击守卫维持
+    }
   }
 
   /** 玩家控制（TopBar 倍速按钮）——真实链路发 set_control；mock 链路直接改本地。 */
@@ -78,6 +163,36 @@ class Runtime {
       target_y: y,
     };
     this.ws?.send(move);
+  }
+
+  /** 读档=分叉（批次 D4）：发 load_anchor，成功后服务端推「分叉告知 + 全量
+   *  快照」两帧——镜像重置与游标指针消费链路现成（ws.ts dispatch/session_state）。 */
+  loadAnchor(anchorId: string): void {
+    this.ws?.send({ type: 'load_anchor', channel: 'session', anchor_id: anchorId });
+  }
+
+  /** 念头注入（ImpulseBar → sim player_impulse；批次 A）。
+   *  客户端预校验：空白/超长即本地拒（不发帧、置 impulseError）；
+   *  服务端 impulse_gate 拒收经 error 帧（ref=player_impulse）回同一 UI 位。
+   *  mock 分支：本地出 accepted feedback（模板独白），骨架验收不受后端阻塞。 */
+  sendImpulse(text: string): void {
+    const store = useUiStore.getState();
+    const cleaned = text.trim();
+    if (!cleaned) {
+      store.setImpulseError('念头还没成形。');
+      return;
+    }
+    if (cleaned.length > IMPULSE_MAX_LEN) {
+      store.setImpulseError(IMPULSE_TOO_LONG_MSG);
+      return;
+    }
+    if (this.mockTimer !== null) {
+      store.setLastImpulseCue('accepted');
+      store.setImpulseError(null);
+      store.pushMonologue('thought', '心里默默记下了这个念头。');
+      return;
+    }
+    this.ws?.send({ type: 'player_impulse', channel: 'control', text: cleaned });
   }
 
   // ── mock 驱动（TASK-C05 起服务后删除）─────────────────────────
@@ -133,3 +248,11 @@ class Runtime {
 }
 
 export const runtime = new Runtime();
+
+// D11：session_state 帧的 speed/paused 权威消费（ws.ts 不直接依赖 store——
+// 经 sink 注入；重连/读档后 TopBar 与服务端真实状态对齐）。
+setControlStateSink((speed, paused) => {
+  const store = useUiStore.getState();
+  if (speed !== null) store.setSpeed(speed as Speed);
+  if (paused !== null) store.setPaused(paused);
+});

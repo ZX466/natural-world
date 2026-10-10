@@ -6,31 +6,82 @@
  */
 import Phaser from 'phaser';
 import type { WorldMirror } from '../world-mirror';
+import {
+  facingRow,
+  walkFrame,
+  villagerFrame,
+  advanceAnimClock,
+  inferFacing,
+  VILLAGER_SHEET,
+  type Facing,
+} from '../render/actors';
+import { useUiStore } from '../../store/uiStore';
 
-const PIXEL_SCALE = 2; // 俯视像素调性，M0 固定 2x
+const PIXEL_SCALE = 3; // 批次 D8：2x→3x（48×48 镇铺满视口，人物可辨）
 const TILE = 16;
-const INTERP_MS = 1000 / 60; // tick 间隔（60tps @1x；倍速插值由 sim 侧节奏吸收）
+// 批次 D1：插值窗口 = 行走节拍（sim 侧 15 tick/格 @1x = 250ms/格）。
+// 服务端每 delta 帧给出新格坐标，客户端在 250ms 内平滑走完一格——
+// 1x 手感对齐；16x 快进时 sim 节奏加快，帧到得更密，窗口缩短自然适配。
+const INTERP_MS = 250;
+const TILESET_KEY = 'sprout-tileset'; // 图集加载键（main.ts preload 同名）
+const GROUND_KEY = 'ground-composite'; // 预拼地面 CanvasTexture 键
 
 interface ActorView {
-  sprite: Phaser.GameObjects.Rectangle;
+  sprite: Phaser.GameObjects.Sprite;
+  /** 快照对快照插值基准（D20 漂移修）：上一快照的逻辑格 + 到达时刻——
+   *  精灵在 [snapAtMs, snapAtMs+INTERP_MS) 内从 prev 线性走到最新快照格，
+   *  到点即停；修前是帧对帧指数逼近（永远落后渐近=滑行漂移感）。 */
   fromX: number;
   fromY: number;
-  toX: number;
-  toY: number;
-  interpStart: number;
+  snapAtMs: number;
+  /** 上一帧逻辑格（anim/facing 推断输入，R2） */
+  prevX: number;
+  prevY: number;
+  /** walk 动画钟（位移中累加 delta；静止归 -1=站立帧） */
+  animClockMs: number;
+  /** H-3：最后非零朝向（停下沿用，不转身） */
+  lastFacing: 'n' | 'e' | 's' | 'w';
+  /** D10：头顶戏内名（快照 actor.name；无 name 的 actor 无此对象） */
+  label: Phaser.GameObjects.Text | null;
 }
 
 export class WorldScene extends Phaser.Scene {
   private mirror: WorldMirror;
   private views = new Map<string, ActorView>();
   private mapLayer: Phaser.GameObjects.Graphics | null = null;
+  private groundImage: Phaser.GameObjects.Image | null = null;
   private nightOverlay: Phaser.GameObjects.Rectangle | null = null;
+  private rainLayer: Phaser.GameObjects.Graphics | null = null;
+  private rainDrops: { x: number; y: number; speed: number }[] = [];
   private lastResetSeen = -1;
   private goalMarker: Phaser.GameObjects.Arc | null = null;
+  /** D14 头顶气泡 Text 池（键=戏内名；mirror.bubbles 驱动增删） */
+  private bubbleTexts = new Map<string, Phaser.GameObjects.Text>();
+  /** D17 视觉雾：未揭示区压暗罩（chunk 粒度矩形；揭示集变化才重绘） */
+  private fogOverlay: Phaser.GameObjects.Graphics | null = null;
+  /** 雾罩脏标记：mirror.fog 引用计数变化才重绘（揭示只增——size 即版本） */
+  private lastFogSize = -1;
+  /** E7 建筑投影层（depth 4 < 雾 5——雾罩未揭示区连建筑一起压暗） */
+  private structureLayer: Phaser.GameObjects.Graphics | null = null;
+  /** 建筑投影脏标记：structures.size 变化才重绘 */
+  private lastStructureCount = -1;
 
   constructor(mirror: WorldMirror) {
     super({ key: 'world' });
     this.mirror = mirror;
+  }
+
+  preload(): void {
+    // M7-T6：图集与角色表（Vite public 静态服务；sim 只发 id 不发素材）。
+    this.load.image(TILESET_KEY, '/assets/tilesets/sprout-tileset.png');
+    this.load.spritesheet('chenmo', '/assets/actors/chenmo.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    this.load.spritesheet('villager', '/assets/actors/villager.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
   }
 
   create(): void {
@@ -40,7 +91,13 @@ export class WorldScene extends Phaser.Scene {
       .setOrigin(0)
       .setScrollFactor(0)
       .setDepth(100);
+    // 批次 D7：雨层（短雨丝 Graphics；雨落动画在 update 里逐帧推进）
+    this.rainLayer = this.add.graphics().setScrollFactor(0).setDepth(99);
     this.goalMarker = this.add.circle(0, 0, 3, 0xffd75e).setVisible(false).setDepth(50);
+    // D17 视觉雾罩：遮地形（depth 5 < 实体 10）——未揭示区压暗，踏入即揭。
+    this.fogOverlay = this.add.graphics().setDepth(5);
+    // E7 建筑投影层：完工结构占格（depth 4 < 雾 5——未揭示区的建筑同被压暗）
+    this.structureLayer = this.add.graphics().setDepth(4);
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.handlePointer(pointer);
@@ -48,9 +105,18 @@ export class WorldScene extends Phaser.Scene {
 
     this.scale.on('resize', () => this.redrawMap());
     this.redrawMap();
+    // 地图 HTTP 加载是异步的：真实模式下晚于镜像到达 → 轮询重绘（mock 即时 setMap 无需等待）
+    const waitMap = setInterval(() => {
+      if (this.mirror.map !== null) {
+        clearInterval(waitMap);
+        this.redrawMap();
+      }
+    }, 250);
+    this.events.once('shutdown', () => clearInterval(waitMap));
   }
 
-  /** M0：无 tileset 资产时以网格色块渲染（瓦片可通行=浅色，不可=深色）。 */
+  /** M0：无 tileset 资产时以网格色块渲染（瓦片可通行=浅色，不可=深色）。
+   *  M7-T6：tileset≠'grid' 且镜像带 ground 层 → 图集拼合渲染（色块层保持清空）。 */
   private redrawMap(): void {
     const g = this.mapLayer;
     const map = this.mirror.map;
@@ -62,12 +128,53 @@ export class WorldScene extends Phaser.Scene {
       g.fillRect(0, 0, 32 * TILE, 32 * TILE);
       return;
     }
+    if (map.tileset !== 'grid' && map.ground && this.textures.exists(TILESET_KEY)) {
+      this.renderTileset(map);
+      return;
+    }
     for (let y = 0; y < map.h; y += 1) {
       for (let x = 0; x < map.w; x += 1) {
         const walkable = map.collision[y * map.w + x] === 1;
         g.fillStyle(walkable ? 0x4a5d4e : 0x2a3038, 1);
         g.fillRect(x * TILE, y * TILE, TILE - 1, TILE - 1);
       }
+    }
+  }
+
+  /** 图集渲染（M7-T6）：ground id → 图集帧，预拼到一张 CanvasTexture 上，
+   *  再以单张 image 显示（整图 48×48×16px=768px 方；一次绘制零每帧成本）。
+   *  不可行方案记录：Phaser Graphics **无 drawImage**（tsc 实证）——
+   *  逐格 blitter 是备选，本方案更简单且静态层不重绘。 */
+  private renderTileset(map: NonNullable<WorldMirror['map']>): void {
+    const img = this.textures.get(TILESET_KEY).getSourceImage() as HTMLImageElement;
+    const cols = Math.floor(img.width / TILE);
+    const canvas = document.createElement('canvas');
+    canvas.width = map.w * TILE;
+    canvas.height = map.h * TILE;
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) return;
+    for (let y = 0; y < map.h; y += 1) {
+      for (let x = 0; x < map.w; x += 1) {
+        const id = map.ground![y * map.w + x] ?? 0;
+        ctx.drawImage(
+          img,
+          (id % cols) * TILE,
+          Math.floor(id / cols) * TILE,
+          TILE,
+          TILE,
+          x * TILE,
+          y * TILE,
+          TILE,
+          TILE,
+        );
+      }
+    }
+    if (this.textures.exists(GROUND_KEY)) this.textures.remove(GROUND_KEY);
+    this.textures.addCanvas(GROUND_KEY, canvas);
+    if (this.groundImage === null) {
+      this.groundImage = this.add.image(0, 0, GROUND_KEY).setOrigin(0).setDepth(0);
+    } else {
+      this.groundImage.setTexture(GROUND_KEY);
     }
   }
 
@@ -84,57 +191,187 @@ export class WorldScene extends Phaser.Scene {
     this.game.events.emit('client:move_request', { x: wx, y: wy });
   }
 
-  update(_time: number, delta: number): void {
-    this.syncActorViews(delta);
+  update(time: number, delta: number): void {
+    this.syncActorViews(delta, time);
     this.syncCamera();
     this.syncOverlay();
+    this.syncRain(delta);
+    this.syncBubbles(time);
+    this.syncFog();
+    this.syncStructures();
   }
 
-  private syncActorViews(delta: number): void {
+  /** E7 建筑投影：完工结构画深棕占格（size 变化才重绘——静态层零每帧成本）。 */
+  private syncStructures(): void {
+    const g = this.structureLayer;
+    if (g === null) return;
+    if (this.mirror.structures.size === this.lastStructureCount) return;
+    this.lastStructureCount = this.mirror.structures.size;
+    g.clear();
+    for (const structure of this.mirror.structures.values()) {
+      for (const [x, y] of structure.tiles) {
+        g.fillStyle(0x6b4f2a, structure.phase === 'built' ? 0.92 : 0.5);
+        g.fillRect(x * TILE, y * TILE, TILE - 1, TILE - 1);
+      }
+    }
+  }
+
+  /** D17 视觉雾：未揭示 chunk 压暗（揭示只增→size 变化才重绘，静态层零每帧成本）。 */
+  private syncFog(): void {
+    const g = this.fogOverlay;
+    const map = this.mirror.map;
+    if (g === null || map === null) return;
+    if (this.mirror.fog.size === this.lastFogSize) return;
+    this.lastFogSize = this.mirror.fog.size;
+    g.clear();
+    const CHUNK = 16;
+    const totalChunksX = Math.ceil(map.w / CHUNK);
+    const totalChunksY = Math.ceil(map.h / CHUNK);
+    if (this.mirror.fog.size === 0 && totalChunksX === 0) return;
+    g.fillStyle(0x06080f, 0.82);
+    for (let cy = 0; cy < totalChunksY; cy += 1) {
+      for (let cx = 0; cx < totalChunksX; cx += 1) {
+        if (this.mirror.fog.has(`${cx},${cy}`)) continue;
+        g.fillRect(cx * CHUNK * TILE, cy * CHUNK * TILE, CHUNK * TILE, CHUNK * TILE);
+      }
+    }
+  }
+
+  /** D14 头顶气泡：mirror.bubbles（name→text/到期）→ Text 池增删/跟随。 */
+  private syncBubbles(nowMs: number): void {
+    if (this.mirror.pruneBubbles(nowMs)) {
+      // 过期清理：池里有而账本没有的 → 销毁
+      for (const [name, text] of this.bubbleTexts) {
+        if (!this.mirror.bubbles.has(name)) {
+          text.destroy();
+          this.bubbleTexts.delete(name);
+        }
+      }
+    }
+    for (const [name, bubble] of this.mirror.bubbles) {
+      let text = this.bubbleTexts.get(name);
+      if (text === undefined) {
+        text = this.add
+          .text(0, 0, bubble.text, {
+            fontFamily: 'sans-serif',
+            fontSize: '10px',
+            color: '#f0ead8',
+            backgroundColor: '#000000aa',
+            padding: { x: 3, y: 1 },
+            resolution: 4,
+            wordWrap: { width: 140 },
+          })
+          .setOrigin(0.5, 1)
+          .setDepth(12);
+        this.bubbleTexts.set(name, text);
+      }
+      // 跟随同名精灵（actor.name ↔ 气泡键；找不到就先挂原地）
+      const actor = [...this.mirror.actors.values()].find((a) => a.name === name);
+      const view = actor ? this.views.get(actor.rtoken) : undefined;
+      if (view) text.setPosition(view.sprite.x, view.sprite.y - TILE - 2);
+    }
+  }
+
+  private syncActorViews(delta: number, timeMs: number): void {
     if (this.mirror.resetCount !== this.lastResetSeen) {
       // 镜像被重连重置：清空精灵池重建（codex 意见 9 的表现层配合）
-      for (const v of this.views.values()) v.sprite.destroy();
+      for (const v of this.views.values()) {
+        v.sprite.destroy();
+        v.label?.destroy();
+      }
       this.views.clear();
+      for (const t of this.bubbleTexts.values()) t.destroy();
+      this.bubbleTexts.clear();
       this.lastResetSeen = this.mirror.resetCount;
     }
-    const t = Math.min(1, delta / INTERP_MS);
     for (const [rtoken, actor] of this.mirror.actors) {
       let view = this.views.get(rtoken);
       if (view === undefined) {
         const isProtagonist = rtoken === this.mirror.protagonist;
+        // M7-T7：矩形色块 → 真精灵（主角=chenmo 走环；村民=villager 走环）
         const sprite = this.add
-          .rectangle(
+          .sprite(
             actor.x * TILE + TILE / 2,
             actor.y * TILE + TILE / 2,
-            TILE - 4,
-            TILE - 4,
-            isProtagonist ? 0xe8c39e : 0x9aa7b0,
+            isProtagonist ? 'chenmo' : 'villager',
+            0,
           )
           .setDepth(10);
+        // 批次 D10：头顶戏内名（快照 actor.name 供数；canvas 内 Text——
+        // DESIGN §4 硬约束：Phaser 画 canvas 世界，React 画 canvas 外 UI）。
+        const label =
+          actor.name !== undefined
+            ? this.add
+                .text(
+                  actor.x * TILE + TILE / 2,
+                  actor.y * TILE - 4,
+                  actor.name,
+                  {
+                    fontFamily: 'sans-serif',
+                    fontSize: '9px',
+                    color: '#e7e0d0',
+                    stroke: '#1a1f14',
+                    strokeThickness: 2,
+                    resolution: 4,
+                  },
+                )
+                .setOrigin(0.5, 1)
+                .setDepth(11)
+            : null;
         view = {
           sprite,
           fromX: actor.x,
           fromY: actor.y,
-          toX: actor.x,
-          toY: actor.y,
-          interpStart: 0,
+          snapAtMs: 0,
+          prevX: actor.x,
+          prevY: actor.y,
+          animClockMs: -1,
+          lastFacing: 's' as Facing,
+          label,
         };
         this.views.set(rtoken, view);
         if (isProtagonist) this.cameras.main.startFollow(sprite, true, 0.12, 0.12);
       }
+      // D20 漂移修：快照对快照插值——逻辑格变化时以「此刻」为起点、
+      // 从上一快照格线性走到新快照格（INTERP_MS 走完，到点即停）；
+      // 修前的帧对帧指数逼近每帧只走剩余距离的 t 比例 → 永远落后
+      // 目标渐近=滑行漂移感。位置未变时保持原地（不重复计时）。
+      if (view.prevX !== actor.x || view.prevY !== actor.y) {
+        view.fromX = view.sprite.x;
+        view.fromY = view.sprite.y;
+        view.snapAtMs = timeMs;
+      }
+      const k = Math.min(1, (timeMs - view.snapAtMs) / INTERP_MS);
       const targetX = actor.x * TILE + TILE / 2;
       const targetY = actor.y * TILE + TILE / 2;
-      // 相邻 tick 快照间线性插值（m0-client §3）
-      view.sprite.x = Phaser.Math.Linear(view.sprite.x, targetX, t);
-      view.sprite.y = Phaser.Math.Linear(view.sprite.y, targetY, t);
-      view.sprite.setFillStyle(
-        actor.tint ?? (rtoken === this.mirror.protagonist ? 0xe8c39e : 0x9aa7b0),
+      view.sprite.x = view.fromX + (targetX - view.fromX) * k;
+      view.sprite.y = view.fromY + (targetY - view.fromY) * k;
+      view.label?.setPosition(view.sprite.x, view.sprite.y - TILE / 2 - 3);
+      // R2：位移推断 anim/facing → 帧号（D10：villager 4 列帧表启用行走环；
+      // 修前恒帧 0——素材有 4×8 走环/劳作表却只画迈步中间帧，人群看着呆滞）
+      const moved = view.prevX !== actor.x || view.prevY !== actor.y;
+      // H-2：walk 累加/idle 归 -1（修前写反 → 循环死在第 0 帧）
+      view.animClockMs = advanceAnimClock(view.animClockMs, moved, delta);
+      // H-3：零位移沿用 lastFacing（停下不转身）；frameOf 只用方向行号
+      if (moved) {
+        view.lastFacing = inferFacing(actor.x - view.prevX, actor.y - view.prevY, view.lastFacing);
+      }
+      const row = facingRow(view.lastFacing);
+      // D14：村民姿势——静止 + work/eat/rest/chat → 劳作姿势行（R4-7）；
+      // 行走中 → 四向走环。主角仍走 chenmo 走环（素材无姿势行）。
+      view.sprite.setFrame(
+        rtoken === this.mirror.protagonist
+          ? walkFrame(row, view.animClockMs)
+          : villagerFrame(VILLAGER_SHEET, moved ? 'walk' : (actor.anim ?? 'idle'), view.lastFacing, view.animClockMs),
       );
+      view.prevX = actor.x;
+      view.prevY = actor.y;
     }
     // 移除已消失的 actor
     for (const [rtoken, view] of this.views) {
       if (!this.mirror.actors.has(rtoken)) {
         view.sprite.destroy();
+        view.label?.destroy();
         this.views.delete(rtoken);
       }
     }
@@ -150,11 +387,47 @@ export class WorldScene extends Phaser.Scene {
   private syncOverlay(): void {
     const overlay = this.nightOverlay;
     if (overlay === null) return;
-    // 读薄 store（低频；Zustand 非 React 用法 getState，不触发渲染树）
-    import('../../store/uiStore').then(({ useUiStore }) => {
-      const phase = useUiStore.getState().gameClock?.phase ?? 'day';
-      const alpha = { day: 0, dawn: 0.12, dusk: 0.2, night: 0.38 }[phase];
-      overlay.setFillStyle(0x0a1030, alpha);
-    });
+    if (overlay.width !== this.scale.width || overlay.height !== this.scale.height) {
+      overlay.setSize(this.scale.width, this.scale.height);
+    }
+    // M-3：静态 import（动态 import 每帧一次 microtask 且 alpha 恒迟一帧）
+    const phase = useUiStore.getState().gameClock?.phase ?? 'day';
+    const alpha = { day: 0, dawn: 0.12, dusk: 0.2, night: 0.38 }[phase];
+    // 批次 D7：天气压暗叠乘（雨比阴更暗——服务端 ambient_light 同源档位）
+    const weatherDark = { clear: 0, overcast: 0.08, rain: 0.16 }[this.mirror.weather.visual] ?? 0;
+    overlay.setFillStyle(0x0a1030, Math.min(1, alpha + weatherDark));
+  }
+
+  /** 批次 D7：雨层（rain 时 80 条短雨丝循环下落；其他天气清空层） */
+  private syncRain(delta: number): void {
+    const layer = this.rainLayer;
+    if (layer === null) return;
+    if (this.mirror.weather.visual !== 'rain') {
+      if (this.rainDrops.length > 0) {
+        this.rainDrops = [];
+        layer.clear();
+      }
+      return;
+    }
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const TARGET = 80;
+    while (this.rainDrops.length < TARGET) {
+      this.rainDrops.push({ x: Math.random() * w, y: Math.random() * h, speed: 220 + Math.random() * 160 });
+    }
+    layer.clear();
+    layer.lineStyle(1, 0x9fb8d8, 0.45);
+    for (const drop of this.rainDrops) {
+      drop.y += (drop.speed * delta) / 1000;
+      drop.x -= (drop.speed * delta) / 3000;
+      if (drop.y > h) {
+        drop.y = -8;
+        drop.x = Math.random() * w;
+      }
+      layer.beginPath();
+      layer.moveTo(drop.x, drop.y);
+      layer.lineTo(drop.x - 1.5, drop.y + 7);
+      layer.strokePath();
+    }
   }
 }

@@ -10,6 +10,7 @@ import contextlib
 import uuid
 from collections import deque
 from collections.abc import AsyncIterator, Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -41,10 +42,20 @@ logger = structlog.get_logger()
 
 manager = ConnectionManager()
 
-# M0：默认 32x32 开阔图（占位；内容管线接入后由 sim/content 加载 Tiled 转换产物）
+# M7（R7）：创世名册——陈默 + 3 名占位村民（静止实体，AI 归 M2 装配线）。
+# 批次 B：占位村民退役，正式名册 50 村民（sim/content/villagers.py）入列——
+# 世界 = chenmo + 50 villager（51 实体）。
+GENESIS_ENTITIES: tuple[str, ...] = (
+    "chenmo",
+    *(f"villager_{i + 1:02d}" for i in range(50)),
+)
+#: 出生点（build_town.py SPAWN 同源：药铺屋前空地；创世 (0,0) 落树墙内 → 事件搬运）
+SPAWN_TILE: tuple[int, int] = (8, 16)
+TOWN_MAP_PATH = Path(__file__).resolve().parents[1] / "content" / "linhe-town.json"
 
 
-def _default_map() -> TileMap:
+def _fallback_map() -> TileMap:
+    """M0 占位 32×32 全平图（真实图缺失/损坏时的 fail-safe 底座）。"""
     from sim.world.map import CHUNK_SIZE, Chunk
 
     chunks = {}
@@ -59,16 +70,52 @@ def _default_map() -> TileMap:
     return TileMap(width=32, height=32, chunks=chunks)
 
 
+def _default_map() -> TileMap:
+    """优先 sim/content 真实小镇图；缺失/损坏回退占位（fail-safe，启动不炸）。"""
+    if TOWN_MAP_PATH.exists():
+        try:
+            return TileMap.from_json_file(TOWN_MAP_PATH)
+        except Exception as exc:
+            logger.warning("map.town_load_failed", reason=str(exc))
+    return _fallback_map()
+
+
 async def build_loop() -> tuple[TickLoop, Any]:
-    """组装世界：store（建表）+ bus + TickLoop + 创世。返回 (loop, store)。"""
+    """组装世界：store（建表）+ bus + TickLoop + 创世 + 出生点搬运。返回 (loop, store)。"""
     from sqlalchemy.ext.asyncio import create_async_engine
 
-    engine = create_async_engine("sqlite+aiosqlite:///world.db")
+    # D20：SQLite 写并发止血（用户实测 POST /api/anchors 500 database is locked
+    # ——同步 anchors 写面与 aiosqlite 驱动事务撞锁即硬炸）。WAL 允许读写并行、
+    # busy_timeout 让写者等锁而不是立刻炸；不改变单写者语义（flush 串行契约不动）。
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///world.db",
+        connect_args={"timeout": 10.0},  # sqlite3 busy_timeout（秒）
+    )
     await init_database(engine)  # 开发库快速起步；生产走 alembic upgrade head
+    # D20：WAL 日志模式（库级持久设置，一次即可）——读写并行、写锁等待
+    # 而非硬炸；与 connect_args timeout 构成双层止血（根治在写事务收口，
+    # anchors.py 头注已立案归 kilo/Claude 面）。
+    from sqlalchemy import text
+
+    async with engine.begin() as conn:
+        await conn.execute(text("PRAGMA journal_mode=WAL"))
     session_factory = create_session_factory(engine)
     store = SqlEventStore(session_factory)
     loop = TickLoop(clock=_make_clock(), bus=build_default_bus(), state=WorldState(world_seed=42))
-    loop.enqueue(world_create_event(tick=0, seed=42, entity_ids=("chenmo",)))
+    loop.enqueue(world_create_event(tick=0, seed=42, entity_ids=GENESIS_ENTITIES))
+    # 批次 B（D19 换调）：创世村民出生=**定籍点邻域**（territory_spawn_positions
+    # ——人一落地就在自己村里，无开局大迁徙挤巷；D18 写的函数本批接线）。
+    from sim.content.villagers import territory_spawn_positions
+
+    tile_map_for_spawn = _default_map()
+    roster = list(GENESIS_ENTITIES[1:])
+    positions = territory_spawn_positions(tile_map_for_spawn, roster)
+    spawn_of: dict[str, tuple[int, int]] = {"chenmo": SPAWN_TILE}
+    for eid, pos in positions.items():
+        spawn_of[eid] = pos
+    for eid in GENESIS_ENTITIES:
+        loop.issue_move(eid, [(0, 0), spawn_of[eid]])
+    loop.advance_frame(1.0)
     return loop, store
 
 
@@ -76,6 +123,36 @@ def _make_clock():
     from sim.core.clock import GameClock
 
     return GameClock(speed=1.0)
+
+
+def _active_profile_snapshot_provider():
+    """批次 C：active LLM profile → ProfileSnapshot 提供器（driver 每轮取）。
+
+    无 active profile 返回 None（driver 零调用降级）。api_key 解密只发生在
+    load_profile_snapshot 调用瞬间（K3：用完即丢，明文只活在快照生命周期内）。
+    读档/fork 后 profile 表换分支不在本批范围（profile 是戏外配置面）。
+    """
+    from sim.api.settings import get_profile_store
+    from sim.llm.client import load_profile_snapshot as _load_snapshot
+
+    def _provider():
+        try:
+            row = get_profile_store().get_active()
+        except Exception as exc:  # 设置库故障不拖垮世界（降级无 LLM）
+            logger.warning("chenmo.profile_provider_failed", reason=str(exc))
+            return None
+        if row is None:
+            return None
+        return _load_snapshot(
+            profile_name=row.name,
+            base_url=row.base_url,
+            model=row.model,
+            temperature=row.temperature,
+            max_tokens=row.max_tokens,
+            api_key_enc=row.api_key_enc,
+        )
+
+    return _provider
 
 
 @contextlib.asynccontextmanager
@@ -89,8 +166,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     loop, store = await build_loop()
     tile_map = _default_map()
     # C06-③：感知挂载进 tick 固定执行序第 3 步（帧键=rtoken，WS 不广播）
+    # 批次 D8：感知叙事接真名（rtoken→戏内名映射；名册 villagers + 陈默）。
+    # 名字是戏内事实可出站；映射后 prompt 说「赵铁柱正朝这边走」而非「rt-…」。
+    from sim.content.protagonist import CHENMO_ID, build_anchor
+    from sim.content.villagers import VILLAGER_IDS, VILLAGER_NAMES
+
+    _display_names: dict[str, str] = dict(zip(VILLAGER_IDS, VILLAGER_NAMES, strict=True))
+    _display_names[CHENMO_ID] = "陈默"
+
+    # 批次 D10：头顶名字供数——快照 actor.name 出站（同源映射，感知真名一致）。
+    from sim.api.ws import set_display_names
+
+    set_display_names(_display_names)
+
     loop.attach_perception(
-        lambda state, tick_events: run_perception_step(state, tile_map, tick_events)
+        lambda state, tick_events: run_perception_step(
+            state, tile_map, tick_events, display_name_of=_display_names
+        )
     )
 
     async def on_flush(events: list[Any]) -> None:
@@ -106,6 +198,248 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.loop = loop
     app.state.store = store
     app.state.tile_map = tile_map
+
+    # ── 批次 B：NPC 装配进实况世界 ──────────────────────────────────
+    # 1) 播种 50 村民 profile（幂等；库已有则零行）；
+    # 2) 装配 NpcRuntime（物化 profiles → 效用决策器）；
+    # 3) 挂决策钩子（每 10 tick 一轮 → NPC_ACT 批次 + wander/move 拆解 MOVE）。
+    from sim.content.villagers import seed_villagers
+    from sim.core.persistence.npc_store import NpcStore
+    from sim.npc.assemble import assemble_runtime
+    from sim.npc.sim_exec import npc_events_for_tick
+    from sim.world.pathfinding import Pathfinder
+
+    seeded = await seed_villagers(store.session_factory)
+    if seeded:
+        logger.info("npc.seeded", count=seeded)
+    npc_store = NpcStore(store)
+    npc_runtime, _hidden_states = await assemble_runtime(npc_store)
+    # 批次 D14：真实意愿面——逐人合成（性格/需求/处境 → band 全谱），
+    # 替换 D2 的全队 band=1 占位（「四句循环」根因收口）。最终都执行
+    # （§10）：verdict 只产独白/defers，不改效用决策。
+    from sim.agent.will import synthesize_verdict
+
+    npc_runtime.willingness_of = synthesize_verdict
+    # 批次 D15 补线①：权力供数——core.persistence.power_store.PowerStore 物化 →
+    # runtime.power（效用面权力列偏置开闸；空表 = 不赋 = 逐位同旧，
+    # 见 assemble.attach_power 契约）。
+    from sim.core.persistence.power_store import PowerStore
+    from sim.npc.assemble import attach_power
+
+    attach_power(
+        npc_runtime,
+        await PowerStore(store).materialize(None),
+    )
+    pathfinder = Pathfinder(tile_map)
+    app.state.npc_runtime = npc_runtime
+    monologue_last: dict[str, int] = {}
+    monologue_quota: dict[int, int] = {}  # D10：每节拍出镇配额账本（撞拍保险丝）
+    # 批次 E2/E1：聊天账本（关系漂移+记忆环形缓冲）+ 聊天冷却账本——
+    # 调用方持有（跨拍记忆态，同 monologue_last 口径；不进重放面）。
+    from sim.npc.chat_ledger import ChatLedger
+
+    chat_ledger = ChatLedger()
+    app.state.chat_ledger = chat_ledger
+    chat_last: dict[str, int] = {}
+    retell_last: dict[str, int] = {}  # 批次 E2：学舌冷却账本（调用方持有）
+    # 批次 E3：全镇余额账本（村民工钱 + 陈默买卖共享一份账）。
+    from sim.world.economy import CoinLedger
+
+    coin_ledger = CoinLedger()
+    app.state.coin_ledger = coin_ledger
+    wage_last: dict[str, int] = {}
+    # 批次 E4：施工 runtime（事件为真相；每 tick 推进 checkpoint/完工）。
+    from sim.agent.build_exec import BuildRuntime
+
+    build_runtime = BuildRuntime(tile_map, seed=loop.state.world_seed)
+    app.state.build_runtime = build_runtime
+
+    # 批次 E7：structure_id → tiles（started 时记；completed 时投影 built——
+    # StructureDelta phase 枚举无 building,在建工地不投影,完工才画）。
+    build_tiles_log: dict[str, list[tuple[int, int]]] = {}
+
+    def _build_tick_hook(state: Any, tick: int) -> list[Any] | None:
+        events = build_runtime.on_tick(tick)
+        if events:
+            # TILE_CHANGED → 寻路缓存失效（§14 chunk 失效；图换新实例后
+            # pathfinder 需感知——observe_map 对齐新几何）。
+            pathfinder.observe_map(build_runtime.tile_map)
+            from sim.api.ws import set_structure_phase
+
+            for ev in events:
+                if ev.event_type.value == "structure.started":
+                    sid = str(ev.payload.get("structure_id", ""))
+                    raw_tiles = ev.payload.get("tiles") or ()
+                    build_tiles_log[sid] = [tuple(t) for t in raw_tiles]
+                elif ev.event_type.value == "structure.completed":
+                    sid = str(ev.payload.get("structure_id", ""))
+                    set_structure_phase(sid, build_tiles_log.get(sid, []), "built")
+        return events or None
+
+    loop.attach_npc_runtime(_build_tick_hook)
+
+    def _npc_tick_hook(state: Any, tick: int) -> list[Any] | None:
+        batch = npc_events_for_tick(
+            npc_runtime,
+            state,
+            tick,
+            pathfinder,
+            seed=loop.state.world_seed,
+            monologue_last=monologue_last,
+            monologue_quota=monologue_quota,
+            chat_last=chat_last,
+            display_name_of=_display_names,
+            chat_ledger=chat_ledger,
+            retell_last=retell_last,  # 批次 E2：学舌通路（review C3 修复）
+            wage_last=wage_last,
+            coin_ledger=coin_ledger,
+        )
+        # 批次 D14：npc.act → 动作姿势账本（快照/delta 的 anim 字段供数）。
+        from sim.api.ws import set_action_anim
+        from sim.npc.sim_exec import anim_of_action
+
+        for event in batch or []:
+            if getattr(event, "event_type", None) is not None and getattr(
+                event.event_type, "value", ""
+            ) == "npc.act":
+                npc_id = str(event.payload.get("npc_id", ""))
+                if npc_id:
+                    set_action_anim(npc_id, anim_of_action(str(event.payload.get("action", ""))))
+        return batch or None
+
+    loop.attach_npc_runtime(_npc_tick_hook)
+
+    # ── 批次 D5：火灾实况（凌晨确定性起火 → 蔓延 → 死亡代价）──────────
+    from sim.npc.fire_runtime import FireRuntime, ignite_due
+
+    fire_runtime = FireRuntime()
+    app.state.fire_runtime = fire_runtime
+
+    def _fire_tick_hook(state: Any, tick: int) -> list[Any] | None:
+        events: list[Any] = []
+        if ignite_due(loop.state.world_seed, tick):
+            # 确定性落点：药铺前空地东南的草地（seed+tick 哈希散布可走格）
+            import zlib
+
+            h = zlib.crc32(f"fire-spot:{loop.state.world_seed}:{tick}".encode())
+            gx, gy = h % tile_map.width, (h // tile_map.width) % tile_map.height
+            if tile_map.is_walkable(gx, gy):
+                events.extend(fire_runtime.ignite_at(tick=tick, x=gx, y=gy))
+        if fire_runtime.cells:
+            walkable = {
+                (x, y)
+                for x in range(tile_map.width)
+                for y in range(tile_map.height)
+                if tile_map.is_walkable(x, y)
+            }
+            events.extend(fire_runtime.step(tick=tick, walkable=walkable))
+            burning = {(c.x, c.y) for c in fire_runtime.cells}
+            events.extend(fire_runtime.collect_deaths(state, burning=burning))
+        return events or None
+
+    loop.attach_npc_runtime(_fire_tick_hook)
+
+    # ── 批次 C：陈默 L2 决策驱动（LLM 接进决策循环）─────────────────
+    # 播种主角档案 → 组 ChenmoDriver → impulse 钩子 + 节拍任务随 lifespan。
+    # LLM 调用全异步、失败降级（driver 内）；世界照常运转不因 LLM 阻塞。
+    from sim.agent.driver import ChenmoDriver
+    from sim.api.ws import set_impulse_trigger
+    from sim.content.protagonist import seed_protagonist
+    from sim.llm.client import LlmClient
+
+    chenmo_seeded = await seed_protagonist(store.session_factory)
+    if chenmo_seeded:
+        logger.info("protagonist.seeded", npc_id="chenmo")
+    llm_client = LlmClient()
+
+    # 批次 D6：感知帧 → 叙事文本投影（chenmo 的 prompt [处境] 段供数）。
+    # run_perception_step 每 tick 为全员装帧（键=rtoken）；取不到/空感知 →
+    # 空文本（[处境] 段省略）。感知帧是 tick 内瞬时快照——直接读最新帧即可。
+    from sim.perception.frame import PerceptionFrame
+    from sim.perception.senses import rtoken_of
+
+    chenmo_rtoken = rtoken_of("chenmo")
+
+    def _chenmo_perception() -> str:
+        frame = loop.perception_frames.get(chenmo_rtoken)
+        if frame is None:
+            return ""
+        assert isinstance(frame, PerceptionFrame)
+        return frame.narrated()
+
+    # 批次 D15 补线②：陈默记忆切片——感知叙述经 write() 闸门入记忆
+    # （observe），决策前检索 top-k 进 prompt（recall → memory_entries）；
+    # 补线③日切反思共用本 pipeline。进程内记忆（M4 口径，见 agent.chenmo_memory）。
+    from sim.agent.chenmo_memory import observe as _mem_observe
+    from sim.agent.chenmo_memory import recall as _mem_recall
+    from sim.content.protagonist import CHENMO_ID
+    from sim.llm.memory_scan import MemoryWritePipeline
+
+    memory_pipeline = MemoryWritePipeline()  # 缺省 InMemoryStore（进程内）
+    _ = CHENMO_ID  # 反思 npc_ids 用（见补线③）
+    # 批次 E6：战斗账本（hp 进程内；死亡走 npc.death 事件——C4 零新增 kind）。
+    from sim.agent.combat_exec import CombatLedger
+
+    combat_ledger = CombatLedger()
+    app.state.combat_ledger = combat_ledger
+    driver = ChenmoDriver(
+        anchor=build_anchor(),
+        llm=llm_client,
+        profile_provider=_active_profile_snapshot_provider(),
+        perception_provider=_chenmo_perception,
+        display_name_of=_display_names.get,  # 批次 E1：talk_to 台词用戏内名
+        economy_provider=lambda: (coin_ledger, loop.state.world_seed),  # 批次 E3
+        build_runtime_provider=lambda: build_runtime,  # 批次 E4
+        combat_provider=lambda: (combat_ledger, loop.state.world_seed),  # 批次 E6
+    )
+    app.state.chenmo_driver = driver
+    set_impulse_trigger(driver.request_decision)
+
+    async def _chenmo_loop() -> None:
+        """决策循环：impulse 置位或节拍到期 → 决策 + 同拍执行（与世界 driver 平行）。
+
+        执行在决策之后（pending 刚入队即执行，revalidate 用当前世界态）；
+        事件随世界帧落库/广播。
+        """
+        import os
+        import time as _time
+
+        try:
+            interval = float(os.environ.get("CHENMO_DECIDE_SECONDS", "60"))
+        except ValueError:
+            interval = 60.0
+        interval = max(5.0, interval)  # 下限护栏：防误配 0 烧钱
+        last = _time.monotonic()
+        while True:
+            await asyncio.sleep(0.5)
+            now = _time.monotonic()
+            due = (now - last) >= interval
+            if not driver.take_requested() and not due:
+                continue
+            last = now
+            # D15：先记后忆——感知叙述过闸门入记忆，检索 top-k 进决策 prompt
+            # （感知文本同轮复用，不二次投影）。
+            _perception_text = _chenmo_perception()
+            if _perception_text:
+                _mem_observe(memory_pipeline, _perception_text, tick=loop.state.tick)
+            # 批次 E2：[记忆] 段双源——检索 top-k 为主，当日对话记忆（ledger
+            # 最新 3 条）排前（最新鲜的社交事实优先）。
+            from sim.agent.chenmo_memory import merge_ledger_entries
+
+            _ledger_texts = tuple(text for _, text in chat_ledger.memories_of(CHENMO_ID)[-3:])
+            await driver.decide_once(
+                loop.state,
+                loop.state.tick,
+                memory_entries=merge_ledger_entries(
+                    _mem_recall(memory_pipeline, now_tick=loop.state.tick),
+                    _ledger_texts,
+                    top_k=3,
+                ),
+                perception_text=_perception_text,
+            )
+            driver.execute_pending(loop, pathfinder=pathfinder)
+
+    app.state.chenmo_task = asyncio.create_task(_chenmo_loop())
 
     # 批次 A 接线（M6 补施工）：rng 状态捕获缝——锚点存档时 capture_rng_state 的
     # 真实实现（registry 由 world_seed 纯函数重建 + 抽签 cache 在 TickContext）。
@@ -195,6 +529,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     flush_in_flight=on_flush_async,
                     register_child=register_new_branch,
                 )
+                # 批次 E（review I2 修复）：读档=分叉 → 进程内 runtime 账本全部
+                # 清零——旧分支的 hp/余额/关系/冷却跨分支残留会造成「一刀秒杀」
+                # /「凭空余财」（账本是**本分支**的世界状态投影，分叉即失效）。
+                # 火场账本既有同款清理由 fork 编排层承担；本批账本在此收口。
+                combat_ledger.reset()
+                coin_ledger.reset()
+                chat_ledger.reset()
+                build_tiles_log.clear()
+                monologue_last.clear()
+                monologue_quota.clear()
+                chat_last.clear()
+                retell_last.clear()
+                wage_last.clear()
+                logger.info("fork.runtime_ledgers_reset", anchor_id=anchor_id)
                 logger.info("fork.load_completed", anchor_id=anchor_id)
                 load_outcomes.append((anchor_id, True))
             except Exception as exc:
@@ -225,16 +573,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.drain_pending_loads = _drain_loads
     app.state.load_outcomes = load_outcomes
     # driver 在 _drain_loads 定义之后创建（case B 接线：drain_loads 生产调用点）
+    # 批次 D15 补线③：日切反思挂载——世界循环日切钩子把当日 event 素材
+    # 压成 reason 摘要（write() 闸门照扫；无素材零产物是常态路径）。
+    from sim.npc.reflection import make_day_switch_reflector
+
+    _day_reflector = make_day_switch_reflector(memory_pipeline, npc_ids=(CHENMO_ID,))
     app.state.driver = asyncio.create_task(
         run_world_driver(
             loop,
             manager,
             tile_map,
             on_flush,
+            on_day_switch=_day_reflector,
             drain_loads=_drain_loads,
         )
     )
     yield
+    app.state.chenmo_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await app.state.chenmo_task
     app.state.driver.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await app.state.driver
@@ -268,7 +625,11 @@ class HealthStatus(BaseModel):
 
 
 class MapChunk(BaseModel):
-    """碰撞层 chunk：collision_b64 = base64(每格 1 字节 0/1，顺序按 chunk 内行优先)，只读静态资产"""
+    """碰撞+地面层 chunk（只读静态资产）。
+
+    M7（1.3）增 `ground_b64` = base64(u16 小端、chunk 内行主序)——与
+    `map_static_payload` / 前端 `decodeGroundB64` 三方同一定义。
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -276,6 +637,10 @@ class MapChunk(BaseModel):
     cy: int = Field(ge=0)
     collision_b64: str = Field(
         description="base64 编码的可通行位（1=可通行），不含 seed/tick/entity_id"
+    )
+    ground_b64: str = Field(
+        description="base64 编码的地面 tile id（u16 小端、行主序；"
+        "调色板值域见前端 sprout-palette.json）"
     )
 
 
@@ -341,6 +706,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 speed=control.effective_speed(),
                 paused=control.paused,
                 anchor=_current_anchor_pointer(),
+                tick=app.state.loop.state.tick,  # M7-R3：连接即同步时钟
             ),
         )
         while True:

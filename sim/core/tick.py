@@ -18,11 +18,31 @@ from sim.world.pathfinding import Pathfinder
 
 _MAX_TICKS_PER_FRAME = 240  # 16x = 960 tick/s 上限按 4s catch-up → 单帧封顶
 _PERCEPTION_EVERY_N_TICKS = 2  # H-1 方案 3：视觉传播降采样（听觉随帧全速）
+_NPC_DECISION_INTERVAL = 10  # 批次 B：L1 决策节拍（60tps 下每秒 5 轮，防事件洪泛）
+_MOVE_TICKS_PER_TILE = 15  # 批次 D1：行走节拍（1x 下 60/15 = 4 格/秒，星露谷手感；
+# 16x 下 64 格/秒——倍速快进语义，视觉瞬移属预期）
+_MOVE_PHASE_SPAN = 15  # 相位散布跨度（0..14，与节拍同模——每 tick 都有人迈步）
+
+
+def entity_move_phase(entity_id: str) -> int:
+    """实体行走相位（确定性纯函数，无 RNG 流）：id 哈希散布进 [0, 节拍)。
+
+    作用：不同实体在同一 tick 内交错迈步（无全员齐步脉冲）；同 id 恒同相位
+    ⇒ 重放逐位一致（C5）。crc32 快且散布均匀，够用。
+    """
+    import zlib
+
+    return zlib.crc32(entity_id.encode()) % _MOVE_TICKS_PER_TILE
 
 # 感知装配钩子签名：(state, tick_events) -> dict[rtoken, frame]。
 # 返回值 value 用 object 避免内核 import 感知域（内核零依赖感知，钩子由外层注入）；
 # Mapping 保持值型协变，调用方 PerceptionFrame 可直接传入。
 PerceptionHook = Callable[[WorldState, list[WorldEvent]], "Mapping[str, object]"]
+
+# NPC 决策钩子签名（批次 B）：(state, tick) -> 本节拍事件批次（WorldEvent 列表）。
+# 返回批次由 TickLoop 经 enqueue 逐条入流（C4 唯一写路径）；None/空 = 本拍无事。
+# 与 PerceptionHook 同纪律：内核零依赖 npc 域，实现由装配层注入（main.py）。
+NpcRuntimeHook = Callable[[WorldState, int], "list[WorldEvent] | None"]
 
 
 @dataclass
@@ -41,18 +61,32 @@ class TickLoop:
     # M1 感知：tick 内装配的最新帧（rtoken → frame）；感知域消费，WS 不广播
     perception_frames: Mapping[str, object] = field(default_factory=dict)
     _perception_hook: PerceptionHook | None = field(default=None, repr=False, compare=False)
+    # 批次 B：NPC 决策钩子（每 _NPC_DECISION_INTERVAL tick 一次）
+    _npc_hooks: list[NpcRuntimeHook] = field(default_factory=list, repr=False, compare=False)
+    # D17 视觉雾：主角已揭示 chunk 全集（实例账本；重放=按 fog.reveal 事件流
+    # 重建——事件是真相，账本只是实况缓存；不入 state_hash）。
+    fog_seen: set[tuple[int, int]] = field(default_factory=set)
 
     def advance_frame(self, real_dt: float) -> int:
         """喂入真实秒数，推进 0..N 个 tick（catch-up 封顶）。返回推进数。"""
         n = min(self.clock.advance(real_dt), _MAX_TICKS_PER_FRAME)
         for _ in range(n):
             self._tick_once()
+        # D17 视觉雾：本帧主角新踏入块 → 一条 fog.reveal 入流（帧末聚合，
+        # 同帧多格只发一条；账本清空供下帧增量——WS 投影 drain 同源）。
+        if self.context.fog_revealed:
+            from sim.core.events import fog_reveal_event
+
+            chunks = tuple(sorted(self.context.fog_revealed))
+            self.enqueue(fog_reveal_event(tick=self.state.tick, chunks=chunks))
+            self.context.fog_revealed.clear()
         return n
 
     def _tick_once(self) -> None:
         """固定执行序：0 熵注入（M5 批次 A 接线）→ 1 实体移动 → 2 定时任务（M0 空）→ 3 感知。"""
         self._maybe_daily_reseed()
         self._step_entity_movement()
+        self._run_npc_runtime()  # 批次 B：定时任务挂载点兑现（决策节拍）
         self._run_perception()
         # 预留挂载点（M1+：L1 效用 / Intent 执行时二次校验）
         self.state = self.state.model_copy(update={"tick": self.state.tick + 1})
@@ -101,18 +135,54 @@ class TickLoop:
         """注入感知装配钩子：签名 (state, tick_events) -> dict[rtoken, frame]。"""
         self._perception_hook = hook
 
+    def attach_npc_runtime(self, hook: NpcRuntimeHook) -> None:
+        """追加 NPC 钩子（批次 B；多槽列表——D5 教训：单槽时第二个挂载者
+        静默顶掉第一个（NPC 决策钩子被火灾钩子覆盖，村民全体静止 4 小时
+        无人发觉）。序=挂载序（固定执行序语义：先决策后火灾）。"""
+        self._npc_hooks.append(hook)
+
+    def _run_npc_runtime(self) -> None:
+        """定时任务挂载点（M0 预留 → 批次 B 兑现）：决策节拍驱动全部 NPC 钩子。"""
+        if not self._npc_hooks or self.state.tick % _NPC_DECISION_INTERVAL != 0:
+            return
+        for hook in self._npc_hooks:
+            batch = hook(self.state, self.state.tick)
+            if not batch:
+                continue
+            for event in batch:
+                self.enqueue(event)
+
+    #: D17 视觉雾：只揭示**主角**踏入的 chunk（迷雾=陈默观察面，村民不揭示）。
+    _FOG_PROTAGONIST_ID = "chenmo"
+
     def _step_entity_movement(self) -> None:
-        """沿路径走一格。路径耗尽不发事件；每格一次 MOVE 不必要——
-        移动是 tick 内插值（路径段事件已含全部信息），此步只更新位置。
+        """沿路径走一格（批次 D1 行走节拍：非每 tick 一步）。
+
+        节拍门：`(state.tick + entity_move_phase(entity_id)) % _MOVE_TICKS_PER_TILE == 0`
+        时本实体才迈步——1x 下 4 格/秒（视觉可辨），16x 下 64 格/秒（快进语义）。
+        相位偏移使不同实体在同 tick 内交错迈步（无齐步脉冲）；同 id 恒同相位，
+        重放逐位一致（C5：节拍是 tick 与 id 的纯函数，无 RNG 状态流）。
+        路径耗尽不发事件；每格一次 MOVE 不必要——移动是 tick 内插值（路径段
+        事件已含全部信息），此步只更新位置。
         """
         moved: dict[str, object] = {}
         for entity_id, entity in self.state.entities.items():
             if not entity.path:
                 continue
+            if (self.state.tick + entity_move_phase(entity_id)) % _MOVE_TICKS_PER_TILE != 0:
+                continue
             nxt = entity.path[0]
             rest = entity.path[1:]
             moved[entity_id] = entity.model_copy(update={"pos": nxt, "path": rest})
             self.pending_delta_entity_ids.add(entity_id)
+            # D17 视觉雾：主角踏入新 chunk → 帧内增量记 ctx.fog_revealed，
+            # 已揭示全集=实例账本 fog_seen（重放按 fog.reveal 事件流重建——
+            # 事件是真相；村民踏入不揭示，迷雾=陈默观察面）。
+            if entity_id == self._FOG_PROTAGONIST_ID:
+                chunk = (nxt[0] // 16, nxt[1] // 16)
+                if chunk not in self.fog_seen:
+                    self.fog_seen.add(chunk)
+                    self.context.fog_revealed.add(chunk)
         if moved:
             self.state = self.state.model_copy(
                 update={"entities": {**self.state.entities, **moved}}

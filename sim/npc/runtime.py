@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
-from sim.agent.will import WillingnessVerdict, willingness_expression
+from sim.agent.will import WillingnessVerdict, synthesize_verdict, willingness_expression
 from sim.core.events import (
     WorldEvent,
     hidden_emerge_event,
@@ -30,6 +30,21 @@ from sim.npc.contract import HiddenState
 from sim.npc.model import NpcProfileData
 from sim.npc.needs import advance_needs
 from sim.npc.utility import UtilityModel, evaluate_batch
+
+
+#: band3 推迟计划的动作语境标签（D18：看板区分「等会儿再干活/找人/吃饭」
+#: ——修前看板单句复读，语境让计划可读；纯函数，未知动作退回原词）。
+def _defer_label(action: str) -> str:
+    return {
+        "work": "干活",
+        "eat": "吃点东西",
+        "rest": "歇口气",
+        "request_chat": "找人说话",
+    }.get(action, action)
+
+#: D14 默认逐人意愿合成器（(profile, action, tick) → verdict）。
+#: 模块级常量供测试 monkeypatch（test_m4d14_defers 用）。
+_VERDICT_OF_DEFAULT = synthesize_verdict
 
 
 @dataclass
@@ -51,6 +66,7 @@ class NpcRuntime:
     profiles: dict[str, NpcProfileData]
     utility: UtilityModel
     willingness: WillingnessVerdict | None = None
+    willingness_of: object | None = None
     power: dict[str, float] | None = None
     _order: list[str] = field(default_factory=list, init=False)
 
@@ -65,11 +81,14 @@ class NpcRuntime:
         self,
         tick: int,
         *,
+        ticks: int = 1,
         hidden_states: dict[str, HiddenState] | None = None,
         context_of: Callable[[str], str] | None = None,
     ) -> list[WorldEvent]:
         """推进一 tick：隐藏档重估(+E1 浮现事件) → 需求 → 效用 → 事件批次（顺序固定，可重放）。
 
+        ticks：本拍推进的游戏秒数（批次 B 决策节拍 10 → 需求按 10 tick 推进，
+        保持「每游戏秒一推进」的语义不随节拍漂移）。其余同上。
         hidden_states：物化产物 {npc_id: HiddenState}；传入时第 0 步按
         context_of(npc_id) 重估触发窗口（frozen.evaluate 返回新实例，原 dict 更新）。
         context_of：npc_id → 自身处境文本（感知帧叙事+内感受）；缺省恒空 =
@@ -83,7 +102,7 @@ class NpcRuntime:
         """
         events: list[WorldEvent] = []
 
-        # 0. 隐藏档触发窗口重估（每 tick；hidden.py §2 纯函数）+ E1 浮现事件
+        # 0. 隐藏档触发窗口重估（每拍；hidden.py §2 纯函数）+ E1 浮现事件
         if hidden_states is not None:
             for nid in self._order:
                 if nid in hidden_states:
@@ -101,11 +120,11 @@ class NpcRuntime:
                             )
                         )
 
-        # 1. 需求推进（frozen：replace 生成新元组）
+        # 1. 需求推进（frozen：replace 生成新元组；ticks = 本拍游戏秒数）
         advanced: dict[str, NpcProfileData] = {}
         for npc_id in self._order:
             p = self.profiles[npc_id]
-            advanced[npc_id] = replace(p, needs=advance_needs(p.needs))
+            advanced[npc_id] = replace(p, needs=advance_needs(p.needs, ticks=ticks))
 
         # 2. L0 统计档不做决策（不建对象语义）；其余按固定序参与批量打分
         active_ids = [nid for nid in self._order if advanced[nid].lod > 0]
@@ -119,8 +138,17 @@ class NpcRuntime:
             power_values = [
                 max(-1.0, min(1.0, float(self.power.get(nid, 0.0)))) for nid in active_ids
             ]
+        # D19 作息：决策节拍判相位——夜相非生存动作压分（凌晨全村睡觉；
+        # schedule.current_slot 纯函数，相位由 tick 决定与画像无关，C5）。
+        from sim.core.calendar import DayPhase
+        from sim.npc.schedule import current_slot
+
+        night = current_slot(tick).phase is DayPhase.NIGHT
         decisions = evaluate_batch(
-            [advanced[nid] for nid in active_ids], self.utility, power=power_values
+            [advanced[nid] for nid in active_ids],
+            self.utility,
+            power=power_values,
+            night_bias=night,
         )
 
         # 3. 事件产出：params 只带白名单键（eat/rest/wander/move 无参数动作 → 空 params）
@@ -139,8 +167,15 @@ class NpcRuntime:
             # M4-B3 意愿面（DESIGN §10「但最终都执行」）：verdict 只产表现
             # （band≥1 → NPC_MONOLOGUE），不改 action/params——决策结果与
             # 无意愿管线逐位一致（test_m4_b3_wiring 钉死）。
-            if self.willingness is not None:
-                expr = willingness_expression(self.willingness, npc_name=nid)
+            # D14 双模式：willingness_of（逐人真实合成，主路径）优先；
+            # willingness（全队共享占位，旧钉兼容）次之；都 None = 无意愿面。
+            verdict: WillingnessVerdict | None = None
+            if self.willingness_of is not None:
+                verdict = self.willingness_of(advanced[nid], d.action, tick=tick)  # type: ignore[operator]
+            elif self.willingness is not None:
+                verdict = self.willingness
+            if verdict is not None:
+                expr = willingness_expression(verdict, npc_name=nid)
                 if expr is not None:
                     events.append(
                         npc_monologue_event(
@@ -150,6 +185,17 @@ class NpcRuntime:
                             content=expr.monologue,
                         )
                     )
+                    # D14：band=3 defers → 计划看板（K8 §3 生产写入点）——
+                    # 「先做别的再绕回来」是外在可观察的计划面。
+                    if expr.defers:
+                        from sim.npc.plan_view import set_plan_from_expression
+
+                        set_plan_from_expression(
+                            nid,
+                            f"先去别处，等会儿再{_defer_label(d.action)}",
+                            band=verdict.band,
+                            defers=True,
+                        )
 
         self.profiles = advanced
         return events

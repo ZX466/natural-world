@@ -6,7 +6,6 @@ profile 影子组装、DecisionTracker。
 
 from __future__ import annotations
 
-import os
 import typing
 
 import pytest
@@ -46,10 +45,19 @@ class TestProfileSnapshot:
         assert snap.api_key_plain == "sk-test-123456"  # type: ignore[attr-defined]
         assert snap.model == "deepseek-chat"  # type: ignore[attr-defined]
 
-    def test_missing_key_rejected(self, monkeypatch: pytest.MonkeyPatch):
+    def test_missing_key_rejected(self, monkeypatch: pytest.MonkeyPatch, tmp_path):
+        """密文无法解密（主密钥不匹配）→ LlmError（D13 后无 env 会自动引导，
+        这里钉的是**解密失败路径**：A key 加密的密文用 B key 解）。"""
+        from sim.llm.client import LlmError
+
         monkeypatch.delenv("LZ_MASTER_KEY", raising=False)
-        enc = encrypt_api_key("sk-x") if os.environ.get("LZ_MASTER_KEY") else b"gAAAAfake"
-        with pytest.raises(Exception, match="LZ_MASTER_KEY"):
+        monkeypatch.setattr(
+            "sim.core.persistence.crypto._KEY_FILE", tmp_path / "k.key"
+        )
+        # 先用第一把引导 key 加密，再换掉密钥文件 → 解密对不上（InvalidToken 路径）
+        enc = encrypt_api_key("sk-test-123456")
+        (tmp_path / "k.key").write_text(Fernet.generate_key().decode(), encoding="utf-8")
+        with pytest.raises(LlmError):
             load_profile_snapshot("p", "https://x/v1", "m", 0.7, 100, enc)
 
 

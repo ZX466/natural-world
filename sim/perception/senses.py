@@ -209,6 +209,7 @@ class PerceptionEngine:
         tick_events: list[WorldEvent] | None = None,
         sounds: list[_SoundEvent] | None = None,
         concentrations: dict[str, float] | None = None,
+        display_name_of: dict[str, str] | None = None,
     ) -> PerceptionFrame:
         """为 observer 装配本 tick 感知帧。纯读：不改 state、无全局态。
 
@@ -216,6 +217,11 @@ class PerceptionEngine:
         避免 50 旁听者 × 每人重建声源表）。
         concentrations 可由批量入口传入（嗅觉批量采样结果 {entity_id: 浓度}；
         M2 §5.1 视听之后追加嗅觉观测）。
+        display_name_of（批次 D8）：entity_id → 戏内名（村民名册/陈默）。
+        名字是**戏内事实**（可出站）；缺省 None = 观测标签回退 rtoken 替身
+        （既有行为）。rtoken→真名的解耦让 prompt 叙事说人话（「赵铁柱正朝
+        这边走」而非「rt-1a2b 正朝这边走」——后者被模型复述成 target_id
+        必被闸门拒，实录见 D8 前的「这么多标记」）。
         性能关键：候选以原始元组参与显著性截断，仅入选者构造 pydantic
         Observation（bench 实测 90% 候选被截断，白建对象占大头）。
         """
@@ -250,7 +256,11 @@ class PerceptionEngine:
             strength = (1.0 / max(dist, 1.0)) * light
             if strength < profile.vision_floor:
                 continue
-            label = rtoken_of(eid)
+            label = (
+                display_name_of.get(eid, rtoken_of(eid))
+                if display_name_of is not None
+                else rtoken_of(eid)
+            )
             if eid in moving:
                 desc = narrate_motion(label)
             elif dist <= 2.0:  # 近距离才能分辨「停步」的细节
@@ -283,7 +293,11 @@ class PerceptionEngine:
                 continue
             if strength > 1.0:
                 strength = 1.0
-            src_label = rtoken_of(src_id) if src_id in state.entities else None
+            src_label = (
+                display_name_of.get(src_id, rtoken_of(src_id))
+                if (display_name_of is not None and src_id in display_name_of)
+                else (rtoken_of(src_id) if src_id in state.entities else None)
+            )
             desc = _sound_desc(kind, src_label)
             subject = src_label if src_label else f"sound:{pos[0]},{pos[1]}"
             raw.append((Channel.HEARING, subject, desc, strength))
@@ -320,7 +334,10 @@ class PerceptionEngine:
 
 
 def run_perception_step(
-    state: WorldState, tile_map, tick_events: list[WorldEvent]
+    state: WorldState,
+    tile_map,
+    tick_events: list[WorldEvent],
+    display_name_of: dict[str, str] | None = None,
 ) -> dict[str, PerceptionFrame]:
     """TickLoop 感知挂载点钩子（attach_perception 的标准实现）。
 
@@ -328,6 +345,7 @@ def run_perception_step(
     每 tick 全员装配（真实红线 3ms/tick 由 bench 卡，见 test_bench_perception）。
     共享单引擎实例（LOS/光照缓存跨 tick 复用）+ 声源表一次提取全员共享。
     嗅觉（M2 §5.1）：视听之后推进场 + 批量采样（场随图常驻，_SHARED_SMELL_WORLD）。
+    display_name_of（批次 D8）：entity_id → 戏内名，透传 assemble（叙事说人话）。
     """
     engine = _shared_engine(tile_map)
     smell_world = _shared_smell_world(tile_map)
@@ -341,7 +359,9 @@ def run_perception_step(
     )
     frames: dict[str, PerceptionFrame] = {}
     for eid in state.entities:
-        frames[rtoken_of(eid)] = engine.assemble(state, eid, tick_events, sounds, concentrations)
+        frames[rtoken_of(eid)] = engine.assemble(
+            state, eid, tick_events, sounds, concentrations, display_name_of
+        )
     return frames
 
 

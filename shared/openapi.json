@@ -15,7 +15,9 @@
             "description": "ok",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/HealthStatus" }
+                "schema": {
+                  "$ref": "#/components/schemas/HealthStatus"
+                }
               }
             }
           }
@@ -31,7 +33,9 @@
             "description": "map",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/WorldMapResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/WorldMapResponse"
+                }
               }
             }
           }
@@ -49,7 +53,9 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/ProfileListItem" }
+                  "items": {
+                    "$ref": "#/components/schemas/ProfileListItem"
+                  }
                 }
               }
             }
@@ -63,7 +69,9 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ProfileCreate" }
+              "schema": {
+                "$ref": "#/components/schemas/ProfileCreate"
+              }
             }
           }
         },
@@ -72,11 +80,77 @@
             "description": "created",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ProfileListItem" }
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileListItem"
+                }
               }
             }
           },
-          "422": { "$ref": "#/components/responses/Problem" }
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/settings/profiles/models": {
+      "post": {
+        "operationId": "listRemoteModels",
+        "summary": "拉取对方模型清单（OpenAI 兼容 GET {base_url}/models；D13）",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelListRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "models",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/settings/profiles/test": {
+      "post": {
+        "operationId": "testConnection",
+        "summary": "极小对话请求测连通性（max_tokens=1；D13）",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestConnectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestConnectionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
         }
       }
     },
@@ -86,7 +160,9 @@
           "name": "profile_id",
           "in": "path",
           "required": true,
-          "schema": { "type": "string" }
+          "schema": {
+            "type": "string"
+          }
         }
       ],
       "patch": {
@@ -96,7 +172,9 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ProfileUpdate" }
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdate"
+              }
             }
           }
         },
@@ -105,21 +183,33 @@
             "description": "updated",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ProfileListItem" }
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileListItem"
+                }
               }
             }
           },
-          "404": { "$ref": "#/components/responses/Problem" },
-          "422": { "$ref": "#/components/responses/Problem" }
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
         }
       },
       "delete": {
         "operationId": "deleteProfile",
         "summary": "删除 Profile",
         "responses": {
-          "204": { "description": "deleted" },
-          "404": { "$ref": "#/components/responses/Problem" },
-          "422": { "$ref": "#/components/responses/Problem" }
+          "204": {
+            "description": "deleted"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
         }
       }
     },
@@ -129,7 +219,9 @@
           "name": "profile_id",
           "in": "path",
           "required": true,
-          "schema": { "type": "string" }
+          "schema": {
+            "type": "string"
+          }
         }
       ],
       "post": {
@@ -140,12 +232,18 @@
             "description": "activated",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ProfileListItem" }
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileListItem"
+                }
               }
             }
           },
-          "404": { "$ref": "#/components/responses/Problem" },
-          "422": { "$ref": "#/components/responses/Problem" }
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
         }
       }
     },
@@ -160,7 +258,9 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/AnchorListItem" }
+                  "items": {
+                    "$ref": "#/components/schemas/AnchorListItem"
+                  }
                 }
               }
             }
@@ -174,7 +274,9 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/AnchorCreate" }
+              "schema": {
+                "$ref": "#/components/schemas/AnchorCreate"
+              }
             }
           }
         },
@@ -183,12 +285,18 @@
             "description": "created",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/AnchorListItem" }
+                "schema": {
+                  "$ref": "#/components/schemas/AnchorListItem"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/Problem" },
-          "422": { "$ref": "#/components/responses/Problem" }
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
         }
       }
     },
@@ -201,11 +309,15 @@
             "description": "current anchor",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/AnchorListItem" }
+                "schema": {
+                  "$ref": "#/components/schemas/AnchorListItem"
+                }
               }
             }
           },
-          "404": { "$ref": "#/components/responses/Problem" }
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
         }
       }
     },
@@ -215,7 +327,9 @@
           "name": "anchor_id",
           "in": "path",
           "required": true,
-          "schema": { "type": "string" }
+          "schema": {
+            "type": "string"
+          }
         }
       ],
       "patch": {
@@ -225,7 +339,9 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/AnchorRename" }
+              "schema": {
+                "$ref": "#/components/schemas/AnchorRename"
+              }
             }
           }
         },
@@ -234,22 +350,36 @@
             "description": "renamed",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/AnchorListItem" }
+                "schema": {
+                  "$ref": "#/components/schemas/AnchorListItem"
+                }
               }
             }
           },
-          "404": { "$ref": "#/components/responses/Problem" },
-          "422": { "$ref": "#/components/responses/Problem" }
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
         }
       },
       "delete": {
         "operationId": "deleteAnchor",
         "summary": "删除游标（不动世界档，C6）",
         "responses": {
-          "204": { "description": "deleted" },
-          "404": { "$ref": "#/components/responses/Problem" },
-          "409": { "$ref": "#/components/responses/Problem" },
-          "422": { "$ref": "#/components/responses/Problem" }
+          "204": {
+            "description": "deleted"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
         }
       },
       "get": {
@@ -260,18 +390,31 @@
             "description": "anchor",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/AnchorListItem" }
+                "schema": {
+                  "$ref": "#/components/schemas/AnchorListItem"
+                }
               }
             }
           },
-          "404": { "$ref": "#/components/responses/Problem" },
-          "422": { "$ref": "#/components/responses/Problem" }
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
         }
       }
     },
     "/api/anchors/{anchor_id}/materialization": {
       "parameters": [
-        { "name": "anchor_id", "in": "path", "required": true, "schema": { "type": "string" } }
+        {
+          "name": "anchor_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
       ],
       "get": {
         "operationId": "getAnchorMaterialization",
@@ -281,13 +424,21 @@
             "description": "materialization status",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/AnchorMaterializationStatus" }
+                "schema": {
+                  "$ref": "#/components/schemas/AnchorMaterializationStatus"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/Problem" },
-          "404": { "$ref": "#/components/responses/Problem" },
-          "422": { "$ref": "#/components/responses/Problem" }
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
         }
       }
     }
@@ -298,7 +449,9 @@
         "description": "RFC 7807 问题详情（戏外工程措辞，不回灌 Agent）",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetail"
+            }
           }
         }
       }
@@ -310,181 +463,427 @@
       },
       "Facing": {
         "type": "string",
-        "enum": ["n", "e", "s", "w"]
+        "enum": [
+          "n",
+          "e",
+          "s",
+          "w"
+        ]
       },
       "MapInfo": {
         "type": "object",
-        "required": ["tileset", "w", "h"],
+        "required": [
+          "tileset",
+          "w",
+          "h"
+        ],
         "properties": {
-          "tileset": { "type": "string" },
-          "w": { "type": "integer", "minimum": 0 },
-          "h": { "type": "integer", "minimum": 0 }
+          "tileset": {
+            "type": "string"
+          },
+          "w": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "h": {
+            "type": "integer",
+            "minimum": 0
+          }
         },
         "additionalProperties": false
       },
       "MapChunk": {
         "type": "object",
-        "description": "碰撞层 chunk：collision_b64 = base64(每格 1 字节 0/1，顺序按 chunk 内行优先)，只读静态资产",
-        "required": ["cx", "cy", "collision_b64"],
+        "description": "碰撞+地面层 chunk（只读静态资产）。M7(1.3) 增 ground_b64 = base64(u16 小端、chunk 内行主序)",
+        "required": [
+          "cx",
+          "cy",
+          "collision_b64",
+          "ground_b64"
+        ],
         "properties": {
-          "cx": { "type": "integer", "minimum": 0 },
-          "cy": { "type": "integer", "minimum": 0 },
-          "collision_b64": { "type": "string", "description": "base64 编码的可通行位（1=可通行），不含 seed/tick/entity_id" }
+          "cx": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cy": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "collision_b64": {
+            "type": "string",
+            "description": "base64 编码的可通行位（1=可通行），不含 seed/tick/entity_id"
+          },
+          "ground_b64": {
+            "type": "string",
+            "description": "base64 编码的地面 tile id（u16 小端、行主序；调色板值域见前端 sprout-palette.json）"
+          }
         },
         "additionalProperties": false
       },
       "WorldMapResponse": {
         "type": "object",
         "description": "/api/world/map 响应：碰撞层静态资产（戏外 meta shell，对齐 sim map_static_payload）",
-        "required": ["w", "h", "tileset", "chunks"],
+        "required": [
+          "w",
+          "h",
+          "tileset",
+          "chunks"
+        ],
         "properties": {
-          "w": { "type": "integer", "minimum": 0 },
-          "h": { "type": "integer", "minimum": 0 },
-          "tileset": { "type": "string" },
-          "chunks": { "type": "array", "items": { "$ref": "#/components/schemas/MapChunk" } }
+          "w": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "h": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "tileset": {
+            "type": "string"
+          },
+          "chunks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapChunk"
+            }
+          }
         },
         "additionalProperties": false
       },
       "Light": {
         "type": "object",
-        "required": ["rtoken", "x", "y", "kind", "radius", "flicker"],
+        "required": [
+          "rtoken",
+          "x",
+          "y",
+          "kind",
+          "radius",
+          "flicker"
+        ],
         "properties": {
-          "rtoken": { "$ref": "#/components/schemas/RToken" },
-          "x": { "type": "integer" },
-          "y": { "type": "integer" },
-          "kind": { "type": "string" },
-          "radius": { "type": "number" },
-          "flicker": { "type": "number" }
+          "rtoken": {
+            "$ref": "#/components/schemas/RToken"
+          },
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "radius": {
+            "type": "number"
+          },
+          "flicker": {
+            "type": "number"
+          }
         },
         "additionalProperties": false
       },
       "LightDelta": {
         "type": "object",
-        "required": ["rtoken"],
+        "required": [
+          "rtoken"
+        ],
         "properties": {
-          "rtoken": { "$ref": "#/components/schemas/RToken" },
-          "flicker": { "type": "number" }
+          "rtoken": {
+            "$ref": "#/components/schemas/RToken"
+          },
+          "flicker": {
+            "type": "number"
+          }
         },
         "additionalProperties": false
       },
       "Actor": {
         "type": "object",
-        "required": ["rtoken", "sprite", "x", "y", "facing", "anim"],
+        "required": [
+          "rtoken",
+          "sprite",
+          "x",
+          "y",
+          "facing",
+          "anim"
+        ],
         "properties": {
-          "rtoken": { "$ref": "#/components/schemas/RToken" },
-          "sprite": { "type": "string" },
-          "x": { "type": "integer" },
-          "y": { "type": "integer" },
-          "facing": { "$ref": "#/components/schemas/Facing" },
-          "anim": { "type": "string" },
-          "tint": { "type": "integer" }
+          "rtoken": {
+            "$ref": "#/components/schemas/RToken"
+          },
+          "sprite": {
+            "type": "string"
+          },
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          },
+          "facing": {
+            "$ref": "#/components/schemas/Facing"
+          },
+          "anim": {
+            "type": "string"
+          },
+          "tint": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string",
+            "description": "戏内显示名（头顶名字供数；未装配则缺省）"
+          }
         },
         "additionalProperties": false
       },
       "ActorDelta": {
         "type": "object",
-        "required": ["rtoken"],
+        "required": [
+          "rtoken"
+        ],
         "properties": {
-          "op": { "type": "string", "enum": ["add", "remove"] },
-          "rtoken": { "$ref": "#/components/schemas/RToken" },
-          "sprite": { "type": "string" },
-          "x": { "type": "integer" },
-          "y": { "type": "integer" },
-          "facing": { "$ref": "#/components/schemas/Facing" },
-          "anim": { "type": "string" },
-          "tint": { "type": "integer" }
+          "op": {
+            "type": "string",
+            "enum": [
+              "add",
+              "remove"
+            ]
+          },
+          "rtoken": {
+            "$ref": "#/components/schemas/RToken"
+          },
+          "sprite": {
+            "type": "string"
+          },
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          },
+          "facing": {
+            "$ref": "#/components/schemas/Facing"
+          },
+          "anim": {
+            "type": "string"
+          },
+          "tint": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string",
+            "description": "戏内显示名（头顶名字供数；未装配则缺省）"
+          }
         },
         "additionalProperties": false
       },
       "Structure": {
         "type": "object",
-        "required": ["rtoken", "tileset_ref", "x", "y", "phase"],
+        "required": [
+          "rtoken",
+          "tileset_ref",
+          "x",
+          "y",
+          "phase"
+        ],
         "properties": {
-          "rtoken": { "$ref": "#/components/schemas/RToken" },
-          "tileset_ref": { "type": "string" },
-          "x": { "type": "integer" },
-          "y": { "type": "integer" },
-          "phase": { "type": "string", "enum": ["built", "collapsing", "rubble"] }
+          "rtoken": {
+            "$ref": "#/components/schemas/RToken"
+          },
+          "tileset_ref": {
+            "type": "string"
+          },
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "built",
+              "collapsing",
+              "rubble"
+            ]
+          }
         },
         "additionalProperties": false
       },
       "StructureDelta": {
         "type": "object",
-        "required": ["rtoken"],
+        "required": [
+          "rtoken"
+        ],
         "properties": {
-          "op": { "type": "string", "enum": ["add", "remove"] },
-          "rtoken": { "$ref": "#/components/schemas/RToken" },
-          "tileset_ref": { "type": "string" },
-          "x": { "type": "integer" },
-          "y": { "type": "integer" },
-          "phase": { "type": "string", "enum": ["built", "collapsing", "rubble"] }
+          "op": {
+            "type": "string",
+            "enum": [
+              "add",
+              "remove"
+            ]
+          },
+          "rtoken": {
+            "$ref": "#/components/schemas/RToken"
+          },
+          "tileset_ref": {
+            "type": "string"
+          },
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "built",
+              "collapsing",
+              "rubble"
+            ]
+          }
         },
         "additionalProperties": false
       },
       "PlanDelta": {
         "type": "object",
-        "required": ["rtoken", "text"],
+        "required": [
+          "rtoken",
+          "text"
+        ],
         "properties": {
-          "rtoken": { "$ref": "#/components/schemas/RToken" },
-          "text": { "type": "string" }
+          "rtoken": {
+            "$ref": "#/components/schemas/RToken"
+          },
+          "text": {
+            "type": "string"
+          }
         },
         "additionalProperties": false
       },
       "Weather": {
         "type": "object",
-        "required": ["visual", "ambient_light"],
+        "required": [
+          "visual",
+          "ambient_light"
+        ],
         "properties": {
-          "visual": { "type": "string" },
-          "ambient_light": { "type": "number" }
+          "visual": {
+            "type": "string"
+          },
+          "ambient_light": {
+            "type": "number"
+          }
         },
         "additionalProperties": false
       },
       "CombatInfo": {
         "type": "object",
-        "required": ["active"],
+        "required": [
+          "active"
+        ],
         "properties": {
-          "active": { "type": "boolean" }
+          "active": {
+            "type": "boolean"
+          }
         },
         "additionalProperties": false
       },
       "Projectile": {
         "type": "object",
-        "required": ["rtoken", "kind", "x0", "y0", "x1", "y1", "dur"],
+        "required": [
+          "rtoken",
+          "kind",
+          "x0",
+          "y0",
+          "x1",
+          "y1",
+          "dur"
+        ],
         "properties": {
-          "rtoken": { "$ref": "#/components/schemas/RToken" },
-          "kind": { "type": "string" },
-          "x0": { "type": "integer" },
-          "y0": { "type": "integer" },
-          "x1": { "type": "integer" },
-          "y1": { "type": "integer" },
-          "dur": { "type": "number" }
+          "rtoken": {
+            "$ref": "#/components/schemas/RToken"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "x0": {
+            "type": "integer"
+          },
+          "y0": {
+            "type": "integer"
+          },
+          "x1": {
+            "type": "integer"
+          },
+          "y1": {
+            "type": "integer"
+          },
+          "dur": {
+            "type": "number"
+          }
         },
         "additionalProperties": false
       },
       "Hit": {
         "type": "object",
-        "required": ["rtoken", "visual", "bleed"],
+        "required": [
+          "rtoken",
+          "visual",
+          "bleed"
+        ],
         "properties": {
-          "rtoken": { "$ref": "#/components/schemas/RToken" },
-          "visual": { "type": "string" },
-          "bleed": { "type": "string", "enum": ["none", "light", "heavy"] }
+          "rtoken": {
+            "$ref": "#/components/schemas/RToken"
+          },
+          "visual": {
+            "type": "string"
+          },
+          "bleed": {
+            "type": "string",
+            "enum": [
+              "none",
+              "light",
+              "heavy"
+            ]
+          }
         },
         "additionalProperties": false
       },
       "MonologueReaction": {
         "type": "object",
-        "required": ["form", "content"],
+        "required": [
+          "form",
+          "content"
+        ],
         "properties": {
-          "form": { "type": "string", "enum": ["bubble", "thought", "plan"] },
-          "content": { "type": "string" }
+          "form": {
+            "type": "string",
+            "enum": [
+              "bubble",
+              "thought",
+              "plan"
+            ]
+          },
+          "content": {
+            "type": "string"
+          }
         },
         "additionalProperties": false
       },
       "SessionAnchor": {
         "type": "object",
-        "required": ["name", "story_label"],
+        "required": [
+          "name",
+          "story_label"
+        ],
         "properties": {
-          "name": { "type": "string", "description": "档名（玩家自取）" },
+          "name": {
+            "type": "string",
+            "description": "档名（玩家自取）"
+          },
           "story_label": {
             "type": "string",
             "description": "叙事化时间标签（非 tick 数值；未就绪时空串）"
@@ -495,42 +894,133 @@
       "WsEnvelope": {
         "type": "object",
         "description": "通用信封；具体消息见各 *Message schema 的 oneOf WsMessage",
-        "required": ["v", "ws_seq", "channel", "type", "data"],
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "data"
+        ],
         "properties": {
-          "v": { "type": "string", "description": "协商后的协议版本 major.minor" },
-          "ws_seq": { "type": "integer", "minimum": 0, "description": "传输序号，非世界 tick" },
-          "channel": { "type": "string", "enum": ["render", "narrative", "control", "session", "error"] },
-          "type": { "type": "string" },
+          "v": {
+            "type": "string",
+            "description": "协商后的协议版本 major.minor"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "传输序号，非世界 tick"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "render",
+              "narrative",
+              "control",
+              "session",
+              "error"
+            ]
+          },
+          "type": {
+            "type": "string"
+          },
           "data": {}
         },
         "additionalProperties": false
       },
       "PlayerImpulseMessage": {
         "type": "object",
-        "required": ["v", "ws_seq", "channel", "type", "text"],
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "text"
+        ],
         "properties": {
-          "v": { "type": "string" },
-          "ws_seq": { "type": "integer", "minimum": 0 },
-          "channel": { "type": "string", "enum": ["control"] },
-          "type": { "type": "string", "enum": ["player_impulse"] },
-          "text": { "type": "string", "maxLength": 64, "description": "玩家原始直觉输入；sim 负责叙事化" },
-          "preset": { "oneOf": [{ "type": "string" }, { "type": "null" }] }
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "control"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "player_impulse"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "玩家原始直觉输入；sim 负责叙事化"
+          },
+          "preset": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
         },
         "additionalProperties": false
       },
       "SetControlMessage": {
         "type": "object",
-        "required": ["v", "ws_seq", "channel", "type", "action"],
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "action"
+        ],
         "properties": {
-          "v": { "type": "string" },
-          "ws_seq": { "type": "integer", "minimum": 0 },
-          "channel": { "type": "string", "enum": ["control"] },
-          "type": { "type": "string", "enum": ["set_control"] },
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "control"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "set_control"
+            ]
+          },
           "action": {
             "type": "string",
-            "enum": ["pause", "resume", "set_speed", "fast_forward"]
+            "enum": [
+              "pause",
+              "resume",
+              "set_speed",
+              "fast_forward"
+            ]
           },
-          "speed": { "type": "integer", "enum": [1, 4, 16] },
+          "speed": {
+            "type": "integer",
+            "enum": [
+              1,
+              4,
+              16
+            ]
+          },
           "advance_hours": {
             "type": "integer",
             "minimum": 1,
@@ -542,167 +1032,589 @@
       },
       "LoadAnchorMessage": {
         "type": "object",
-        "required": ["v", "ws_seq", "channel", "type", "anchor_id"],
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "anchor_id"
+        ],
         "properties": {
-          "v": { "type": "string" },
-          "ws_seq": { "type": "integer", "minimum": 0 },
-          "channel": { "type": "string", "enum": ["session"] },
-          "type": { "type": "string", "enum": ["load_anchor"] },
-          "anchor_id": { "type": "string" }
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "session"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "load_anchor"
+            ]
+          },
+          "anchor_id": {
+            "type": "string"
+          }
         },
         "additionalProperties": false
       },
       "MoveRequestMessage": {
         "type": "object",
         "description": "玩家点击寻路：客户端只发目标格坐标，sim 负责寻路并驱动主角；无 rtoken（服务端知道主角是谁）",
-        "required": ["v", "ws_seq", "channel", "type", "target_x", "target_y"],
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "target_x",
+          "target_y"
+        ],
         "properties": {
-          "v": { "type": "string" },
-          "ws_seq": { "type": "integer", "minimum": 0 },
-          "channel": { "type": "string", "enum": ["render"] },
-          "type": { "type": "string", "enum": ["move_request"] },
-          "target_x": { "type": "integer", "description": "目标格 X（整数格坐标）" },
-          "target_y": { "type": "integer", "description": "目标格 Y（整数格坐标）" }
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "render"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "move_request"
+            ]
+          },
+          "target_x": {
+            "type": "integer",
+            "description": "目标格 X（整数格坐标）"
+          },
+          "target_y": {
+            "type": "integer",
+            "description": "目标格 Y（整数格坐标）"
+          }
         },
         "additionalProperties": false
       },
       "SyncRequestMessage": {
         "type": "object",
-        "required": ["v", "ws_seq", "channel", "type", "reason"],
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "reason"
+        ],
         "properties": {
-          "v": { "type": "string" },
-          "ws_seq": { "type": "integer", "minimum": 0 },
-          "channel": { "type": "string", "enum": ["session"] },
-          "type": { "type": "string", "enum": ["sync_request"] },
-          "reason": { "type": "string" }
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "session"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "sync_request"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
         },
         "additionalProperties": false
       },
       "FullSnapshotMessage": {
         "type": "object",
-        "required": ["v", "ws_seq", "channel", "type", "map", "lights", "actors", "structures", "weather"],
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "map",
+          "lights",
+          "actors",
+          "structures",
+          "weather",
+          "time"
+        ],
         "properties": {
-          "v": { "type": "string" },
-          "ws_seq": { "type": "integer", "minimum": 0 },
-          "channel": { "type": "string", "enum": ["render"] },
-          "type": { "type": "string", "enum": ["full_snapshot"] },
-          "map": { "$ref": "#/components/schemas/MapInfo" },
-          "lights": { "type": "array", "items": { "$ref": "#/components/schemas/Light" } },
-          "actors": { "type": "array", "items": { "$ref": "#/components/schemas/Actor" } },
-          "structures": { "type": "array", "items": { "$ref": "#/components/schemas/Structure" } },
-          "weather": { "$ref": "#/components/schemas/Weather" },
-          "combat": { "oneOf": [{ "$ref": "#/components/schemas/CombatInfo" }, { "type": "null" }] }
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "render"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "full_snapshot"
+            ]
+          },
+          "map": {
+            "$ref": "#/components/schemas/MapInfo"
+          },
+          "lights": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Light"
+            }
+          },
+          "actors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Actor"
+            }
+          },
+          "structures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Structure"
+            }
+          },
+          "weather": {
+            "$ref": "#/components/schemas/Weather"
+          },
+          "combat": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CombatInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "time": {
+            "$ref": "#/components/schemas/TimeInfo"
+          },
+          "fog": {
+            "$ref": "#/components/schemas/FogState"
+          }
         },
         "additionalProperties": false
       },
       "StateDeltaMessage": {
         "type": "object",
-        "required": ["v", "ws_seq", "channel", "type", "actors"],
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "actors",
+          "time"
+        ],
         "properties": {
-          "v": { "type": "string" },
-          "ws_seq": { "type": "integer", "minimum": 0 },
-          "channel": { "type": "string", "enum": ["render"] },
-          "type": { "type": "string", "enum": ["state_delta"] },
-          "actors": { "type": "array", "items": { "$ref": "#/components/schemas/ActorDelta" } },
-          "lights": { "type": "array", "items": { "$ref": "#/components/schemas/LightDelta" } },
-          "structures": { "type": "array", "items": { "$ref": "#/components/schemas/StructureDelta" } },
-          "plan": { "type": "array", "items": { "$ref": "#/components/schemas/PlanDelta" } },
-          "weather": { "$ref": "#/components/schemas/Weather" }
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "render"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "state_delta"
+            ]
+          },
+          "actors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActorDelta"
+            }
+          },
+          "lights": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LightDelta"
+            }
+          },
+          "structures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StructureDelta"
+            }
+          },
+          "plan": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanDelta"
+            }
+          },
+          "weather": {
+            "$ref": "#/components/schemas/Weather"
+          },
+          "time": {
+            "$ref": "#/components/schemas/TimeInfo"
+          },
+          "fog": {
+            "$ref": "#/components/schemas/FogState"
+          }
         },
         "additionalProperties": false
       },
       "PerceptionMessage": {
         "type": "object",
-        "required": ["v", "ws_seq", "channel", "type", "sense", "content"],
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "sense",
+          "content"
+        ],
         "properties": {
-          "v": { "type": "string" },
-          "ws_seq": { "type": "integer", "minimum": 0 },
-          "channel": { "type": "string", "enum": ["narrative"] },
-          "type": { "type": "string", "enum": ["perception"] },
-          "sense": { "type": "string", "enum": ["sight", "sound", "smell", "touch", "interoception"] },
-          "content": { "type": "string", "description": "第一人称叙事，无数值无系统词" },
-          "form": { "oneOf": [{ "type": "string", "enum": ["bubble", "thought", "plan"] }, { "type": "null" }] }
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "narrative"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "perception"
+            ]
+          },
+          "sense": {
+            "type": "string",
+            "enum": [
+              "sight",
+              "sound",
+              "smell",
+              "touch",
+              "interoception"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "description": "第一人称叙事，无数值无系统词"
+          },
+          "form": {
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "bubble",
+                  "thought",
+                  "plan"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
         },
         "additionalProperties": false
       },
       "MonologueMessage": {
         "type": "object",
         "description": "M1 独白三形态呈现（§8）；content 必须第一人称世界内语言、无数值无系统词，永不直接渲染 LLM 原始思维链",
-        "required": ["v", "ws_seq", "channel", "type", "form", "content"],
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "form",
+          "content"
+        ],
         "properties": {
-          "v": { "type": "string" },
-          "ws_seq": { "type": "integer", "minimum": 0 },
-          "channel": { "type": "string", "enum": ["narrative"] },
-          "type": { "type": "string", "enum": ["monologue"] },
-          "form": { "type": "string", "enum": ["bubble", "thought", "plan"] },
-          "content": { "type": "string", "description": "第一人称叙事化独白，无数值无系统词" }
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "narrative"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "monologue"
+            ]
+          },
+          "form": {
+            "type": "string",
+            "enum": [
+              "bubble",
+              "thought",
+              "plan"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "description": "第一人称叙事化独白，无数值无系统词"
+          },
+          "name": {
+            "type": "string",
+            "description": "说话人戏内名（仅 bubble 署名；thought/plan 不带）"
+          }
         },
         "additionalProperties": false
       },
       "ImpulseFeedbackMessage": {
         "type": "object",
         "description": "M1 念头注入即时反馈（§10 意愿冲突度表现）；cue 是表现提示而非冲突度数值，reaction_monologue 为第一人称自我怀疑（非被操纵感）",
-        "required": ["v", "ws_seq", "channel", "type", "injected", "cue", "reaction_monologue"],
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "injected",
+          "cue",
+          "reaction_monologue"
+        ],
         "properties": {
-          "v": { "type": "string" },
-          "ws_seq": { "type": "integer", "minimum": 0 },
-          "channel": { "type": "string", "enum": ["control"] },
-          "type": { "type": "string", "enum": ["impulse_feedback"] },
-          "injected": { "type": "boolean" },
-          "cue": { "type": "string", "enum": ["accepted", "hesitation", "complaint", "resistance"] },
-          "reaction_monologue": { "$ref": "#/components/schemas/MonologueReaction" }
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "control"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "impulse_feedback"
+            ]
+          },
+          "injected": {
+            "type": "boolean"
+          },
+          "cue": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "hesitation",
+              "complaint",
+              "resistance"
+            ]
+          },
+          "reaction_monologue": {
+            "$ref": "#/components/schemas/MonologueReaction"
+          }
         },
         "additionalProperties": false
       },
       "CombatEventMessage": {
         "type": "object",
-        "required": ["v", "ws_seq", "channel", "type", "exchange", "rtoken", "posture_visual", "exchange_resolved"],
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "exchange",
+          "rtoken",
+          "posture_visual",
+          "exchange_resolved"
+        ],
         "properties": {
-          "v": { "type": "string" },
-          "ws_seq": { "type": "integer", "minimum": 0 },
-          "channel": { "type": "string", "enum": ["render"] },
-          "type": { "type": "string", "enum": ["combat_event"] },
-          "exchange": { "type": "integer", "minimum": 0, "description": "本战斗内序，非世界 tick" },
-          "rtoken": { "$ref": "#/components/schemas/RToken" },
-          "posture_visual": { "type": "string" },
-          "projectiles": { "type": "array", "items": { "$ref": "#/components/schemas/Projectile" } },
-          "hits": { "type": "array", "items": { "$ref": "#/components/schemas/Hit" } },
-          "exchange_resolved": { "type": "boolean" }
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "render"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "combat_event"
+            ]
+          },
+          "exchange": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "本战斗内序，非世界 tick"
+          },
+          "rtoken": {
+            "$ref": "#/components/schemas/RToken"
+          },
+          "posture_visual": {
+            "type": "string"
+          },
+          "projectiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Projectile"
+            }
+          },
+          "hits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Hit"
+            }
+          },
+          "exchange_resolved": {
+            "type": "boolean"
+          }
         },
         "additionalProperties": false
       },
       "TimescaleMessage": {
         "type": "object",
-        "required": ["v", "ws_seq", "channel", "type", "mode", "active"],
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "mode",
+          "active"
+        ],
         "properties": {
-          "v": { "type": "string" },
-          "ws_seq": { "type": "integer", "minimum": 0 },
-          "channel": { "type": "string", "enum": ["control"] },
-          "type": { "type": "string", "enum": ["timescale"] },
-          "mode": { "type": "string", "enum": ["normal", "combat"] },
-          "active": { "type": "boolean" },
-          "note": { "oneOf": [{ "type": "string" }, { "type": "null" }] }
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "control"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "timescale"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "combat"
+            ]
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "note": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
         },
         "additionalProperties": false
       },
       "ControlAckMessage": {
         "type": "object",
-        "required": ["v", "ws_seq", "channel", "type", "action", "applied"],
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "action",
+          "applied"
+        ],
         "properties": {
-          "v": { "type": "string" },
-          "ws_seq": { "type": "integer", "minimum": 0 },
-          "channel": { "type": "string", "enum": ["control"] },
-          "type": { "type": "string", "enum": ["control_ack"] },
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "control"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "control_ack"
+            ]
+          },
           "action": {
             "type": "string",
-            "enum": ["pause", "resume", "set_speed", "fast_forward"]
+            "enum": [
+              "pause",
+              "resume",
+              "set_speed",
+              "fast_forward"
+            ]
           },
-          "speed": { "type": "integer", "enum": [1, 4, 16] },
+          "speed": {
+            "type": "integer",
+            "enum": [
+              1,
+              4,
+              16
+            ]
+          },
           "paused": {
             "type": "boolean",
             "description": "暂停态（D-3 幂等单值）：省略=未表达；true=仍暂停，此时 speed 是恢复后倍率而非当前生效倍率"
           },
-          "applied": { "type": "boolean" }
+          "applied": {
+            "type": "boolean"
+          }
         },
         "additionalProperties": false
       },
@@ -719,55 +1631,160 @@
           "notice"
         ],
         "properties": {
-          "v": { "type": "string" },
-          "ws_seq": { "type": "integer", "minimum": 0 },
-          "channel": { "type": "string", "enum": ["session"] },
-          "type": { "type": "string", "enum": ["session_state"] },
-          "speed": { "type": "integer", "enum": [1, 4, 16] },
-          "paused": { "type": "boolean" },
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "session"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "session_state"
+            ]
+          },
+          "speed": {
+            "type": "integer",
+            "enum": [
+              1,
+              4,
+              16
+            ]
+          },
+          "paused": {
+            "type": "boolean"
+          },
           "anchor": {
             "oneOf": [
-              { "$ref": "#/components/schemas/SessionAnchor" },
-              { "type": "null" }
+              {
+                "$ref": "#/components/schemas/SessionAnchor"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "notice": {
-            "oneOf": [{ "type": "string" }, { "type": "null" }]
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "time": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TimeInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false
       },
       "WsErrorMessage": {
         "type": "object",
-        "required": ["v", "ws_seq", "channel", "type", "ref", "code", "message"],
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "ref",
+          "code",
+          "message"
+        ],
         "properties": {
-          "v": { "type": "string" },
-          "ws_seq": { "type": "integer", "minimum": 0 },
-          "channel": { "type": "string", "enum": ["error"] },
-          "type": { "type": "string", "enum": ["error"] },
-          "ref": { "type": "string" },
-          "code": { "type": "string" },
-          "message": { "type": "string", "description": "戏内文风，不向玩家显示系统措辞" }
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "error"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "error"
+            ]
+          },
+          "ref": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string",
+            "description": "戏内文风，不向玩家显示系统措辞"
+          }
         },
         "additionalProperties": false
       },
       "WsMessage": {
         "oneOf": [
-          { "$ref": "#/components/schemas/PlayerImpulseMessage" },
-          { "$ref": "#/components/schemas/SetControlMessage" },
-          { "$ref": "#/components/schemas/LoadAnchorMessage" },
-          { "$ref": "#/components/schemas/MoveRequestMessage" },
-          { "$ref": "#/components/schemas/SyncRequestMessage" },
-          { "$ref": "#/components/schemas/FullSnapshotMessage" },
-          { "$ref": "#/components/schemas/StateDeltaMessage" },
-          { "$ref": "#/components/schemas/PerceptionMessage" },
-          { "$ref": "#/components/schemas/MonologueMessage" },
-          { "$ref": "#/components/schemas/ImpulseFeedbackMessage" },
-          { "$ref": "#/components/schemas/CombatEventMessage" },
-          { "$ref": "#/components/schemas/TimescaleMessage" },
-          { "$ref": "#/components/schemas/ControlAckMessage" },
-          { "$ref": "#/components/schemas/SessionStateMessage" },
-          { "$ref": "#/components/schemas/WsErrorMessage" }
+          {
+            "$ref": "#/components/schemas/PlayerImpulseMessage"
+          },
+          {
+            "$ref": "#/components/schemas/SetControlMessage"
+          },
+          {
+            "$ref": "#/components/schemas/LoadAnchorMessage"
+          },
+          {
+            "$ref": "#/components/schemas/MoveRequestMessage"
+          },
+          {
+            "$ref": "#/components/schemas/SyncRequestMessage"
+          },
+          {
+            "$ref": "#/components/schemas/FullSnapshotMessage"
+          },
+          {
+            "$ref": "#/components/schemas/StateDeltaMessage"
+          },
+          {
+            "$ref": "#/components/schemas/PerceptionMessage"
+          },
+          {
+            "$ref": "#/components/schemas/MonologueMessage"
+          },
+          {
+            "$ref": "#/components/schemas/ImpulseFeedbackMessage"
+          },
+          {
+            "$ref": "#/components/schemas/CombatEventMessage"
+          },
+          {
+            "$ref": "#/components/schemas/TimescaleMessage"
+          },
+          {
+            "$ref": "#/components/schemas/ControlAckMessage"
+          },
+          {
+            "$ref": "#/components/schemas/SessionStateMessage"
+          },
+          {
+            "$ref": "#/components/schemas/WsErrorMessage"
+          }
         ],
         "discriminator": {
           "propertyName": "type",
@@ -793,100 +1810,449 @@
       "ProfileCreate": {
         "type": "object",
         "description": "新建 LLM Profile。api_key 明文入、后端即 Fernet 加密落库（codex K1/K2）。字段与约束对齐 sim/api/settings.py::ProfileCreate（真相源）",
-        "required": ["name", "base_url", "model", "api_key"],
+        "required": [
+          "name",
+          "base_url",
+          "model",
+          "api_key"
+        ],
         "properties": {
-          "name": { "type": "string", "minLength": 1, "maxLength": 64 },
-          "base_url": { "type": "string", "minLength": 1 },
-          "model": { "type": "string", "minLength": 1 },
-          "api_key": { "type": "string", "minLength": 1, "description": "明文入，后端即加密；响应永不回传（K4/K5）" },
-          "temperature": { "type": "number", "minimum": 0, "maximum": 2, "default": 0.7 },
-          "max_tokens": { "type": "integer", "minimum": 1, "maximum": 32768, "default": 2048 }
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "base_url": {
+            "type": "string",
+            "minLength": 1
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "api_key": {
+            "type": "string",
+            "minLength": 1,
+            "description": "明文入，后端即加密；响应永不回传（K4/K5）"
+          },
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2,
+            "default": 0.7
+          },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32768,
+            "default": 2048
+          }
         }
       },
       "ProfileUpdate": {
         "type": "object",
         "description": "更新 Profile；字段全可选，api_key 省略即保留原密钥（K1/K3）。对齐 sim/api/settings.py::ProfileUpdate",
         "properties": {
-          "name": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
-          "base_url": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
-          "model": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
-          "api_key": { "anyOf": [{ "type": "string" }, { "type": "null" }], "description": "可选，省略即保留原密钥" },
-          "temperature": { "anyOf": [{ "type": "number", "minimum": 0, "maximum": 2 }, { "type": "null" }] },
-          "max_tokens": { "anyOf": [{ "type": "integer", "minimum": 1, "maximum": 32768 }, { "type": "null" }] }
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "可选，省略即保留原密钥"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 32768
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
         }
       },
       "ProfileListItem": {
         "type": "object",
         "description": "Profile 序列化白名单（codex K5）：绝不含 api_key 明文字段；api_key_hint 仅掩码（如 sk-***last4），前端无法据此调用 LLM",
-        "required": ["id", "name", "base_url", "model", "temperature", "max_tokens", "active", "api_key_hint"],
+        "required": [
+          "id",
+          "name",
+          "base_url",
+          "model",
+          "temperature",
+          "max_tokens",
+          "active",
+          "api_key_hint"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "name": { "type": "string" },
-          "base_url": { "type": "string" },
-          "model": { "type": "string" },
-          "temperature": { "type": "number" },
-          "max_tokens": { "type": "integer" },
-          "active": { "type": "boolean", "description": "单 profile 手动切换用（DESIGN §4）" },
-          "api_key_hint": { "type": "string", "description": "仅掩码 sk-***last4；不是密钥，不能用于调用" }
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "base_url": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "temperature": {
+            "type": "number"
+          },
+          "max_tokens": {
+            "type": "integer"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "单 profile 手动切换用（DESIGN §4）"
+          },
+          "api_key_hint": {
+            "type": "string",
+            "description": "仅掩码 sk-***last4；不是密钥，不能用于调用"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ModelListRequest": {
+        "type": "object",
+        "description": "拉取模型清单请求（OpenAI 兼容 GET {base_url}/models；api_key 只用于本次请求，不落库）",
+        "required": [
+          "base_url",
+          "api_key"
+        ],
+        "properties": {
+          "base_url": {
+            "type": "string",
+            "minLength": 1
+          },
+          "api_key": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "ModelListResponse": {
+        "type": "object",
+        "description": "拉取结果（失败也 200 + ok:false + reason；reason 永不含密钥材料）",
+        "required": [
+          "ok",
+          "models"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "TestConnectionRequest": {
+        "type": "object",
+        "description": "连通性测试请求（极小对话 max_tokens=1，不烧钱；api_key 只用于本次请求）",
+        "required": [
+          "base_url",
+          "model",
+          "api_key"
+        ],
+        "properties": {
+          "base_url": {
+            "type": "string",
+            "minLength": 1
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "api_key": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "TestConnectionResponse": {
+        "type": "object",
+        "description": "测试结果（失败也 200 + ok:false + reason；reason 永不含密钥材料）",
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "latency_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "成功时为请求往返毫秒数"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
         },
         "additionalProperties": false
       },
       "AnchorCreate": {
         "type": "object",
-        "required": ["name"],
+        "required": [
+          "name"
+        ],
         "properties": {
-          "name": { "type": "string", "minLength": 1, "maxLength": 64 }
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
         },
         "additionalProperties": false
       },
       "AnchorRename": {
         "type": "object",
-        "required": ["name"],
+        "required": [
+          "name"
+        ],
         "properties": {
-          "name": { "type": "string", "minLength": 1, "maxLength": 64 }
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
         },
         "additionalProperties": false
       },
       "AnchorListItem": {
         "type": "object",
-        "required": ["id", "name", "story_label", "created_at", "protected"],
+        "required": [
+          "id",
+          "name",
+          "story_label",
+          "created_at",
+          "protected"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "name": { "type": "string" },
-          "story_label": { "type": "string", "description": "叙事化时间标签，非 tick 数值" },
-          "created_at": { "type": "string", "format": "date-time" },
-          "protected": { "type": "boolean" }
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "story_label": {
+            "type": "string",
+            "description": "叙事化时间标签，非 tick 数值"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "protected": {
+            "type": "boolean"
+          }
         },
         "additionalProperties": false
       },
       "AnchorMaterializationStatus": {
         "type": "object",
-        "required": ["anchor_id", "ready"],
+        "required": [
+          "anchor_id",
+          "ready"
+        ],
         "properties": {
-          "anchor_id": { "type": "string" },
-          "ready": { "type": "boolean" },
-          "reason": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+          "anchor_id": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
         },
         "additionalProperties": false
       },
       "HealthStatus": {
         "type": "object",
-        "required": ["status", "world_running", "in_combat"],
+        "required": [
+          "status",
+          "world_running",
+          "in_combat"
+        ],
         "properties": {
-          "status": { "type": "string", "enum": ["ok"] },
-          "world_running": { "type": "boolean" },
-          "in_combat": { "type": "boolean", "description": "戏外只读，不回流戏内" }
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "world_running": {
+            "type": "boolean"
+          },
+          "in_combat": {
+            "type": "boolean",
+            "description": "戏外只读，不回流戏内"
+          }
         },
         "additionalProperties": false
       },
       "ProblemDetail": {
         "type": "object",
-        "required": ["title", "status"],
+        "required": [
+          "title",
+          "status"
+        ],
         "properties": {
-          "type": { "type": "string" },
-          "title": { "type": "string" },
-          "status": { "type": "integer" },
-          "detail": { "type": "string" }
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TimeInfo": {
+        "type": "object",
+        "description": "戏内时间（服务端权威帧；day 从 1 起，phase 四枚举，集市日布尔）",
+        "required": [
+          "day",
+          "hour",
+          "minute",
+          "phase",
+          "is_market_day"
+        ],
+        "properties": {
+          "day": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "hour": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 23
+          },
+          "minute": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 59
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "dawn",
+              "day",
+              "dusk",
+              "night"
+            ]
+          },
+          "is_market_day": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "FogState": {
+        "type": "object",
+        "required": [
+          "revealed"
+        ],
+        "properties": {
+          "revealed": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "cx",
+                "cy"
+              ],
+              "properties": {
+                "cx": {
+                  "type": "integer"
+                },
+                "cy": {
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
         },
         "additionalProperties": false
       }

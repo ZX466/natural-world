@@ -3,6 +3,7 @@
  *
  * 本页只服务人类玩家：可用工程措辞，绝不进戏内叙事通道，也不回流 Agent prompt。
  * 契约：shared/protocol.ts（ProfileListItem 8 字段白名单；api_key 只提交、不回显）。
+ * 版式：暗木墨色 shell，与戏内宣纸面板分层（见 ui.css）。
  */
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import type { ProfileCreate, ProfileListItem } from '../net/protocol';
@@ -12,6 +13,8 @@ import {
   createProfile,
   deleteProfile,
   listProfiles,
+  listRemoteModels,
+  testConnection,
   updateProfile,
 } from '../net/settingsApi';
 
@@ -51,7 +54,6 @@ function formFrom(p: ProfileListItem): FormState {
 function errorText(e: unknown): string {
   if (e instanceof SettingsApiError) {
     if (e.status === 422) return `输入不合法（422）：${e.message}`;
-    if (e.status === 500) return `密钥服务不可用（500）：检查后端 LZ_MASTER_KEY 是否配置`;
     return `请求失败（${e.status}）：${e.message}`;
   }
   if (e instanceof TypeError) return '无法连接后端（sim 未启动？）';
@@ -63,6 +65,9 @@ export function SettingsPage({ onClose }: { onClose: () => void }): ReactElement
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // D13：拉取的模型清单（非空 = 模型字段变下拉）；测试连接结果
+  const [modelOptions, setModelOptions] = useState<string[]>([]);
+  const [testResult, setTestResult] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -124,6 +129,44 @@ export function SettingsPage({ onClose }: { onClose: () => void }): ReactElement
     }
   }
 
+  /** D13：拉取对方模型清单 → 模型字段变下拉。 */
+  async function onFetchModels(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    setTestResult(null);
+    try {
+      const out = await listRemoteModels(form.base_url.trim(), form.api_key);
+      if (out.ok) {
+        setModelOptions(out.models);
+        if (out.models.length > 0 && !out.models.includes(form.model)) {
+          set('model', out.models[0] ?? form.model);
+        }
+      } else {
+        setError(`拉取失败：${out.reason ?? '未知原因'}`);
+      }
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** D13：极小对话请求测连通性（max_tokens=1）。 */
+  async function onTestConnection(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      const out = await testConnection(form.base_url.trim(), form.model.trim(), form.api_key);
+      setTestResult(
+        out.ok ? `✓ 连通正常（${out.latency_ms ?? '?'}ms）` : `✗ ${out.reason ?? '未知原因'}`,
+      );
+    } catch (e) {
+      setTestResult(`✗ ${errorText(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onDelete(p: ProfileListItem): Promise<void> {
     if (!window.confirm(`删除配置「${p.name}」？此操作不可撤销。`)) return;
     setBusy(true);
@@ -139,54 +182,36 @@ export function SettingsPage({ onClose }: { onClose: () => void }): ReactElement
     }
   }
 
-  const inputCls =
-    'w-full rounded border border-stone-600 bg-stone-800 px-2 py-1 text-sm text-stone-100';
-
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-stone-950/98 p-6 text-stone-200">
-      <header className="mb-4 flex items-center justify-between border-b border-stone-700 pb-2">
-        <h1 className="text-lg font-semibold">模型设置</h1>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded bg-stone-700 px-3 py-1 text-sm hover:bg-stone-600"
-        >
+    <div className="od-sheet">
+      <header className="od-sheet__head">
+        <h1 className="od-sheet__title">模型设置</h1>
+        <button type="button" onClick={onClose} className="od-menu__btn">
           返回
         </button>
       </header>
 
-      {error !== null && (
-        <div className="mb-3 rounded border border-rose-700 bg-rose-950 px-3 py-2 text-sm text-rose-200">
-          {error}
-        </div>
-      )}
+      {error !== null && <div className="od-error">{error}</div>}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[1fr_20rem] gap-6">
+      <div className="od-sheet__grid">
         {/* 列表 */}
-        <section className="min-h-0 overflow-auto">
-          <h2 className="mb-2 text-sm text-stone-400">已配置档案</h2>
+        <section className="od-sheet__col">
+          <h2 className="od-section-title">已配置档案</h2>
           {profiles.length === 0 ? (
-            <p className="text-sm text-stone-500">（暂无配置）</p>
+            <p className="od-menu__empty">（暂无配置）</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="od-menu__list">
               {profiles.map((p) => (
-                <li
-                  key={p.id}
-                  className={`rounded border px-3 py-2 ${
-                    p.active
-                      ? 'border-emerald-600 bg-emerald-950/40'
-                      : 'border-stone-700 bg-stone-900'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{p.name}</span>
-                    {p.active && <span className="text-xs text-emerald-400">使用中</span>}
-                    <span className="ml-auto flex gap-1">
+                <li key={p.id} className={`od-profile${p.active ? ' od-profile--active' : ''}`}>
+                  <div className="od-profile__top">
+                    <span className="od-profile__name">{p.name}</span>
+                    {p.active && <span className="od-badge">使用中</span>}
+                    <span className="od-profile__acts">
                       <button
                         type="button"
                         disabled={busy || p.active}
                         onClick={() => void onActivate(p.id)}
-                        className="rounded bg-stone-700 px-2 py-0.5 text-xs hover:bg-stone-600 disabled:opacity-40"
+                        className="od-menu__btn"
                       >
                         激活
                       </button>
@@ -194,7 +219,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }): ReactElement
                         type="button"
                         disabled={busy}
                         onClick={() => setForm(formFrom(p))}
-                        className="rounded bg-stone-700 px-2 py-0.5 text-xs hover:bg-stone-600 disabled:opacity-40"
+                        className="od-menu__btn"
                       >
                         编辑
                       </button>
@@ -202,32 +227,32 @@ export function SettingsPage({ onClose }: { onClose: () => void }): ReactElement
                         type="button"
                         disabled={busy}
                         onClick={() => void onDelete(p)}
-                        className="rounded bg-rose-900 px-2 py-0.5 text-xs hover:bg-rose-800 disabled:opacity-40"
+                        className="od-menu__btn od-menu__btn--danger"
                       >
                         删除
                       </button>
                     </span>
                   </div>
-                  <dl className="mt-1 grid grid-cols-2 gap-x-4 text-xs text-stone-400">
+                  <dl className="od-kv">
                     <div>
-                      <dt className="inline">Base URL：</dt>
-                      <dd className="inline text-stone-300">{p.base_url}</dd>
+                      <dt>Base URL：</dt>
+                      <dd>{p.base_url}</dd>
                     </div>
                     <div>
-                      <dt className="inline">模型：</dt>
-                      <dd className="inline text-stone-300">{p.model}</dd>
+                      <dt>模型：</dt>
+                      <dd>{p.model}</dd>
                     </div>
                     <div>
-                      <dt className="inline">温度：</dt>
-                      <dd className="inline text-stone-300">{p.temperature}</dd>
+                      <dt>温度：</dt>
+                      <dd>{p.temperature}</dd>
                     </div>
                     <div>
-                      <dt className="inline">Max tokens：</dt>
-                      <dd className="inline text-stone-300">{p.max_tokens}</dd>
+                      <dt>Max tokens：</dt>
+                      <dd>{p.max_tokens}</dd>
                     </div>
                     <div>
-                      <dt className="inline">密钥：</dt>
-                      <dd className="inline text-stone-300">{p.api_key_hint}</dd>
+                      <dt>密钥：</dt>
+                      <dd>{p.api_key_hint}</dd>
                     </div>
                   </dl>
                 </li>
@@ -237,51 +262,93 @@ export function SettingsPage({ onClose }: { onClose: () => void }): ReactElement
         </section>
 
         {/* 表单 */}
-        <section className="rounded border border-stone-700 bg-stone-900 p-3">
-          <h2 className="mb-3 text-sm text-stone-400">
-            {form.id === null ? '新建档案' : '编辑档案'}
-          </h2>
-          <div className="space-y-2">
-            <label className="block text-xs">
+        <section className="od-card">
+          <h2 className="od-section-title">{form.id === null ? '新建档案' : '编辑档案'}</h2>
+          <div>
+            <label className="od-field">
               名称
               <input
-                className={inputCls}
+                className="od-input"
                 value={form.name}
                 maxLength={64}
                 onChange={(e) => set('name', e.target.value)}
               />
             </label>
-            <label className="block text-xs">
+            <label className="od-field">
               Base URL
               <input
-                className={inputCls}
+                className="od-input"
                 value={form.base_url}
                 onChange={(e) => set('base_url', e.target.value)}
               />
             </label>
-            <label className="block text-xs">
+            <label className="od-field">
               模型
-              <input
-                className={inputCls}
-                value={form.model}
-                onChange={(e) => set('model', e.target.value)}
-              />
+              {modelOptions.length > 0 ? (
+                <select
+                  className="od-input"
+                  value={form.model}
+                  onChange={(e) => set('model', e.target.value)}
+                >
+                  {modelOptions.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                  {form.model && !modelOptions.includes(form.model) && (
+                    <option value={form.model}>{form.model}</option>
+                  )}
+                </select>
+              ) : (
+                <input
+                  className="od-input"
+                  value={form.model}
+                  onChange={(e) => set('model', e.target.value)}
+                />
+              )}
             </label>
-            <label className="block text-xs">
-              API Key{form.id !== null && <span className="text-stone-500">（留空则不修改）</span>}
+            <label className="od-field">
+              API Key
+              {form.id !== null && <span className="od-hint">（留空则不修改）</span>}
               <input
-                className={inputCls}
+                className="od-input"
                 type="password"
                 autoComplete="off"
                 value={form.api_key}
                 onChange={(e) => set('api_key', e.target.value)}
               />
             </label>
-            <div className="flex gap-2">
-              <label className="block flex-1 text-xs">
+            <div className="od-actions">
+              <button
+                type="button"
+                disabled={busy || !form.base_url.trim() || !form.api_key}
+                onClick={() => void onFetchModels()}
+                className="od-menu__btn"
+              >
+                拉取模型
+              </button>
+              <button
+                type="button"
+                disabled={busy || !form.base_url.trim() || !form.model.trim() || !form.api_key}
+                onClick={() => void onTestConnection()}
+                className="od-menu__btn"
+              >
+                测试连接
+              </button>
+              {testResult !== null && (
+                <span
+                  className={testResult.startsWith('✓') ? 'od-test-ok' : 'od-test-bad'}
+                  aria-live="polite"
+                >
+                  {testResult}
+                </span>
+              )}
+            </div>
+            <div className="od-field-row">
+              <label className="od-field">
                 温度
                 <input
-                  className={inputCls}
+                  className="od-input"
                   type="number"
                   min={0}
                   max={2}
@@ -290,10 +357,10 @@ export function SettingsPage({ onClose }: { onClose: () => void }): ReactElement
                   onChange={(e) => set('temperature', e.target.value)}
                 />
               </label>
-              <label className="block flex-1 text-xs">
+              <label className="od-field">
                 Max tokens
                 <input
-                  className={inputCls}
+                  className="od-input"
                   type="number"
                   min={1}
                   max={32768}
@@ -303,12 +370,12 @@ export function SettingsPage({ onClose }: { onClose: () => void }): ReactElement
               </label>
             </div>
           </div>
-          <div className="mt-4 flex gap-2">
+          <div className="od-actions">
             <button
               type="button"
               disabled={busy}
               onClick={() => void submit()}
-              className="rounded bg-emerald-700 px-3 py-1 text-sm hover:bg-emerald-600 disabled:opacity-40"
+              className="od-menu__btn od-menu__btn--primary"
             >
               {form.id === null ? '新建' : '保存'}
             </button>
@@ -317,7 +384,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }): ReactElement
                 type="button"
                 disabled={busy}
                 onClick={() => setForm(EMPTY_FORM)}
-                className="rounded bg-stone-700 px-3 py-1 text-sm hover:bg-stone-600 disabled:opacity-40"
+                className="od-menu__btn"
               >
                 取消
               </button>

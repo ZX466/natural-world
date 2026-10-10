@@ -38,6 +38,7 @@ import asyncio
 import base64
 import hmac
 import secrets
+import struct
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -63,7 +64,7 @@ logger = structlog.get_logger(__name__)
 #: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
 #: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
 #: PlanDelta 封闭）；1.2 = 批次 E 只读诊断面进协议快照（M6-K2）——登记见 versioning.md §7。
-_PROTOCOL_VERSION = "1.2"
+_PROTOCOL_VERSION = "1.7"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 
 # K4 提案 §2.2/§3.2：五类 C→S 消息在此与 _CHANNEL_FOR **成对**注册
@@ -250,6 +251,82 @@ def _rtoken(entity_id: str) -> str:
     return "rt-" + hashlib.sha256(entity_id.encode()).hexdigest()[:12]
 
 
+#: 批次 D10：entity_id → 戏内显示名（{entity_id: 名}；lifespan 装配）。
+#: **名字是戏内事实可出站**（D8 感知真名同源裁定——感知层 display_name_of
+#: 已把真名给 prompt；头顶名字是同一位事实的呈现面，不破出戏边界）。
+#: None = 未装配（测试/旧调用）→ 快照零 name 键（协议 name 可选，向后兼容）。
+#: 模块级（同 _IMPULSE_TRIGGER 模式）：snapshot_payload 是同步纯函数，
+#: 不能读 app.state。
+_DISPLAY_NAMES: dict[str, str] | None = None
+
+
+def set_display_names(names: dict[str, str] | None) -> None:
+    """装配显示名映射（main.py lifespan 调用；None = 清除）。"""
+    global _DISPLAY_NAMES
+    _DISPLAY_NAMES = None if names is None else dict(names)
+
+
+def _display_name_of(entity_id: str) -> str | None:
+    name = (_DISPLAY_NAMES or {}).get(entity_id)
+    if name is None or name == entity_id:  # 防御：戏内名不得退化为 entity_id
+        return None
+    return name
+
+
+#: 批次 D14：动作姿势账本 {entity_id: anim 词}——npc.act 执行面写入
+#: （work/eat/rest/chat → 姿势；wander/move → walk）。「当前动作」是戏内
+#: 可观察事实（他正在干活/吃饭/歇着），anim 是既有协议字段（纯启用）。
+#: 模块级（同 _DISPLAY_NAMES 模式）；快照/delta 出站时携带，缺省 idle。
+_ACTION_ANIMS: dict[str, str] = {}
+
+
+def set_action_anim(entity_id: str, anim: str) -> None:
+    """登记实体当前动作姿势（sim_exec 执行面调用）。"""
+    _ACTION_ANIMS[entity_id] = anim
+
+
+def _anim_of(entity_id: str) -> str:
+    return _ACTION_ANIMS.get(entity_id, "idle")
+
+
+#: 批次 D7：天气日级视觉状态（确定性哈希抽签，同 fire 模式——无 RNG 流）。
+#: visual 协议封闭集 {clear, overcast, rain}；ambient_light 与昼夜色罩叠乘。
+_WEATHER_LIGHTS: dict[str, float] = {"clear": 1.0, "overcast": 0.9, "rain": 0.75}
+
+
+def weather_payload(tick: int, seed: int) -> dict[str, Any]:
+    """戏内天气块（批次 D7）：日级状态，同游戏日恒定。
+
+    判定：(seed, day) 确定性哈希 → 晴 60% / 阴 25% / 雨 15%。雨/阴压低
+    ambient_light（前端色罩叠乘面——昼夜 × 天气的双通道光照）。
+    """
+    day = (tick // 86_400) + 1
+    import zlib
+
+    draw = zlib.crc32(f"weather:{seed}:{day}".encode()) % 100
+    visual = "rain" if draw < 15 else ("overcast" if draw < 40 else "clear")
+    return {"visual": visual, "ambient_light": _WEATHER_LIGHTS[visual]}
+
+
+def _time_payload(tick: int) -> dict[str, Any]:
+    """戏内时间块（M7-R3 时钟权威帧）。五键白名单，零 tick 原值。
+
+    phase/is_market_day 派生自 sim.core.calendar（与 TopBar 展示同源——
+    C3 出戏边界：这些是戏内事实，mock 时代前端就在同形展示；禁键
+    tick/seq/branch 照旧零出站，T3 出站扫描覆盖）。
+    """
+    from sim.core.calendar import game_time, is_market_day, phase_of_day
+
+    t = game_time(tick)
+    return {
+        "day": t.day,
+        "hour": t.hour,
+        "minute": t.minute,
+        "phase": phase_of_day(tick).value,
+        "is_market_day": is_market_day(tick),
+    }
+
+
 class ConnectionManager:
     """WS 连接登记与广播。"""
 
@@ -348,20 +425,24 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
     """全量快照（full_snapshot）。rtoken 替身；无 tick/seed/内部 id。
 
     sprite 名也从 rtoken 派生（内部 entity_id 不可出网关——W 系列出戏边界）。
+    D10：actor 增可选 `name`（戏内显示名；装配了 _DISPLAY_NAMES 才带——
+    名字是戏内事实可出站，entity_id 仍禁出）。
     """
     actors = []
     for entity_id, entity in loop.state.entities.items():
         rt = _rtoken(entity_id)
-        actors.append(
-            {
-                "rtoken": rt,
-                "x": entity.pos[0],
-                "y": entity.pos[1],
-                "facing": "s",
-                "sprite": rt,
-                "anim": "idle",
-            }
-        )
+        actor: dict[str, Any] = {
+            "rtoken": rt,
+            "x": entity.pos[0],
+            "y": entity.pos[1],
+            "facing": "s",
+            "sprite": rt,
+            "anim": _anim_of(entity_id),  # D14：动作姿势账本（缺省 idle）
+        }
+        name = _display_name_of(entity_id)
+        if name is not None:
+            actor["name"] = name
+        actors.append(actor)
     return {
         "type": "full_snapshot",
         "channel": "render",
@@ -369,11 +450,108 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
         "ws_seq": 0,
         "actors": actors,
         "lights": [],
-        "structures": [],
-        "map": {"w": tile_map.width, "h": tile_map.height, "tileset": "grid"},
-        "weather": {"visual": "clear", "ambient_light": 1.0},
+        "structures": _structures_snapshot_payload(),  # E7：真实投影（空账本=空数组，同旧形）
+        "map": {
+            "w": tile_map.width,
+            "h": tile_map.height,
+            "tileset": _tileset_name(tile_map),  # C-1：真实图带图集名（快照与 HTTP 同源）
+        },
+        "weather": weather_payload(loop.state.tick, loop.state.world_seed),
+        # D17 视觉雾：已揭示 chunk 全集（重连/读档重同步；账本空=刚起步常态，
+        # 仍带空表——快照是全量语义，前端不用区分「无键/空键」两态）。
+        "fog": _fog_snapshot(loop),
         "combat": None,
+        "time": _time_payload(loop.state.tick),
     }
+
+
+def _fog_revealed_payload(chunks: set[tuple[int, int]]) -> dict[str, Any]:
+    """揭示集 → 帧形（预研稿 §3.3）：{"revealed": [{cx, cy}, …]}，字典序确定（C5）。"""
+    return {
+        "revealed": [
+            {"cx": cx, "cy": cy}
+            for cx, cy in sorted(chunks)
+        ]
+    }
+
+
+# ---------------------------------------------------------------------------
+# 批次 E7：structures 投影账本（StructureDelta 形——M 面预留协议复用）
+# ---------------------------------------------------------------------------
+
+#: {structure_id: {"tiles": [(x,y)...], "phase": 词}} —— 事件侧（BuildRuntime 钩子）
+#: 经 set_structure_phase 登记；出站面在此唯一收口（rtoken 替身、增量过滤）。
+_STRUCTURES: dict[str, dict[str, Any]] = {}
+_structures_broadcast: dict[str, str] | None = None  # {structure_id: phase} 上次出站基准
+
+
+def set_structure_phase(structure_id: str, tiles: list[tuple[int, int]], phase: str) -> None:
+    """登记/更新结构相位（build hook 写入点；phase ∈ built|collapsing|rubble）。"""
+    _STRUCTURES[structure_id] = {"tiles": sorted(tiles), "phase": phase}
+
+
+def reset_structures() -> None:
+    """测试辅助：清空账本与广播基准。"""
+    global _structures_broadcast
+    _STRUCTURES.clear()
+    _structures_broadcast = None
+
+
+def _structure_rtoken(structure_id: str) -> str:
+    """structure_id → 出站替身（同 _rtoken 口径；id 不得出站）。"""
+    return f"st-{structure_id}"
+
+
+def _structures_delta_rows() -> list[dict[str, Any]]:
+    """增量行：相位有变化的格子 → StructureDelta 形（op=add upsert；排序确定）。"""
+    global _structures_broadcast
+    base = _structures_broadcast or {}
+    rows: list[dict[str, Any]] = []
+    for sid in sorted(_STRUCTURES):
+        entry = _STRUCTURES[sid]
+        if base.get(sid) == entry["phase"]:
+            continue
+        for x, y in entry["tiles"]:
+            rows.append(
+                {
+                    "op": "add",
+                    "rtoken": _structure_rtoken(sid),
+                    "x": x,
+                    "y": y,
+                    "phase": entry["phase"],
+                }
+            )
+    _structures_broadcast = {sid: e["phase"] for sid, e in _STRUCTURES.items()}
+    return rows
+
+
+def _structures_delta_payload() -> list[dict[str, Any]]:
+    return _structures_delta_rows()
+
+
+def _structures_snapshot_payload() -> list[dict[str, Any]]:
+    """快照全量（重连重同步）；副作用：标记为已广播基准。"""
+    global _structures_broadcast
+    rows: list[dict[str, Any]] = []
+    for sid in sorted(_STRUCTURES):
+        entry = _STRUCTURES[sid]
+        for x, y in entry["tiles"]:
+            rows.append(
+                {
+                    "op": "add",
+                    "rtoken": _structure_rtoken(sid),
+                    "x": x,
+                    "y": y,
+                    "phase": entry["phase"],
+                }
+            )
+    _structures_broadcast = {sid: e["phase"] for sid, e in _STRUCTURES.items()}
+    return rows
+
+
+def _fog_snapshot(loop: TickLoop) -> dict[str, Any]:
+    """快照雾形：已揭示全集（实例账本 fog_seen；重放=事件流投影同源）。"""
+    return _fog_revealed_payload(getattr(loop, "fog_seen", set()))
 
 
 def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
@@ -383,6 +561,8 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
     会被 moved 过滤漏掉，故与 actors/lights 并列）。账本为空则**不发该键**
     （可选字段不制造噪声）；已清计划的实体发 `text:""`（前端收起看板）。
     rtoken 替身出网关；账本可能残留已注销实体 → 按世界表过滤。
+    D10：重连/新建连接期间 delta 可能先于快照到达——moved actor 同样带
+    `name`（可选；装配了显示名才带），防前端先建出无名精灵。
     """
     from sim.npc.plan_view import registry
 
@@ -391,13 +571,26 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
         entity = loop.state.entities.get(entity_id)
         if entity is None:
             continue
-        actors.append({"rtoken": _rtoken(entity_id), "x": entity.pos[0], "y": entity.pos[1]})
+        actor: dict[str, Any] = {
+            "rtoken": _rtoken(entity_id),
+            "x": entity.pos[0],
+            "y": entity.pos[1],
+        }
+        name = _display_name_of(entity_id)
+        if name is not None:
+            actor["name"] = name
+        # D14：anim 变化随行（walk↔work/eat/rest 切换前端姿势）；账本缺省
+        # idle 与旧快照一致——只在非 idle 或曾非 idle 时携带（增量不制造噪声）。
+        anim = _anim_of(entity_id)
+        actor["anim"] = anim
+        actors.append(actor)
     payload: dict[str, Any] = {
         "type": "state_delta",
         "channel": "render",
         "v": _PROTOCOL_VERSION,
         "ws_seq": 0,
         "actors": actors,
+        "time": _time_payload(loop.state.tick),
     }
     known = registry().entries()
     plan_items = [
@@ -407,16 +600,28 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
     ]
     if plan_items:
         payload["plan"] = plan_items
+    # D17 视觉雾：本帧有新揭示才带（可选字段不制造噪声）；账本由 run_world_driver
+    # 帧末 drain（内核 advance_frame 聚合入流后清空前，投影与事件同帧）。
+    fog_chunks: set[tuple[int, int]] = getattr(loop.context, "fog_revealed", set()) or set()
+    if fog_chunks:
+        payload["fog"] = _fog_revealed_payload(fog_chunks)
+    # 批次 E7：结构相位变化才带（可选字段；M 面预留 StructureDelta 形）。
+    structures_delta = _structures_delta_rows()
+    if structures_delta:
+        payload["structures"] = structures_delta
     return payload
 
 
-def monologue_payload(form: str, content: str) -> dict[str, Any]:
+def monologue_payload(form: str, content: str, *, name: str | None = None) -> dict[str, Any]:
     """独白帧（monologue，narrative 通道；§8 三形态）。
 
     帧只含 form + content（ws-protocol §4.2 W7 字段最小化：**无 rtoken/actor**）。
     投递面由 `route_monologue` 按 form 决定，不进载荷（出戏边界）。
+    D12：bubble 可带 `name`（说话人戏内名，可选）——bubble 是**外在可观察面**
+    （路人看见谁在嘟囔），署名不破 W7（rtoken/内部 id 仍禁出；thought 私密面
+    保持无 name——心里话无「谁在说」的观察面）。
     """
-    return {
+    frame: dict[str, Any] = {
         "type": "monologue",
         "channel": "narrative",
         "v": _PROTOCOL_VERSION,
@@ -424,6 +629,9 @@ def monologue_payload(form: str, content: str) -> dict[str, Any]:
         "form": form,
         "content": content,
     }
+    if name is not None:
+        frame["name"] = name
+    return frame
 
 
 def monologue_events_to_frames(events: list[WorldEvent]) -> list[tuple[str, dict[str, Any]]]:
@@ -432,18 +640,17 @@ def monologue_events_to_frames(events: list[WorldEvent]) -> list[tuple[str, dict
     事件是真相来源（§14，进事件日志可重放）；本函数只做「事件 → 投递单元」的
     投影，**不改内容**（逐位一致：帧 content 即事件 payload content）。actor_id
     从事件 actor_id 取（路由用，不出网关——帧里没有它）。
+    D12：bubble 帧附说话人戏内名（外在可观察面署名；查不到映射则不带——
+    entity_id 不得退化出站）。
     """
     frames: list[tuple[str, dict[str, Any]]] = []
     for e in events:
         if e.event_type is not EventKind.NPC_MONOLOGUE:
             continue
         payload = e.payload
-        frames.append(
-            (
-                e.actor_id,
-                monologue_payload(str(payload["form"]), str(payload["content"])),
-            )
-        )
+        form = str(payload["form"])
+        name = _display_name_of(e.actor_id) if form == "bubble" else None
+        frames.append((e.actor_id, monologue_payload(form, str(payload["content"]), name=name)))
     return frames
 
 
@@ -463,17 +670,44 @@ async def route_monologue(manager: ConnectionManager, actor_id: str, frame: dict
 
 
 def map_static_payload(tile_map: TileMap) -> dict[str, Any]:
-    """碰撞层 HTTP 端点载荷（kilo 提案按 chunk 模式，codex 意见 5：静态资产不走 WS）。"""
+    """碰撞+地面层 HTTP 端点载荷（kilo 提案按 chunk 模式，codex 意见 5：静态资产不走 WS）。
+
+    M7（1.3 加法）：每 chunk 增 `ground_b64` = base64(**u16 小端**、chunk 内行主序，
+    16×16×2=512 字节)；与前端 `assembleGround`（decodeGroundB64）互为镜像定义。
+    collision_b64 口径不变（M0 契约不回退）。
+    """
     chunks = []
     for (cx, cy), chunk in sorted(tile_map.chunks.items()):
         bits = bytes(1 if w else 0 for w in chunk.collision)
-        chunks.append({"cx": cx, "cy": cy, "collision_b64": base64.b64encode(bits).decode()})
+        ground = b"".join(struct.pack("<H", g) for g in chunk.ground)
+        chunks.append(
+            {
+                "cx": cx,
+                "cy": cy,
+                "collision_b64": base64.b64encode(bits).decode(),
+                "ground_b64": base64.b64encode(ground).decode(),
+            }
+        )
     return {
         "w": tile_map.width,
         "h": tile_map.height,
-        "tileset": "grid",
+        # C-1 修复：tileset 名随真实图携带（fail-safe 占位图='grid' → 前端色块回退；
+        # 真实图='zelda_like_v1' → 前端图集渲染）。名值与 sim/content/build_palette.py
+        # 的 palette["tileset"] 同源——经 TOWN_MAP_PATH 加载时从文件名约定取，占位恒 grid。
+        "tileset": _tileset_name(tile_map),
         "chunks": chunks,
     }
+
+
+def _tileset_name(tile_map: TileMap) -> str:
+    """真实小镇图（96×96，D16 扩图）→ 'zelda_like_v1'；占位图 → 'grid'
+    （前端色块开关，C-1）。
+
+    判据用尺寸而非引用传递（map_static_payload 无 app 上下文）；96×96 恰是
+    build_town.py 产物尺寸（D16 起家 48×48，扩图后同函数同步），占位图恒
+    32×32——两值是内容常量而非魔数。
+    """
+    return "zelda_like_v1" if (tile_map.width, tile_map.height) == (96, 96) else "grid"
 
 
 def handle_client_message(
@@ -738,6 +972,8 @@ def _handle_player_impulse(raw: dict[str, Any]) -> dict[str, Any]:
 
     同步纯函数：不 await LLM、不改 Agent 状态（写路径唯一 = apply）。
     冲突度规则表 / 叙事化模板归 LLM 域（8.3）,本块按占位 cue 与模板作答。
+    批次 C：通过校验的念头经 _impulse_trigger 钩子置位 chenmo 即时决策轮
+    （钩子 None = driver 未装配，静默跳过——世界照常运转）。
     """
     text = raw.get("text")
     if not isinstance(text, str) or not text.strip():
@@ -760,6 +996,10 @@ def _handle_player_impulse(raw: dict[str, Any]) -> dict[str, Any]:
         )
         return _error_frame("player_impulse", code, "这个念头进不去。")
     cleaned = verdict.content
+    # 批次 C：念头过闸 → 置位 chenmo 即时决策轮（携带原文进 prompt [输入] 段；
+    # 钩子 None = driver 未装配，静默跳过）。乐观反馈语义不变（§2.5 异步）。
+    if _IMPULSE_TRIGGER is not None:
+        _IMPULSE_TRIGGER(cleaned)
     return {
         "type": "impulse_feedback",
         "channel": "control",
@@ -772,6 +1012,18 @@ def _handle_player_impulse(raw: dict[str, Any]) -> dict[str, Any]:
             "content": "这话我记下了。",
         },
     }
+
+
+#: 批次 C：impulse → chenmo 即时决策的触发钩子（main.py lifespan 装配；
+#: 签名 (text: str) -> None）。None = driver 未装配（测试/降级，静默跳过）。
+#: 同 _ANCHOR_LOAD_HOOK 钩子缝模式——handler 保持纯函数，副作用经注入。
+_IMPULSE_TRIGGER: Any = None
+
+
+def set_impulse_trigger(fn: Any) -> None:
+    """装配 impulse 触发钩子（lifespan 调用；测试可注入替身）。"""
+    global _IMPULSE_TRIGGER
+    _IMPULSE_TRIGGER = fn
 
 
 def _impulse_cue(text: str) -> str:
@@ -925,6 +1177,7 @@ def session_state_payload(
     paused: bool,
     anchor: dict[str, str] | None = None,
     notice: str | None = None,
+    tick: int | None = None,
 ) -> dict[str, Any]:
     """`session_state` 帧构造（M5-K3 / 裁 21-A D-5+D-6 **一帧承载**）。
 
@@ -934,8 +1187,11 @@ def session_state_payload(
     **零原始数值**：`speed` 只在 {1,4,16}（暂停时=恢复后倍率，不是 0）；`anchor`
     只带 `name` + `story_label`；`notice` 是戏内口语行。tick/seq/branch_id/
     entity_id 零出现（ws-protocol §5）。
+
+    M7（1.3）：`tick` 传入时附 `time` 权威帧（R3 连接即同步时钟）；None 不带
+    （旧调用点/测试兼容，可选字段不制造噪声）。
     """
-    return {
+    payload: dict[str, Any] = {
         "type": "session_state",
         "channel": "session",
         "v": _PROTOCOL_VERSION,
@@ -947,6 +1203,9 @@ def session_state_payload(
         else None,
         "notice": notice,
     }
+    if tick is not None:
+        payload["time"] = _time_payload(tick)
+    return payload
 
 
 def fork_notice(anchor_name: str) -> str:

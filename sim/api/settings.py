@@ -6,6 +6,7 @@ api_key 提交即 Fernet 加密落库；明文永不回传/记日志（K1/K5）�
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -239,3 +240,135 @@ async def activate_profile(profile_id: str) -> dict[str, Any]:
     if row is None:
         raise HTTPException(status_code=404, detail="/errors/profile-not-found")
     return _profile_to_item(row)
+
+
+# ---------------------------------------------------------------------------
+# D13：模型拉取 / 连通性测试（戏外调试面——工程词允许；不落库不进世界事件）
+# ---------------------------------------------------------------------------
+
+
+class ModelListRequest(BaseModel):
+    """拉取模型清单请求（OpenAI 兼容 GET {base_url}/models）。"""
+
+    base_url: str = Field(min_length=1)
+    api_key: str = Field(min_length=1)
+
+
+class ModelListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool
+    models: list[str] = []
+    reason: str | None = None
+
+
+class TestConnectionRequest(BaseModel):
+    """连通性测试请求（极小对话：max_tokens=1，不烧钱）。"""
+
+    base_url: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    api_key: str = Field(min_length=1)
+
+
+class TestConnectionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool
+    latency_ms: int | None = None
+    reason: str | None = None
+
+
+_LLM_TIMEOUT_SECONDS = 8.0
+
+
+def _clean_reason(exc: Exception) -> str:
+    """异常 → 安全原因串（K4：api_key/密钥材料绝不进 reason）。"""
+    import httpx
+
+    if isinstance(exc, httpx.HTTPStatusError):
+        code = exc.response.status_code
+        hints = {
+            401: "密钥被拒（401）",
+            403: "无权访问（403）",
+            404: "路径不对（404，检查 base_url 是否带 /v1）",
+        }
+        return hints.get(code, f"对方返回 HTTP {code}")
+    if isinstance(exc, httpx.TimeoutException):
+        return "超时（8 秒无响应）"
+    if isinstance(exc, httpx.ConnectError):
+        return "连不上对方服务（检查 base_url / 网络）"
+    return f"请求失败：{type(exc).__name__}"
+
+
+def _fetch_models_sync(base_url: str, api_key: str) -> dict[str, Any]:
+    """阻塞拉取（供 to_thread 包裹；测试 monkeypatch httpx.get）。"""
+    import httpx
+
+    try:
+        resp = httpx.get(
+            f"{base_url.rstrip('/')}/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=_LLM_TIMEOUT_SECONDS,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+    except Exception as exc:
+        return {"ok": False, "models": [], "reason": _clean_reason(exc)}
+    models = sorted(
+        str(m.get("id")) for m in payload.get("data", []) if isinstance(m, dict) and m.get("id")
+    )
+    if not models:
+        return {"ok": False, "models": [], "reason": "对方返回了空模型清单"}
+    return {"ok": True, "models": models, "reason": None}
+
+
+@router.post("/models", response_model=ModelListResponse)
+async def list_remote_models(data: ModelListRequest) -> dict[str, Any]:
+    """拉对方模型清单（前端「拉取模型」按钮供数）。
+
+    OpenAI 兼容口径：GET {base_url}/models，Authorization: Bearer。
+    清单空视为失败（防静默成功）。阻塞 HTTP 走 to_thread（不占事件循环）。
+    """
+    base = _validated_base_url(data.base_url)
+    return await asyncio.to_thread(_fetch_models_sync, base, data.api_key)
+
+
+def _test_connection_sync(base_url: str, model: str, api_key: str) -> dict[str, Any]:
+    """阻塞测试连接（供 to_thread 包裹；测试 monkeypatch httpx.post）。"""
+    import time
+
+    import httpx
+
+    started = time.monotonic()
+    try:
+        resp = httpx.post(
+            f"{base_url.rstrip('/')}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": "回一个字。"}],
+                "max_tokens": 1,
+                "temperature": 0,
+            },
+            timeout=_LLM_TIMEOUT_SECONDS,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+    except Exception as exc:
+        return {"ok": False, "latency_ms": None, "reason": _clean_reason(exc)}
+    latency_ms = int((time.monotonic() - started) * 1000)
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return {
+            "ok": False,
+            "latency_ms": latency_ms,
+            "reason": "对方响应缺 choices（非 OpenAI 兼容格式？）",
+        }
+    return {"ok": True, "latency_ms": latency_ms, "reason": None}
+
+
+@router.post("/test", response_model=TestConnectionResponse)
+async def test_connection(data: TestConnectionRequest) -> dict[str, Any]:
+    """连通性测试（前端「测试连接」按钮供数）：极小对话请求 max_tokens=1。"""
+    base = _validated_base_url(data.base_url)
+    return await asyncio.to_thread(_test_connection_sync, base, data.model, data.api_key)

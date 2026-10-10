@@ -76,11 +76,13 @@ class TestCryptoRoundtrip:
 
 @pytest.mark.t1
 class TestMasterKeyRequired:
-    def test_missing_key_refuses(self) -> None:
-        """无 LZ_MASTER_KEY → CryptoError（拒绝启动）。"""
-        with pytest.raises(CryptoError) as exc_info:
-            load_master_key({})
-        assert MASTER_KEY_ENV in str(exc_info.value)
+    def test_missing_key_refuses(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """空字符串 env → 视为「显式给了但没给内容」→ 走文件/生成路径（D13 三级
+        引导）；无 env 也无文件 → 自动生成合法 key（D13 K2 订正：生成后落
+        固定文件即不丢）。原「缺钥拒启」仅保留给**显式坏 key**（下条）。"""
+        monkeypatch.setattr("sim.core.persistence.crypto._KEY_FILE", tmp_path / "k.key")
+        key = load_master_key({MASTER_KEY_ENV: ""})
+        Fernet(key)  # 生成的 key 必须可用
 
     def test_invalid_key_refuses(self) -> None:
         """格式非法 → CryptoError，且报错不含密钥内容。"""
@@ -89,19 +91,34 @@ class TestMasterKeyRequired:
             load_master_key({MASTER_KEY_ENV: bad})
         assert bad not in str(exc_info.value)
 
-    def test_encrypt_without_key_refuses(self) -> None:
-        with pytest.raises(CryptoError):
-            encrypt_api_key("sk-x", {})
+    def test_encrypt_without_key_bootstraps(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """无 env 无文件 → 引导生成后加密成功（D13：前端填完即可用）。"""
+        monkeypatch.setattr("sim.core.persistence.crypto._KEY_FILE", tmp_path / "k.key")
+        ciphertext = encrypt_api_key("sk-x", {})
+        assert ciphertext.startswith(b"gAAAA")
 
     def test_valid_key_accepted(self) -> None:
         key = load_master_key(TEST_ENV)
         assert key == TEST_KEY
         assert isinstance(get_fernet(TEST_ENV), Fernet)
 
-    def test_no_silent_generation(self) -> None:
-        """K2 负向断言：load_master_key 不接受 None/空，绝不生成密钥。"""
+    def test_empty_env_string_bootstraps(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """空 env 串 = 未配置（D13：三级引导兜底），不再单独拒绝。"""
+        monkeypatch.setattr("sim.core.persistence.crypto._KEY_FILE", tmp_path / "k.key")
+        key = load_master_key({MASTER_KEY_ENV: ""})
+        Fernet(key)
+
+    def test_bad_file_refuses(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """密钥文件存在但内容非法 → CryptoError（不静默重造——文件是显式状态）。"""
+        import sim.core.persistence.crypto as crypto_mod
+
+        bad_file = tmp_path / "k.key"
+        bad_file.write_text("not-a-fernet-key", encoding="utf-8")
+        monkeypatch.setattr(crypto_mod, "_KEY_FILE", bad_file)
         with pytest.raises(CryptoError):
-            load_master_key({MASTER_KEY_ENV: ""})
+            load_master_key({})
 
 
 # ---------------------------------------------------------------------------

@@ -269,19 +269,25 @@ class TestOutOfCharacterBoundary:
             "map",
             "weather",
             "combat",
+            "time",  # M7（1.3）：时钟权威帧（R3）——安全评审随本 CR：五键全为戏内事实
+            "fog",  # D17（1.6）：视觉雾快照全集（chunk 坐标整数对，戏内观察面事实）
         }
         for actor in payload["actors"]:
-            assert set(actor.keys()) == {"rtoken", "x", "y", "facing", "sprite", "anim"}
+            # D10（1.4）：`name` 可选（戏内显示名，装配了映射才带；entity_id 仍禁出）
+            assert set(actor.keys()) <= {"rtoken", "x", "y", "facing", "sprite", "anim", "name"}
+            assert "name" not in actor or actor["name"] != actor["rtoken"]
         assert set(payload["map"].keys()) == {"w", "h", "tileset"}
+        assert set(payload["time"].keys()) == {"day", "hour", "minute", "phase", "is_market_day"}
 
     def test_delta_key_whitelist(self, loop: TickLoop):
-        """delta 键白名单同口径。"""
+        """delta 键白名单同口径（D10：可选 name；D14：anim 动作姿势供数）。"""
         loop.issue_move("chenmo", [(1, 0), (2, 0)])
         loop.advance_frame(1.0)
         payload = delta_payload(loop, loop.drain_delta())
-        assert set(payload.keys()) == {"type", "channel", "v", "ws_seq", "actors"}
+        assert set(payload.keys()) == {"type", "channel", "v", "ws_seq", "actors", "time"}
         for actor in payload["actors"]:
-            assert set(actor.keys()) == {"rtoken", "x", "y"}
+            assert set(actor.keys()) <= {"rtoken", "x", "y", "name", "anim"}
+            assert actor.get("anim", "idle") in {"idle", "walk", "work", "eat", "rest", "chat"}
 
     def test_delta_clean(self, loop: TickLoop):
         loop.issue_move("chenmo", [(1, 0), (2, 0)])

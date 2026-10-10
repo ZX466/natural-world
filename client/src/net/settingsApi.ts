@@ -20,7 +20,7 @@ export class SettingsApiError extends Error {
   }
 }
 
-async function readError(res: Response): Promise<SettingsApiError> {
+export async function readError(res: Response): Promise<SettingsApiError> {
   let detail = `请求失败（HTTP ${res.status}）`;
   try {
     const body: unknown = await res.json();
@@ -72,4 +72,42 @@ export async function activateProfile(id: string): Promise<ProfileListItem> {
   return json<ProfileListItem>(
     await fetch(`${BASE}/${encodeURIComponent(id)}/activate`, { method: 'POST' }),
   );
+}
+
+// ── D13：拉取模型 / 测试连接（戏外调试面）──────────────────────────
+
+export interface ListModelsResult {
+  ok: boolean;
+  models: string[];
+  reason: string | null;
+}
+
+/** 拉对方 /models 清单（OpenAI 兼容）。失败也返回结构化结果（不抛）。 */
+export async function listRemoteModels(baseUrl: string, apiKey: string): Promise<ListModelsResult> {
+  const res = await fetch(`${BASE}/models`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base_url: baseUrl, api_key: apiKey }),
+  });
+  return json<ListModelsResult>(res);
+}
+
+export interface TestConnectionResult {
+  ok: boolean;
+  latency_ms: number | null;
+  reason: string | null;
+}
+
+/** 极小对话请求（max_tokens=1）测连通性。失败也返回结构化结果（不抛）。 */
+export async function testConnection(
+  baseUrl: string,
+  model: string,
+  apiKey: string,
+): Promise<TestConnectionResult> {
+  const res = await fetch(`${BASE}/test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base_url: baseUrl, model, api_key: apiKey }),
+  });
+  return json<TestConnectionResult>(res);
 }

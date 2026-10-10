@@ -94,6 +94,9 @@ _SUB_SCHEMAS: dict[str, dict[str, Any]] = {
             "facing": {"$ref": "#/components/schemas/Facing"},
             "anim": {"type": "string"},
             "tint": {"type": "integer"},
+            # D10（协议 1.4）：戏内显示名（可选）——名字是戏内事实可出站
+            # （D8 感知真名同源裁定）；头顶名字供数。entity_id 仍禁出站。
+            "name": {"type": "string", "description": "戏内显示名（头顶名字供数；未装配则缺省）"},
         },
         "additionalProperties": False,
     },
@@ -109,6 +112,7 @@ _SUB_SCHEMAS: dict[str, dict[str, Any]] = {
             "facing": {"$ref": "#/components/schemas/Facing"},
             "anim": {"type": "string"},
             "tint": {"type": "integer"},
+            "name": {"type": "string"},
         },
         "additionalProperties": False,
     },
@@ -159,12 +163,48 @@ _SUB_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         "additionalProperties": False,
     },
+    "FogState": {
+        "type": "object",
+        "required": ["revealed"],
+        "properties": {
+            # D17（1.6）：本帧新揭示（delta）/已揭示全集（snapshot）的 chunk
+            # 坐标——整数对，零枚举零内部数值（出戏边界预核 D-10）。
+            "revealed": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["cx", "cy"],
+                    "properties": {
+                        "cx": {"type": "integer"},
+                        "cy": {"type": "integer"},
+                    },
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "additionalProperties": False,
+    },
     "Weather": {
         "type": "object",
         "required": ["visual", "ambient_light"],
         "properties": {
             "visual": {"type": "string"},
             "ambient_light": {"type": "number"},
+        },
+        "additionalProperties": False,
+    },
+    # M7（1.3）：戏内时间权威帧（R3）。五键白名单、零 tick 原值——
+    # phase/is_market_day 是戏内事实（TopBar 既有展示），非禁键。
+    "TimeInfo": {
+        "type": "object",
+        "description": "戏内时间（服务端权威帧；day 从 1 起，phase 四枚举，集市日布尔）",
+        "required": ["day", "hour", "minute", "phase", "is_market_day"],
+        "properties": {
+            "day": {"type": "integer", "minimum": 1},
+            "hour": {"type": "integer", "minimum": 0, "maximum": 23},
+            "minute": {"type": "integer", "minimum": 0, "maximum": 59},
+            "phase": {"type": "string", "enum": ["dawn", "day", "dusk", "night"]},
+            "is_market_day": {"type": "boolean"},
         },
         "additionalProperties": False,
     },
@@ -321,9 +361,13 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
             },
             "weather": {"$ref": "#/components/schemas/Weather"},
             "combat": _oneof_null({"$ref": "#/components/schemas/CombatInfo"}),
+            # M7（1.3）：time 权威帧（R3）——快照必带
+            "time": {"$ref": "#/components/schemas/TimeInfo"},
+            # D17（1.6）：视觉雾快照全集（重连/读档重同步；空集=刚起步常态）
+            "fog": {"$ref": "#/components/schemas/FogState"},
         },
         # 快照口径：combat optional（可为 null=无战斗）
-        ["map", "lights", "actors", "structures", "weather"],
+        ["map", "lights", "actors", "structures", "weather", "time"],
     ),
     "StateDeltaMessage": _envelope(
         "render",
@@ -344,8 +388,12 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
             # driver 的 moved 过滤漏掉。可选（不进 required）：账本空则不发该键。
             "plan": {"type": "array", "items": {"$ref": "#/components/schemas/PlanDelta"}},
             "weather": {"$ref": "#/components/schemas/Weather"},
+            # M7（1.3）：time 权威帧（R3）——delta 必带（每帧重同步）
+            "time": {"$ref": "#/components/schemas/TimeInfo"},
+            # D17（1.6）：视觉雾增量（**可选**——只在本帧有新揭示时出现）
+            "fog": {"$ref": "#/components/schemas/FogState"},
         },
-        ["actors"],
+        ["actors", "time"],
     ),
     "PerceptionMessage": _envelope(
         "narrative",
@@ -370,6 +418,13 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
             "content": {
                 "type": "string",
                 "description": "第一人称叙事化独白，无数值无系统词",
+            },
+            # D12（协议 1.5）：bubble 署名（说话人戏内名，可选）——bubble 是
+            # 外在可观察面（路人看见谁在嘟囔），署名不破 W7（无 rtoken/entity_id）；
+            # thought 私密面不带。
+            "name": {
+                "type": "string",
+                "description": "说话人戏内名（仅 bubble 署名；thought/plan 不带）",
             },
         },
         ["form", "content"],
@@ -453,6 +508,8 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
             "paused": {"type": "boolean"},
             "anchor": _oneof_null({"$ref": "#/components/schemas/SessionAnchor"}),
             "notice": _oneof_null({"type": "string"}),
+            # M7（1.3）：time 权威帧（R3）——可选（生产端传 tick 才带）
+            "time": _oneof_null({"$ref": "#/components/schemas/TimeInfo"}),
         },
         ["speed", "paused", "anchor", "notice"],
     ),

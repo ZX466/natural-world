@@ -150,6 +150,40 @@ export type paths = {
     readonly patch?: never;
     readonly trace?: never;
   };
+  readonly '/api/settings/profiles/models': {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly get?: never;
+    readonly put?: never;
+    /** 拉取对方模型清单（OpenAI 兼容 GET {base_url}/models；D13） */
+    readonly post: operations['listRemoteModels'];
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
+  readonly '/api/settings/profiles/test': {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly get?: never;
+    readonly put?: never;
+    /** 极小对话请求测连通性（max_tokens=1；D13） */
+    readonly post: operations['testConnection'];
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
   readonly '/api/world/map': {
     readonly parameters: {
       readonly query?: never;
@@ -174,6 +208,8 @@ export type components = {
     readonly Actor: {
       readonly anim: string;
       readonly facing: components['schemas']['Facing'];
+      /** @description 戏内显示名（头顶名字供数；未装配则缺省） */
+      readonly name?: string;
       readonly rtoken: components['schemas']['RToken'];
       readonly sprite: string;
       readonly tint?: number;
@@ -183,6 +219,8 @@ export type components = {
     readonly ActorDelta: {
       readonly anim?: string;
       readonly facing?: components['schemas']['Facing'];
+      /** @description 戏内显示名（头顶名字供数；未装配则缺省） */
+      readonly name?: string;
       /** @enum {string} */
       readonly op?: 'add' | 'remove';
       readonly rtoken: components['schemas']['RToken'];
@@ -252,14 +290,22 @@ export type components = {
     };
     /** @enum {string} */
     readonly Facing: 'n' | 'e' | 's' | 'w';
+    readonly FogState: {
+      readonly revealed: readonly {
+        readonly cx: number;
+        readonly cy: number;
+      }[];
+    };
     readonly FullSnapshotMessage: {
       readonly actors: readonly components['schemas']['Actor'][];
       /** @enum {string} */
       readonly channel: 'render';
       readonly combat?: components['schemas']['CombatInfo'] | null;
+      readonly fog?: components['schemas']['FogState'];
       readonly lights: readonly components['schemas']['Light'][];
       readonly map: components['schemas']['MapInfo'];
       readonly structures: readonly components['schemas']['Structure'][];
+      readonly time: components['schemas']['TimeInfo'];
       /**
        * @description discriminator enum property added by openapi-typescript
        * @enum {string}
@@ -322,17 +368,30 @@ export type components = {
       readonly v: string;
       readonly ws_seq: number;
     };
-    /** @description 碰撞层 chunk：collision_b64 = base64(每格 1 字节 0/1，顺序按 chunk 内行优先)，只读静态资产 */
+    /** @description 碰撞+地面层 chunk（只读静态资产）。M7(1.3) 增 ground_b64 = base64(u16 小端、chunk 内行主序) */
     readonly MapChunk: {
       /** @description base64 编码的可通行位（1=可通行），不含 seed/tick/entity_id */
       readonly collision_b64: string;
       readonly cx: number;
       readonly cy: number;
+      /** @description base64 编码的地面 tile id（u16 小端、行主序；调色板值域见前端 sprout-palette.json） */
+      readonly ground_b64: string;
     };
     readonly MapInfo: {
       readonly h: number;
       readonly tileset: string;
       readonly w: number;
+    };
+    /** @description 拉取模型清单请求（OpenAI 兼容 GET {base_url}/models；api_key 只用于本次请求，不落库） */
+    readonly ModelListRequest: {
+      readonly api_key: string;
+      readonly base_url: string;
+    };
+    /** @description 拉取结果（失败也 200 + ok:false + reason；reason 永不含密钥材料） */
+    readonly ModelListResponse: {
+      readonly models: readonly string[];
+      readonly ok: boolean;
+      readonly reason?: string | null;
     };
     /** @description M1 独白三形态呈现（§8）；content 必须第一人称世界内语言、无数值无系统词，永不直接渲染 LLM 原始思维链 */
     readonly MonologueMessage: {
@@ -342,6 +401,8 @@ export type components = {
       readonly content: string;
       /** @enum {string} */
       readonly form: 'bubble' | 'thought' | 'plan';
+      /** @description 说话人戏内名（仅 bubble 署名；thought/plan 不带） */
+      readonly name?: string;
       /**
        * @description discriminator enum property added by openapi-typescript
        * @enum {string}
@@ -471,6 +532,7 @@ export type components = {
       readonly paused: boolean;
       /** @enum {integer} */
       readonly speed: 1 | 4 | 16;
+      readonly time?: components['schemas']['TimeInfo'] | null;
       /**
        * @description discriminator enum property added by openapi-typescript
        * @enum {string}
@@ -500,9 +562,11 @@ export type components = {
       readonly actors: readonly components['schemas']['ActorDelta'][];
       /** @enum {string} */
       readonly channel: 'render';
+      readonly fog?: components['schemas']['FogState'];
       readonly lights?: readonly components['schemas']['LightDelta'][];
       readonly plan?: readonly components['schemas']['PlanDelta'][];
       readonly structures?: readonly components['schemas']['StructureDelta'][];
+      readonly time: components['schemas']['TimeInfo'];
       /**
        * @description discriminator enum property added by openapi-typescript
        * @enum {string}
@@ -541,6 +605,28 @@ export type components = {
       readonly type: 'sync_request';
       readonly v: string;
       readonly ws_seq: number;
+    };
+    /** @description 连通性测试请求（极小对话 max_tokens=1，不烧钱；api_key 只用于本次请求） */
+    readonly TestConnectionRequest: {
+      readonly api_key: string;
+      readonly base_url: string;
+      readonly model: string;
+    };
+    /** @description 测试结果（失败也 200 + ok:false + reason；reason 永不含密钥材料） */
+    readonly TestConnectionResponse: {
+      /** @description 成功时为请求往返毫秒数 */
+      readonly latency_ms?: number | null;
+      readonly ok: boolean;
+      readonly reason?: string | null;
+    };
+    /** @description 戏内时间（服务端权威帧；day 从 1 起，phase 四枚举，集市日布尔） */
+    readonly TimeInfo: {
+      readonly day: number;
+      readonly hour: number;
+      readonly is_market_day: boolean;
+      readonly minute: number;
+      /** @enum {string} */
+      readonly phase: 'dawn' | 'day' | 'dusk' | 'night';
     };
     readonly TimescaleMessage: {
       readonly active: boolean;
@@ -932,6 +1018,56 @@ export interface operations {
         };
       };
       readonly 404: components['responses']['Problem'];
+      readonly 422: components['responses']['Problem'];
+    };
+  };
+  readonly listRemoteModels: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly requestBody: {
+      readonly content: {
+        readonly 'application/json': components['schemas']['ModelListRequest'];
+      };
+    };
+    readonly responses: {
+      /** @description models */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly 'application/json': components['schemas']['ModelListResponse'];
+        };
+      };
+      readonly 422: components['responses']['Problem'];
+    };
+  };
+  readonly testConnection: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly requestBody: {
+      readonly content: {
+        readonly 'application/json': components['schemas']['TestConnectionRequest'];
+      };
+    };
+    readonly responses: {
+      /** @description result */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly 'application/json': components['schemas']['TestConnectionResponse'];
+        };
+      };
       readonly 422: components['responses']['Problem'];
     };
   };

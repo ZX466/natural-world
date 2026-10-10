@@ -6,7 +6,28 @@
  * codex 意见 2：快照/世界真相数值禁入本 store（戏外调试层走 W2 独立通道，M0 不做）。
  */
 import { create } from 'zustand';
+import type { PlanDelta } from '../net/protocol';
 import type { WsStatus } from '../net/ws';
+
+/** 独白环形缓冲上限（超过丢最旧；M4 叙事面） */
+export const MONOLOGUE_CAP = 20;
+
+/** 街谈巷议环形缓冲上限（批次 D10：村民 bubble 与陈默心声分流；超过丢最旧） */
+export const CHATTER_CAP = 8; // D20：嘟囔池收紧——12 条已足以把心之声挤出首屏
+
+export type MonologueForm = 'bubble' | 'thought' | 'plan';
+
+/** 独白条目（monologue 帧 / impulse reaction_monologue 的消费端形态） */
+export interface MonologueEntry {
+  form: MonologueForm;
+  content: string;
+}
+
+/** 街谈巷议条目（批次 D12：bubble 署名——「谁在说」可读；无名退化为匿名） */
+export interface ChatterEntry {
+  name: string | null;
+  content: string;
+}
 
 /** 戏内时间白名单——本 store 允许暴露的全部世界派生字段。 */
 export interface InGameTime {
@@ -24,13 +45,27 @@ interface UiState {
   gameClock: InGameTime | null;
   speed: Speed;
   paused: boolean;
-  /** impulse 反馈 cue（M4 起有真实数据；M0 供占位 UI） */
+  /** impulse 反馈 cue（批次 A 起接真实数据源） */
   lastImpulseCue: string | null;
+  /** 独白流（环形缓冲，上限 MONOLOGUE_CAP；只进面板文本，高频位置数据不在此） */
+  monologues: MonologueEntry[];
+  /** 街谈巷议（批次 D10：村民公开自语 bubble 专属环形缓冲——村民的嘟囔
+   *  是镇上的公开声音，不是陈默的内心活动；与 monologues 分流防刷屏。
+   *  D12：条目带署名） */
+  chatter: ChatterEntry[];
+  /** 计划看板（state_delta.plan 整组替换；空 = 收起） */
+  plans: PlanDelta[];
+  /** impulse 入站 error 帧玩家可见文案（仅 ref=player_impulse 置位） */
+  impulseError: string | null;
   setWsStatus: (s: WsStatus) => void;
   setGameClock: (t: InGameTime | null) => void;
   setSpeed: (s: Speed) => void;
   setPaused: (p: boolean) => void;
   setLastImpulseCue: (cue: string | null) => void;
+  pushMonologue: (form: MonologueForm, content: string) => void;
+  pushChatter: (name: string | null, content: string) => void;
+  setPlans: (plans: PlanDelta[]) => void;
+  setImpulseError: (e: string | null) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -39,9 +74,19 @@ export const useUiStore = create<UiState>((set) => ({
   speed: 1,
   paused: false,
   lastImpulseCue: null,
+  monologues: [],
+  chatter: [],
+  plans: [],
+  impulseError: null,
   setWsStatus: (wsStatus) => set({ wsStatus }),
   setGameClock: (gameClock) => set({ gameClock }),
   setSpeed: (speed) => set({ speed }),
   setPaused: (paused) => set({ paused }),
   setLastImpulseCue: (lastImpulseCue) => set({ lastImpulseCue }),
+  pushMonologue: (form, content) =>
+    set((s) => ({ monologues: [...s.monologues, { form, content }].slice(-MONOLOGUE_CAP) })),
+  pushChatter: (name, content) =>
+    set((s) => ({ chatter: [...s.chatter, { name, content }].slice(-CHATTER_CAP) })),
+  setPlans: (plans) => set({ plans }),
+  setImpulseError: (impulseError) => set({ impulseError }),
 }));

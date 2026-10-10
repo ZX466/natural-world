@@ -46,6 +46,13 @@ class EventKind(StrEnum):
     #: 进事件日志）→ WS 侧 `ws.monologue_events_to_frames` 投影成独立 monologue
     #: 帧，按 form 路由（bubble/plan 广播；thought 定向本人，见 ws.py 投递面契约）。
     NPC_MONOLOGUE = "npc.monologue"
+    # ---- 批次 E（E1 玩法接线）----
+    #: 面对面聊天记录（E1）：行为记录面（谁对谁说了一句什么）——
+    #: **零归因键**（关系/记忆效应归进程内 runtime），line 过 banned 终扫。
+    NPC_CHAT = "npc.chat"
+    #: 铜钱入账/出账（E3）：账单面（余额归 runtime CoinLedger，账单即真相——
+    #: 事件流可重放重建余额）。零归因键（note 记事非归因）。
+    COIN_GRANT = "coin.grant"
     # ---- M5（批次 D 火灾生态，裁 33；K12 事件面判定 + A8 数据面预研）----
     #: 起火：火场诞生（**信号≠状态**：起火那一刻没有任何物质变更，故既有族表达不了）。
     #: 「蔓延」与「烧毁」**不新增 kind**：走既有 ``matter.damage`` / ``matter.collapse`` /
@@ -181,6 +188,26 @@ class NpcMonologuePayload(BaseModel):
     npc_id: str
     form: str = Field(pattern=r"^(bubble|thought|plan)$")
     content: str = Field(min_length=1, max_length=512)
+
+
+class NpcChatPayload(BaseModel):
+    """面对面聊天（批次 E1）。line 是出站戏内文本（工厂层 banned 终扫强制）。"""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    npc_id: str
+    to_id: str
+    line: str = Field(min_length=1, max_length=512)
+
+
+class CoinGrantPayload(BaseModel):
+    """铜钱入账（批次 E3）。note 记事（buy:herb / sell:herb / wage:work）。"""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    owner_id: str
+    delta: int
+    note: str = Field(min_length=1, max_length=128)
 
 
 class MatterPayload(BaseModel):
@@ -544,6 +571,28 @@ def world_create_event(
     )
 
 
+def fog_reveal_event(
+    tick: int,
+    chunks: tuple[tuple[int, int], ...],
+    branch_id: str = "main",
+) -> WorldEvent:
+    """迷雾揭示事件（D17 视觉雾；只载已踏入事实——S4 FG-1 禁未探索先验）。
+
+    chunks 封闭校验：非空、元素为 int 二元组（世界真相面不收脏形状）。
+    """
+    if not chunks:
+        msg = "fog.reveal 空揭示（无块可揭不发事件）"
+        raise ValueError(msg)
+    cleaned = tuple((int(cx), int(cy)) for cx, cy in chunks)
+    p = FogRevealPayload(chunks=cleaned)
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.FOG_REVEAL,
+        payload=p.model_dump(mode="json"),
+    )
+
+
 def move_event(
     tick: int,
     actor_id: str,
@@ -657,6 +706,46 @@ def npc_monologue_event(
         tick=tick,
         event_type=EventKind.NPC_MONOLOGUE,
         actor_id=npc_id,
+        payload=p.model_dump(mode="json"),
+    )
+
+
+def npc_chat_event(
+    tick: int,
+    npc_id: str,
+    to_id: str,
+    line: str,
+    branch_id: str = "main",
+) -> WorldEvent:
+    """面对面聊天事件（批次 E1）。line 命中禁词即拒（ValueError；与独白同纪律）。"""
+    from sim.llm.prompts.banned_words import scan
+
+    if scan(line).hits:
+        raise ValueError(f"npc.chat line banned hit: tick={tick}")
+    p = NpcChatPayload(npc_id=npc_id, to_id=to_id, line=line)
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.NPC_CHAT,
+        actor_id=npc_id,
+        payload=p.model_dump(mode="json"),
+    )
+
+
+def coin_grant_event(
+    tick: int,
+    owner_id: str,
+    delta: int,
+    note: str,
+    branch_id: str = "main",
+) -> WorldEvent:
+    """铜钱入账事件（批次 E3）。delta 可负（出账）；note 记事非归因。"""
+    p = CoinGrantPayload(owner_id=owner_id, delta=delta, note=note)
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.COIN_GRANT,
+        actor_id=owner_id,
         payload=p.model_dump(mode="json"),
     )
 

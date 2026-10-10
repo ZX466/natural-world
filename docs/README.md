@@ -291,9 +291,11 @@ M2 范围与量化验收 = `DESIGN.md` §17 M2 行：**NPC 底座 + L1 效用 AI
 | **M6 机制面（我域八件）** | Claude | inject 生产化+6 钉 / rng_capture / hooks 四步+权力传导（POWER_MAX_BIAS=0.18 定标）/driver 双修（drain 案 B+写锁收口）/fire 机制面（O(G)+N=2+F≤50）/npc.death+对称删除 / 内容面四模块+四 kind / 旁路收口 | ✅ main（`d1d287e`/`ae67985`/`7260d3e`） | 门禁 2416 passed/122 skipped、ruff/pyright 0、gen-protocol EXIT 0；K5 十钉+A6 五钉全绿 |
 
 **M6 收官判定**：四道门 G1-G4 全 ✅（2026-10-05，判据链=S6 终版预审+P7 性能
-预审+C6/C7 索引+K7 协议总账）。**移交清单**：迷雾 B 案（视觉雾，产品裁）/
-幻影端点 getProfile（用户裁）/定标轮三案（机器窗）/7 日完整 soak（登记未跑）/
-W-A 机制面复验（authority/ 施工触发）/META_SHELL 8 词（首个戏外消费 CR）。
+预审+C6/C7 索引+K7 协议总账）。**移交清单**：迷雾 B 案（视觉雾）——**已落地**（D17，2026-10-08，协议 1.6，
+`git log` feat(m4d17)）/ 幻影端点 getProfile——**已裁决清除**（全仓零引用实
+证，M6-K7 清除本就完成，仅台账销账）/ 定标轮三案（机器窗）/ 7 日完整 soak
+（登记未跑）/ W-A 机制面复验——权力供数已接（D15 attach_power）/ META_SHELL
+8 词（首个戏外消费 CR）。
 #### 5.4.1 接口契约（kilo：anchors 契约与路径/版本定口）
 
 | 路 | Agent | 交付物（提交） | 状态 | 实测 / 结论 |
