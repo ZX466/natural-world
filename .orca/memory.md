@@ -3,6 +3,11 @@
 
 # ===== codex 快速恢复卡（最新，2026-10-05）=====
 
+## 2026-10-10 security increment
+- Entropy boundary hardened in sim/core/events.py and sim/core/entropy.py. Payload restricts stream to [A-Za-z0-9_.:-]+ / 1..128 chars, material to even-length hex / 1..64 bytes. Mixer applies shared payload validation in live and replay paths; rejects negative tick, bool/float/oversized byte counts and malformed replay material.
+- Targeted tests: 111 passed. ruff, pyright, git diff --check clean. Three source/test files modified; pending main-tree integration.
+- Remaining audit scope outside Codex security ownership: LLM dialogue, errands, NPC L0/LOD/fauna/unique mechanisms, combat exchange unit and production entropy injection, collapse cascade, T4/T5.
+
 ## 一句话
 
 M6 已代码侧收官：main `abbe765`，全量 `2416 passed / 122 skipped / 0 failed`，

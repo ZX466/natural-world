@@ -161,6 +161,27 @@ class TestRng:
         )
         assert replayed.rng.draw_key("world.weather") == mixer2.rng.draw_key("world.weather")
 
+    @pytest.mark.parametrize(
+        ("stream", "tick", "nbytes"),
+        (
+            ("", 0, 16),
+            ("bad stream", 0, 16),
+            ("weather", -1, 16),
+            ("weather", True, 16),
+            ("weather", 0, 0),
+            ("weather", 0, 65),
+            ("weather", 0, 1.5),
+        ),
+    )
+    def test_entropy_request_rejects_invalid_bounds(self, stream, tick, nbytes):
+        with pytest.raises(ValueError):
+            EntropyMixer(rng=RngRegistry(world_seed=7)).mix(stream, tick, nbytes)
+
+    @pytest.mark.parametrize("material", ("", "0", "zz", "00" * 65))
+    def test_entropy_replay_rejects_invalid_material(self, material):
+        with pytest.raises((ValueError, TypeError)):
+            EntropyMixer(rng=RngRegistry(world_seed=7)).replay_mix("weather", material)
+
 
 # ---------------------------------------------------------------------------
 # 事件 / 唯一写路径

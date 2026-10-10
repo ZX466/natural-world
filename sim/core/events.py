@@ -118,8 +118,17 @@ class EntropyInjectPayload(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    stream: str
-    material: str  # 熵材料 hex
+    stream: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
+    material: str = Field(
+        min_length=2, max_length=128, pattern=r"^[0-9a-fA-F]+$"
+    )  # entropy material hex
+
+    @field_validator("material")
+    @classmethod
+    def _even_hex(cls, value: str) -> str:
+        if len(value) % 2:
+            raise ValueError("entropy material must have even-length hex")
+        return value.lower()
 
 
 class TileChangedPayload(BaseModel):
