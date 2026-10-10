@@ -1,11 +1,13 @@
 """E4：建造闭环——started→checkpoint→completed→tile_changed→寻路失效。"""
 
 from pathlib import Path
+from typing import cast
 
 from sim.agent.build_exec import BuildRuntime
 from sim.core.calendar import TICKS_PER_GAME_DAY
 from sim.core.events import EventKind, structure_started_event, tile_changed_event
 from sim.core.world import TickContext, WorldState, build_default_bus
+from sim.llm.client import LlmClient
 from sim.world.map import TileMap
 
 _TOWN = Path("sim/content/linhe-town.json")
@@ -41,7 +43,9 @@ def test_structure_events_can_fold():
                 recipe_id="shed_2x2",
                 recipe_version="e4-v1",
                 build_rule_version="m4-v1",
-            ) if with_structure else _move_only(),
+            )
+            if with_structure
+            else _move_only(),
             ctx,
         ).state
         state = state.model_copy(update={"tick": 1})
@@ -184,7 +188,7 @@ def test_build_intent_costs_coins():
     build_runtime, _ = _runtime()
     driver = ChenmoDriver(
         anchor=build_anchor(),
-        llm=_NullLlm(),
+        llm=cast("LlmClient", _NullLlm()),
         profile_provider=lambda: None,
         economy_provider=lambda: (led, 42),
         build_runtime_provider=lambda: build_runtime,
@@ -226,7 +230,7 @@ def test_build_intent_insufficient_coins():
     build_runtime, _ = _runtime()
     driver = ChenmoDriver(
         anchor=build_anchor(),
-        llm=_NullLlm(),
+        llm=cast("LlmClient", _NullLlm()),
         profile_provider=lambda: None,
         economy_provider=lambda: (led, 42),
         build_runtime_provider=lambda: build_runtime,

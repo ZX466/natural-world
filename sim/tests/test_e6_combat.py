@@ -7,6 +7,7 @@ from sim.agent.combat_exec import (
     AttackOutcome,
     CombatLedger,
     help_line,
+    needs_critical_entropy,
     settle_attack,
 )
 from sim.llm.prompts.banned_words import scan
@@ -18,6 +19,19 @@ def test_settle_deterministic():
     assert a == b  # C5 同输入同输出
     assert a.outcome in ("hit", "miss", "kill")
     assert 0 <= a.damage <= 9
+
+
+def test_critical_candidate_uses_recorded_entropy():
+    tick = next(
+        t for t in range(1000) if needs_critical_entropy("chenmo", "villager_03", tick=t, seed=42)
+    )
+    critical = settle_attack("chenmo", "villager_03", tick=tick, seed=42, entropy_roll=0.1)
+    ordinary = settle_attack("chenmo", "villager_03", tick=tick, seed=42, entropy_roll=0.9)
+
+    assert critical.critical is True
+    assert critical.damage >= 6
+    assert ordinary.critical is False
+    assert ordinary.damage <= 4
 
 
 def test_kill_when_hp_depleted():

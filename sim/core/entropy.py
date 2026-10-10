@@ -7,10 +7,11 @@
 from __future__ import annotations
 
 import os
+from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
-from sim.core.events import WorldEvent, entropy_event
+from sim.core.events import EntropyInjectPayload, WorldEvent, entropy_event
 from sim.core.rng import RngRegistry
 
 
@@ -21,12 +22,23 @@ class EntropyMixer(BaseModel):
 
     rng: RngRegistry
 
+    _MAX_MATERIAL_BYTES: ClassVar[int] = 64
+
+    @classmethod
+    def _validate_request(cls, stream: str, tick: int, nbytes: int) -> None:
+        if type(tick) is not int or tick < 0:
+            raise ValueError("entropy tick must be non-negative")
+        if type(nbytes) is not int or not 1 <= nbytes <= cls._MAX_MATERIAL_BYTES:
+            raise ValueError(f"entropy material length must be 1..{cls._MAX_MATERIAL_BYTES} bytes")
+        EntropyInjectPayload(stream=stream, material="00" * nbytes)
+
     def mix(self, stream: str, tick: int, nbytes: int = 16) -> tuple[EntropyMixer, WorldEvent]:
         """采集 os.urandom → reseed 目标流 → 返回（新 mixer，熵事件）。
 
         调用方必须把事件交给 EventBus.apply 落日志；
         重放路径用 event.payload 里的材料调 replay_mix 重建同样的注册表。
         """
+        self._validate_request(stream, tick, nbytes)
         material = os.urandom(nbytes)
         return (
             EntropyMixer(rng=self.rng.reseed(stream, material)),
@@ -35,4 +47,5 @@ class EntropyMixer(BaseModel):
 
     def replay_mix(self, stream: str, material_hex: str) -> EntropyMixer:
         """重放路径：用事件里记录的熵材料重建注册表（不采集新熵）。"""
-        return EntropyMixer(rng=self.rng.reseed(stream, bytes.fromhex(material_hex)))
+        payload = EntropyInjectPayload(stream=stream, material=material_hex)
+        return EntropyMixer(rng=self.rng.reseed(payload.stream, bytes.fromhex(payload.material)))

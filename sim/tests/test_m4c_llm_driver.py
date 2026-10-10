@@ -19,9 +19,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, cast
 
 import pytest
+
+from sim.llm.client import LlmCallResult, LlmClient, ProfileSnapshot
 
 pytestmark = pytest.mark.t1
 
@@ -70,14 +72,27 @@ class TestProtagonistProfile:
 # ---------------------------------------------------------------------------
 
 
-class _FakeResult:
-    """LlmCallResult 最小替身。"""
+def _fake_result(content: str) -> LlmCallResult:
+    """LlmCallResult 最小替身（只填 content；其余计数字段对断言无意义）。"""
 
-    content: str
+    return LlmCallResult(
+        request_id="fake",
+        content=content,
+        prompt_tokens=0,
+        completion_tokens=0,
+        total_tokens=0,
+        latency_ms=0.0,
+        attempt=1,
+        cache_hit=False,
+    )
 
 
 class _FakeLlm:
-    """可控 LlmClient 替身：记录调用；result 或 error 二选一。"""
+    """可控 LlmClient 替身：记录调用；result 或 error 二选一。
+
+    `complete` 签名对齐 `LlmClient.complete`（含 `DecisionTracker` 形参名与
+    `LlmCallResult` 返回类型）——driver 只透传调用，协议一致即可注入。
+    """
 
     def __init__(self, result_content: str | None = None, error: Exception | None = None):
         self.calls = 0
@@ -85,14 +100,19 @@ class _FakeLlm:
         self._content = result_content
         self._error = error
 
-    async def complete(self, profile: Any, messages: list[dict[str, str]]) -> _FakeResult:
+    async def complete(
+        self,
+        profile: ProfileSnapshot,
+        messages: list[dict[str, str]],
+        decision: Any = None,
+        *,
+        max_tokens_override: int | None = None,
+    ) -> LlmCallResult:
         self.calls += 1
         self.last_messages = messages
         if self._error is not None:
             raise self._error
-        result = _FakeResult()
-        result.content = self._content or ""
-        return result  # type: ignore[return-value]
+        return _fake_result(self._content or "")
 
 
 class _FakeProfile:
@@ -106,13 +126,13 @@ class _FakeProfile:
 
 class TestChenmoDriver:
     @staticmethod
-    def _driver(llm: _FakeLlm, *, profile: Any | None = None) -> Any:
+    def _driver(llm: Any, *, profile: Any | None = None) -> Any:
         from sim.agent.driver import ChenmoDriver
         from sim.content.protagonist import build_anchor
 
         return ChenmoDriver(
             anchor=build_anchor(),
-            llm=llm,  # type: ignore[arg-type]
+            llm=cast("LlmClient", llm),  # 测试替身：协议对齐即可注入
             profile_provider=lambda: profile,
         )
 
@@ -147,6 +167,7 @@ class TestChenmoDriver:
         assert ok is True
         assert llm.calls == 1
         # messages[0] 是身份锚（前缀缓存契约）
+        assert llm.last_messages is not None
         assert "陈默" in llm.last_messages[0]["content"]
         from sim.api.main import _fallback_map
         from sim.world.pathfinding import Pathfinder
@@ -174,7 +195,7 @@ class TestChenmoDriver:
         loop = self._loop_with_chenmo()
         ok = asyncio.run(driver.decide_once(loop.state, tick=100))
         assert ok is True  # 决策本身成立（LLM 正常返回、解析成功）
-        executed = driver.execute_pending(loop, pathfinder=None)  # type: ignore[arg-type]
+        executed = driver.execute_pending(loop, pathfinder=None)
         assert executed == 0
         events = loop.drain_events()
         assert all(e.event_type is not EventKind.MOVE for e in events)
@@ -218,7 +239,7 @@ class TestChenmoDriver:
         driver = self._driver(llm, profile=_FakeProfile())
         loop = self._loop_with_chenmo()
         asyncio.run(driver.decide_once(loop.state, tick=100))
-        executed = driver.execute_pending(loop, pathfinder=None)  # type: ignore[arg-type]
+        executed = driver.execute_pending(loop, pathfinder=None)
         assert executed == 1
         events = loop.drain_events()
         assert all(e.event_type is not EventKind.MOVE for e in events)
@@ -238,7 +259,7 @@ class TestChenmoDriver:
         asyncio.run(driver.decide_once(loop.state, tick=100))
         # 执行前 villager_01 从世界消失 → revalidate target_gone
         loop.state = loop.state.model_copy(update={"entities": {}})
-        executed = driver.execute_pending(loop, pathfinder=None)  # type: ignore[arg-type]
+        executed = driver.execute_pending(loop, pathfinder=None)
         assert executed == 0
         events = loop.drain_events()
         assert all(e.event_type is not EventKind.MOVE for e in events)
@@ -255,7 +276,11 @@ class TestImpulseTrigger:
         from sim.agent.driver import ChenmoDriver
         from sim.content.protagonist import build_anchor
 
-        driver = ChenmoDriver(anchor=build_anchor(), llm=_FakeLlm(), profile_provider=lambda: None)
+        driver = ChenmoDriver(
+            anchor=build_anchor(),
+            llm=cast("LlmClient", _FakeLlm()),
+            profile_provider=lambda: None,
+        )
         assert driver.take_requested() is False
         driver.request_decision()
         assert driver.take_requested() is True
@@ -266,7 +291,11 @@ class TestImpulseTrigger:
         from sim.agent.driver import ChenmoDriver
         from sim.content.protagonist import build_anchor
 
-        driver = ChenmoDriver(anchor=build_anchor(), llm=_FakeLlm(), profile_provider=lambda: None)
+        driver = ChenmoDriver(
+            anchor=build_anchor(),
+            llm=cast("LlmClient", _FakeLlm()),
+            profile_provider=lambda: None,
+        )
 
         async def _set() -> None:
             driver.request_decision()
@@ -303,7 +332,11 @@ class TestWiring:
         from sim.api import ws as ws_mod
         from sim.content.protagonist import build_anchor
 
-        driver = ChenmoDriver(anchor=build_anchor(), llm=_FakeLlm(), profile_provider=lambda: None)
+        driver = ChenmoDriver(
+            anchor=build_anchor(),
+            llm=cast("LlmClient", _FakeLlm()),
+            profile_provider=lambda: None,
+        )
         received: list[str | None] = []
         ws_mod.set_impulse_trigger(lambda text: received.append(text))
         try:

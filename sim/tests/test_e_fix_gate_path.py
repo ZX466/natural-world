@@ -4,7 +4,7 @@
 """
 
 from sim.agent.gate import IntentGate
-from sim.agent.intent import Intent
+from sim.agent.intent import Intent, IntentAction
 from sim.core.world import EntityState, WorldState
 from sim.llm.prompts.assembler import _REQUIREMENTS_TEXT
 
@@ -18,12 +18,13 @@ def test_gate_accepts_buy_sell_build():
             "chenmo": EntityState(entity_id="chenmo", pos=(30, 46)),
         },
     )
-    for action, kwargs in (
+    cases: tuple[tuple[IntentAction, dict[str, object]], ...] = (
         ("buy", {"target_id": "herb"}),
         ("sell", {"target_id": "herb"}),
         ("build", {"target_pos": (34, 46)}),
-    ):
-        intent = Intent(action=action, reason="铺子里该进货了", confidence=0.9, **kwargs)
+    )
+    for action, kwargs in cases:
+        intent = Intent(action=action, reason="铺子里该进货了", confidence=0.9, **kwargs)  # type: ignore[arg-type]
         verdict = gate.validate(intent, state, "chenmo")
         assert verdict.accepted, f"{action} 被闸门拒绝: {verdict.reason}"
 

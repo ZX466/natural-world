@@ -11,7 +11,7 @@ import uuid
 from collections import deque
 from collections.abc import AsyncIterator, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -189,15 +189,40 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from sim.core.flush import flush_events
 
         await flush_events(store, events)
+        branch_id = await store.current_branch_id_or_none()
+        if branch_id is not None:
+            if memory_store.branch_id != branch_id:
+                memory_store.attach_branch(branch_id)
+            async with store.session_factory() as session:
+                await memory_store.hydrate_if_empty(session)
+                await memory_store.flush(session)
+                await session.commit()
 
     async def on_flush_async() -> None:
         from sim.core.flush import flush_events
 
         await flush_events(store, loop.drain_events())
+        branch_id = await store.current_branch_id_or_none()
+        if branch_id is not None:
+            if memory_store.branch_id != branch_id:
+                memory_store.attach_branch(branch_id)
+            async with store.session_factory() as session:
+                await memory_store.hydrate_if_empty(session)
+                await memory_store.flush(session)
+                await session.commit()
 
     app.state.loop = loop
     app.state.store = store
     app.state.tile_map = tile_map
+
+    from sim.core.persistence.async_memory_store import AsyncMemoryStore
+
+    branch_id = await store.current_branch_id_or_none()
+    memory_store = AsyncMemoryStore(branch_id=branch_id or "unbound")
+    if branch_id is not None:
+        async with store.session_factory() as session:
+            await memory_store.hydrate(session)
+    app.state.memory_store = memory_store
 
     # ── 批次 B：NPC 装配进实况世界 ──────────────────────────────────
     # 1) 播种 50 村民 profile（幂等；库已有则零行）；
@@ -257,6 +282,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 批次 E7：structure_id → tiles（started 时记；completed 时投影 built——
     # StructureDelta phase 枚举无 building,在建工地不投影,完工才画）。
     build_tiles_log: dict[str, list[tuple[int, int]]] = {}
+    from sim.world.maintenance import WorldMaintenance
+
+    matter_ledger = await npc_store.materialize_matter()
+    structure_snapshots = await npc_store.materialize_structures()
+    maintenance = WorldMaintenance(ledger=matter_ledger, structures=structure_snapshots)
 
     def _build_tick_hook(state: Any, tick: int) -> list[Any] | None:
         events = build_runtime.on_tick(tick)
@@ -269,8 +299,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             for ev in events:
                 if ev.event_type.value == "structure.started":
                     sid = str(ev.payload.get("structure_id", ""))
-                    raw_tiles = ev.payload.get("tiles") or ()
-                    build_tiles_log[sid] = [tuple(t) for t in raw_tiles]
+                    raw_tiles = cast("Sequence[Sequence[int]]", ev.payload.get("tiles") or ())
+                    build_tiles_log[sid] = [(int(t[0]), int(t[1])) for t in raw_tiles]
                 elif ev.event_type.value == "structure.completed":
                     sid = str(ev.payload.get("structure_id", ""))
                     set_structure_phase(sid, build_tiles_log.get(sid, []), "built")
@@ -278,7 +308,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     loop.attach_npc_runtime(_build_tick_hook)
 
+    def _maintenance_tick_hook(state: Any, tick: int) -> list[Any] | None:
+        return maintenance.tick(tick=tick, seed=state.world_seed) or None
+
+    loop.attach_maintenance(_maintenance_tick_hook)
+
     def _npc_tick_hook(state: Any, tick: int) -> list[Any] | None:
+        chenmo = state.entities.get(CHENMO_ID)
+        if chenmo is not None:
+            for npc_id, _profile in npc_runtime.profiles.items():
+                entity = state.entities.get(npc_id)
+                nearby = (
+                    entity is not None
+                    and abs(entity.pos[0] - chenmo.pos[0]) + abs(entity.pos[1] - chenmo.pos[1]) <= 3
+                )
+                npc_runtime.update_lod(npc_id, in_interaction=nearby, tick=tick)
         batch = npc_events_for_tick(
             npc_runtime,
             state,
@@ -299,9 +343,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from sim.npc.sim_exec import anim_of_action
 
         for event in batch or []:
-            if getattr(event, "event_type", None) is not None and getattr(
-                event.event_type, "value", ""
-            ) == "npc.act":
+            if (
+                getattr(event, "event_type", None) is not None
+                and getattr(event.event_type, "value", "") == "npc.act"
+            ):
                 npc_id = str(event.payload.get("npc_id", ""))
                 if npc_id:
                     set_action_anim(npc_id, anim_of_action(str(event.payload.get("action", ""))))
@@ -375,13 +420,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sim.content.protagonist import CHENMO_ID
     from sim.llm.memory_scan import MemoryWritePipeline
 
-    memory_pipeline = MemoryWritePipeline()  # 缺省 InMemoryStore（进程内）
+    memory_pipeline = MemoryWritePipeline(store=memory_store)
     _ = CHENMO_ID  # 反思 npc_ids 用（见补线③）
     # 批次 E6：战斗账本（hp 进程内；死亡走 npc.death 事件——C4 零新增 kind）。
     from sim.agent.combat_exec import CombatLedger
+    from sim.core.entropy import EntropyMixer
 
     combat_ledger = CombatLedger()
     app.state.combat_ledger = combat_ledger
+    entropy_mixer = EntropyMixer(rng=RngRegistry(world_seed=loop.state.world_seed))
+
+    def _combat_entropy(stream: str, tick: int):
+        nonlocal entropy_mixer
+        entropy_mixer, event = entropy_mixer.mix(stream, tick=tick)
+        return event
+
+    loop.attach_entropy(_combat_entropy)
+
     driver = ChenmoDriver(
         anchor=build_anchor(),
         llm=llm_client,
@@ -391,6 +446,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         economy_provider=lambda: (coin_ledger, loop.state.world_seed),  # 批次 E3
         build_runtime_provider=lambda: build_runtime,  # 批次 E4
         combat_provider=lambda: (combat_ledger, loop.state.world_seed),  # 批次 E6
+        entropy_provider=_combat_entropy,
     )
     app.state.chenmo_driver = driver
     set_impulse_trigger(driver.request_decision)
@@ -542,6 +598,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 chat_last.clear()
                 retell_last.clear()
                 wage_last.clear()
+                memory_store.attach_branch(await store.current_branch_id_or_none())
                 logger.info("fork.runtime_ledgers_reset", anchor_id=anchor_id)
                 logger.info("fork.load_completed", anchor_id=anchor_id)
                 load_outcomes.append((anchor_id, True))

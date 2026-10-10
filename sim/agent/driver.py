@@ -26,6 +26,7 @@ import structlog
 
 from sim.agent.gate import IntentGate
 from sim.agent.intent import Intent, parse_intent
+from sim.core.events import WorldEvent
 from sim.core.tick import TickLoop
 from sim.core.world import WorldState
 from sim.llm.client import LlmClient, LlmError, ProfileSnapshot
@@ -57,6 +58,7 @@ class ChenmoDriver:
         economy_provider: Callable[[], tuple[Any, int]] | None = None,
         build_runtime_provider: Callable[[], Any] | None = None,
         combat_provider: Callable[[], tuple[Any, int]] | None = None,
+        entropy_provider: Callable[[str, int], WorldEvent] | None = None,
     ) -> None:
         self._anchor = anchor
         self._llm = llm
@@ -73,8 +75,10 @@ class ChenmoDriver:
         self._build = build_runtime_provider
         # 批次 E6：战斗面注入（() -> (CombatLedger, world_seed)）；None = 无攻击面。
         self._combat = combat_provider
+        self._entropy_provider = entropy_provider
         self._gate = IntentGate()
         self._pending: deque[Intent] = deque()
+        self._chat_lines: dict[tuple[str, int], str] = {}
         # 批次 E6 战斗尺（§9）：attack 命中 → 进战斗尺 60 tick；过期即退出。
         # None = 不在战斗尺；issue_combat_scale 发既有 combat.scale_change 事件。
         self._combat_until_tick: int | None = None
@@ -158,8 +162,47 @@ class ChenmoDriver:
         if verdict.rejected:
             logger.info("chenmo.gate_rejected", tick=tick, reason=verdict.reason)
             return True  # 决策成立但被闸门拦下（幻觉隔离：不入 pending）
+        if intent.action == "talk_to" and intent.target_id is not None:
+            self._chat_lines[(intent.target_id, tick)] = await self._dialogue_line(
+                profile, intent.target_id, intent.reason, tick
+            )
         self._pending.append(intent)
         return True
+
+    async def _dialogue_line(
+        self, profile: ProfileSnapshot, target_id: str, context: str, tick: int
+    ) -> str:
+        from sim.agent.dialogue import template_line, validate_provider_line
+        from sim.llm.prompts.assembler import (
+            InputSlice,
+            MemorySlice,
+            PlanSlice,
+            SituationSlice,
+            assemble_prompt,
+        )
+
+        name = self._display_name_of(target_id) or target_id
+        fallback = template_line(self._anchor.entity_id, name, tick)
+        prompt = assemble_prompt(
+            anchor=self._anchor,
+            memory=MemorySlice(),
+            situation=SituationSlice(),
+            plan=PlanSlice(),
+            user_input=InputSlice(
+                dialogue=(
+                    f"你正与{name}当面交谈。对话缘由：{context}。"
+                    "请只写一句自然、简短的戏内对白，不要解释，不要JSON。"
+                )
+            ),
+            chain_id=f"chat-{tick}-{target_id}",
+        )
+        try:
+            result = await self._llm.complete(
+                profile, list(prompt.messages), max_tokens_override=64
+            )
+        except (LlmError, TypeError):
+            return fallback
+        return validate_provider_line(result.content) or fallback
 
     # -- 执行段（同步：闸门二次校验 + 事件入流） -----------------------------
 
@@ -252,12 +295,10 @@ class ChenmoDriver:
                 except ValueError:
                     pass  # 不可达：原地喊话（fail-soft，聊天仍发生）
         listener_name = self._display_name_of(target_id) or target_id
-        line = template_line(actor_id, listener_name, state.tick)
-        loop.enqueue(
-            npc_chat_event(
-                tick=state.tick, npc_id=actor_id, to_id=target_id, line=line
-            )
+        line = self._chat_lines.pop(
+            (target_id, state.tick), template_line(actor_id, listener_name, state.tick)
         )
+        loop.enqueue(npc_chat_event(tick=state.tick, npc_id=actor_id, to_id=target_id, line=line))
 
     def _issue_trade(self, loop: TickLoop, intent: Intent) -> None:
         """buy/sell：查价 → 余额判定 → coin.grant 事件 + 独白结果（E3 最小面）。
@@ -290,15 +331,11 @@ class ChenmoDriver:
             earned = max(1, price // 2)
             ledger.apply_grant(actor_id, earned, tick=tick)
             loop.enqueue(
-                coin_grant_event(
-                    tick=tick, owner_id=actor_id, delta=earned, note=f"sell:{good.id}"
-                )
+                coin_grant_event(tick=tick, owner_id=actor_id, delta=earned, note=f"sell:{good.id}")
             )
             content = f"出手一批{good.name}，进账{earned}文。"
         loop.enqueue(
-            npc_monologue_event(
-                tick=tick + 1, npc_id=actor_id, form="thought", content=content
-            )
+            npc_monologue_event(tick=tick + 1, npc_id=actor_id, form="thought", content=content)
         )
 
     def _issue_build(self, loop: TickLoop, actor_id: str, intent: Intent) -> None:
@@ -338,9 +375,7 @@ class ChenmoDriver:
                 )
             )
             return
-        loop.enqueue(
-            coin_grant_event(tick=tick, owner_id=actor_id, delta=-cost, note="build:shed")
-        )
+        loop.enqueue(coin_grant_event(tick=tick, owner_id=actor_id, delta=-cost, note="build:shed"))
         loop.enqueue(started)
         loop.enqueue(
             npc_monologue_event(
@@ -356,7 +391,7 @@ class ChenmoDriver:
 
         hp/伤害数值零出戏（独白只有叙事）；命中后呼救是外在可观察 bubble。
         """
-        from sim.agent.combat_exec import help_line
+        from sim.agent.combat_exec import entropy_roll, help_line, needs_critical_entropy
         from sim.core.events import npc_death_event, npc_monologue_event
 
         if self._combat is None:  # 调用分支已保证（pyright 收窄）
@@ -366,7 +401,17 @@ class ChenmoDriver:
         if target not in loop.state.entities:
             return  # 目标不在场（闸门 revalidate 也会拦——双保险）
         tick = loop.state.tick
-        out = ledger.apply_attack(actor_id, target, tick=tick, seed=seed)
+        roll = None
+        if self._entropy_provider is not None and needs_critical_entropy(
+            actor_id, target, tick=tick, seed=seed
+        ):
+            event = self._entropy_provider("combat.critical", tick)
+            loop.enqueue(event)
+            roll = entropy_roll(str(event.payload["material"]))
+        if roll is None:
+            out = ledger.apply_attack(actor_id, target, tick=tick, seed=seed)
+        else:
+            out = ledger.apply_attack(actor_id, target, tick=tick, seed=seed, entropy_roll=roll)
         target_name = self._display_name_of(target) or target
         attacker_name = self._display_name_of(actor_id) or actor_id
         if out.outcome == "kill":

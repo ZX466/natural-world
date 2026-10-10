@@ -645,12 +645,23 @@ def monologue_events_to_frames(events: list[WorldEvent]) -> list[tuple[str, dict
     """
     frames: list[tuple[str, dict[str, Any]]] = []
     for e in events:
-        if e.event_type is not EventKind.NPC_MONOLOGUE:
-            continue
-        payload = e.payload
-        form = str(payload["form"])
-        name = _display_name_of(e.actor_id) if form == "bubble" else None
-        frames.append((e.actor_id, monologue_payload(form, str(payload["content"]), name=name)))
+        if e.event_type is EventKind.NPC_MONOLOGUE:
+            payload = e.payload
+            form = str(payload["form"])
+            name = _display_name_of(e.actor_id) if form == "bubble" else None
+            frames.append(
+                (e.actor_id, monologue_payload(form, str(payload["content"]), name=name))
+            )
+        elif e.event_type is EventKind.NPC_CHAT:
+            payload = e.payload
+            frames.append(
+                (
+                    e.actor_id,
+                    monologue_payload(
+                        "bubble", str(payload["line"]), name=_display_name_of(e.actor_id)
+                    ),
+                )
+            )
     return frames
 
 

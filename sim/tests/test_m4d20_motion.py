@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -46,8 +47,7 @@ class TestPathJitter:
         pf = _town_pf()
         base = pf.find((28, 42), (40, 47))
         paths = {
-            _jitter_path(base, f"villager_{i:02d}", tick=100, pathfinder=pf)
-            for i in range(1, 11)
+            _jitter_path(base, f"villager_{i:02d}", tick=100, pathfinder=pf) for i in range(1, 11)
         }
         assert len(paths) >= 2, "10 人同 OD 全走同一条路（扰动未生效）"
 
@@ -103,5 +103,6 @@ class TestPathJitter:
             st = _state_at(**{nid: (28, 42)})
             ev = plan_npc_move(st, nid, "eat", pf, seed=42, tick=100 + i)
             if ev is not None:
-                paths.add(tuple(map(tuple, ev.payload["path"])))
+                path = cast("list[list[int]]", ev.payload["path"])
+                paths.add(tuple((int(x), int(y)) for x, y in path))
         assert len(paths) >= 2, "10 人同 OD 同路径（plan_npc_move 未接扰动）"

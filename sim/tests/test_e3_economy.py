@@ -1,9 +1,11 @@
 """E3：最小经济——coin.grant 事件 + CoinLedger 余额 + 价目表。"""
 
+from typing import cast
 
 from sim.core.events import EventKind, coin_grant_event
 from sim.core.persistence.event_validation import PAYLOAD_MODELS, validate_store_row
 from sim.core.world import TickContext, WorldState, build_default_bus
+from sim.llm.client import LlmClient
 from sim.world.economy import GOODS, CoinLedger, buy_price
 
 
@@ -64,7 +66,7 @@ def test_buy_intent_produces_grant_and_monologue():
     led.apply_grant("chenmo", 100, tick=0)
     driver = ChenmoDriver(
         anchor=build_anchor(),
-        llm=_NullLlm(),
+        llm=cast("LlmClient", _NullLlm()),
         profile_provider=lambda: None,
         economy_provider=lambda: (led, 42),
     )
@@ -78,7 +80,7 @@ def test_buy_intent_produces_grant_and_monologue():
     events = loop.drain_events()
     grants = [e for e in events if e.event_type.value == "coin.grant"]
     assert len(grants) == 1
-    assert grants[0].payload["delta"] < 0  # 买=出账
+    assert cast("int", grants[0].payload["delta"]) < 0  # 买=出账
     assert led.balance_of("chenmo") < 100
     monos = [e for e in events if e.event_type.value == "npc.monologue"]
     assert len(monos) >= 1  # 结果独白在场（另有一条 intent.reason 独白，D 批既有面）
@@ -104,7 +106,7 @@ def test_buy_insufficient_funds_no_grant():
     led = CoinLedger()  # 余额 0
     driver = ChenmoDriver(
         anchor=build_anchor(),
-        llm=_NullLlm(),
+        llm=cast("LlmClient", _NullLlm()),
         profile_provider=lambda: None,
         economy_provider=lambda: (led, 42),
     )
