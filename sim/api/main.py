@@ -11,7 +11,7 @@ import uuid
 from collections import deque
 from collections.abc import AsyncIterator, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -189,15 +189,40 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from sim.core.flush import flush_events
 
         await flush_events(store, events)
+        branch_id = await store.current_branch_id_or_none()
+        if branch_id is not None:
+            if memory_store.branch_id != branch_id:
+                memory_store.attach_branch(branch_id)
+            async with store.session_factory() as session:
+                await memory_store.hydrate_if_empty(session)
+                await memory_store.flush(session)
+                await session.commit()
 
     async def on_flush_async() -> None:
         from sim.core.flush import flush_events
 
         await flush_events(store, loop.drain_events())
+        branch_id = await store.current_branch_id_or_none()
+        if branch_id is not None:
+            if memory_store.branch_id != branch_id:
+                memory_store.attach_branch(branch_id)
+            async with store.session_factory() as session:
+                await memory_store.hydrate_if_empty(session)
+                await memory_store.flush(session)
+                await session.commit()
 
     app.state.loop = loop
     app.state.store = store
     app.state.tile_map = tile_map
+
+    from sim.core.persistence.async_memory_store import AsyncMemoryStore
+
+    branch_id = await store.current_branch_id_or_none()
+    memory_store = AsyncMemoryStore(branch_id=branch_id or "unbound")
+    if branch_id is not None:
+        async with store.session_factory() as session:
+            await memory_store.hydrate(session)
+    app.state.memory_store = memory_store
 
     # ── 批次 B：NPC 装配进实况世界 ──────────────────────────────────
     # 1) 播种 50 村民 profile（幂等；库已有则零行）；
@@ -234,8 +259,70 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.npc_runtime = npc_runtime
     monologue_last: dict[str, int] = {}
     monologue_quota: dict[int, int] = {}  # D10：每节拍出镇配额账本（撞拍保险丝）
+    # 批次 E2/E1：聊天账本（关系漂移+记忆环形缓冲）+ 聊天冷却账本——
+    # 调用方持有（跨拍记忆态，同 monologue_last 口径；不进重放面）。
+    from sim.npc.chat_ledger import ChatLedger
+
+    chat_ledger = ChatLedger()
+    app.state.chat_ledger = chat_ledger
+    chat_last: dict[str, int] = {}
+    retell_last: dict[str, int] = {}  # 批次 E2：学舌冷却账本（调用方持有）
+    # 批次 E3：全镇余额账本（村民工钱 + 陈默买卖共享一份账）。
+    from sim.world.economy import CoinLedger
+
+    coin_ledger = CoinLedger()
+    app.state.coin_ledger = coin_ledger
+    wage_last: dict[str, int] = {}
+    # 批次 E4：施工 runtime（事件为真相；每 tick 推进 checkpoint/完工）。
+    from sim.agent.build_exec import BuildRuntime
+
+    build_runtime = BuildRuntime(tile_map, seed=loop.state.world_seed)
+    app.state.build_runtime = build_runtime
+
+    # 批次 E7：structure_id → tiles（started 时记；completed 时投影 built——
+    # StructureDelta phase 枚举无 building,在建工地不投影,完工才画）。
+    build_tiles_log: dict[str, list[tuple[int, int]]] = {}
+    from sim.world.maintenance import WorldMaintenance
+
+    matter_ledger = await npc_store.materialize_matter()
+    structure_snapshots = await npc_store.materialize_structures()
+    maintenance = WorldMaintenance(ledger=matter_ledger, structures=structure_snapshots)
+
+    def _build_tick_hook(state: Any, tick: int) -> list[Any] | None:
+        events = build_runtime.on_tick(tick)
+        if events:
+            # TILE_CHANGED → 寻路缓存失效（§14 chunk 失效；图换新实例后
+            # pathfinder 需感知——observe_map 对齐新几何）。
+            pathfinder.observe_map(build_runtime.tile_map)
+            from sim.api.ws import set_structure_phase
+
+            for ev in events:
+                if ev.event_type.value == "structure.started":
+                    sid = str(ev.payload.get("structure_id", ""))
+                    raw_tiles = cast("Sequence[Sequence[int]]", ev.payload.get("tiles") or ())
+                    build_tiles_log[sid] = [(int(t[0]), int(t[1])) for t in raw_tiles]
+                elif ev.event_type.value == "structure.completed":
+                    sid = str(ev.payload.get("structure_id", ""))
+                    set_structure_phase(sid, build_tiles_log.get(sid, []), "built")
+        return events or None
+
+    loop.attach_npc_runtime(_build_tick_hook)
+
+    def _maintenance_tick_hook(state: Any, tick: int) -> list[Any] | None:
+        return maintenance.tick(tick=tick, seed=state.world_seed) or None
+
+    loop.attach_maintenance(_maintenance_tick_hook)
 
     def _npc_tick_hook(state: Any, tick: int) -> list[Any] | None:
+        chenmo = state.entities.get(CHENMO_ID)
+        if chenmo is not None:
+            for npc_id, _profile in npc_runtime.profiles.items():
+                entity = state.entities.get(npc_id)
+                nearby = (
+                    entity is not None
+                    and abs(entity.pos[0] - chenmo.pos[0]) + abs(entity.pos[1] - chenmo.pos[1]) <= 3
+                )
+                npc_runtime.update_lod(npc_id, in_interaction=nearby, tick=tick)
         batch = npc_events_for_tick(
             npc_runtime,
             state,
@@ -244,15 +331,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             seed=loop.state.world_seed,
             monologue_last=monologue_last,
             monologue_quota=monologue_quota,
+            chat_last=chat_last,
+            display_name_of=_display_names,
+            chat_ledger=chat_ledger,
+            retell_last=retell_last,  # 批次 E2：学舌通路（review C3 修复）
+            wage_last=wage_last,
+            coin_ledger=coin_ledger,
         )
         # 批次 D14：npc.act → 动作姿势账本（快照/delta 的 anim 字段供数）。
         from sim.api.ws import set_action_anim
         from sim.npc.sim_exec import anim_of_action
 
         for event in batch or []:
-            if getattr(event, "event_type", None) is not None and getattr(
-                event.event_type, "value", ""
-            ) == "npc.act":
+            if (
+                getattr(event, "event_type", None) is not None
+                and getattr(event.event_type, "value", "") == "npc.act"
+            ):
                 npc_id = str(event.payload.get("npc_id", ""))
                 if npc_id:
                     set_action_anim(npc_id, anim_of_action(str(event.payload.get("action", ""))))
@@ -326,13 +420,33 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sim.content.protagonist import CHENMO_ID
     from sim.llm.memory_scan import MemoryWritePipeline
 
-    memory_pipeline = MemoryWritePipeline()  # 缺省 InMemoryStore（进程内）
+    memory_pipeline = MemoryWritePipeline(store=memory_store)
     _ = CHENMO_ID  # 反思 npc_ids 用（见补线③）
+    # 批次 E6：战斗账本（hp 进程内；死亡走 npc.death 事件——C4 零新增 kind）。
+    from sim.agent.combat_exec import CombatLedger
+    from sim.core.entropy import EntropyMixer
+
+    combat_ledger = CombatLedger()
+    app.state.combat_ledger = combat_ledger
+    entropy_mixer = EntropyMixer(rng=RngRegistry(world_seed=loop.state.world_seed))
+
+    def _combat_entropy(stream: str, tick: int):
+        nonlocal entropy_mixer
+        entropy_mixer, event = entropy_mixer.mix(stream, tick=tick)
+        return event
+
+    loop.attach_entropy(_combat_entropy)
+
     driver = ChenmoDriver(
         anchor=build_anchor(),
         llm=llm_client,
         profile_provider=_active_profile_snapshot_provider(),
         perception_provider=_chenmo_perception,
+        display_name_of=_display_names.get,  # 批次 E1：talk_to 台词用戏内名
+        economy_provider=lambda: (coin_ledger, loop.state.world_seed),  # 批次 E3
+        build_runtime_provider=lambda: build_runtime,  # 批次 E4
+        combat_provider=lambda: (combat_ledger, loop.state.world_seed),  # 批次 E6
+        entropy_provider=_combat_entropy,
     )
     app.state.chenmo_driver = driver
     set_impulse_trigger(driver.request_decision)
@@ -364,10 +478,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             _perception_text = _chenmo_perception()
             if _perception_text:
                 _mem_observe(memory_pipeline, _perception_text, tick=loop.state.tick)
+            # 批次 E2：[记忆] 段双源——检索 top-k 为主，当日对话记忆（ledger
+            # 最新 3 条）排前（最新鲜的社交事实优先）。
+            from sim.agent.chenmo_memory import merge_ledger_entries
+
+            _ledger_texts = tuple(text for _, text in chat_ledger.memories_of(CHENMO_ID)[-3:])
             await driver.decide_once(
                 loop.state,
                 loop.state.tick,
-                memory_entries=_mem_recall(memory_pipeline, now_tick=loop.state.tick),
+                memory_entries=merge_ledger_entries(
+                    _mem_recall(memory_pipeline, now_tick=loop.state.tick),
+                    _ledger_texts,
+                    top_k=3,
+                ),
                 perception_text=_perception_text,
             )
             driver.execute_pending(loop, pathfinder=pathfinder)
@@ -462,6 +585,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     flush_in_flight=on_flush_async,
                     register_child=register_new_branch,
                 )
+                # 批次 E（review I2 修复）：读档=分叉 → 进程内 runtime 账本全部
+                # 清零——旧分支的 hp/余额/关系/冷却跨分支残留会造成「一刀秒杀」
+                # /「凭空余财」（账本是**本分支**的世界状态投影，分叉即失效）。
+                # 火场账本既有同款清理由 fork 编排层承担；本批账本在此收口。
+                combat_ledger.reset()
+                coin_ledger.reset()
+                chat_ledger.reset()
+                build_tiles_log.clear()
+                monologue_last.clear()
+                monologue_quota.clear()
+                chat_last.clear()
+                retell_last.clear()
+                wage_last.clear()
+                memory_store.attach_branch(await store.current_branch_id_or_none())
+                logger.info("fork.runtime_ledgers_reset", anchor_id=anchor_id)
                 logger.info("fork.load_completed", anchor_id=anchor_id)
                 load_outcomes.append((anchor_id, True))
             except Exception as exc:

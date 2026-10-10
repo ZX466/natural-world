@@ -111,10 +111,34 @@ class CognitionParams:
     """偏差装配参数：检索缝一次注册（retrieval_scorers 供 retrieve 调用方）。"""
 
     beliefs: Beliefs = Beliefs()
+    sunk_investment: float = 0.0
+    trauma_triggers: frozenset[str] = frozenset()
+    drunkenness: float = 0.0
 
     def retrieval_scorers(self) -> tuple[Scorer, ...]:
         """检索缝钩子序列（顺序固定，C5：先确认偏误后情绪一致性）。"""
-        return (confirmation_bias_scorer(self.beliefs), mood_bias_scorer())
+
+        def sunk(_entry: MemoryEntry, _query: MemoryQuery) -> float:
+            return sunk_cost_bonus(self.sunk_investment, 0.0)
+
+        def trauma(entry: MemoryEntry, query: MemoryQuery) -> float:
+            if not self.trauma_triggers or not any(
+                trigger in entry.content or trigger in query.context
+                for trigger in self.trauma_triggers
+            ):
+                return 0.0
+            return trauma_avoidance_penalty(self.trauma_triggers)
+
+        def drunk(_entry: MemoryEntry, _query: MemoryQuery) -> float:
+            return drunkenness_factor(self.drunkenness)
+
+        return (
+            confirmation_bias_scorer(self.beliefs),
+            mood_bias_scorer(),
+            Scorer(name=BIAS_NAMES[2], fn=sunk, mode="add"),
+            Scorer(name=BIAS_NAMES[4], fn=trauma, mode="add"),
+            Scorer(name=BIAS_NAMES[5], fn=drunk, mode="mul"),
+        )
 
 
 # ---------------------------------------------------------------------------

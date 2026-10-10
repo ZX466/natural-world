@@ -4,7 +4,7 @@
 > 玩家不控制他，只是他的「直觉」：偶尔让某个念头在他脑中冒出来。
 > 世界不可预测、不可控、不可预定。
 
-[![tests](https://img.shields.io/badge/tests-2547%20passed-green)]() [![ruff](https://img.shields.io/badge/ruff-clean-green)]() [![pyright](https://img.shields.io/badge/pyright-0%20errors-green)]() [![protocol](https://img.shields.io/badge/protocol-1.5-blue)]()
+[![tests](https://img.shields.io/badge/tests-2623%20passed-green)]() [![ruff](https://img.shields.io/badge/ruff-clean-green)]() [![pyright](https://img.shields.io/badge/pyright-0%20new%20errors-green)]() [![protocol](https://img.shields.io/badge/protocol-1.7-blue)]()
 
 设计基线见 [DESIGN.md](DESIGN.md)（v2.1 冻结）；本 README 是**运行与开发入口**，设计细节以 DESIGN 与 `docs/` 为准。
 
@@ -156,7 +156,7 @@ M0–M6 六个里程碑**全部收官**（M6 于 2026-10-05 宣告，四道门 G
 | M5 | 读档=分叉（anchors）+ 权力机制数据面 + 火灾数据面 + 性能治理 |
 | M6 | 权力→决策传导 + 火灾机制面 + 死亡对称删除 + 内容面 + 定标（POWER 翻硬） |
 
-**当前门禁**：2505 passed / 123 skipped / 0 failed · ruff clean · pyright 0 · `gen-protocol --check` EXIT 0 · 协议版本 1.3。skip 全部为设计态（T4 真模型探针、T3 live-fire、T5 golden、降频自检门与环境门）——无失败、无悬空。
+**当前门禁**：2623 passed / 121 skipped / 0 failed · ruff clean · pyright 0 新增（存量 23 为 M 前历史面，基线 35）· `gen-protocol --check` EXIT 0 · 协议版本 1.7。skip 全部为设计态（T4 真模型探针、T3 live-fire、T5 golden、降频自检门与环境门）——无失败、无悬空。
 
 ## M7 渲染面（2026-10-06 收口）
 
@@ -220,6 +220,30 @@ M1-M6 机制存货接进实况世界（D1-D7）：
 
 全部接线遵守既有红线：状态变更走事件（no-op handler 记录面）、确定性
 哈希代替 RNG（无熵流依赖）、执行面只在实况侧（重放逐位一致不破）。
+
+## 玩法面接线（批次 E，2026-10-09）
+
+世界第一次有了「动词」：陈默能说、能买、能盖、能动手。
+
+- **E1 对话**：talk_to 走向目标开口（`npc.chat` 事件，模板台词池 + LLM 注入缝）；
+  村民 request_chat 到站互聊（冷却散布防齐射）——对话第一次成为可观察行为
+  （`npc.chat` 事件面；气泡渲染随下一批次）；
+- **E2 记忆与关系**：聊天落 ChatLedger（进程内好感漂移 + 记忆环形缓冲，
+  禁第二 SQL 驱动）；陈默 prompt [记忆] 段双源（检索 + 当日对话）；有旧闻的
+  村民会学舌（retell bubble 转述**开口前**记忆 + trust 漂移）——流言成立；
+- **E3 经济**：`coin.grant` 事件 + CoinLedger 余额（账单即真相）；三件货价目
+  （±20% 确定性浮动）；陈默 buy/sell 执行面（买不起=结构化拒绝+叙事）；
+  work 到站计酬（冷却防刷）——谋生闭环成立；
+- **E4 建造**：build 扣工料（余额不足不开工）→ `structure.started` → 每日
+  checkpoint → completed → TILE_CHANGED 占格 → 寻路缓存失效——§14 施工
+  推进第一次进实况（含既有 STRUCTURE_*/TILE_CHANGED handler 注册收口）；
+- **E5 非理性**：陈默检索挂回确认偏误/情绪一致性 scorers（§8 偏差表首次
+  生效于实况决策）；
+- **E6 战斗最小面**：attack 确定性结算（25% miss / 55% hit / 20% crit）→
+  `npc.death`（既有 kind，零新增）→ 呼救 bubble；命中自动切战斗时间尺
+  （§9 `combat.scale_change` 首次生产触发，60 tick 窗口过期自动退出）；
+- **协议 1.7**：structures 增量投影（M 面预留 StructureDelta 首次启用；
+  additive——旧客户端安全忽略）；前端完工建筑占格重绘。
 
 ## 文档地图
 

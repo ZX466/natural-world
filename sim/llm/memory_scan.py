@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Literal, Protocol, runtime_checkable
 
@@ -201,6 +201,11 @@ class InMemoryStore:
             if e.npc_id == npc_id and e.superseded_by is None and e.invalid_reason is None:
                 yield e
 
+    def reset(self) -> None:
+        """清空进程内条目（读档=分叉时的 runtime 账本收口；仅内存态，不改库）。"""
+
+        self._entries.clear()
+
     def __len__(self) -> int:
         return len(self._entries)
 
@@ -212,8 +217,13 @@ class MemoryWritePipeline:
     ``sim.core.persistence.memory_store.SqlMemoryStore``。扫描逻辑与 store 无关。
     """
 
-    def __init__(self, store: MemoryStore | None = None) -> None:
+    def __init__(
+        self,
+        store: MemoryStore | None = None,
+        on_write: Callable[[MemoryEntry], None] | None = None,
+    ) -> None:
         self._store: MemoryStore = store if store is not None else InMemoryStore()
+        self._on_write = on_write
 
     @property
     def store(self) -> MemoryStore:
@@ -255,9 +265,15 @@ class MemoryWritePipeline:
                 source=source,
                 hits=list(decision.hits),
             )
-            return WriteResult(accepted=True, entry=entry, action="rewritten", hits=decision.hits)
+            result = WriteResult(accepted=True, entry=entry, action="rewritten", hits=decision.hits)
+            if self._on_write is not None:
+                self._on_write(entry)
+            return result
         entry = self._persist(npc_id, decision.content, source, event_seq, importance, emotion_tag)
-        return WriteResult(accepted=True, entry=entry, action="written")
+        result = WriteResult(accepted=True, entry=entry, action="written")
+        if self._on_write is not None:
+            self._on_write(entry)
+        return result
 
     def decide(
         self,

@@ -161,6 +161,54 @@ class TestRng:
         )
         assert replayed.rng.draw_key("world.weather") == mixer2.rng.draw_key("world.weather")
 
+    def test_daily_encounter_consumes_entropy_and_emits_chat(self):
+        from sim.core.events import EntropyInjectPayload, EventKind, entropy_event
+        from sim.world.chaos import ENCOUNTER_STREAM
+
+        state = WorldState(
+            world_seed=42,
+            tick=86_400,
+            entities={
+                "villager_01": __import__("sim.core.world", fromlist=["EntityState"]).EntityState(
+                    entity_id="villager_01", pos=(5, 5)
+                ),
+                "villager_02": __import__("sim.core.world", fromlist=["EntityState"]).EntityState(
+                    entity_id="villager_02", pos=(6, 5)
+                ),
+            },
+        )
+        loop = TickLoop(clock=GameClock(speed=1.0), bus=build_default_bus(), state=state)
+        loop.attach_entropy(
+            lambda stream, tick: entropy_event(tick=tick, stream=stream, payload_hex="00" * 16)
+        )
+        loop._maybe_encounter_entropy()
+        events = loop.drain_events()
+        assert any(e.event_type is EventKind.ENTROPY_INJECT for e in events)
+        assert any(e.event_type is EventKind.NPC_CHAT for e in events)
+        entropy = next(e for e in events if e.event_type is EventKind.ENTROPY_INJECT)
+        assert EntropyInjectPayload.model_validate(entropy.payload).stream == ENCOUNTER_STREAM
+
+    @pytest.mark.parametrize(
+        ("stream", "tick", "nbytes"),
+        (
+            ("", 0, 16),
+            ("bad stream", 0, 16),
+            ("weather", -1, 16),
+            ("weather", True, 16),
+            ("weather", 0, 0),
+            ("weather", 0, 65),
+            ("weather", 0, 1.5),
+        ),
+    )
+    def test_entropy_request_rejects_invalid_bounds(self, stream, tick, nbytes):
+        with pytest.raises(ValueError):
+            EntropyMixer(rng=RngRegistry(world_seed=7)).mix(stream, tick, nbytes)
+
+    @pytest.mark.parametrize("material", ("", "0", "zz", "00" * 65))
+    def test_entropy_replay_rejects_invalid_material(self, material):
+        with pytest.raises((ValueError, TypeError)):
+            EntropyMixer(rng=RngRegistry(world_seed=7)).replay_mix("weather", material)
+
 
 # ---------------------------------------------------------------------------
 # 事件 / 唯一写路径

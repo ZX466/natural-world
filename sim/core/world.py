@@ -197,6 +197,26 @@ def _apply_npc_monologue(state: WorldState, event: WorldEvent, ctx: TickContext)
     return ApplyResult(state=state)
 
 
+def _apply_npc_chat(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    """NPC_CHAT（批次 E1）：聊天行为记录，状态层 no-op（关系/记忆效应归 runtime）。
+
+    同 _apply_npc_monologue 口径：no-op ⇒ 含 NPC_CHAT 与不含 NPC_CHAT 的同构
+    序列 fold 出逐位一致的 state_hash（回放安全，C5）。
+    """
+    from sim.core.events import NpcChatPayload
+
+    NpcChatPayload.model_validate(event.payload)  # schema 校验；无状态效果
+    return ApplyResult(state=state)
+
+
+def _apply_coin_grant(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    """COIN_GRANT（批次 E3）：账单记录，余额归 runtime CoinLedger（重放安全 no-op）。"""
+    from sim.core.events import CoinGrantPayload
+
+    CoinGrantPayload.model_validate(event.payload)  # schema 校验；无状态效果
+    return ApplyResult(state=state)
+
+
 def _apply_fog_reveal(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
     """迷雾揭示折叠：no-op 状态层（裁 40-4：迷雾是事件即真相的观察者投影，
     不进 state_hash；揭示集由投影侧 fold_fog_reveal 按事件流重建——同
@@ -213,10 +233,54 @@ def _apply_fire_event(state: WorldState, event: WorldEvent, ctx: TickContext) ->
     return ApplyResult(state=state)
 
 
+def _apply_structure_event(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    """STRUCTURE_*（批次 E4 实况接线）：施工记录进事件日志，状态层 no-op。
+
+    结构投影（structures 表）与占格（tile_changed）由 NpcStore 投影缝 /
+    BuildRuntime 实况侧承担；世界态不含结构（同火场口径——事件材料足以
+    重放观察面）。no-op ⇒ 重放安全（C5）。schema 校验随 kind 分派（M1 修复：
+    畸形 payload 拒绝而非静默折算——同 chat/coin 口径）。
+    """
+    from sim.core.events import (
+        StructureCheckpointPayload,
+        StructureCollapsedPayload,
+        StructureCompletedPayload,
+        StructureRemovedPayload,
+        StructureStartedPayload,
+    )
+
+    _STRUCTURE_VALIDATORS = {
+        EventKind.STRUCTURE_STARTED: StructureStartedPayload,
+        EventKind.STRUCTURE_CHECKPOINT: StructureCheckpointPayload,
+        EventKind.STRUCTURE_COMPLETED: StructureCompletedPayload,
+        EventKind.STRUCTURE_COLLAPSED: StructureCollapsedPayload,
+        EventKind.STRUCTURE_REMOVED: StructureRemovedPayload,
+    }
+    model = _STRUCTURE_VALIDATORS.get(event.event_type)
+    if model is not None:
+        model.model_validate(event.payload)
+    return ApplyResult(state=state)
+
+
+def _apply_material_event(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    """MATERIAL_*（E4 前置一并注册——事件族同源；余额投影归 NpcStore）。
+
+    schema 校验（M1 修复）：MaterialMovedPayload 显式验证（畸形拒绝）。
+    """
+    from sim.core.events import MaterialMovedPayload
+
+    MaterialMovedPayload.model_validate(event.payload)
+    return ApplyResult(state=state)
+
+
 def _apply_tile_changed(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
-    """M3 预留：M0 地图静态，收到即拒绝。"""
-    msg = "tile_changed 在 M0 未启用（可变地图底座是 M3）"
-    raise NotImplementedError(msg)
+    """TILE_CHANGED（批次 E4 启用，替换 M0 的 NotImplementedError 占位）：
+    瓦片变更是表现/寻路面（TileMap frozen 几何由 BuildRuntime 实况重建），
+    状态层 no-op（实体位置不在 tile 上、WorldState 无瓦片字段）。"""
+    from sim.core.events import TileChangedPayload
+
+    TileChangedPayload.model_validate(event.payload)
+    return ApplyResult(state=state)
 
 
 def build_default_bus() -> EventBus:
@@ -230,6 +294,14 @@ def build_default_bus() -> EventBus:
     bus.register(EventKind.NPC_DEATH, _apply_npc_death)
     bus.register(EventKind.NPC_ACT, _apply_npc_act)
     bus.register(EventKind.NPC_MONOLOGUE, _apply_npc_monologue)
+    bus.register(EventKind.NPC_CHAT, _apply_npc_chat)
+    bus.register(EventKind.COIN_GRANT, _apply_coin_grant)
+    bus.register(EventKind.STRUCTURE_STARTED, _apply_structure_event)
+    bus.register(EventKind.STRUCTURE_CHECKPOINT, _apply_structure_event)
+    bus.register(EventKind.STRUCTURE_COMPLETED, _apply_structure_event)
+    bus.register(EventKind.STRUCTURE_COLLAPSED, _apply_structure_event)
+    bus.register(EventKind.STRUCTURE_REMOVED, _apply_structure_event)
+    bus.register(EventKind.MATERIAL_MOVED, _apply_material_event)
     bus.register(EventKind.FIRE_IGNITED, _apply_fire_event)
     bus.register(EventKind.FOG_REVEAL, _apply_fog_reveal)
     bus.register(EventKind.FIRE_EXTINGUISHED, _apply_fire_event)

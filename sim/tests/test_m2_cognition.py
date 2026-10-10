@@ -98,6 +98,25 @@ class TestRetrievalIntegration:
         # m2 基础分更高但无命中；m1 命中「鱼」上浮后反超
         assert hits[0].entry.id == "m1"
 
+    def test_sunk_cost_trauma_and_drunkenness_are_registered(self) -> None:
+        params = CognitionParams(
+            sunk_investment=0.8,
+            trauma_triggers=frozenset({"fire"}),
+            drunkenness=0.5,
+        )
+        scorers = params.retrieval_scorers()
+        assert {scorer.name for scorer in scorers} >= {
+            "sunk_cost",
+            "trauma_avoidance",
+            "drunkenness",
+        }
+        entry = _entry("memory", "fire destroyed my home", importance=0.5)
+        query = MemoryQuery(npc_id="chenmo", context="fire", top_k=1)
+        scores = {scorer.name: scorer.apply(entry, query) for scorer in scorers}
+        assert scores["sunk_cost"] > 0
+        assert scores["trauma_avoidance"] < 0
+        assert scores["drunkenness"] > 1
+
 
 class TestUtilitySeamSkeletons:
     """效用缝四骨架：纯函数形先立（M3 行为能力接入时生效）。"""

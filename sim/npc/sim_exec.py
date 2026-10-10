@@ -15,10 +15,11 @@ wander 零票——本执行面让**全部动作族**都产生走动，镇子活
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from dataclasses import replace
 
-from sim.core.events import WorldEvent, move_event
-from sim.core.world import WorldState
+from sim.core.events import WorldEvent, move_event, npc_chat_event, npc_monologue_event
+from sim.core.world import EntityState, WorldState
 from sim.world.pathfinding import Pathfinder
 
 # ---------------------------------------------------------------------------
@@ -38,6 +39,42 @@ _MONOLOGUE_COOLDOWN_SPAN_TICKS = 7200
 #: D10 每决策节拍全镇 bubble 出镇上限（保险丝：冷却散布仍有概率撞拍；
 #: 50 人同拍开口最多放行 2 条，其余静默丢——表现面节流，非世界真相）。
 _MONOLOGUE_QUOTA_PER_BEAT = 2
+
+#: E1 聊天冷却（D10 同手法：按 NPC 散布防齐射）。[1800, 7200) tick =
+#: 30~120 游戏分——同 NPC 两次面对面聊天最小间隔。
+_CHAT_COOLDOWN_MIN_TICKS = 1800
+_CHAT_COOLDOWN_SPAN_TICKS = 5400
+#: 到站开口半径（曼哈顿；review I1：开口对象=此邻域内最近者）。
+_CHAT_ARRIVAL_RADIUS = 2
+
+
+def _chat_cooldown_ticks(npc_id: str) -> int:
+    """npc_id → 聊天冷却时长（tick）：[MIN, MIN+SPAN) 均匀散布（C5 哈希）。"""
+    span = _hash_u32("chat-cooldown", npc_id) % _CHAT_COOLDOWN_SPAN_TICKS
+    return _CHAT_COOLDOWN_MIN_TICKS + span
+
+
+#: E2 retell 冷却：[3600, 14400) tick = 60~240 游戏分（学舌比聊天更稀）。
+_RETELL_COOLDOWN_MIN_TICKS = 3600
+_RETELL_COOLDOWN_SPAN_TICKS = 10800
+
+
+def retell_template(speaker_name: str, content: str) -> str:
+    """转述模板（外在可观察面：路人听见 A 向 B 学舌）。"""
+    return f"听{speaker_name}说，{content}"
+
+
+#: E3 谋生：work 到站计酬（一次 5 文；冷却 [3600, 10800) tick = 60~180 游戏分
+#: ——防同拍连刷；工钱是戏内事实，数额可出站）。
+_WAGE_AMOUNT = 5
+_WAGE_COOLDOWN_MIN_TICKS = 3600
+_WAGE_COOLDOWN_SPAN_TICKS = 7200
+
+
+def _wage_cooldown_ticks(npc_id: str) -> int:
+    """npc_id → 计酬冷却（tick）：[MIN, MIN+SPAN) 均匀散布（C5 哈希）。"""
+    span = _hash_u32("wage-cooldown", npc_id) % _WAGE_COOLDOWN_SPAN_TICKS
+    return _WAGE_COOLDOWN_MIN_TICKS + span
 
 
 def _cooldown_ticks(npc_id: str) -> int:
@@ -272,6 +309,24 @@ def _chat_target_of(state: WorldState, npc_id: str, *, tick: int) -> str | None:
     return others[_hash_u32("chat-target", npc_id, tick) % len(others)]
 
 
+def _nearest_other(entity: EntityState, state: WorldState) -> str | None:
+    """到站邻域内最近的其他人（review I1：开口对象与寻路目的地脱钩——
+    「走到了谁面前就跟谁说」）。曼哈顿 ≤2 内按距离取最近；并列按 id 序
+    （C5 确定性）；无人在邻域 → None（走了全程没人可说，静默是常态路径）。
+    """
+    nearest: str | None = None
+    nearest_dist = _CHAT_ARRIVAL_RADIUS + 1
+    eid_self = getattr(entity, "entity_id", "")
+    for eid, other in sorted(state.entities.items()):
+        if eid == eid_self:
+            continue
+        dist = abs(other.pos[0] - entity.pos[0]) + abs(other.pos[1] - entity.pos[1])
+        if dist <= _CHAT_ARRIVAL_RADIUS and dist < nearest_dist:
+            nearest = eid
+            nearest_dist = dist
+    return nearest
+
+
 def _resolve_goal(
     state: WorldState,
     npc_id: str,
@@ -443,6 +498,12 @@ def npc_events_for_tick(
     seed: int,
     monologue_last: dict[str, int] | None = None,
     monologue_quota: dict[int, int] | None = None,
+    chat_last: dict[str, int] | None = None,
+    display_name_of: Mapping[str, str] | None = None,
+    chat_ledger: object | None = None,
+    retell_last: dict[str, int] | None = None,
+    wage_last: dict[str, int] | None = None,
+    coin_ledger: object | None = None,
 ) -> list[WorldEvent]:
     """一个决策节拍的事件批次：NpcRuntime.tick → NPC_ACT 批次 + MOVE 交错。
 
@@ -505,6 +566,89 @@ def npc_events_for_tick(
 
                     p = profiles[npc_id]
                     profiles[npc_id] = replace(p, needs=apply_remedy(p.needs, action))
+            # E3 谋生：work 到站计酬（到站才发——没到田里没有工钱，D3 口径）。
+            if (
+                action == "work"
+                and anchor is not None
+                and entity is not None
+                and not entity.path
+                and wage_last is not None
+                and coin_ledger is not None
+            ):
+                dist = abs(entity.pos[0] - anchor[0]) + abs(entity.pos[1] - anchor[1])
+                if dist <= _SITE_SCATTER_RADIUS:
+                    _wage_never = -(_WAGE_COOLDOWN_MIN_TICKS + _WAGE_COOLDOWN_SPAN_TICKS)
+                    last_w = wage_last.get(npc_id, _wage_never)
+                    if tick - last_w >= _wage_cooldown_ticks(npc_id):
+                        wage_last[npc_id] = tick
+                        from sim.core.events import coin_grant_event
+                        from sim.world.economy import CoinLedger
+
+                        assert isinstance(coin_ledger, CoinLedger)
+                        coin_ledger.apply_grant(npc_id, _WAGE_AMOUNT, tick=tick)
+                        events.append(
+                            coin_grant_event(
+                                tick=tick, owner_id=npc_id, delta=_WAGE_AMOUNT, note="wage:work"
+                            )
+                        )
+        # 批次 E1：request_chat 到站开口。**开口对象 = 到站邻域内最近的其他人**
+        # （review I1 修复：决策 tick 与开口 tick 相差几十 tick,哈希含 tick 的
+        # _chat_target_of 重算会选出另一个目标——走了全程却对不上人。到站邻域
+        # 最近者 = 「走到了谁面前就跟谁说」,与寻路目的地脱钩但戏内自洽）。
+        if (
+            action == "request_chat"
+            and entity is not None
+            and not entity.path
+            and chat_last is not None
+        ):
+            target_id = _nearest_other(entity, state)
+            if target_id is not None:
+                last = chat_last.get(
+                    npc_id, -(_CHAT_COOLDOWN_MIN_TICKS + _CHAT_COOLDOWN_SPAN_TICKS)
+                )
+                if tick - last >= _chat_cooldown_ticks(npc_id):
+                    chat_last[npc_id] = tick
+                    from sim.agent.dialogue import template_line
+
+                    listener = (display_name_of or {}).get(target_id, target_id)
+                    line = template_line(npc_id, listener, tick)
+                    events.append(
+                        npc_chat_event(
+                            tick=tick, npc_id=npc_id, to_id=target_id, line=line
+                        )
+                    )
+                    # E2：聊天落账本——好感漂移 + 双方记忆（进程内 runtime 态）。
+                    if chat_ledger is not None:
+                        from sim.npc.chat_ledger import ChatLedger
+
+                        assert isinstance(chat_ledger, ChatLedger)
+                        chat_ledger.adjust(npc_id, target_id, kind="chat")
+                        # E2 retell：开口同拍，学舌**开口前**已记住的旧闻
+                        # （本拍的话对方刚听过——复读不传播新信息；流言=
+                        # 传播先前获得的内容，故先取旧记忆再落新记忆）。
+                        _prior_mems = chat_ledger.memories_of(npc_id)
+                        chat_ledger.remember(npc_id, line, tick=tick)
+                        chat_ledger.remember(target_id, line, tick=tick)
+                        if retell_last is not None and _prior_mems:
+                            cool = _RETELL_COOLDOWN_MIN_TICKS + (
+                                _hash_u32("retell-cooldown", npc_id)
+                                % _RETELL_COOLDOWN_SPAN_TICKS
+                            )
+                            last_r = retell_last.get(npc_id, -(cool + 1))
+                            if tick - last_r >= cool:
+                                retell_last[npc_id] = tick
+                                _tick_src, _content = _prior_mems[-1]
+                                _speaker = (display_name_of or {}).get(npc_id, npc_id)
+                                _line = retell_template(_speaker, _content)
+                                events.append(
+                                    npc_monologue_event(
+                                        tick=tick,
+                                        npc_id=npc_id,
+                                        form="bubble",
+                                        content=_line,
+                                    )
+                                )
+                                chat_ledger.adjust(npc_id, target_id, kind="retell")
         mv = plan_npc_move(
             state,
             npc_id,

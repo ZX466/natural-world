@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -126,7 +127,7 @@ class TestPlanNpcMove:
         mv = plan_npc_move(loop.state, "npc_01", "wander", pf, seed=42, tick=100)
         assert mv is not None and mv.event_type is EventKind.MOVE
         assert mv.payload["entity_id"] == "npc_01"
-        path = mv.payload["path"]
+        path = cast("list[list[int]]", mv.payload["path"])
         assert tuple(path[0]) == (5, 5)  # 起点即实体当前位置（model_dump 后 list）
         goal = tuple(path[-1])
         assert town.is_walkable(goal[0], goal[1])

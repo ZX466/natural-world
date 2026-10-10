@@ -58,6 +58,39 @@ export class WorldMirror {
   bubbles = new Map<string, { text: string; expiresAt: number }>();
   /** D17 视觉雾：已揭示 chunk 全集（'cx,cy' 键；快照=全集重置，delta=并集） */
   fog = new Set<string>();
+  /** 批次 E7：结构投影（rtoken → {tiles, phase}；delta upsert / 快照全量） */
+  structures = new Map<string, { tiles: [number, number][]; phase: string }>();
+
+  /** E7：结构增量 upsert（同 rtoken 重声明=覆盖；相位即最新）。
+   *  op/x/y/phase 按生成类型可选——缺省按 add/built 兜底（服务端总是带齐）。 */
+  applyStructures(
+    list: readonly {
+      readonly op?: 'add' | 'remove';
+      readonly rtoken: string;
+      readonly x?: number;
+      readonly y?: number;
+      readonly phase?: 'built' | 'collapsing' | 'rubble';
+    }[],
+  ): void {
+    for (const s of list) {
+      if (s.op === 'remove') {
+        this.structures.delete(s.rtoken);
+        continue;
+      }
+      const x = s.x ?? 0;
+      const y = s.y ?? 0;
+      const phase = s.phase ?? 'built';
+      const cur = this.structures.get(s.rtoken);
+      if (cur) {
+        if (!cur.tiles.some(([tx, ty]) => tx === x && ty === y)) {
+          cur.tiles.push([x, y]);
+        }
+        cur.phase = phase;
+      } else {
+        this.structures.set(s.rtoken, { tiles: [[x, y]], phase });
+      }
+    }
+  }
 
   /** 揭示块并集（delta 增量 / 快照全量共用；重连重置走 clear） */
   revealFog(chunks: readonly { cx: number; cy: number }[]): void {
@@ -154,6 +187,7 @@ export class WorldMirror {
     this.actors.clear();
     this.lights.clear();
     this.fog.clear(); // D17：重连重置雾（快照随后重灌全集）
+    this.structures.clear(); // E7：重连重置结构投影（快照随后重灌全集）
     this.protagonist = null;
     this.resetCount += 1;
   }

@@ -111,6 +111,8 @@ class LlmClient:
         profile: ProfileSnapshot,
         messages: list[dict[str, str]],
         decision: DecisionTracker | None = None,
+        *,
+        max_tokens_override: int | None = None,
     ) -> LlmCallResult:
         """单次补全调用：监控事件 + 重试一次 + 结构化错误。"""
         client = self._ensure_client(profile)
@@ -132,7 +134,11 @@ class LlmClient:
                     model=profile.model,
                     messages=messages,  # type: ignore[arg-type]
                     temperature=profile.temperature,
-                    max_tokens=profile.max_tokens,
+                    max_tokens=(
+                        min(profile.max_tokens, max_tokens_override)
+                        if max_tokens_override is not None
+                        else profile.max_tokens
+                    ),
                 )
             except APITimeoutError as exc:
                 last_error = ("timeout", str(type(exc).__name__))

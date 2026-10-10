@@ -179,8 +179,12 @@ class TestStructuralAttacks:
         assert exc.value.detail == "extra_fields"
 
     def test_unsupported_action_rejected(self):
-        """越权动作（build/reset）→ unsupported_action。"""
-        for action in ("build", "demolish", "reset"):
+        """越权动作（demolish/reset）→ unsupported_action。
+
+        批次 E 收口：build/buy/sell 已有执行面进白名单（原钉以 build 为越权
+        例证——随引擎落地升格为放行；对抗面改钉真无引擎的 demolish）。
+        """
+        for action in ("demolish", "reset"):
             raw = json.dumps({"action": action, "reason": "干点什么"}, ensure_ascii=False)
             if action == "reset":
                 # reset 不在 schema 枚举 → parse 拒
@@ -190,6 +194,16 @@ class TestStructuralAttacks:
             intent = parse_intent(raw)
             v = _GATE.validate(intent, _STATE, "chenmo")
             assert v.rejected and v.reason == "unsupported_action"
+
+    def test_engine_backed_actions_now_accepted(self):
+        """批次 E 收口面：build 过闸门（执行面 E4 已就位——对抗样本同步升格）。"""
+        raw = json.dumps(
+            {"action": "build", "target_pos": [7, 7], "reason": "盖个棚子"},
+            ensure_ascii=False,
+        )
+        intent = parse_intent(raw)
+        v = _GATE.validate(intent, _STATE, "chenmo")
+        assert v.accepted and v.reason == "ok"
 
     def test_meta_reason_number_field_rejected(self):
         """数值字段模式 reason（hunger:72）→ banned_reason。"""

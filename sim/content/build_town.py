@@ -67,8 +67,10 @@ def build() -> None:
     for y in range(SIZE):
         for x in range(SIZE):
             h = (x * 7 + y * 13) % 53
-            ground[y][x] = ids["flower"] if h == 0 else (
-                ids["grass_alt"] if (x * 7 + y * 13) % 11 == 0 else ids["grass"]
+            ground[y][x] = (
+                ids["flower"]
+                if h == 0
+                else (ids["grass_alt"] if (x * 7 + y * 13) % 11 == 0 else ids["grass"])
             )
 
     def fill(
@@ -131,7 +133,7 @@ def build() -> None:
 
     out = {"width": SIZE, "height": SIZE, "tile_size": CHUNK, "chunks": chunks}
     path = REPO / "sim" / "content" / "linhe-town.json"
-    path.write_text(json.dumps(out, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_bytes(json.dumps(out, ensure_ascii=False).encode("utf-8") + b"\n")
     print(f"written {path} ({len(chunks)} chunks)")
 
 
