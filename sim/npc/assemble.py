@@ -25,18 +25,14 @@ async def assemble_runtime(
     （n_npc 必须与 profiles 数一致，runtime.__post_init__ 校验）。
     """
     profiles = await store.materialize(npc_ids)
-    hidden_rows = await store.materialize_hidden(
-        list(profiles) if npc_ids is not None else None
-    )
+    hidden_rows = await store.materialize_hidden(list(profiles) if npc_ids is not None else None)
     # 无隐藏档 NPC 补恒等值（零分支透传：全员有键，消费点免 KeyError 分支）
     hidden = {nid: hidden_rows.get(nid, HiddenState.empty()) for nid in profiles}
     runtime = NpcRuntime(profiles=profiles, utility=UtilityModel(n_npc=len(profiles)))
     return runtime, hidden
 
 
-def attach_power(
-    runtime: NpcRuntime, states: Mapping[str, PowerState]
-) -> None:
+def attach_power(runtime: NpcRuntime, states: Mapping[str, PowerState]) -> None:
     """权力快照装配（M4-D15 补线：M6 批次 C 机制 → 实况面开闸）。
 
     PowerStore.materialize 产物 → runtime.power（效用面权力列偏置随即生效，
@@ -50,9 +46,7 @@ def attach_power(
     - 纯内存赋值，零 IO（物化由调用方 async 完成——本模块不做 SQL）。
     """
     snapshot = {
-        nid: float(state.power_level)
-        for nid, state in states.items()
-        if nid in runtime.profiles
+        nid: float(state.power_level) for nid, state in states.items() if nid in runtime.profiles
     }
     if not snapshot:
         return

@@ -188,9 +188,7 @@ class TestPauseIdempotentSingleValue:
 class TestControlStateIsolation:
     """G-4：会话态连接级。"""
 
-    def test_two_controls_do_not_share_memory(
-        self, loop: TickLoop, pf: Pathfinder
-    ) -> None:
+    def test_two_controls_do_not_share_memory(self, loop: TickLoop, pf: Pathfinder) -> None:
         a, b = ControlState(), ControlState()
         _send(loop, pf, a, action="set_speed", speed=4)
         _send(loop, pf, a, action="pause")

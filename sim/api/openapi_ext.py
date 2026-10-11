@@ -287,6 +287,7 @@ _SUB_SCHEMAS: dict[str, dict[str, Any]] = {
     },
 }
 
+
 #: oneOf-null 通用形（§3.2：禁 nullable——openapi-typescript 不产 | null）。
 def _oneof_null(inner: dict[str, Any]) -> dict[str, Any]:
     return {"oneOf": [inner, {"type": "null"}]}
@@ -404,9 +405,7 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
                 "enum": ["sight", "sound", "smell", "touch", "interoception"],
             },
             "content": {"type": "string", "description": "第一人称叙事，无数值无系统词"},
-            "form": _oneof_null(
-                {"type": "string", "enum": ["bubble", "thought", "plan"]}
-            ),
+            "form": _oneof_null({"type": "string", "enum": ["bubble", "thought", "plan"]}),
         },
         ["sense", "content"],
     ),
@@ -569,11 +568,7 @@ def _strip_pydantic_decorations(node: Any) -> Any:
     if isinstance(node, dict):
         out = {}
         for k, v in node.items():
-            if (
-                k == "title"
-                and isinstance(v, str)
-                and isinstance(node.get("type"), str)
-            ):
+            if k == "title" and isinstance(v, str) and isinstance(node.get("type"), str):
                 continue  # 装饰 title（schema 节点上的字符串 title）
             if k == "description" and v == "":
                 continue  # 抑制 docstring 的空占位（快照无 description 键）
@@ -585,7 +580,6 @@ def _strip_pydantic_decorations(node: Any) -> Any:
     if isinstance(node, list):
         return [_strip_pydantic_decorations(v) for v in node]
     return node
-
 
 
 def _attach_problem_responses(schema: dict[str, Any]) -> None:
@@ -642,6 +636,7 @@ def _attach_problem_responses(schema: dict[str, Any]) -> None:
     attach("/api/settings/profiles/{profile_id}", "patch", ["404"])  # 档案不存在
     attach("/api/settings/profiles/{profile_id}", "delete", ["404"])  # 档案不存在
     attach("/api/settings/profiles/{profile_id}/activate", "post", ["404"])  # 档案不存在
+
 
 def custom_openapi() -> dict[str, Any]:
     """自动 schema + WS 消息 schemas（components.schemas.WsMessage 联合）。挂到 app.openapi。"""

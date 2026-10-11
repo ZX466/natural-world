@@ -74,8 +74,17 @@ class TestTemplatePool:
         from sim.agent.will import _TEMPLATES
 
         FORBIDDEN = (
-            "谁在指使", "谁指使", "被指使", "命令我", "被操纵",
-            "存档", "读档", "重放", "快照", "回放", "分支",
+            "谁在指使",
+            "谁指使",
+            "被指使",
+            "命令我",
+            "被操纵",
+            "存档",
+            "读档",
+            "重放",
+            "快照",
+            "回放",
+            "分支",
         )
         for text in _TEMPLATES[band]:
             for word in FORBIDDEN:
@@ -126,7 +135,9 @@ class TestQuotaPerBeat:
 
         profiles = {
             f"npc_{i:02d}": NpcProfileData(
-                npc_id=f"npc_{i:02d}", name=f"n{i}", lod=1,
+                npc_id=f"npc_{i:02d}",
+                name=f"n{i}",
+                lod=1,
                 needs=(Need(name="hunger", value=0.9, weight=1.0),),
             )
             for i in range(1, 7)
@@ -146,12 +157,17 @@ class TestQuotaPerBeat:
         last: dict[str, int] = {}
         quota: dict[int, int] = {}
         batch = npc_events_for_tick(
-            runtime=runtime, state=state, tick=1000,
-            pathfinder=Pathfinder(_fallback_map()), seed=42,
-            monologue_last=last, monologue_quota=quota,
+            runtime=runtime,
+            state=state,
+            tick=1000,
+            pathfinder=Pathfinder(_fallback_map()),
+            seed=42,
+            monologue_last=last,
+            monologue_quota=quota,
         )
         bubbles = [
-            e for e in batch
+            e
+            for e in batch
             if e.event_type is EventKind.NPC_MONOLOGUE and e.payload.get("form") == "bubble"
         ]
         assert len(bubbles) <= _MONOLOGUE_QUOTA_PER_BEAT, (
@@ -172,7 +188,9 @@ class TestQuotaPerBeat:
 
         profiles = {
             f"npc_{i:02d}": NpcProfileData(
-                npc_id=f"npc_{i:02d}", name=f"n{i}", lod=1,
+                npc_id=f"npc_{i:02d}",
+                name=f"n{i}",
+                lod=1,
                 needs=(Need(name="hunger", value=0.9, weight=1.0),),
             )
             for i in range(1, 4)
@@ -195,19 +213,30 @@ class TestQuotaPerBeat:
 
         def bubbles_of(events):
             return [
-                e for e in events
+                e
+                for e in events
                 if e.event_type is EventKind.NPC_MONOLOGUE and e.payload.get("form") == "bubble"
             ]
 
         beat1 = npc_events_for_tick(
-            runtime=runtime, state=state, tick=1000, pathfinder=pf, seed=42,
-            monologue_last=last, monologue_quota=quota,
+            runtime=runtime,
+            state=state,
+            tick=1000,
+            pathfinder=pf,
+            seed=42,
+            monologue_last=last,
+            monologue_quota=quota,
         )
         # 3 人同拍：配额内最多 2 条，至少 1 人被压（3>2）
         assert len(bubbles_of(beat1)) <= 2
         beat2 = npc_events_for_tick(
-            runtime=runtime, state=state, tick=1010, pathfinder=pf, seed=42,
-            monologue_last=last, monologue_quota=quota,
+            runtime=runtime,
+            state=state,
+            tick=1010,
+            pathfinder=pf,
+            seed=42,
+            monologue_last=last,
+            monologue_quota=quota,
         )
         # 下一节拍：被压的人仍在冷却（冷却 ≥2400 tick >> 节拍），不再开口
         assert len(bubbles_of(beat2)) == 0

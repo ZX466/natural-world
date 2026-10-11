@@ -32,6 +32,7 @@
 ⚠ 本机噪声提示：同进程重负载后纯 CPU 自旋会 6.7x 变慢（热/功耗降频，非代码退化）——
    故 ① 用 `iterations=200` 的 pedantic（单帧微基准，受降频影响小）。
 """
+
 from __future__ import annotations
 
 import time

@@ -8,6 +8,7 @@
   NPC 踏入揭示的最小通路，玩家面 M4 指令 UI 再接）；
 - frozen：reveal 返回新实例（immutability 规约）。
 """
+
 from __future__ import annotations
 
 import pytest

@@ -33,8 +33,12 @@ class TestDiffusion:
         """静风 + 扩散：邻格浓度 > 0（无扩散时 roll(0) no-op，浓度困在源格）。"""
         f = SmellField.zeros(grid=GRID).inject(sources=[(32, 32)], strength=10.0)
         f2 = smell_propagate(
-            f, sources=[(32, 32)], wind=(0.0, 0.0), strength=10.0,
-            decay=DECAY, diffuse_rate=DIFFUSE,
+            f,
+            sources=[(32, 32)],
+            wind=(0.0, 0.0),
+            strength=10.0,
+            decay=DECAY,
+            diffuse_rate=DIFFUSE,
         )
         assert f2.sample((31, 32)) > 0.0
         assert f2.sample((33, 32)) > 0.0
@@ -43,17 +47,19 @@ class TestDiffusion:
         """风 (0,+1)：下风邻格浓度 > 上风邻格（扩散不改变平流方向性）。"""
         f = SmellField.zeros(grid=GRID).inject(sources=[(32, 10)], strength=10.0)
         f2 = smell_propagate(
-            f, sources=[(32, 10)], wind=(0.0, 1.0), strength=10.0,
-            decay=DECAY, diffuse_rate=DIFFUSE,
+            f,
+            sources=[(32, 10)],
+            wind=(0.0, 1.0),
+            strength=10.0,
+            decay=DECAY,
+            diffuse_rate=DIFFUSE,
         )
         assert f2.sample((32, 11)) > f2.sample((32, 9))
 
     def test_no_diffuse_by_default(self) -> None:
         """diffuse_rate 缺省 0：既有调用方（pi bench 参考口径）行为不变。"""
         f = SmellField.zeros(grid=GRID).inject(sources=[(32, 32)], strength=10.0)
-        f2 = smell_propagate(
-            f, sources=[(32, 32)], wind=(0.0, 0.0), strength=10.0, decay=DECAY
-        )
+        f2 = smell_propagate(f, sources=[(32, 32)], wind=(0.0, 0.0), strength=10.0, decay=DECAY)
         assert f2.sample((31, 32)) == 0.0
 
 
@@ -120,7 +126,8 @@ class TestWiring:
 
         chunks = {
             (0, 0): Chunk(
-                cx=0, cy=0,
+                cx=0,
+                cy=0,
                 ground=(1,) * (GRID * GRID),
                 collision=(True,) * (GRID * GRID),
             )
@@ -166,12 +173,16 @@ class TestChannelSmell:
             tick=0,
             observations=(
                 Observation(
-                    channel=C.SMELL, subject="smell",
-                    description="空气里飘着一股说不清的味道。", strength=0.5,
+                    channel=C.SMELL,
+                    subject="smell",
+                    description="空气里飘着一股说不清的味道。",
+                    strength=0.5,
                 ),
                 Observation(
-                    channel=C.VISION, subject="rt-y",
-                    description="rt-y就在不远处。", strength=0.9,
+                    channel=C.VISION,
+                    subject="rt-y",
+                    description="rt-y就在不远处。",
+                    strength=0.9,
                 ),
             ),
         )

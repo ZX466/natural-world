@@ -16,6 +16,7 @@ S3 钉子防新增未登记码）。
 接线点：ws.py `_handle_player_impulse` 长度校验之后、prompt 装配之前
 （批次 A 派单卡列明；admitted=False → injected:false + error 帧）。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -115,9 +116,7 @@ def impulse_gate(
     if len(result.hits) <= REWRITE_MAX_HITS and all(h.word in REWRITE_MAP for h in result.hits):
         rescanned = scan(result.cleaned)
         if rescanned.ok:
-            return ImpulseVerdict(
-                admitted=True, content=result.cleaned, hits=hit_words
-            )
+            return ImpulseVerdict(admitted=True, content=result.cleaned, hits=hit_words)
         residual = tuple(dict.fromkeys(h.word for h in rescanned.hits))
         return ImpulseVerdict(
             admitted=False,

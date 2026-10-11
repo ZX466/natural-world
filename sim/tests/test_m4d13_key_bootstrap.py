@@ -220,9 +220,7 @@ class TestTestConnectionEndpoint:
         def fake_post(url: str, headers=None, json=None, timeout=None):
             sent["url"] = url
             sent["body"] = json
-            return resp(
-                {"choices": [{"message": {"content": "好"}}], "usage": {"total_tokens": 1}}
-            )
+            return resp({"choices": [{"message": {"content": "好"}}], "usage": {"total_tokens": 1}})
 
         monkeypatch.setattr("httpx.post", fake_post)
         res = self._post(client)

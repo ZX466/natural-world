@@ -109,9 +109,11 @@ class TestAssembleRuntime:
             [_profile_row("npc:01"), _profile_row("npc:02")],
             [_health_row("npc:01", trigger="雨")],
         )
-        store = NpcStore(SqlEventStore(
-            async_sessionmaker(session.bind, class_=AsyncSession, expire_on_commit=False)
-        ))
+        store = NpcStore(
+            SqlEventStore(
+                async_sessionmaker(session.bind, class_=AsyncSession, expire_on_commit=False)
+            )
+        )
         runtime, hidden = await assemble_runtime(store)
         assert isinstance(runtime, NpcRuntime)
         assert set(runtime.profiles) == {"npc:01", "npc:02"}
@@ -122,9 +124,11 @@ class TestAssembleRuntime:
 
     async def test_profile_fields_survive_roundtrip(self, session) -> None:
         await _seed(session, [_profile_row("npc:01")], [])
-        store = NpcStore(SqlEventStore(
-            async_sessionmaker(session.bind, class_=AsyncSession, expire_on_commit=False)
-        ))
+        store = NpcStore(
+            SqlEventStore(
+                async_sessionmaker(session.bind, class_=AsyncSession, expire_on_commit=False)
+            )
+        )
         runtime, _ = await assemble_runtime(store)
         p = runtime.profiles["npc:01"]
         assert isinstance(p, NpcProfileData)

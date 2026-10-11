@@ -63,20 +63,14 @@ class BuildRuntime:
     def build_cost(self) -> int:
         return BUILD_COST_COINS
 
-    def start(
-        self, owner_id: str, pos: tuple[int, int], *, tick: int
-    ) -> WorldEvent | None:
+    def start(self, owner_id: str, pos: tuple[int, int], *, tick: int) -> WorldEvent | None:
         """2×2 选格 → started 事件（None=格不可走/已有工地）。"""
         if self._site is not None:
             return None
         # 行主序生成（y 优先——瓦片语义；schema _canonical_tiles 会再归一化为
         # sorted 元组序，此处序只影响生成序、不影响落库形）。
         tiles = sorted(
-            (
-                (pos[0] + dx, pos[1] + dy)
-                for dx in range(BUILD_TILES)
-                for dy in range(BUILD_TILES)
-            ),
+            ((pos[0] + dx, pos[1] + dy) for dx in range(BUILD_TILES) for dy in range(BUILD_TILES)),
         )
         if not all(self.tile_map.is_walkable(x, y) for x, y in tiles):
             return None

@@ -419,8 +419,10 @@ class TestDrainFailureFrame:
             # 其余（Call/f-string/Name-of-loop-var 等）不进表（照红）。
             literal_alias: set[str] = set()
             for node in ast.walk(tree):
-                if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(
-                    node.targets[0], ast.Name
+                if (
+                    isinstance(node, ast.Assign)
+                    and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Name)
                 ):
                     name = node.targets[0].id
                     value = node.value

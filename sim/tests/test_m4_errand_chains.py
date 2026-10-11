@@ -8,6 +8,7 @@
 - 完成判定：全步 accepted 且末步 action ∈ expected_actions。
 fixture 优先（§16 T5 原则）：假 LLM 脚本回放，零网络零真实调用。
 """
+
 from __future__ import annotations
 
 import pytest

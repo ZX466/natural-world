@@ -115,9 +115,12 @@ class TestMultiHookNoClobber:
         loop.drain_events()
 
         calls: list[str] = []
-        loop.attach_npc_runtime(lambda state, tick: (calls.append("npc"), [
-            npc_act_event(tick=tick, npc_id="a", action="wander", params={})
-        ])[1])
+        loop.attach_npc_runtime(
+            lambda state, tick: (
+                calls.append("npc"),
+                [npc_act_event(tick=tick, npc_id="a", action="wander", params={})],
+            )[1]
+        )
         loop.attach_npc_runtime(lambda state, tick: (calls.append("fire"), None)[1])
 
         loop.advance_frame(1.0)

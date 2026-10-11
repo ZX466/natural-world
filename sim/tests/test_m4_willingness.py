@@ -11,6 +11,7 @@
 - 纯函数管线：同输入同输出（C5）；不改 UtilityDecision 的动作选择——
   「最终都执行」由类型层保证（管线只产 WillingnessVerdict，不回写 scores）。
 """
+
 from __future__ import annotations
 
 import pytest
@@ -43,9 +44,11 @@ class TestWillingnessConflict:
         # 四档边界按 §10 表：0.3/0.6/0.8（输入×4 使单维 1.0×w=0.25 时总分恰好落界：
         # 权重 0.25/维，单维满值=0.25；要构造总分 s 用 四维=s/0.25 均摊）
         assert WILLINGNESS_BANDS == (0.3, 0.6, 0.8)
+
         def at(total: float) -> WillingnessVerdict:
             x = total  # 四维均摊 x*0.25*4 = x
             return willingness_conflict(x, x, x, x)
+
         assert at(0.29).band == 0
         assert at(0.30).band == 1
         assert at(0.59).band == 1

@@ -54,9 +54,7 @@ def install_error_handlers(app: FastAPI) -> None:
     """全局错误形归一：HTTPException / 未匹配 404 / 422 校验 → ProblemDetail。"""
 
     @app.exception_handler(StarletteHTTPException)
-    async def http_exc(
-        request: Request, exc: StarletteHTTPException
-    ) -> JSONResponse:
+    async def http_exc(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         detail = str(exc.detail)
         # 路由传机器码（/errors/... 开头）→ 同时用作 type；`机器码|人读详情`
         # 分段时 type 取码、detail 取人读段；否则按状态码映射
@@ -73,9 +71,7 @@ def install_error_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(RequestValidationError)
-    async def validation_exc(
-        request: Request, exc: RequestValidationError
-    ) -> JSONResponse:
+    async def validation_exc(request: Request, exc: RequestValidationError) -> JSONResponse:
         first = exc.errors()[0]
         loc = ".".join(str(x) for x in first["loc"][1:]) or "body"
         return JSONResponse(

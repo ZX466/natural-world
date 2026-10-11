@@ -102,9 +102,7 @@ class TestE1ProductionEmission:
                 triggered=frozenset(),
             )
         }
-        events = runtime.tick(
-            1, hidden_states=hidden, context_of=lambda _nid: "阴雨天"
-        )
+        events = runtime.tick(1, hidden_states=hidden, context_of=lambda _nid: "阴雨天")
         kinds = [e.event_type for e in events]
         assert EventKind.NPC_HIDDEN_EMERGE in kinds
         emerge_idx = kinds.index(EventKind.NPC_HIDDEN_EMERGE)

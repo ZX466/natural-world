@@ -8,6 +8,7 @@ B2 管线（sim/agent/will.py）已定 w₁-w₄ 合成与四档表现；本文�
   计划层语义，本批只钉「不拦截」；
 - 独白内容零元信息（冲突度数值/权重名不出现在 event payload）。
 """
+
 from __future__ import annotations
 
 import pytest
@@ -38,9 +39,7 @@ def _make_runtime(**kwargs) -> NpcRuntime:
             ),
         ]
     }
-    return NpcRuntime(
-        profiles=profiles, utility=UtilityModel(n_npc=len(profiles)), **kwargs
-    )
+    return NpcRuntime(profiles=profiles, utility=UtilityModel(n_npc=len(profiles)), **kwargs)
 
 
 @pytest.mark.t1

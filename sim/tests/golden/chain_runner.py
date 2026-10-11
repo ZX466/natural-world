@@ -8,6 +8,7 @@
 落地后的世界（跨决策状态存活的可测面）。
 fixture 优先：零 LLM、零网络；C5：同种子同链逐位可重放。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

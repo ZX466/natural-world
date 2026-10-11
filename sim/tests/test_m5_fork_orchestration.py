@@ -118,15 +118,14 @@ class TestOrchestrateLoadAnchor:
                 )
             ).scalar_one_or_none()
             parent_status = (
-                await session.execute(
-                    text("SELECT status FROM branches WHERE id = 'main'")
-                )
+                await session.execute(text("SELECT status FROM branches WHERE id = 'main'"))
             ).scalar_one()
         assert child_status == "active"
         assert parent_status == "abandoned"
 
     async def test_missing_anchor_fails_without_forking(self, session_factory):
         """定位失败 → 不进事务、不产生任何分支。"""
+
         async def preflush() -> None:
             pytest.fail("定位失败不得触发 preflush")
 
@@ -137,9 +136,7 @@ class TestOrchestrateLoadAnchor:
                 flush_in_flight=preflush,
             )
         async with session_factory() as session:
-            count = (
-                await session.execute(text("SELECT COUNT(*) FROM branches"))
-            ).scalar_one()
+            count = (await session.execute(text("SELECT COUNT(*) FROM branches"))).scalar_one()
         assert count == 1  # 只有 main
 
     async def test_fork_error_propagates_untouched(self, session_factory):
@@ -155,6 +152,7 @@ class TestOrchestrateLoadAnchor:
                 ),
                 {"ts": _time.time()},
             )
+
         async def preflush() -> None:
             return None
 
@@ -169,6 +167,7 @@ class TestOrchestrateLoadAnchor:
 class TestForkHeadOnlyStillHolds:
     async def test_fork_from_head_succeeds_directly(self, session_factory):
         """分叉点=父分支头部才可分叉（fork.py fail-closed）——本例是合法形态。"""
+
         async def preflush() -> None:
             return None
 

@@ -311,8 +311,7 @@ class TestSpeechNoSocialHierarchyNumbers:
         kinds = _content_kinds()
         for name in _speech_kinds():
             hit = sorted(
-                set(_payload_model(kinds[name]).model_fields)
-                & SOCIAL_HIERARCHY_FORBIDDEN_KEYS
+                set(_payload_model(kinds[name]).model_fields) & SOCIAL_HIERARCHY_FORBIDDEN_KEYS
             )
             if hit:
                 offenders.append(f"{name}:{hit}")

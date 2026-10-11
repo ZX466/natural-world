@@ -117,9 +117,7 @@ class TestSubSchemasAdded:
     def test_world_map_response_shape(self, schemas: dict) -> None:
         wm = schemas["WorldMapResponse"]
         assert set(wm["required"]) == {"w", "h", "tileset", "chunks"}
-        assert wm["properties"]["chunks"]["items"] == {
-            "$ref": "#/components/schemas/MapChunk"
-        }
+        assert wm["properties"]["chunks"]["items"] == {"$ref": "#/components/schemas/MapChunk"}
         chunk = schemas["MapChunk"]
         # M7（1.3）：ground_b64 加入（u16 小端地面层）
         assert set(chunk["required"]) == {"cx", "cy", "collision_b64", "ground_b64"}
@@ -145,8 +143,15 @@ class TestWsMemberFieldDiffs:
         }
         assert "combat" not in full["required"]
         assert set(full["required"]) == {
-            "v", "ws_seq", "channel", "type",
-            "map", "lights", "actors", "structures", "weather",
+            "v",
+            "ws_seq",
+            "channel",
+            "type",
+            "map",
+            "lights",
+            "actors",
+            "structures",
+            "weather",
             "time",  # M7（1.3）：时钟权威帧（R3）
         }
 
@@ -177,7 +182,8 @@ class TestWsMemberFieldDiffs:
         mono = schemas["MonologueMessage"]
         assert "reaction" not in mono["properties"]
         assert mono["properties"]["form"] == {
-            "type": "string", "enum": ["bubble", "thought", "plan"]
+            "type": "string",
+            "enum": ["bubble", "thought", "plan"],
         }
         assert "form" in mono["required"]
 
@@ -188,11 +194,15 @@ class TestWsMemberFieldDiffs:
         assert "accepted" not in props and "content" not in props
         assert props["injected"] == {"type": "boolean"}
         assert props["cue"]["enum"] == ["accepted", "hesitation", "complaint", "resistance"]
-        assert props["reaction_monologue"] == {
-            "$ref": "#/components/schemas/MonologueReaction"
-        }
+        assert props["reaction_monologue"] == {"$ref": "#/components/schemas/MonologueReaction"}
         assert set(fb["required"]) == {
-            "v", "ws_seq", "channel", "type", "injected", "cue", "reaction_monologue",
+            "v",
+            "ws_seq",
+            "channel",
+            "type",
+            "injected",
+            "cue",
+            "reaction_monologue",
         }
 
     def test_combat_event_fields_replaced(self, schemas: dict) -> None:
@@ -205,8 +215,14 @@ class TestWsMemberFieldDiffs:
         assert props["projectiles"]["items"] == {"$ref": "#/components/schemas/Projectile"}
         assert props["hits"]["items"] == {"$ref": "#/components/schemas/Hit"}
         assert set(ce["required"]) == {
-            "v", "ws_seq", "channel", "type",
-            "exchange", "rtoken", "posture_visual", "exchange_resolved",
+            "v",
+            "ws_seq",
+            "channel",
+            "type",
+            "exchange",
+            "rtoken",
+            "posture_visual",
+            "exchange_resolved",
         }
 
     def test_timescale_mode_active_note_no_rate(self, schemas: dict) -> None:
@@ -250,7 +266,13 @@ class TestWsMemberFieldDiffs:
         err = schemas["WsErrorMessage"]
         assert err["properties"]["ref"] == {"type": "string"}
         assert set(err["required"]) == {
-            "v", "ws_seq", "channel", "type", "ref", "code", "message",
+            "v",
+            "ws_seq",
+            "channel",
+            "type",
+            "ref",
+            "code",
+            "message",
         }
 
 
@@ -339,8 +361,16 @@ class TestRegression:
         snap = schemas["FullSnapshotMessage"]
         assert "combat" not in snap["required"]
         assert set(snap["properties"]) == {
-            "v", "ws_seq", "channel", "type",
-            "map", "lights", "actors", "structures", "weather", "combat",
+            "v",
+            "ws_seq",
+            "channel",
+            "type",
+            "map",
+            "lights",
+            "actors",
+            "structures",
+            "weather",
+            "combat",
             "time",  # M7（1.3）
             "fog",  # D17（1.6）：视觉雾全集（可选键）
         }

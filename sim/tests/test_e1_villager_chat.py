@@ -36,9 +36,7 @@ def _two_villagers_adjacent() -> WorldState:
 def test_arrival_produces_chat_once():
     state = _two_villagers_adjacent()
     rt = _FakeRuntime([npc_act_event(tick=0, npc_id="villager_01", action="request_chat")])
-    events = npc_events_for_tick(
-        rt, state, 100, Pathfinder(_TOWN_MAP()), seed=42, chat_last={}
-    )
+    events = npc_events_for_tick(rt, state, 100, Pathfinder(_TOWN_MAP()), seed=42, chat_last={})
     chats = [e for e in events if e.event_type.value == "npc.chat"]
     assert len(chats) == 1
     assert chats[0].payload["npc_id"] == "villager_01"

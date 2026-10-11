@@ -149,9 +149,7 @@ class TestBranchesRngStateSchema:
 
 @pytest.mark.t1
 class TestForkPersistsRngState:
-    async def test_state_written_into_child_branch_row(
-        self, store, session: AsyncSession
-    ) -> None:
+    async def test_state_written_into_child_branch_row(self, store, session: AsyncSession) -> None:
         await store.append(PARENT, [_lod(1), _lod(2)])
         _reg, _cache, blob = _seeded_state()
 
@@ -225,9 +223,7 @@ class TestForkPersistsRngState:
             )
         assert await session.get(Branch, CHILD) is None, "回滚后仍留了子分支行"
 
-    async def test_continuous_fork_chain_carries_state(
-        self, store, session: AsyncSession
-    ) -> None:
+    async def test_continuous_fork_chain_carries_state(self, store, session: AsyncSession) -> None:
         """连续分叉：子分支的状态可作为下一次 fork 的输入（b2 的核心好处）。"""
         await store.append(PARENT, [_lod(1), _lod(2)])
         _reg, _cache, blob = _seeded_state()
@@ -300,9 +296,7 @@ class TestForkPersistsRngState:
 
 
 @pytest.mark.t1
-async def test_fork_still_touches_no_events_or_memories(
-    store, session: AsyncSession
-) -> None:
+async def test_fork_still_touches_no_events_or_memories(store, session: AsyncSession) -> None:
     """0009 只加一列：事件与语料仍零改动（裁 6 (c) / C6 口径不变）。"""
     await store.append(PARENT, [_lod(1), _lod(2)])
     session.add(
@@ -318,13 +312,9 @@ async def test_fork_still_touches_no_events_or_memories(
         )
     )
     await session.commit()
-    before_events = ((await session.execute(select(Event.branch_id, Event.seq))).all())
+    before_events = (await session.execute(select(Event.branch_id, Event.seq))).all()
     before_mem = (
-        (
-            await session.execute(
-                select(NpcMemory.entry_id).where(NpcMemory.branch_id == PARENT)
-            )
-        )
+        (await session.execute(select(NpcMemory.entry_id).where(NpcMemory.branch_id == PARENT)))
         .scalars()
         .all()
     )
@@ -339,13 +329,9 @@ async def test_fork_still_touches_no_events_or_memories(
         preflush=_noop_preflush,
         rng_state=blob,
     )
-    after_events = ((await session.execute(select(Event.branch_id, Event.seq))).all())
+    after_events = (await session.execute(select(Event.branch_id, Event.seq))).all()
     after_parent_mem = (
-        (
-            await session.execute(
-                select(NpcMemory.entry_id).where(NpcMemory.branch_id == PARENT)
-            )
-        )
+        (await session.execute(select(NpcMemory.entry_id).where(NpcMemory.branch_id == PARENT)))
         .scalars()
         .all()
     )

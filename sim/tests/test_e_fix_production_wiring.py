@@ -4,7 +4,6 @@
 用反射检查装配形而非起真 lifespan（lifespan 依赖 DB/世界初始化，单测不起）。
 """
 
-
 from pathlib import Path
 
 _MAIN = Path("sim/api/main.py").read_text(encoding="utf-8")
@@ -26,17 +25,13 @@ def test_driver_construction_passes_combat_provider():
     assert "combat_provider" in block, (
         "ChenmoDriver 构造缺 combat_provider——attack 生产不可达（review C2）"
     )
-    assert "combat_ledger" in block or "CombatLedger" in _MAIN, (
-        "main.py 无 CombatLedger 实例"
-    )
+    assert "combat_ledger" in block or "CombatLedger" in _MAIN, "main.py 无 CombatLedger 实例"
 
 
 def test_npc_events_for_tick_call_passes_retell_last():
     """C3：生产调用点必须传 retell_last（学舌通路）。"""
     lines = _MAIN.splitlines()
-    start = next(
-        i for i, ln in enumerate(lines) if "npc_events_for_tick(" in ln
-    )
+    start = next(i for i, ln in enumerate(lines) if "npc_events_for_tick(" in ln)
     block = "\n".join(lines[start : start + 14])
     assert "retell_last" in block, (
         "npc_events_for_tick 生产调用缺 retell_last——retell 死路（review C3）"

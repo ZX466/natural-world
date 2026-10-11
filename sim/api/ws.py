@@ -143,9 +143,7 @@ class ControlState:
     def effective_speed(self) -> int:
         """给协议面用的刻度读数：未暂停=当前倍率，暂停=恢复后倍率（枚举无 0）。"""
         speed = self.speed_before_pause if self.paused else self.current_clock_speed()
-        return int(speed) if int(speed) in ALLOWED_CONTROL_SPEEDS else int(
-            DEFAULT_CONTROL_SPEED
-        )
+        return int(speed) if int(speed) in ALLOWED_CONTROL_SPEEDS else int(DEFAULT_CONTROL_SPEED)
 
     def current_clock_speed(self) -> float:
         """记忆值缺省时给 1.0（连接刚建、还没按过键）。"""
@@ -187,6 +185,7 @@ _LEGACY_CONTROL = ControlState()
 def reset_legacy_control() -> None:
     """测试辅助：重置兼容用兜底控制态（每用例隔离，防跨用例污染）。"""
     _LEGACY_CONTROL.reset()
+
 
 # ---------------------------------------------------------------------------
 # W6 WS 鉴权（codex M1 终审前置项；cline P04 结论：零新依赖）
@@ -467,12 +466,7 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
 
 def _fog_revealed_payload(chunks: set[tuple[int, int]]) -> dict[str, Any]:
     """揭示集 → 帧形（预研稿 §3.3）：{"revealed": [{cx, cy}, …]}，字典序确定（C5）。"""
-    return {
-        "revealed": [
-            {"cx": cx, "cy": cy}
-            for cx, cy in sorted(chunks)
-        ]
-    }
+    return {"revealed": [{"cx": cx, "cy": cy} for cx, cy in sorted(chunks)]}
 
 
 # ---------------------------------------------------------------------------
@@ -649,9 +643,7 @@ def monologue_events_to_frames(events: list[WorldEvent]) -> list[tuple[str, dict
             payload = e.payload
             form = str(payload["form"])
             name = _display_name_of(e.actor_id) if form == "bubble" else None
-            frames.append(
-                (e.actor_id, monologue_payload(form, str(payload["content"]), name=name))
-            )
+            frames.append((e.actor_id, monologue_payload(form, str(payload["content"]), name=name)))
         elif e.event_type is EventKind.NPC_CHAT:
             payload = e.payload
             frames.append(
@@ -898,8 +890,10 @@ def _rememberable_speed(loop: TickLoop) -> float:
     记忆值也只可能是 {1,4,16} 之一 ⇒ `control_ack.speed` 结构上永不越枚举。
     """
     current = loop.clock.speed
-    return float(current) if current in (float(s) for s in ALLOWED_CONTROL_SPEEDS) else (
-        DEFAULT_CONTROL_SPEED
+    return (
+        float(current)
+        if current in (float(s) for s in ALLOWED_CONTROL_SPEEDS)
+        else (DEFAULT_CONTROL_SPEED)
     )
 
 
@@ -971,9 +965,7 @@ def fast_forward_done_frames(
     （与读档同一措辞口径）。
     """
     return [
-        _control_ack(
-            "fast_forward", speed=control.effective_speed(), paused=control.paused
-        ),
+        _control_ack("fast_forward", speed=control.effective_speed(), paused=control.paused),
         snapshot_payload(loop, tile_map),
     ]
 

@@ -10,6 +10,7 @@
   内，不破 messages[0] 前缀缓存分界）。
 纯函数、无 IO（store 查询归调用方）；C5：同输入同输出（同分按行 id 稳定序）。
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

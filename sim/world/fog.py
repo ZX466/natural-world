@@ -13,6 +13,7 @@
   消费方只问 is_revealed/count，不依赖迭代序（C5：同输入同输出）。
 不做：视野遮挡计算（LOS 在感知域 propagation.py）、逐 tile 迷雾（量级不符）。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

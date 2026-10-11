@@ -186,7 +186,10 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: gen:protocol 漂移守卫（shared/protocol.ts 必须与 openapi.json 一致）
-        run: node tools/gen-protocol.ts --check
+        # 走 npm script（package.json 自带 ../tools/ 前缀）——本 job working-directory
+        # 是 client/，裸调 `node tools/...` 会解析成 client/tools/（不存在，2026-10-11
+        # CI 实测 20s 即红）；npm script 路径与本地开发完全同路。
+        run: npm run gen:protocol:check
 
       - name: tsc --noEmit（类型）
         run: npx tsc --noEmit

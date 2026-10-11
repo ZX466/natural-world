@@ -56,9 +56,7 @@ class TestFogRevealEvent:
         state = bus.apply(
             state, world_create_event(tick=0, seed=42, entity_ids=("chenmo",)), ctx
         ).state
-        result = bus.apply(
-            state, fog_reveal_event(tick=1, chunks=((3, 2),)), ctx
-        )
+        result = bus.apply(state, fog_reveal_event(tick=1, chunks=((3, 2),)), ctx)
         assert result.state == state, "迷雾不进世界态（裁 40-4：事件即真相）"
 
 
@@ -147,9 +145,7 @@ class TestWsProjection:
         from sim.core.tick import TickLoop
         from sim.core.world import WorldState, build_default_bus
 
-        loop = TickLoop(
-            clock=GameClock(), bus=build_default_bus(), state=WorldState(world_seed=42)
-        )
+        loop = TickLoop(clock=GameClock(), bus=build_default_bus(), state=WorldState(world_seed=42))
         # 无新揭示 → 无 fog 键
         p1 = delta_payload(loop, {"chenmo"})
         assert "fog" not in p1
@@ -168,15 +164,13 @@ class TestWsProjection:
         from sim.core.tick import TickLoop
         from sim.core.world import WorldState, build_default_bus
 
-        loop = TickLoop(
-            clock=GameClock(), bus=build_default_bus(), state=WorldState(world_seed=42)
-        )
+        loop = TickLoop(clock=GameClock(), bus=build_default_bus(), state=WorldState(world_seed=42))
         loop.enqueue(world_create_event(tick=0, seed=42, entity_ids=("chenmo",)))
         loop.fog_seen.update({(0, 0), (1, 0)})  # 快照真源=已揭示全集（fog_seen）
         snap = snapshot_payload(loop, _fallback_map())
-        assert snap["fog"] == {
-            "revealed": [{"cx": 0, "cy": 0}, {"cx": 1, "cy": 0}]
-        }, "快照带全集（重连/读档重同步）"
+        assert snap["fog"] == {"revealed": [{"cx": 0, "cy": 0}, {"cx": 1, "cy": 0}]}, (
+            "快照带全集（重连/读档重同步）"
+        )
 
     def test_delta_fog_sorted_deterministic(self) -> None:
         """revealed 排序确定（(cx,cy) 字典序——C5，不依赖 set 迭代序）。"""
@@ -185,9 +179,7 @@ class TestWsProjection:
         from sim.core.tick import TickLoop
         from sim.core.world import WorldState, build_default_bus
 
-        loop = TickLoop(
-            clock=GameClock(), bus=build_default_bus(), state=WorldState(world_seed=42)
-        )
+        loop = TickLoop(clock=GameClock(), bus=build_default_bus(), state=WorldState(world_seed=42))
         loop.context.fog_revealed.update({(3, 1), (0, 2), (1, 0)})
         a = delta_payload(loop, set())["fog"]["revealed"]
         loop.context.fog_revealed.update({(1, 0), (3, 1), (0, 2)})

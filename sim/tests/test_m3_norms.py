@@ -6,6 +6,7 @@
 - 挂载：assembler [规矩] 段在 messages[1] 内（[记忆] 之后 [处境] 之前），
   不动 messages[0] 身份锚（前缀缓存分界不变，C06-④ 契约）。
 """
+
 from __future__ import annotations
 
 import pytest
@@ -137,9 +138,7 @@ class TestNormsSelectionBoundary:
         from types import SimpleNamespace
         from typing import cast
 
-        return cast(
-            Knowledge, SimpleNamespace(id=rid, confidence=conf, subject_npc_id=subject)
-        )
+        return cast(Knowledge, SimpleNamespace(id=rid, confidence=conf, subject_npc_id=subject))
 
     @pytest.mark.t1
     def test_select_sorted_by_confidence_desc(self) -> None:

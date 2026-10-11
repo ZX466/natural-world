@@ -9,6 +9,7 @@ events / memory / knowledge（runtime.tick 已按 ACTION_PAYLOAD_KEYS 过滤 par
 本文件把「死路」钉死为可回归断言：三条出路面逐面扫描 BIAS_NAMES 词面与
 breakdown/scores 键名，任何一条出现即红（构造隔离失效 = 元信息泄漏进戏内）。
 """
+
 from __future__ import annotations
 
 import pytest

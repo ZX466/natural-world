@@ -38,9 +38,7 @@ class ChatLedger:
         if kind not in _RULES:
             raise ValueError(f"未知互动类型: {kind!r}")
         field, delta = _RULES[kind]
-        row = self._relations.setdefault(owner, {}).setdefault(
-            other, dict.fromkeys(_FIELDS, 0.0)
-        )
+        row = self._relations.setdefault(owner, {}).setdefault(other, dict.fromkeys(_FIELDS, 0.0))
         row[field] = min(1.0, max(0.0, row[field] + delta))
 
     def remember(self, npc_id: str, content: str, *, tick: int) -> None:

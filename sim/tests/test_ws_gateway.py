@@ -23,9 +23,7 @@ from sim.world.map import CHUNK_SIZE, Chunk, TileMap
 from sim.world.pathfinding import Pathfinder
 
 
-def _reply(
-    raw: dict, loop: TickLoop, pf: Pathfinder, control: ControlState | None = None
-) -> dict:
+def _reply(raw: dict, loop: TickLoop, pf: Pathfinder, control: ControlState | None = None) -> dict:
     """handle_client_message 的单帧窄化包装（M5-K3 返回类型放宽为 dict|list|None）。
 
     既有测试只消费单帧场景——统一窄化取首帧（单帧路径与原函数行为一致）；
@@ -335,9 +333,7 @@ class TestSetControl:
     def test_pause_then_resume_restores_previous_speed(self, loop: TickLoop, pf: Pathfinder):
         """§7 #2：pause → speed=0 并存暂停前倍率；resume → 恢复该值。"""
         loop.clock.set_speed(4.0)
-        paused = _reply(
-            {"type": "set_control", "channel": "control", "action": "pause"}, loop, pf
-        )
+        paused = _reply({"type": "set_control", "channel": "control", "action": "pause"}, loop, pf)
         assert paused is not None
         assert paused["type"] == "control_ack"
         assert paused["action"] == "pause"
@@ -358,9 +354,7 @@ class TestSetControl:
         handle_client_message(
             {"type": "set_control", "channel": "control", "action": "pause"}, loop, pf
         )
-        reply = _reply(
-            {"type": "set_control", "channel": "control", "action": "resume"}, loop, pf
-        )
+        reply = _reply({"type": "set_control", "channel": "control", "action": "resume"}, loop, pf)
         assert reply is not None
         assert reply["speed"] == 1
         assert loop.clock.speed == 1.0
@@ -401,9 +395,7 @@ class TestSetControl:
 
     def test_unknown_action_rejected(self, loop: TickLoop, pf: Pathfinder):
         """§7 #5：action 非三值 → bad_action。"""
-        reply = _reply(
-            {"type": "set_control", "channel": "control", "action": "nope"}, loop, pf
-        )
+        reply = _reply({"type": "set_control", "channel": "control", "action": "nope"}, loop, pf)
         assert reply is not None
         assert reply["type"] == "error"
         assert reply["ref"] == "set_control"
@@ -424,9 +416,7 @@ class TestSetControl:
             {},
         ]
         for extra in cases:
-            reply = _reply(
-                {"type": "set_control", "channel": "control", **extra}, loop, pf
-            )
+            reply = _reply({"type": "set_control", "channel": "control", **extra}, loop, pf)
             assert reply is not None, f"set_control{extra} 不得静默"
 
     def test_extra_speed_on_pause_tolerated(self, loop: TickLoop, pf: Pathfinder):
@@ -521,9 +511,7 @@ class TestPlayerImpulse:
     def test_missing_or_non_string_text_rejected(self, loop: TickLoop, pf: Pathfinder):
         """§2.3：text 缺失/非字符串 → bad_impulse。"""
         for payload in ({}, {"text": 42}, {"text": None}, {"text": ["去"]}):
-            reply = _reply(
-                {"type": "player_impulse", "channel": "control", **payload}, loop, pf
-            )
+            reply = _reply({"type": "player_impulse", "channel": "control", **payload}, loop, pf)
             assert reply is not None and reply["code"] == "bad_impulse", f"{payload} 应被拒"
 
     def test_preset_non_string_tolerated(self, loop: TickLoop, pf: Pathfinder):
@@ -545,9 +533,7 @@ class TestPlayerImpulse:
 
     def test_does_not_touch_world_state(self, loop: TickLoop, pf: Pathfinder):
         """§2.4『不要做的事』：handler 不直接改 Agent 状态（写路径唯一 = apply）。"""
-        before = {
-            eid: (e.pos, e.path) for eid, e in loop.state.entities.items()
-        }
+        before = {eid: (e.pos, e.path) for eid, e in loop.state.entities.items()}
         handle_client_message(
             {"type": "player_impulse", "channel": "control", "text": "我想出门"}, loop, pf
         )
@@ -556,9 +542,7 @@ class TestPlayerImpulse:
 
     def test_error_message_is_in_character(self, loop: TickLoop, pf: Pathfinder):
         """anchors-api.md:250 红线：error message 戏内第一人称、无系统措辞。"""
-        reply = _reply(
-            {"type": "player_impulse", "channel": "control", "text": ""}, loop, pf
-        )
+        reply = _reply({"type": "player_impulse", "channel": "control", "text": ""}, loop, pf)
         assert reply is not None
         assert reply["code"] == "bad_impulse"
         assert reply["message"]  # 非空
@@ -631,9 +615,7 @@ class TestLoadAnchor:
     def test_bad_anchor_id_shape(self, loop: TickLoop, pf: Pathfinder, anchors: set[str]):
         """§3.3：anchor_id 缺失/非字符串 → bad_anchor。"""
         for payload in ({}, {"anchor_id": 42}, {"anchor_id": None}, {"anchor_id": ["x"]}):
-            reply = _reply(
-                {"type": "load_anchor", "channel": "session", **payload}, loop, pf
-            )
+            reply = _reply({"type": "load_anchor", "channel": "session", **payload}, loop, pf)
             assert reply is not None and reply["code"] == "bad_anchor", f"{payload} 应被拒"
 
     def test_underscore_prefix_not_rejected(
@@ -743,9 +725,7 @@ class TestUnregisterAnchorId:
     本组钉子锁「注册→摘除→失配」三态与成对可逆性；**CRUD 调用点归 Claude 域**。
     """
 
-    def test_register_then_unregister_makes_load_anchor_fail(
-        self, loop: TickLoop, pf: Pathfinder
-    ):
+    def test_register_then_unregister_makes_load_anchor_fail(self, loop: TickLoop, pf: Pathfinder):
         from sim.api import ws as ws_mod
         from sim.api.ws import frames_of, register_anchor_id, unregister_anchor_id
 

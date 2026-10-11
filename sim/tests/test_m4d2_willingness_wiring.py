@@ -107,9 +107,7 @@ class TestWillingnessWiring:
         last: dict[str, int] = {}
 
         def bubbles_of(events, npc_id):
-            return [
-                e for e in _bubbles(events) if str(e.payload.get("npc_id", "")) == npc_id
-            ]
+            return [e for e in _bubbles(events) if str(e.payload.get("npc_id", "")) == npc_id]
 
         batch1 = npc_events_for_tick(
             runtime=runtime, state=state, tick=1000, pathfinder=pf, seed=42, monologue_last=last

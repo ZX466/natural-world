@@ -142,9 +142,7 @@ def test_recall_orders_by_recency(pipeline: MemoryWritePipeline) -> None:
     assert len(hits) == 2
     assert hits[0].entry.content.startswith("今早")
     fresh = hits[0].entry
-    assert hits[0].score == pytest.approx(
-        fresh.importance * 0.5 ** ((86_400 - 40_000) / 86_400)
-    )
+    assert hits[0].score == pytest.approx(fresh.importance * 0.5 ** ((86_400 - 40_000) / 86_400))
 
 
 def test_recall_top_k(pipeline: MemoryWritePipeline) -> None:

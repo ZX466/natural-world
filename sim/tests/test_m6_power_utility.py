@@ -45,12 +45,12 @@ class TestPowerBiasWiring:
         full = utility_scores_matrix(profiles, model, power=[1.0, -1.0])
         for action in ("request_chat", "wander"):
             col = model.action_index[action]
-            assert np.isclose(
-                float(full[0, col] - base[0, col]), POWER_MAX_BIAS, atol=1e-6
-            ), f"{action} 列偏置 ≠ +{POWER_MAX_BIAS}：{full[0, col] - base[0, col]}"
-            assert np.isclose(
-                float(full[1, col] - base[1, col]), -POWER_MAX_BIAS, atol=1e-6
-            ), f"{action} 列偏置 ≠ -{POWER_MAX_BIAS}"
+            assert np.isclose(float(full[0, col] - base[0, col]), POWER_MAX_BIAS, atol=1e-6), (
+                f"{action} 列偏置 ≠ +{POWER_MAX_BIAS}：{full[0, col] - base[0, col]}"
+            )
+            assert np.isclose(float(full[1, col] - base[1, col]), -POWER_MAX_BIAS, atol=1e-6), (
+                f"{action} 列偏置 ≠ -{POWER_MAX_BIAS}"
+            )
 
     def test_survival_columns_untouched(self) -> None:
         """生存列（eat/rest）零偏置——权力不改变生存紧迫度语义。"""
@@ -60,9 +60,9 @@ class TestPowerBiasWiring:
         full = utility_scores_matrix(profiles, model, power=[1.0])
         for action in ("eat", "rest"):
             col = model.action_index[action]
-            assert np.isclose(
-                float(full[0, col] - base[0, col]), 0.0, atol=1e-7
-            ), f"{action} 列被权力动了（饿不死权力低的语义破了）"
+            assert np.isclose(float(full[0, col] - base[0, col]), 0.0, atol=1e-7), (
+                f"{action} 列被权力动了（饿不死权力低的语义破了）"
+            )
 
     def test_power_clamped_to_dimension(self) -> None:
         """越界 power 值截到 [-1,1]（快照外值不混入打分——A7 量纲口径）。"""
@@ -93,9 +93,7 @@ class TestPowerBiasWiring:
         （P5 口径警告：本夹具体熵 0.68-0.88 与 P10 合成面 2.52/2.41 不同口径）。
         """
         rng = np.random.default_rng(42)
-        profiles = [
-            _profile(f"npc{i}", hunger=float(rng.uniform(0.1, 0.9))) for i in range(50)
-        ]
+        profiles = [_profile(f"npc{i}", hunger=float(rng.uniform(0.1, 0.9))) for i in range(50)]
         model = UtilityModel(n_npc=50, seed=7)
         base = evaluate_batch(profiles, model, power=None)
         full = evaluate_batch(profiles, model, power=[1.0] * 50)

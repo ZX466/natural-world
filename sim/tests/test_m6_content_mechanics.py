@@ -56,10 +56,7 @@ class TestEcologyPhase:
     def test_phase_cycles_over_period(self) -> None:
         """相位按周期循环：一个周期内三档全出现，跨周期同位同相（比标签不比 tick）。"""
         span = ECOLOGY_PERIOD_DAYS * TICKS_PER_GAME_DAY
-        seen = {
-            ecology_phase_at(t).phase
-            for t in range(0, span, TICKS_PER_GAME_DAY)
-        }
+        seen = {ecology_phase_at(t).phase for t in range(0, span, TICKS_PER_GAME_DAY)}
         assert seen == {PHASE_BLOOM, PHASE_PLATEAU, PHASE_SCARCE}, f"三档未全出现：{seen}"
         period_ticks = ECOLOGY_PERIOD_DAYS * TICKS_PER_GAME_DAY
         a = ecology_phase_at(0)
@@ -226,11 +223,13 @@ class TestFogFold:
     def test_fold_replay_deterministic(self) -> None:
         """C5：同事件序列两次重放 ⇒ 同揭示集（T2 逐位口径）。"""
         batches = [((0, 0),), ((1, 1), (0, 0)), ((2, 2),)]
+
         def replay() -> FogOfWar:
             fog = FogOfWar()
             for b in batches:
                 fog = fold_fog_reveal(fog, b)
             return fog
+
         assert replay() == replay()
 
 

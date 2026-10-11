@@ -291,8 +291,7 @@ ERRAND_CHAINS: tuple[ErrandChain, ...] = (
         "chenmo",
         (
             '{"action": "move_to", "target_pos": [20, 20], "reason": "先去集市看看木料的价"}',
-            '{"action": "take", "target_id": "@actor", '
-            '"reason": "价合适就买下，栅栏等米下锅呢"}',
+            '{"action": "take", "target_id": "@actor", "reason": "价合适就买下，栅栏等米下锅呢"}',
             '{"action": "move_to", "target_pos": [6, 7], "reason": "料备齐了，扛回去修栅栏"}',
         ),
         frozenset({"take", "move_to"}),

@@ -174,7 +174,10 @@ def step_fires(
             continue
         stepped.append(
             FireCell(
-                x=cell.x, y=cell.y, fire_id=cell.fire_id, fuel_ticks=remain,
+                x=cell.x,
+                y=cell.y,
+                fire_id=cell.fire_id,
+                fuel_ticks=remain,
                 ignited_tick=cell.ignited_tick,
             )
         )

@@ -355,9 +355,7 @@ class TestMaterializationRoute:
         if body["ready"] is False:
             assert body["reason"] in MATERIALIZATION_REASONS
         else:
-            assert body["reason"] is None, (
-                f"ready=true 却带原因码（骗人组合）：{body}"
-            )
+            assert body["reason"] is None, f"ready=true 却带原因码（骗人组合）：{body}"
 
     def test_route_does_not_shadow_single_get(self, client: TestClient, world_db: Path) -> None:
         """两段路径不遮蔽一段路径（`/{anchor_id}` 仍回五键白名单）。"""

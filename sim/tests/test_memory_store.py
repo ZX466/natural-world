@@ -256,9 +256,7 @@ class TestBranchIsolationMemorySide:
             assert _write(p_main, "主线记忆：药铺盘点").accepted
             assert _write(p_fork, "分叉线记忆：一场大火").accepted
             # 各分支只读回自己的行（写读同分支对称）
-            assert [e.content for e in main_store.iter_visible("chenmo")] == [
-                "主线记忆：药铺盘点"
-            ]
+            assert [e.content for e in main_store.iter_visible("chenmo")] == ["主线记忆：药铺盘点"]
             assert [e.content for e in fork_store.iter_visible("chenmo")] == [
                 "分叉线记忆：一场大火"
             ]

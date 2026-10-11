@@ -166,9 +166,7 @@ def test_willingness_hotpath_50npc(benchmark, band: int) -> None:
             expr = willingness_expression(verdict, npc_name=nid)
             if expr is not None:
                 events.append(
-                    npc_monologue_event(
-                        tick=1, npc_id=nid, form="thought", content=expr.monologue
-                    )
+                    npc_monologue_event(tick=1, npc_id=nid, form="thought", content=expr.monologue)
                 )
         return events
 

@@ -83,6 +83,7 @@ def _cooldown_ticks(npc_id: str) -> int:
     span = int.from_bytes(digest[0:4], "big") % _MONOLOGUE_COOLDOWN_SPAN_TICKS
     return _MONOLOGUE_COOLDOWN_MIN_TICKS + span
 
+
 # ---------------------------------------------------------------------------
 # 动作目的地（批次 B 内容面；坐标须在 linhe-town.json 可走格上）
 # ---------------------------------------------------------------------------
@@ -106,11 +107,11 @@ _SITE_SCATTER_RADIUS = 4
 #: 五片区锚点（build_town.py 96×96 布局同源，锚点自身必须可走）：
 #: 中心镇集 / 西村 / 东村 / 南村 / 北村——每区一宅（rest=自家门前）。
 HOME_BASES: tuple[tuple[int, int], ...] = (
-    (28, 42),   # 中心镇集（药铺/食摊一带）
-    (14, 68),   # 西村（西村宅前）
-    (82, 38),   # 东村（东村宅前，水塘上方）
-    (46, 86),   # 南村（南村宅前，农田带）
-    (78, 75),   # 北村（北村宅前，水塘下方）
+    (28, 42),  # 中心镇集（药铺/食摊一带）
+    (14, 68),  # 西村（西村宅前）
+    (82, 38),  # 东村（东村宅前，水塘上方）
+    (46, 86),  # 南村（南村宅前，农田带）
+    (78, 75),  # 北村（北村宅前，水塘下方）
 )
 
 #: 领地内散步半径（曼哈顿）：闲逛只在本人片区 ±R 内——「一部分区域乱走」
@@ -146,9 +147,7 @@ def _home_digest(nid: str) -> int:
     return int.from_bytes(_D4(f"home-base:{nid}".encode()).digest()[:4], "big")
 
 
-_sorted_ids = sorted(
-    (_home_digest(f"villager_{i:02d}"), f"villager_{i:02d}") for i in range(1, 51)
-)
+_sorted_ids = sorted((_home_digest(f"villager_{i:02d}"), f"villager_{i:02d}") for i in range(1, 51))
 _TERRITORY_ORDER = {
     nid: (rank // _DISTRICT_SIZES) % len(HOME_BASES)
     for rank, (_digest, nid) in enumerate(_sorted_ids)
@@ -160,25 +159,25 @@ _TERRITORY_ORDER = {
 #: work=南村农田带（农活集中在南村，其余区走田埂路去——劳作是跨街的，
 #: 去程也是「在片区间活动」的戏内图景）。
 _TERRITORY_EAT: dict[tuple[int, int], tuple[int, int]] = {
-    (28, 42): (30, 46),   # 中心镇集：食摊
-    (14, 68): (20, 62),   # 西村：十字路西南口
-    (82, 38): (70, 38),   # 东村：村口路旁（D18：本区吃饭，不再走去镇集）
-    (46, 86): (40, 80),   # 南村：农田带路旁
-    (78, 75): (70, 72),   # 北村：村口（D18：本区吃饭，不再走去镇集）
+    (28, 42): (30, 46),  # 中心镇集：食摊
+    (14, 68): (20, 62),  # 西村：十字路西南口
+    (82, 38): (70, 38),  # 东村：村口路旁（D18：本区吃饭，不再走去镇集）
+    (46, 86): (40, 80),  # 南村：农田带路旁
+    (78, 75): (70, 72),  # 北村：村口（D18：本区吃饭，不再走去镇集）
 }
 _TERRITORY_REST: dict[tuple[int, int], tuple[int, int]] = {
-    (28, 42): (28, 41),   # 中心区 → 中心住宅门前
-    (14, 68): (14, 67),   # 西村 → 西村宅门前
-    (82, 38): (82, 37),   # 东村 → 东村宅门前
-    (46, 86): (48, 85),   # 南村 → 南村宅门前
-    (78, 75): (78, 73),   # 北村 → 北村宅门前
+    (28, 42): (28, 41),  # 中心区 → 中心住宅门前
+    (14, 68): (14, 67),  # 西村 → 西村宅门前
+    (82, 38): (82, 37),  # 东村 → 东村宅门前
+    (46, 86): (48, 85),  # 南村 → 南村宅门前
+    (78, 75): (78, 73),  # 北村 → 北村宅门前
 }
 _TERRITORY_WORK: dict[tuple[int, int], tuple[int, int]] = {
-    (28, 42): (26, 76),   # 中心区 → 农田北缘
-    (14, 68): (26, 76),   # 西村 → 农田北缘
-    (82, 38): (26, 76),   # 东村 → 农田北缘
-    (46, 86): (26, 80),   # 南村 → 农田心（就近）
-    (78, 75): (26, 76),   # 北村 → 农田北缘
+    (28, 42): (26, 76),  # 中心区 → 农田北缘
+    (14, 68): (26, 76),  # 西村 → 农田北缘
+    (82, 38): (26, 76),  # 东村 → 农田北缘
+    (46, 86): (26, 80),  # 南村 → 农田心（就近）
+    (78, 75): (26, 76),  # 北村 → 农田北缘
 }
 
 #: D14：动作 → 呈现用 anim 词（前端姿势行选择；villager 素材行序
@@ -222,8 +221,11 @@ def _scatter_near(
             if abs(dx) + abs(dy) > _SITE_SCATTER_RADIUS:
                 continue
             x, y = sx + dx, sy + dy
-            if 0 <= x < pathfinder.tile_map.width and 0 <= y < pathfinder.tile_map.height \
-                    and pathfinder.tile_map.is_walkable(x, y):
+            if (
+                0 <= x < pathfinder.tile_map.width
+                and 0 <= y < pathfinder.tile_map.height
+                and pathfinder.tile_map.is_walkable(x, y)
+            ):
                 candidates.append((x, y))
     if not candidates:
         return site  # 锚点兜底（理论不可达：站点坐标自身必可走）
@@ -271,8 +273,11 @@ def wander_near(
             if abs(dx) + abs(dy) > _WANDER_RADIUS or (dx == 0 and dy == 0):
                 continue
             x, y = hx + dx, hy + dy
-            if 0 <= x < pathfinder.tile_map.width and 0 <= y < pathfinder.tile_map.height \
-                    and pathfinder.tile_map.is_walkable(x, y):
+            if (
+                0 <= x < pathfinder.tile_map.width
+                and 0 <= y < pathfinder.tile_map.height
+                and pathfinder.tile_map.is_walkable(x, y)
+            ):
                 candidates.append((x, y))
     if not candidates:
         return None
@@ -354,12 +359,8 @@ def _resolve_goal(
     if action == "request_chat":
         target = _chat_target_of(state, npc_id, tick=tick)
         if target is None:
-            return wander_near(
-                home_base_of(npc_id), npc_id, pathfinder, seed=seed, tick=tick
-            )
-        return _scatter_near(
-            state.entities[target].pos, npc_id, pathfinder, seed=seed
-        )
+            return wander_near(home_base_of(npc_id), npc_id, pathfinder, seed=seed, tick=tick)
+        return _scatter_near(state.entities[target].pos, npc_id, pathfinder, seed=seed)
     return None
 
 
@@ -542,9 +543,7 @@ def npc_events_for_tick(
             # 事件入流前替换 payload：内容逐位不变，仅 form 呈现档（见 M5-K8
             # 投递面契约：bubble=广播）。frozen 事件用 model_copy。
             if event.payload.get("form") == "thought":
-                event = event.model_copy(
-                    update={"payload": {**event.payload, "form": "bubble"}}
-                )
+                event = event.model_copy(update={"payload": {**event.payload, "form": "bubble"}})
             events.append(event)
             continue
         if event.event_type.value != "npc.act":
@@ -613,9 +612,7 @@ def npc_events_for_tick(
                     listener = (display_name_of or {}).get(target_id, target_id)
                     line = template_line(npc_id, listener, tick)
                     events.append(
-                        npc_chat_event(
-                            tick=tick, npc_id=npc_id, to_id=target_id, line=line
-                        )
+                        npc_chat_event(tick=tick, npc_id=npc_id, to_id=target_id, line=line)
                     )
                     # E2：聊天落账本——好感漂移 + 双方记忆（进程内 runtime 态）。
                     if chat_ledger is not None:
@@ -631,8 +628,7 @@ def npc_events_for_tick(
                         chat_ledger.remember(target_id, line, tick=tick)
                         if retell_last is not None and _prior_mems:
                             cool = _RETELL_COOLDOWN_MIN_TICKS + (
-                                _hash_u32("retell-cooldown", npc_id)
-                                % _RETELL_COOLDOWN_SPAN_TICKS
+                                _hash_u32("retell-cooldown", npc_id) % _RETELL_COOLDOWN_SPAN_TICKS
                             )
                             last_r = retell_last.get(npc_id, -(cool + 1))
                             if tick - last_r >= cool:

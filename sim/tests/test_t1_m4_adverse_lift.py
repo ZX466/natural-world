@@ -9,6 +9,7 @@
 - Agent 零可见：mix.adverse 流的抽取只进世界内部判定（天气/事件掷点），
   感知帧/prompt/独白三面零词面零字段（S2 预审值零可见口径）。
 """
+
 from __future__ import annotations
 
 import pytest
@@ -42,8 +43,10 @@ class TestAdverseLift:
         # C5/T2：同一事件序列重放 → 逐位一致
         reg = RngRegistry(world_seed=42)
         r1 = reg.reseed("mix.adverse", b"a" * 32).reseed("mix.adverse", b"b" * 32)
-        r2 = RngRegistry(world_seed=42).reseed("mix.adverse", b"a" * 32).reseed(
-            "mix.adverse", b"b" * 32
+        r2 = (
+            RngRegistry(world_seed=42)
+            .reseed("mix.adverse", b"a" * 32)
+            .reseed("mix.adverse", b"b" * 32)
         )
         assert r1.draw_key("mix.adverse") == r2.draw_key("mix.adverse")
 

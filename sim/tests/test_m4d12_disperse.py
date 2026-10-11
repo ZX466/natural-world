@@ -45,9 +45,7 @@ class TestSiteScatter:
             },
         )
         goals = [
-            _resolve_goal(
-                state, f"npc_{i:02d}", "eat", seed=42, tick=1000, w=w, h=h, pathfinder=pf
-            )
+            _resolve_goal(state, f"npc_{i:02d}", "eat", seed=42, tick=1000, w=w, h=h, pathfinder=pf)
             for i in range(1, 13)
         ]
         distinct = len(set(goals))
@@ -76,12 +74,8 @@ class TestSiteScatter:
             world_seed=42,
             entities={"npc_01": EntityState(entity_id="npc_01", pos=(5, 15))},
         )
-        g1 = _resolve_goal(
-            state, "npc_01", "eat", seed=42, tick=1000, w=w, h=h, pathfinder=pf
-        )
-        g2 = _resolve_goal(
-            state, "npc_01", "eat", seed=42, tick=1000, w=w, h=h, pathfinder=pf
-        )
+        g1 = _resolve_goal(state, "npc_01", "eat", seed=42, tick=1000, w=w, h=h, pathfinder=pf)
+        g2 = _resolve_goal(state, "npc_01", "eat", seed=42, tick=1000, w=w, h=h, pathfinder=pf)
         assert g1 == g2
 
     def test_all_scatter_goals_walkable(self) -> None:
@@ -100,9 +94,7 @@ class TestSiteScatter:
         roster = build_roster()
         state = WorldState(
             world_seed=42,
-            entities={
-                p.npc_id: EntityState(entity_id=p.npc_id, pos=(8, 16)) for p in roster
-            },
+            entities={p.npc_id: EntityState(entity_id=p.npc_id, pos=(8, 16)) for p in roster},
         )
         for i, p in enumerate(roster):
             for action in ("eat", "rest", "work"):
@@ -133,9 +125,7 @@ class TestSiteScatter:
         # npc_01 的 chat 目标恒是 npc_02（2 人 deterministic）——目的地在
         # npc_02 的散点邻域内（同散点半径口径）
         goals = {
-            _resolve_goal(
-                state, "npc_01", "request_chat", seed=42, tick=t, w=w, h=h, pathfinder=pf
-            )
+            _resolve_goal(state, "npc_01", "request_chat", seed=42, tick=t, w=w, h=h, pathfinder=pf)
             for t in range(1000, 1020)
         }
         assert goals != {(20, 20)}, "chat 目的地不应恒精确踩目标格"
@@ -170,9 +160,7 @@ class TestSiteScatter:
         )
         decisions = evaluate_batch(roster, UtilityModel(n_npc=50))
         goals = [
-            _resolve_goal(
-                state, d.npc_id, d.action, seed=42, tick=1000, w=w, h=h, pathfinder=pf
-            )
+            _resolve_goal(state, d.npc_id, d.action, seed=42, tick=1000, w=w, h=h, pathfinder=pf)
             for d in decisions
         ]
         agg = Counter(goals)

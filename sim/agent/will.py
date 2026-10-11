@@ -16,6 +16,7 @@
 
 不做：念头注入（批次 A 另件）、看板渲染（前端域）、LOD0 统计档（无独白面）。
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -78,12 +79,7 @@ def willingness_conflict(
     w2 = min(1.0, max(0.0, risk))
     w3 = min(1.0, max(0.0, needs_conflict))
     w4 = min(1.0, max(0.0, situation_mismatch))
-    score = (
-        WEIGHT_PERSONALITY * w1
-        + WEIGHT_RISK * w2
-        + WEIGHT_NEEDS * w3
-        + WEIGHT_SITUATION * w4
-    )
+    score = WEIGHT_PERSONALITY * w1 + WEIGHT_RISK * w2 + WEIGHT_NEEDS * w3 + WEIGHT_SITUATION * w4
     return WillingnessVerdict(score=score, band=_band_of(score))
 
 

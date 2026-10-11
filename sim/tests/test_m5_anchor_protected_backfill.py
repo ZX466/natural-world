@@ -123,9 +123,7 @@ class TestProtectedBackfill:
 
     async def test_idempotent(self, session: AsyncSession) -> None:
         """幂等：重跑不翻更多行（仍恰一行 protected=1）。"""
-        session.add_all(
-            [_anchor("a1", updated_at=100.0), _anchor("a2", updated_at=200.0)]
-        )
+        session.add_all([_anchor("a1", updated_at=100.0), _anchor("a2", updated_at=200.0)])
         await session.commit()
 
         await _run_backfill(session)
@@ -133,14 +131,12 @@ class TestProtectedBackfill:
         await _run_backfill(session)
 
         protected = (
-            (
-                await session.execute(
-                    select(func.count())
-                    .select_from(PlayerAnchor)
-                    .where(PlayerAnchor.protected.is_(True))
-                )
-            ).scalar_one()
-        )
+            await session.execute(
+                select(func.count())
+                .select_from(PlayerAnchor)
+                .where(PlayerAnchor.protected.is_(True))
+            )
+        ).scalar_one()
         assert protected == 1
 
     async def test_empty_table_is_legal(self, session: AsyncSession) -> None:
@@ -162,18 +158,30 @@ class TestProtectedBackfill:
         """只回填保护位：游标/名字/agent_override 逐字段不变。"""
         session.add(_anchor("a1", updated_at=100.0, name="原名"))
         await session.commit()
-        before = (
-            (await session.execute(select(PlayerAnchor))).scalar_one()
+        before = (await session.execute(select(PlayerAnchor))).scalar_one()
+        snapshot = (
+            before.id,
+            before.name,
+            before.branch_id,
+            before.tick,
+            before.seq,
+            before.agent_override,
+            before.updated_at,
         )
-        snapshot = (before.id, before.name, before.branch_id, before.tick, before.seq,
-                    before.agent_override, before.updated_at)
 
         await _run_backfill(session)
         session.expire_all()
         after = (await session.execute(select(PlayerAnchor))).scalar_one()
         assert after.protected is True
-        assert (after.id, after.name, after.branch_id, after.tick, after.seq,
-                after.agent_override, after.updated_at) == snapshot
+        assert (
+            after.id,
+            after.name,
+            after.branch_id,
+            after.tick,
+            after.seq,
+            after.agent_override,
+            after.updated_at,
+        ) == snapshot
 
 
 # ---------------------------------------------------------------------------
@@ -216,9 +224,7 @@ class TestAlembic0010:
         assert _alembic(tmp_path, "upgrade", "0010_protected_backfill").returncode == 0
         conn = sqlite3.connect(str(db))
         try:
-            rows = conn.execute(
-                "SELECT id, protected FROM player_anchors ORDER BY id"
-            ).fetchall()
+            rows = conn.execute("SELECT id, protected FROM player_anchors ORDER BY id").fetchall()
         finally:
             conn.close()
         assert rows == [("a1", 0), ("a2", 0), ("a3", 1)]
@@ -252,9 +258,7 @@ class TestAlembic0010:
 
         conn = sqlite3.connect(str(db))
         try:
-            rows = conn.execute(
-                "SELECT id, protected FROM player_anchors ORDER BY id"
-            ).fetchall()
+            rows = conn.execute("SELECT id, protected FROM player_anchors ORDER BY id").fetchall()
             version = conn.execute("SELECT version_num FROM alembic_version").fetchall()
         finally:
             conn.close()
@@ -283,6 +287,7 @@ def test_backfill_statement_matches_migration_source() -> None:
         / "versions"
         / "0010_protected_backfill.py"
     ).read_text(encoding="utf-8")
+
     def _norm(text: str) -> str:
         # 迁移里 SQL 是跨行拼接的字面量：归一空白并去掉引号后比对
         return " ".join(text.replace('"', "").split())

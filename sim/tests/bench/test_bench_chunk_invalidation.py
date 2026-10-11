@@ -16,6 +16,7 @@ m3-retrieval-budget.md 附录 M3-P3），Claude 裁前**不卡 CI 红**：用 `_
 失效本体是**消费式**的（标脏即 drain、剔除即删），故每轮前用 `setup` 复原缓存快照，
 计时窗口只含失效通路（不含 A* 回填；A* 单条 ~0.65ms，属寻路本身、不在本通路内）。
 """
+
 from __future__ import annotations
 
 import pytest
@@ -95,9 +96,7 @@ def _mixed_batch(n: int = _BATCH) -> list:
 
 def _tick_event_batch(n_located: int = _BATCH, n_irrelevant: int = _TICK_IRRELEVANT) -> list:
     """典型 tick 全事件流：n_irrelevant 条无关 MOVE + n_located 条定位 matter。"""
-    evs = [
-        move_event(0, f"e{i}", (0, 0), (1, 1), ((0, 0), (1, 1))) for i in range(n_irrelevant)
-    ]
+    evs = [move_event(0, f"e{i}", (0, 0), (1, 1), ((0, 0), (1, 1))) for i in range(n_irrelevant)]
     evs.extend(_located_batch(n_located))
     return evs
 

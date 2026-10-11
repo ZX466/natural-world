@@ -122,9 +122,7 @@ def _entity_loss_bound(ticks: int) -> int:
     return math.ceil(SOAK_ENTITY_LOSS_PER_GAME_DAY * ticks / TICKS_PER_GAME_DAY)
 
 
-def _assert_entity_stable(
-    result, *, label: str, profile_ids: set[str] | None = None
-) -> None:
+def _assert_entity_stable(result, *, label: str, profile_ids: set[str] | None = None) -> None:
     """实体守恒（**结构量**判据，两处断言共用，防双真相源）。
 
     四侧判据（M6-P1 阶段 A，方案见 `docs/perf/m6-soak-contract-preplan.md` §2.1/§3）：
@@ -152,9 +150,7 @@ def _assert_entity_stable(
             )
 
 
-def _assert_no_runaway(
-    result, *, label: str, profile_ids: set[str] | None = None
-) -> None:
+def _assert_no_runaway(result, *, label: str, profile_ids: set[str] | None = None) -> None:
     """长跑稳定性断言（分窗口径，抗单窗离群）。
 
     **结构判据前置**（M6-P1 / P14 建议已采）：实体守恒是**结构量**（与机器速度无关），
@@ -202,6 +198,7 @@ def _assert_no_runaway(
         )
     # 实体守恒已**前置**到本函数首行（M6-P1：结构量不受降频门管辖），此处不再重复。
 
+
 def _assert_smoke(
     result, *, label: str, expected_ticks: int, profile_ids: set[str] | None = None
 ) -> None:
@@ -218,6 +215,7 @@ def _assert_smoke(
         f"{label}: 总 tick {result.total_ticks} != {expected_ticks}"
     )
     _assert_entity_stable(result, label=label, profile_ids=profile_ids)
+
 
 def _write_soak_artifact(result, *, label: str) -> None:
     """窗口级数字落 artifact（裁 28-D 建议②采纳）。
@@ -244,6 +242,7 @@ def _write_soak_artifact(result, *, label: str) -> None:
     with Path(_SOAK_ARTIFACT_PATH).open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
+
 def _skip_if_throttled() -> None:
     """本机持续降频 ⇒ skip（M5-P7 接管 `throttle_probe` 的信号）。
 
@@ -253,6 +252,7 @@ def _skip_if_throttled() -> None:
         assert_not_throttled(label="soak 降频自检")
     except _SkipSoak as exc:
         pytest.skip(str(exc))
+
 
 def test_soak_ci_smoke_stability() -> None:
     """CI 冒烟（M5-P5 收口）：50 NPC × 1,200 tick 只作**框架冒烟**。
@@ -289,6 +289,7 @@ def test_soak_probe_is_available_or_gracefully_unknown() -> None:
     assert p.rss_mb == -1.0 or p.rss_mb > 0.0
     assert p.handles == -1 or p.handles > 0
 
+
 def test_throttle_probe_shape() -> None:
     """降频自检探针契约（M5-P7）：字段齐、`throttled` 与比值单调一致、成本小。
 
@@ -309,6 +310,7 @@ def test_throttle_probe_shape() -> None:
     assert result["throttled"] is (result["throttle_ratio"] > result["ratio_limit"])
     assert throttle_probe.THROTTLE_RATIO_LIMIT == 2.0
 
+
 def test_throttle_probe_selfcheck_off_short_circuits() -> None:
     """`PI_THROTTLE_SELFCHECK=0` 时 `_skip_if_throttled` 不自旋（CI 不打折）。"""
     monkey = pytest.MonkeyPatch()
@@ -322,6 +324,7 @@ def test_throttle_probe_selfcheck_off_short_circuits() -> None:
 def test_m2_acceptance_tick_constant_is_7_days() -> None:
     """量纲守卫：M2 验收 = 7 游戏日 = 604,800 tick（DESIGN §10/§17）。"""
     assert M2_ACCEPTANCE_TICKS == 604_800
+
 
 def test_soak_entity_loss_bound_is_zero_in_phase_a() -> None:
     """契约钉（体例同 `test_cascade_frame_budget_is_100_nodes`）：阶段 A 净减上界 = 0。

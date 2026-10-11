@@ -40,9 +40,7 @@ def _state_at(**positions: tuple[int, int]):
 
     return WorldState(
         world_seed=42,
-        entities={
-            eid: EntityState(entity_id=eid, pos=pos) for eid, pos in positions.items()
-        },
+        entities={eid: EntityState(entity_id=eid, pos=pos) for eid, pos in positions.items()},
     )
 
 
@@ -288,11 +286,7 @@ class TestRuntimeWillingnessOf:
 
         rt = self._runtime(willingness_of=synthesize_verdict)
         events = rt.tick(36000)
-        monos = [
-            str(e.payload["content"])
-            for e in events
-            if e.event_type.value == "npc.monologue"
-        ]
+        monos = [str(e.payload["content"]) for e in events if e.event_type.value == "npc.monologue"]
         # 内向者 vs 外向者：至少一人 band0 沉默、一人开口（分布分化）
         assert len(monos) <= 1, f"两人都开口且未分化？{monos}"
 

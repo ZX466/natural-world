@@ -51,9 +51,7 @@ class TestProfileSnapshot:
         from sim.llm.client import LlmError
 
         monkeypatch.delenv("LZ_MASTER_KEY", raising=False)
-        monkeypatch.setattr(
-            "sim.core.persistence.crypto._KEY_FILE", tmp_path / "k.key"
-        )
+        monkeypatch.setattr("sim.core.persistence.crypto._KEY_FILE", tmp_path / "k.key")
         # 先用第一把引导 key 加密，再换掉密钥文件 → 解密对不上（InvalidToken 路径）
         enc = encrypt_api_key("sk-test-123456")
         (tmp_path / "k.key").write_text(Fernet.generate_key().decode(), encoding="utf-8")

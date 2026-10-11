@@ -10,6 +10,7 @@ T5 golden 场景 M3 雏形（fixture 优先，无 LLM——§16 T5「fixture 优
 宏观断言：链路各节点状态 + 治理不变量（失效传播完整、无孤儿有效行）。
 C5：同种子同事件流逐位可重放（纯函数链 + 管线确定性）。
 """
+
 from __future__ import annotations
 
 import pytest

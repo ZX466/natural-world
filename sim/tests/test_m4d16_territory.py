@@ -47,9 +47,7 @@ def _state_at(**positions: tuple[int, int]):
 
     return WorldState(
         world_seed=42,
-        entities={
-            eid: EntityState(entity_id=eid, pos=pos) for eid, pos in positions.items()
-        },
+        entities={eid: EntityState(entity_id=eid, pos=pos) for eid, pos in positions.items()},
     )
 
 
@@ -157,9 +155,7 @@ class TestPlanMoveTerritory:
 
         pf = _town_pf()
         state = _state_at(villager_01=(5, 5))
-        event = plan_npc_move(
-            state, "villager_01", "eat", pf, seed=42, tick=100
-        )
+        event = plan_npc_move(state, "villager_01", "eat", pf, seed=42, tick=100)
         assert event is not None
         goal = cast("tuple[int, int]", event.payload["goal"])  # payload 值 object → 收窄
         # 真实语义：eat 目的地 ∈ 本片区**食摊锚**散点邻域（≤散点半径）——
