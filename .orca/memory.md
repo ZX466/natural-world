@@ -2751,3 +2751,9 @@ uv run ruff check . && uv run pyright <改动文件>
   ② 6 行无 hash（`M5-D2`/`D3-c`/`A-DATA`/`D3-a`/`A2`/`CRUD`）。**待 Claude 裁决**是否回填。
 - ~~**P5 因果未知「措辞生成」缺口**~~ ✅ **已闭（S12 实测销账）**：`sim/llm/prompts/assembler.py::_CAUSAL_UNKNOWN_TEXT`（L38-42）**有调用点**（L173）＋ `test_prompt_assembly.py:94` 零命中断言；T4 语料 P5-05 已改写。本行原挂账作废（别再当开放风险带给 M6）。
 - M5 安规预研待主树派单（T4 已交付，可派）。
+
+## 2026-10-11 i-have-adhd 差距修复（主树 merge fc28943）
+- 提交 c503e68（偶遇配对哈希）、da44135（已落事件喂认知＋购酒入口）、dd6420b（20 个生产差事）、e6bf13c（语言判定供数）、ebf68d4（L2 降格社交记忆回写）、6f60ae6（攻击近身与熵护栏）、061b6ca（交差才支付）、8c7ccfa（结构图随事件/分叉刷新）。
+- 全量 uv run pytest -m 'not bench' -q --disable-warnings --no-header：2675 passed / 121 skipped / 70 deselected；ruff check . 通过；pyright 0；主树定向 77 passed + ruff/pyright 绿。
+- 诚实边界：§9 十 tick 交换单元/六姿态/下一单元生效仍缺；L0 千人统计、动物实体、角色专属、T4 真模型仍未完成；差事 20/20 为独立合成状态验收，并非长跑完成率。
+- 主树当前 fc28943，未 push；codex 工作树 8c7ccfa 干净。
