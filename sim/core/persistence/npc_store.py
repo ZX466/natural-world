@@ -537,6 +537,7 @@ class NpcStore:
         self,
         events: Sequence[WorldEvent],
         *,
+        branch_id: str | None = None,
         extra_projection: ProjectionLike | None = None,
     ) -> None:
         """本 tick 事件批次落库 + 事件投影（同一事务；无则 no-op）。
@@ -550,6 +551,8 @@ class NpcStore:
         event_list = list(events)
         if not event_list and extra_projection is None:
             return
+        if branch_id is not None:
+            self._branch_id = branch_id
         rows, entropy_rows = flush_rows(event_list)
 
         async def _project(session: AsyncSession, seq_by_index: dict[int, int]) -> None:

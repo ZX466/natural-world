@@ -81,3 +81,24 @@ class WorldMaintenance:
                 next_cascades.append(step.state)
         self._cascades = next_cascades
         return events
+
+
+def collapse_injuries(state, events, structures, combat_ledger):
+    """坍塌结构瓦片附近实体受伤；死亡仍只经 npc.death 事件。"""
+    from sim.core.events import EventKind, npc_death_event
+
+    deaths = []
+    for event in events:
+        if event.event_type is not EventKind.STRUCTURE_COLLAPSED:
+            continue
+        snapshot = structures.get(str(event.payload["structure_id"]))
+        if snapshot is None:
+            continue
+        for entity_id, entity in sorted(state.entities.items()):
+            near = any(
+                abs(entity.pos[0] - tile[0]) + abs(entity.pos[1] - tile[1]) <= 3
+                for tile in snapshot.tiles
+            )
+            if near and combat_ledger.apply_damage(entity_id, 10):
+                deaths.append(npc_death_event(tick=event.tick, entity_id=entity_id))
+    return deaths

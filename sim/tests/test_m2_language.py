@@ -175,3 +175,54 @@ def test_protagonist_language_profile_reaches_narrative():
     )
     assert "漕运" not in frame.narrated(language=profile)
     assert "没听明白" in frame.narrated(language=profile)
+
+
+def test_live_chat_becomes_hearing_and_language_is_degraded():
+    from sim.api.main import _fallback_map
+    from sim.core.events import npc_chat_event
+    from sim.core.world import EntityState, WorldState
+    from sim.perception.senses import PerceptionEngine
+
+    state = WorldState(
+        tick=1,
+        entities={
+            "chenmo": EntityState(entity_id="chenmo", pos=(5, 5)),
+            "seller": EntityState(entity_id="seller", pos=(6, 5)),
+            "far": EntityState(entity_id="far", pos=(30, 30)),
+        },
+    )
+    chat = npc_chat_event(1, "seller", "chenmo", "漕运的船今日要到。")
+    engine = PerceptionEngine(_fallback_map())
+    frame = engine.assemble(state, "chenmo", [chat])
+    assert any("漕运" in o.description for o in frame.observations if o.channel is Channel.HEARING)
+    text = frame.narrated(language=LanguageProfile(jargon=("漕运",)))
+    assert "没听明白" in text and "漕运" not in text
+    assert not any(
+        "漕运" in o.description for o in engine.assemble(state, "far", [chat]).observations
+    )
+
+
+def test_three_animals_live_in_genesis_with_species_perception():
+    from sim.api.main import GENESIS_ENTITIES, _fallback_map
+    from sim.content.animals import ANIMALS
+    from sim.core.world import EntityState, WorldState
+    from sim.perception.profiles import CAT, DOG, RAVEN
+    from sim.perception.senses import PerceptionEngine
+
+    assert set(ANIMALS) <= set(GENESIS_ENTITIES)
+    state = WorldState(
+        tick=12 * 3600,
+        entities={
+            "cat_grey": EntityState(entity_id="cat_grey", pos=(5, 5)),
+            "raven": EntityState(entity_id="raven", pos=(5, 5)),
+            "chenmo": EntityState(entity_id="chenmo", pos=(18, 5)),
+        },
+    )
+    assert {CAT.species, DOG.species, RAVEN.species} == {"cat", "dog", "raven"}
+    engine = PerceptionEngine(_fallback_map())
+    cat_frame = engine.assemble(state, "cat_grey", profile=CAT)
+    from sim.perception.senses import rtoken_of
+
+    assert not any(o.subject == rtoken_of("chenmo") for o in cat_frame.observations)
+    raven_frame = engine.assemble(state, "raven", profile=RAVEN)
+    assert any(o.subject == rtoken_of("chenmo") for o in raven_frame.observations)

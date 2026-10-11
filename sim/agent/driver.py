@@ -82,6 +82,9 @@ class ChenmoDriver:
         # 批次 E6 战斗尺（§9）：attack 命中 → 进战斗尺 60 tick；过期即退出。
         # None = 不在战斗尺；issue_combat_scale 发既有 combat.scale_change 事件。
         self._combat_until_tick: int | None = None
+        self._exchange: Any = None
+        self._combat_target: str | None = None
+        self._combat_tick_last = 0
         # impulse 置位（ws handler 在事件循环线程调，driver 循环也在事件循环——
         # 单线程语义本就安全；锁是防御性的，防将来跨线程调用）
         self._requested_lock = threading.Lock()
@@ -132,6 +135,8 @@ class ChenmoDriver:
             logger.debug("chenmo.no_profile", tick=tick)
             return False
         impulse = self.take_impulse()
+        if self._exchange is not None:
+            perception_text += "\n正在交手，可进攻、防御、拉开、瞄准要害、逃跑或喊话。"
         if perception_text == "" and self._perception_provider is not None:
             try:
                 perception_text = self._perception_provider()
@@ -241,7 +246,10 @@ class ChenmoDriver:
                     self._issue_build(loop, actor_id, intent)
             elif intent.action == "attack" and intent.target_id is not None:
                 if self._combat is not None:
-                    self._issue_attack(loop, actor_id, intent)
+                    if self._exchange is not None:
+                        self._exchange.prefetch(intent.params.get("posture", "attack"))
+                    else:
+                        self._issue_attack(loop, actor_id, intent)
             elif intent.action == "flee" and intent.target_id is not None:
                 self._issue_flee(loop, pathfinder, actor_id, intent.target_id)
             from sim.core.events import npc_monologue_event
@@ -261,9 +269,79 @@ class ChenmoDriver:
             executed += 1
         # 战斗尺过期退出（E6：意图队列清空后检查——窗口过完恢复原倍率）。
         if self._combat_until_tick is not None and loop.state.tick >= self._combat_until_tick:
-            self._combat_until_tick = None
+            self.reset_combat()
             loop.issue_combat_scale(False)
         return executed
+
+    def reset_combat(self) -> None:
+        self._combat_until_tick = None
+        self._exchange = None
+        self._combat_target = None
+        self._pending.clear()
+        self._chat_lines.clear()
+
+    def combat_tick(self, loop: TickLoop, *, pathfinder: object) -> None:
+        """同步交换单元，不等 LLM；边界预取，迟到的姿态顺延下一单元。"""
+        if self._exchange is None:
+            return
+        actor_id = self._anchor.entity_id
+        target = self._combat_target
+        if actor_id not in loop.state.entities or target not in loop.state.entities:
+            self.reset_combat()
+            loop.issue_combat_scale(False)
+            return
+        tick = loop.state.tick
+        if self._combat_until_tick is not None and tick >= self._combat_until_tick:
+            self.reset_combat()
+            loop.issue_combat_scale(False)
+            return
+        elapsed = tick - self._combat_tick_last
+        if elapsed <= 0:
+            return
+        boundary = self._exchange.elapsed + elapsed >= 10
+        self._exchange.advance(elapsed)
+        self._combat_tick_last = tick
+        if not boundary:
+            return
+        self.request_decision()
+        posture = self._exchange.active_posture
+        from sim.agent.intent import Intent
+        from sim.core.events import npc_monologue_event
+
+        if posture in ("attack", "aim"):
+            self._issue_attack(
+                loop,
+                actor_id,
+                Intent(
+                    action="attack",
+                    target_id=target,
+                    params={"posture": posture},
+                    reason="护住自己。",
+                ),
+            )
+        elif posture in ("withdraw", "flee"):
+            self._issue_flee(loop, pathfinder, actor_id, target)
+            if posture == "flee":
+                self.reset_combat()
+                loop.issue_combat_scale(False)
+                return
+        elif posture == "shout":
+            loop.enqueue(
+                npc_monologue_event(
+                    tick=tick, npc_id=actor_id, form="bubble", content="乡亲们，快来帮忙！"
+                )
+            )
+        else:
+            loop.enqueue(
+                npc_monologue_event(
+                    tick=tick, npc_id=actor_id, form="thought", content="护住要害，等他露出破绽。"
+                )
+            )
+        # 对手仍在近身，下一招由同一结算/熵入口完成。
+        if target in loop.state.entities and actor_id in loop.state.entities:
+            self._issue_attack(
+                loop, target, Intent(action="attack", target_id=actor_id, reason="挡住这一招。")
+            )
 
     def _issue_talk(
         self, loop: TickLoop, pathfinder: object, actor_id: str, intent: Intent
@@ -391,7 +469,12 @@ class ChenmoDriver:
 
         hp/伤害数值零出戏（独白只有叙事）；命中后呼救是外在可观察 bubble。
         """
-        from sim.agent.combat_exec import entropy_roll, help_line, needs_critical_entropy
+        from sim.agent.combat_exec import (
+            CombatLedger,
+            entropy_roll,
+            help_line,
+            needs_critical_entropy,
+        )
         from sim.core.events import npc_death_event, npc_monologue_event
 
         if self._combat is None:  # 调用分支已保证（pyright 收窄）
@@ -405,6 +488,13 @@ class ChenmoDriver:
         if abs(actor.pos[0] - victim.pos[0]) + abs(actor.pos[1] - victim.pos[1]) > 2:
             return  # 够不着：不扣血、不抽熵、不切战斗时间尺
         tick = loop.state.tick
+        if self._exchange is None:
+            from sim.agent.combat_exec import CombatExchange
+
+            self._exchange = CombatExchange()
+            self._combat_target = target
+            self._combat_tick_last = tick
+            self.request_decision()
         roll = None
         if self._entropy_provider is not None and needs_critical_entropy(
             actor_id, target, tick=tick, seed=seed
@@ -412,7 +502,14 @@ class ChenmoDriver:
             event = self._entropy_provider("combat.critical", tick)
             loop.enqueue(event)
             roll = entropy_roll(str(event.payload["material"]))
-        if roll is None:
+        if isinstance(ledger, CombatLedger):
+            scale = 1.25 if intent.params.get("posture") == "aim" else 1.0
+            if target == self._anchor.entity_id and self._exchange.active_posture == "defend":
+                scale *= 0.5
+            out = ledger.apply_attack(
+                actor_id, target, tick=tick, seed=seed, entropy_roll=roll, damage_scale=scale
+            )
+        elif roll is None:
             out = ledger.apply_attack(actor_id, target, tick=tick, seed=seed)
         else:
             out = ledger.apply_attack(actor_id, target, tick=tick, seed=seed, entropy_roll=roll)
@@ -455,8 +552,10 @@ class ChenmoDriver:
                     content=help_line(attacker_name, tick=tick),
                 )
             )
-        # 战斗尺（Task 12）：命中/击杀 → 进慢镜 60 tick（miss 不切——没交上手）。
-        if out.outcome in ("hit", "kill"):
+        if target not in loop.state.entities or self._anchor.entity_id not in loop.state.entities:
+            self.reset_combat()
+            loop.issue_combat_scale(False)
+        elif self._combat_until_tick is None:
             self._combat_until_tick = tick + 60
             loop.issue_combat_scale(True)
 

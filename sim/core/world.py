@@ -184,6 +184,13 @@ def _apply_npc_act(state: WorldState, event: WorldEvent, ctx: TickContext) -> Ap
     return ApplyResult(state=state)
 
 
+def _apply_demography(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    from sim.core.events import DemographyPayload
+
+    DemographyPayload.model_validate(event.payload)
+    return ApplyResult(state=state)
+
+
 def _apply_npc_lod_change(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
     """LOD 只改变 NPC 档案投影；WorldState 实体不随 LOD 增减。"""
     from sim.core.events import NpcLodChangePayload
@@ -305,6 +312,7 @@ def build_default_bus() -> EventBus:
     bus.register(EventKind.NPC_MONOLOGUE, _apply_npc_monologue)
     bus.register(EventKind.NPC_CHAT, _apply_npc_chat)
     bus.register(EventKind.COIN_GRANT, _apply_coin_grant)
+    bus.register(EventKind.DEMOGRAPHY_TICK, _apply_demography)
     bus.register(EventKind.STRUCTURE_STARTED, _apply_structure_event)
     bus.register(EventKind.STRUCTURE_CHECKPOINT, _apply_structure_event)
     bus.register(EventKind.STRUCTURE_COMPLETED, _apply_structure_event)

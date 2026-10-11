@@ -79,6 +79,11 @@ class IntentGate:
         """规划时预检：schema 之后的语义层。"""
         if intent.action not in M1_SUPPORTED_ACTIONS:
             return GateVerdict(False, "unsupported_action")
+        if intent.action == "attack":
+            from sim.agent.combat_exec import POSTURES
+
+            if intent.params.get("posture", "attack") not in POSTURES:
+                return GateVerdict(False, "invalid_posture")
         if not intent.reason.strip():
             return GateVerdict(False, "empty_reason")
         # M1-D（codex S04）：reason 是独白唯一来源，出戏词面在闸门处死。

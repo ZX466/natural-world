@@ -25,6 +25,7 @@ from pydantic import BaseModel, ValidationError
 from sim.core.events import (
     CoinGrantPayload,
     CombatScaleChangePayload,
+    DemographyPayload,
     EcologyShiftPayload,
     EntropyInjectPayload,
     EventKind,
@@ -91,6 +92,7 @@ PAYLOAD_MODELS: dict[EventKind, type[BaseModel]] = {
     EventKind.NPC_MONOLOGUE: NpcMonologuePayload,
     EventKind.NPC_CHAT: NpcChatPayload,
     EventKind.COIN_GRANT: CoinGrantPayload,
+    EventKind.DEMOGRAPHY_TICK: DemographyPayload,
 }
 
 

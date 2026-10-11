@@ -263,6 +263,24 @@ def _anchors(db: Path) -> list[PlayerAnchor]:
         engine.dispose()
 
 
+async def _append_async(db: Path, branch_id: str, frm: int, to: int) -> None:
+    """经生产 store 的显式写入路径（非 driver）向指定分支追加事件。"""
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from sim.core.events import npc_lod_change_event
+    from sim.core.persistence.store import SqlEventStore
+
+    engine = create_async_engine(f"sqlite+aiosqlite:///{db}", connect_args={"timeout": 10.0})
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    store = SqlEventStore(factory)
+    rows = [
+        npc_lod_change_event(seq, "probe", 0, 0, "probe", branch_id=branch_id).to_store_dict()
+        for seq in range(frm, to + 1)
+    ]
+    await store.append(branch_id, rows)
+    await engine.dispose()
+
+
 def _await_until(predicate: Callable[[], bool], timeout: float = 10.0) -> bool:
     """轮询等待（driver 首帧 flush 是异步任务，起 app 后立刻断言会有竞态）。"""
     deadline = time.monotonic() + timeout
@@ -616,18 +634,27 @@ class TestGateAndTrueSource:
             assert client.get("/api/anchors").status_code == 200
 
     def test_archive_line_appendable_and_current_untouched(self, world_db: Path) -> None:
-        """读档子线（active + 非当前）**照写不误**，且写入不抢当前行。
+        """读档子线（active + 非当前）**经显式写入口照写不误**，且写入不抢当前行。
 
-        这是 0012 闸门收紧最容易被误伤的一格：若收紧成「非当前不可写」，历史点读档线
-        会被写死。判别力：等 driver 真的往 'main' 落一条事件（落不下 ⇒ 闸门收过头）。
+        0012 闸门收紧后，实况 driver 只落当前行（R-4.4）；本条守另一半：向读档子线
+        **显式** append 仍是合法写路径（历史点读档线不能被写死）。判别力：直接对
+        store append 到 MAIN，同时断言当前行标志未被抢走。
         """
         spec = [(CHILD, CHILD_HEAD, True, "active"), (MAIN, MAIN_HEAD, False, "active")]
         with _seeded_app(world_db, spec) as client:
-            assert _await_until(lambda: _head_seq(world_db, MAIN) > MAIN_HEAD), (
-                "读档子线写不进去（闸门误伤非当前分支）"
-            )
+            asyncio.run(_append_async(world_db, MAIN, MAIN_HEAD + 1, MAIN_HEAD + 2))
+            assert _head_seq(world_db, MAIN) == MAIN_HEAD + 2, "读档子线显式写不进去"
             assert _branch_flags(world_db)[CHILD] is True, "读档子线的写入抢走了当前行"
             assert client.get("/api/anchors").status_code == 200
+
+    def test_live_driver_writes_current_line_not_archive_line(self, world_db: Path) -> None:
+        """实况 driver 的事件必须落在当前活跃分支，不是读档子线。"""
+        spec = [(CHILD, CHILD_HEAD, True, "active"), (MAIN, MAIN_HEAD, False, "active")]
+        with _seeded_app(world_db, spec):
+            assert _await_until(lambda: _head_seq(world_db, CHILD) > CHILD_HEAD), (
+                "driver 没往当前行（读档子线）落事件"
+            )
+            assert _head_seq(world_db, MAIN) == MAIN_HEAD, "driver 写进了非当前的读档子线"
 
     def test_positive_control_post_on_opened_line(self, world_db: Path) -> None:
         """正控：真源恰好是 'main'（闸门开的那条）时记档行为不变。
@@ -717,9 +744,7 @@ class TestForkHandoverForm:
                 "——后来者会把交接当成 0012 的欠账"
             )
         else:
-            assert "交接已落" not in src, (
-                "交接未落但 0012 头注已写「交接已落」=假记账"
-            )
+            assert "交接已落" not in src, "交接未落但 0012 头注已写「交接已落」=假记账"
 
     def test_fork_from_archive_line_keeps_true_source(self, world_db: Path) -> None:
         """从**读档线**分叉：不碰当前行（子只是又一条并存线）。
