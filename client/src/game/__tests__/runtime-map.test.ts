@@ -37,9 +37,7 @@ describe('runtime.start loads world map', () => {
 
   it('fetchWorldMap 成功 → setMap 收到组装后的碰撞网格', async () => {
     vi.doMock('../../net/worldApi', () => ({
-      fetchWorldMap: vi
-        .fn()
-        .mockResolvedValue({ w: 32, h: 32, tileset: 'grid', chunks: [] }),
+      fetchWorldMap: vi.fn().mockResolvedValue({ w: 32, h: 32, tileset: 'grid', chunks: [] }),
       assembleCollision: (w: number, h: number) => new Uint8Array(w * h).fill(1),
       assembleGround: (w: number, h: number) => new Uint16Array(w * h),
     }));

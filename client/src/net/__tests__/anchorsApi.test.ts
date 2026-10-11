@@ -17,9 +17,9 @@ describe('anchorsApi', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('list: GET /api/anchors', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify([sampleItem]), { status: 200 }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify([sampleItem]), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     const items = await anchorsApi.list();
     expect(items).toEqual([sampleItem]);
@@ -27,9 +27,9 @@ describe('anchorsApi', () => {
   });
 
   it('create: POST /api/anchors {name}', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify(sampleItem), { status: 201 }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(sampleItem), { status: 201 }));
     vi.stubGlobal('fetch', fetchMock);
     const item = await anchorsApi.create({ name: '开镇第两天' });
     expect(item.id).toBe('a1');
@@ -49,9 +49,11 @@ describe('anchorsApi', () => {
   });
 
   it('错误响应抛 SettingsApiError 同族（含 detail）', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ detail: '这个档读不出来了。' }), { status: 500 }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ detail: '这个档读不出来了。' }), { status: 500 }),
+      );
     vi.stubGlobal('fetch', fetchMock);
     await expect(anchorsApi.list()).rejects.toThrow('这个档读不出来了。');
   });

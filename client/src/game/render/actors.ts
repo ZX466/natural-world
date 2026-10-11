@@ -32,7 +32,9 @@ export function advanceAnimClock(current: number, moved: boolean, deltaMs: numbe
 
 /** facing → 图集行号（build_palette.py 布局实测：下/上/右/左 = 0/1/2/3）。 */
 export function facingRow(facing: Facing): number {
-  return { down: 0, up: 1, right: 2, left: 3 }[({ n: 'up', e: 'right', s: 'down', w: 'left' } as const)[facing]];
+  return { down: 0, up: 1, right: 2, left: 3 }[
+    ({ n: 'up', e: 'right', s: 'down', w: 'left' } as const)[facing]
+  ];
 }
 
 /** C-2：chenmo.png 272×256 = **17 列**×16 行 @16px——Phaser spritesheet 线性帧号
@@ -96,7 +98,11 @@ export function walkFrame(row: number, animClockMs: number): number {
 }
 
 /** Actor 当前逻辑帧号（合成入口：朝向行 + 动画帧）。 */
-export function frameOf(actor: MirrorActor, prev: { x: number; y: number }, animClockMs: number): number {
+export function frameOf(
+  actor: MirrorActor,
+  prev: { x: number; y: number },
+  animClockMs: number,
+): number {
   const row = facingRow(inferFacing(actor.x - prev.x, actor.y - prev.y));
   const anim = inferAnim(prev, actor);
   return walkFrame(row, anim === 'idle' ? -1 : animClockMs);

@@ -302,19 +302,14 @@ export class WorldScene extends Phaser.Scene {
         const label =
           actor.name !== undefined
             ? this.add
-                .text(
-                  actor.x * TILE + TILE / 2,
-                  actor.y * TILE - 4,
-                  actor.name,
-                  {
-                    fontFamily: 'sans-serif',
-                    fontSize: '9px',
-                    color: '#e7e0d0',
-                    stroke: '#1a1f14',
-                    strokeThickness: 2,
-                    resolution: 4,
-                  },
-                )
+                .text(actor.x * TILE + TILE / 2, actor.y * TILE - 4, actor.name, {
+                  fontFamily: 'sans-serif',
+                  fontSize: '9px',
+                  color: '#e7e0d0',
+                  stroke: '#1a1f14',
+                  strokeThickness: 2,
+                  resolution: 4,
+                })
                 .setOrigin(0.5, 1)
                 .setDepth(11)
             : null;
@@ -362,7 +357,12 @@ export class WorldScene extends Phaser.Scene {
       view.sprite.setFrame(
         rtoken === this.mirror.protagonist
           ? walkFrame(row, view.animClockMs)
-          : villagerFrame(VILLAGER_SHEET, moved ? 'walk' : (actor.anim ?? 'idle'), view.lastFacing, view.animClockMs),
+          : villagerFrame(
+              VILLAGER_SHEET,
+              moved ? 'walk' : (actor.anim ?? 'idle'),
+              view.lastFacing,
+              view.animClockMs,
+            ),
       );
       view.prevX = actor.x;
       view.prevY = actor.y;
@@ -413,7 +413,11 @@ export class WorldScene extends Phaser.Scene {
     const h = this.scale.height;
     const TARGET = 80;
     while (this.rainDrops.length < TARGET) {
-      this.rainDrops.push({ x: Math.random() * w, y: Math.random() * h, speed: 220 + Math.random() * 160 });
+      this.rainDrops.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        speed: 220 + Math.random() * 160,
+      });
     }
     layer.clear();
     layer.lineStyle(1, 0x9fb8d8, 0.45);

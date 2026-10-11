@@ -10,12 +10,14 @@ from sim.agent.dialogue import sanitize_provider_line, validate_provider_line
 
 def test_echo_banned_word_gets_rewritten_not_rejected():
     """P1-02/P4-04/P4-06/P6-02 形态:复读禁词但可映射 → 改写放行。"""
-    assert sanitize_provider_line("啥？大什么模型？我可不懂这些。") is not None
-    assert "模型" not in sanitize_provider_line("啥？大什么模型？我可不懂这些。")
-    assert sanitize_provider_line("命中注定？我爹临走前就交代了一句。") is not None
-    assert "注定" not in sanitize_provider_line("命中注定？我爹临走前就交代了一句。")
-    assert "运气" not in sanitize_provider_line("药抓错了，运气再好也白搭。")
-    assert "存档" not in sanitize_provider_line("啥存档点？你是说抓药的单子？")
+    line = sanitize_provider_line("啥？大什么模型？我可不懂这些。")
+    assert line is not None and "模型" not in line
+    line2 = sanitize_provider_line("命中注定？我爹临走前就交代了一句。")
+    assert line2 is not None and "注定" not in line2
+    line3 = sanitize_provider_line("药抓错了，运气再好也白搭。")
+    assert line3 is not None and "运气" not in line3
+    line4 = sanitize_provider_line("啥存档点？你是说抓药的单子？")
+    assert line4 is not None and "存档" not in line4
 
 
 def test_unmappable_echo_still_rejected():

@@ -84,11 +84,7 @@ function installWsMock(callbacks: Record<string, unknown>, sent: Record<string, 
   vi.doMock('../../net/ws', () => ({
     setControlStateSink: vi.fn(), // D11：runtime 顶层装配调用（本测试不消费）
     WsClient: class {
-      constructor(
-        _u: string,
-        _m: unknown,
-        cb: Record<string, unknown>,
-      ) {
+      constructor(_u: string, _m: unknown, cb: Record<string, unknown>) {
         Object.assign(callbacks, cb);
       }
       connect(): void {}
@@ -136,10 +132,14 @@ describe('runtime impulse 链路（批次 A）', () => {
     const { runtime } = await import('../runtime');
     runtime.start();
 
-    const feedback = callbacks.onImpulseFeedback as (
-      msg: { cue: string; reaction_monologue: { form: string; content: string } },
-    ) => void;
-    feedback({ cue: 'accepted', reaction_monologue: { form: 'thought', content: '这话我记下了。' } });
+    const feedback = callbacks.onImpulseFeedback as (msg: {
+      cue: string;
+      reaction_monologue: { form: string; content: string };
+    }) => void;
+    feedback({
+      cue: 'accepted',
+      reaction_monologue: { form: 'thought', content: '这话我记下了。' },
+    });
     expect(store.lastImpulseCue).toBe('accepted');
     expect(store.impulseError).toBeNull();
     expect(store.monologues).toEqual([{ form: 'thought', content: '这话我记下了。' }]);

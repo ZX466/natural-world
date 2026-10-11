@@ -66,7 +66,10 @@ describe('WsClient dispatch 叙事消息（批次 A）', () => {
     );
     expect(cb.onImpulseFeedback).toHaveBeenCalledTimes(1);
     expect(cb.onImpulseFeedback).toHaveBeenCalledWith(
-      expect.objectContaining({ cue: 'hesitation', reaction_monologue: { form: 'thought', content: '心里一颤。' } }),
+      expect.objectContaining({
+        cue: 'hesitation',
+        reaction_monologue: { form: 'thought', content: '心里一颤。' },
+      }),
     );
   });
 

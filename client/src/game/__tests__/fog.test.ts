@@ -30,7 +30,12 @@ describe('WorldMirror 雾状态（D17）', () => {
       [{ rtoken: 'r1', x: 0, y: 0, facing: 's', sprite: 'chenmo', anim: 'idle' }],
       [],
       undefined,
-      { revealed: [{ cx: 0, cy: 0 }, { cx: 1, cy: 1 }] },
+      {
+        revealed: [
+          { cx: 0, cy: 0 },
+          { cx: 1, cy: 1 },
+        ],
+      },
     );
     expect(m.fog.size).toBe(2);
     expect(m.fog.has('9,9')).toBe(false);

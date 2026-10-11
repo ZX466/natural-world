@@ -8,18 +8,22 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 describe('runtime mock lifecycle（H-4）', () => {
   let clockStarted: number;
 
-
   beforeEach(() => {
     vi.resetModules();
     clockStarted = 0;
-
 
     vi.doMock('../world-mirror', () => ({
       WorldMirror: class {},
       worldMirror: { setMap: vi.fn(), applySnapshot: vi.fn(), protagonist: null },
     }));
     vi.doMock('../clock', () => ({
-      worldClock: { start: () => { clockStarted += 1; }, stop: () => {}, apply: vi.fn() },
+      worldClock: {
+        start: () => {
+          clockStarted += 1;
+        },
+        stop: () => {},
+        apply: vi.fn(),
+      },
     }));
     vi.doMock('../../net/worldApi', () => ({
       fetchWorldMap: vi.fn().mockRejectedValue(new Error('no backend')),
@@ -31,7 +35,9 @@ describe('runtime mock lifecycle（H-4）', () => {
         wsStatus: 'connecting',
         paused: false,
         speed: 1,
-        setWsStatus: (s: string) => { state.wsStatus = s; },
+        setWsStatus: (s: string) => {
+          state.wsStatus = s;
+        },
         setGameClock: vi.fn(),
         setPaused: vi.fn(),
         setSpeed: vi.fn(),

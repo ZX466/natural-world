@@ -87,11 +87,7 @@ function installWsMock(callbacks: Record<string, unknown>, sent: Record<string, 
         state.sink = sink;
       },
       WsClient: class {
-        constructor(
-          _u: string,
-          _m: unknown,
-          cb: Record<string, unknown>,
-        ) {
+        constructor(_u: string, _m: unknown, cb: Record<string, unknown>) {
           Object.assign(callbacks, cb);
         }
         connect(): void {}
@@ -179,8 +175,7 @@ describe('runtime 控制回执（批次 D11）', () => {
     const { runtime } = await import('../runtime');
     runtime.start();
 
-    const sink = (callbacks.__sink as { sink: ((s: number, p: boolean) => void) | null })
-      .sink;
+    const sink = (callbacks.__sink as { sink: ((s: number, p: boolean) => void) | null }).sink;
     expect(sink).not.toBeNull();
     sink!(16, true);
     expect(store.speed).toBe(16);

@@ -246,14 +246,12 @@ describe('ws-protocol 类型与出戏边界', () => {
     // 快照侧曾用 {id} 而 sim 函数签名是 profile_id → 归一为 {profile_id}。
     // 前端 settingsApi.ts 用 encodeURIComponent(id) 拼 URL，参数名不影响调用，
     // 但 paths 类型是自文档契约，必须与 sim 一致。
-    type Update = NonNullable<
-      paths['/api/settings/profiles/{profile_id}']['patch']
-    >;
-    type Activate = NonNullable<
-      paths['/api/settings/profiles/{profile_id}/activate']['post']
-    >;
+    type Update = NonNullable<paths['/api/settings/profiles/{profile_id}']['patch']>;
+    type Activate = NonNullable<paths['/api/settings/profiles/{profile_id}/activate']['post']>;
     expectTypeOf<NonNullable<Update['parameters']['path']['profile_id']>>().toEqualTypeOf<string>();
-    expectTypeOf<NonNullable<Activate['parameters']['path']['profile_id']>>().toEqualTypeOf<string>();
+    expectTypeOf<
+      NonNullable<Activate['parameters']['path']['profile_id']>
+    >().toEqualTypeOf<string>();
     // 旧名 id 必须已从 paths 中消失
     expectTypeOf<paths>().not.toHaveProperty('/api/settings/profiles/{id}');
     expectTypeOf<paths>().not.toHaveProperty('/api/settings/profiles/{id}/activate');

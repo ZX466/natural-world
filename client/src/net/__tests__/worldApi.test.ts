@@ -6,7 +6,12 @@
  * assembleCollision 是本次新增的地图数据组装核心，此处锁死其行为。
  */
 import { describe, expect, it } from 'vitest';
-import { assembleCollision, decodeCollisionB64, assembleGround, decodeGroundB64 } from '../worldApi';
+import {
+  assembleCollision,
+  decodeCollisionB64,
+  assembleGround,
+  decodeGroundB64,
+} from '../worldApi';
 
 describe('decodeGroundB64 / assembleGround（M7-T6 u16 LE 地面层）', () => {
   it('u16 小端解码（id=1,id=258）', () => {

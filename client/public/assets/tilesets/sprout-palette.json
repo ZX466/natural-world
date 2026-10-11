@@ -1,10 +1,7 @@
 {
   "tileset": "zelda_like_v1",
   "image": "sprout-tileset.png",
-  "image_size": [
-    640,
-    576
-  ],
+  "image_size": [640, 576],
   "tile_size": 16,
   "cols": 40,
   "ground": {
@@ -23,10 +20,7 @@
   "actors": {
     "chenmo": {
       "image": "chenmo.png",
-      "frame_size": [
-        16,
-        16
-      ],
+      "frame_size": [16, 16],
       "rows": {
         "down": 0,
         "up": 1,
@@ -38,10 +32,7 @@
     },
     "villager": {
       "image": "villager.png",
-      "frame_size": [
-        16,
-        16
-      ],
+      "frame_size": [16, 16],
       "standing_frame": 0
     }
   }
