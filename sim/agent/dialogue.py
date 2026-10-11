@@ -12,7 +12,7 @@ import hashlib
 import json
 from collections.abc import Callable
 
-from sim.llm.prompts.banned_words import scan
+from sim.llm.prompts.banned_words import REWRITE_MAP, scan
 
 #: 模板池（第一人称世界内台词；{listener} 为称呼占位）。
 _CHAT_TEMPLATES: tuple[str, ...] = (
@@ -36,6 +36,33 @@ def validate_provider_line(line: str) -> str | None:
     candidate = " ".join(line.strip().split())
     if not candidate or len(candidate) > 160 or scan(candidate).hits:
         return None
+    try:
+        json.loads(candidate)
+    except json.JSONDecodeError:
+        pass
+    else:
+        return None
+    return candidate
+
+
+def sanitize_provider_line(line: str) -> str | None:
+    """复读剥离判梯（T4 泄漏修复,2026-10-11 实测四泄漏同形态）——同 memory_scan
+    decide 判梯:命中 ≤2 且全部在 REWRITE_MAP → 机械改写后复扫放行;其余拒
+    （调用方退模板池）。改写产物仍过 validate_provider_line 全部既有钉
+    （长度/JSON/复扫）——不绕任何门。"""
+    candidate = " ".join(line.strip().split())
+    if not candidate or len(candidate) > 160:
+        return None
+    result = scan(candidate)
+    if not result.hits:
+        return _reject_json_or_pass(candidate)
+    if len(result.hits) <= 2 and all(h.word in REWRITE_MAP for h in result.hits):
+        cleaned = result.cleaned
+        return validate_provider_line(cleaned)  # 改写产物复走全钉（含复扫）
+    return None
+
+
+def _reject_json_or_pass(candidate: str) -> str | None:
     try:
         json.loads(candidate)
     except json.JSONDecodeError:

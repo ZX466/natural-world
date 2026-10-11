@@ -177,7 +177,7 @@ class ChenmoDriver:
     async def _dialogue_line(
         self, profile: ProfileSnapshot, target_id: str, context: str, tick: int
     ) -> str:
-        from sim.agent.dialogue import template_line, validate_provider_line
+        from sim.agent.dialogue import template_line
         from sim.llm.prompts.assembler import (
             InputSlice,
             MemorySlice,
@@ -207,7 +207,11 @@ class ChenmoDriver:
             )
         except (LlmError, TypeError):
             return fallback
-        return validate_provider_line(result.content) or fallback
+        # T4 泄漏修复(2026-10-11):复读剥离判梯先行(≤2 可映射命中→改写),
+        # 改不动再走既有硬拒(退模板池)——不绕任何既有钉。
+        from sim.agent.dialogue import sanitize_provider_line
+
+        return sanitize_provider_line(result.content) or fallback
 
     # -- 执行段（同步：闸门二次校验 + 事件入流） -----------------------------
 
