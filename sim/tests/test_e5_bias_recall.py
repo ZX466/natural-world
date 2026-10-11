@@ -94,3 +94,21 @@ def test_runtime_params_change_retrieval_ranking():
     state.observe((coin_grant_event(100, "chenmo", -8, "buy:wine"),))
     drunk = recall_hits(pipe, now_tick=100, top_k=2, params=state.params_at(100))
     assert drunk[0].score > sober[0].score
+
+
+def test_lod_demotion_writes_compacted_memory_once():
+    from sim.npc.model import NpcProfileData
+    from sim.npc.runtime import NpcRuntime
+    from sim.npc.utility import UtilityModel
+
+    npc = NpcProfileData(npc_id="villager_01", name="赵铁柱", lod=2)
+    recorded: list[str] = []
+    runtime = NpcRuntime(
+        profiles={npc.npc_id: npc},
+        utility=UtilityModel(n_npc=1, seed=42),
+        on_downgrade=lambda npc_id: recorded.append(npc_id),
+    )
+    runtime.update_lod(npc.npc_id, in_interaction=False, tick=10)
+    runtime.update_lod(npc.npc_id, in_interaction=False, tick=20)
+    assert recorded == [npc.npc_id]
+    assert any(e.event_type.value == "npc.lod_change" for e in runtime.tick(30))

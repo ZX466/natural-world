@@ -434,6 +434,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sim.llm.memory_scan import MemoryWritePipeline
 
     memory_pipeline = MemoryWritePipeline(store=memory_store)
+
+    def _writeback_downgrade(npc_id: str) -> None:
+        memories = chat_ledger.memories_of(npc_id)
+        if not memories:
+            return
+        memory_pipeline.write(
+            npc_id=npc_id,
+            content=memories[-1][1],
+            source="reason",
+            event_seq=None,
+            importance=0.5,
+            emotion_tag=None,
+        )
+
+    npc_runtime.on_downgrade = _writeback_downgrade
     _ = CHENMO_ID  # 反思 npc_ids 用（见补线③）
     # 批次 E6：战斗账本（hp 进程内；死亡走 npc.death 事件——C4 零新增 kind）。
     from sim.agent.combat_exec import CombatLedger
