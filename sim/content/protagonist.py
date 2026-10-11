@@ -60,7 +60,9 @@ def _profile_row() -> dict[str, object]:
         "skills": json.dumps({"药理": 4, "抓药": 3}),
         "goals": json.dumps({}),
         "inventory": json.dumps([]),
-        "knowledge_boundary": json.dumps({}),
+        "knowledge_boundary": json.dumps(
+            {"literacy": 0.7, "jargon": ["漕运", "行会"], "class_register": "平民"}
+        ),
         "lod": 2,
         "created_at_tick": 0,
         "updated_at_tick": 0,
@@ -74,7 +76,7 @@ async def seed_protagonist(session_factory) -> int:
     from sim.core.persistence.models import NpcProfile
 
     async with session_factory() as session:
-        existing = (await session.execute(select(NpcProfile.id).where(NpcProfile.id == CHENMO_ID)))
+        existing = await session.execute(select(NpcProfile.id).where(NpcProfile.id == CHENMO_ID))
         if existing.scalars().first() is not None:
             return 0
         session.add(NpcProfile(**_profile_row()))

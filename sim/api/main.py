@@ -410,9 +410,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 批次 D6：感知帧 → 叙事文本投影（chenmo 的 prompt [处境] 段供数）。
     # run_perception_step 每 tick 为全员装帧（键=rtoken）；取不到/空感知 →
     # 空文本（[处境] 段省略）。感知帧是 tick 内瞬时快照——直接读最新帧即可。
+    from sim.agent.language import LanguageProfile
+    from sim.content.protagonist import _profile_row as _chenmo_profile_row
     from sim.perception.frame import PerceptionFrame
     from sim.perception.senses import rtoken_of
 
+    language = LanguageProfile.from_json(str(_chenmo_profile_row()["knowledge_boundary"]))
     chenmo_rtoken = rtoken_of("chenmo")
 
     def _chenmo_perception() -> str:
@@ -420,7 +423,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if frame is None:
             return ""
         assert isinstance(frame, PerceptionFrame)
-        return frame.narrated()
+        return frame.narrated(language=language)
 
     # 批次 D15 补线②：陈默记忆切片——感知叙述经 write() 闸门入记忆
     # （observe），决策前检索 top-k 进 prompt（recall → memory_entries）；
