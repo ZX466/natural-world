@@ -189,6 +189,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from sim.core.flush import flush_events
 
         await flush_events(store, events)
+        cognition.observe(events)
         branch_id = await store.current_branch_id_or_none()
         if branch_id is not None:
             if memory_store.branch_id != branch_id:
@@ -223,6 +224,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         async with store.session_factory() as session:
             await memory_store.hydrate(session)
     app.state.memory_store = memory_store
+    from sim.agent.cognition import CognitionState
+
+    cognition = CognitionState()
+    app.state.cognition = cognition
 
     # ── 批次 B：NPC 装配进实况世界 ──────────────────────────────────
     # 1) 播种 50 村民 profile（幂等；库已有则零行）；
@@ -487,7 +492,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 loop.state,
                 loop.state.tick,
                 memory_entries=merge_ledger_entries(
-                    _mem_recall(memory_pipeline, now_tick=loop.state.tick),
+                    _mem_recall(
+                        memory_pipeline,
+                        now_tick=loop.state.tick,
+                        params=cognition.params_at(loop.state.tick),
+                    ),
                     _ledger_texts,
                     top_k=3,
                 ),
@@ -589,6 +598,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 # 清零——旧分支的 hp/余额/关系/冷却跨分支残留会造成「一刀秒杀」
                 # /「凭空余财」（账本是**本分支**的世界状态投影，分叉即失效）。
                 # 火场账本既有同款清理由 fork 编排层承担；本批账本在此收口。
+                cognition.reset()
                 combat_ledger.reset()
                 coin_ledger.reset()
                 chat_ledger.reset()

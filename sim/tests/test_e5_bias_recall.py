@@ -59,3 +59,38 @@ def test_hits_uses_scorers_via_cognition_params():
     finally:
         cog.CognitionParams = original
     assert called  # _hits 走了 CognitionParams().retrieval_scorers()
+
+
+def test_executed_events_feed_cognition_and_branch_reset():
+    from sim.agent.cognition import CognitionState
+    from sim.core.events import coin_grant_event, npc_monologue_event
+
+    state = CognitionState()
+    state.observe(
+        (
+            coin_grant_event(10, "chenmo", -12, "buy:herb"),
+            coin_grant_event(20, "chenmo", -8, "buy:wine"),
+            npc_monologue_event(30, "chenmo", "thought", "看着赵铁柱倒下去，我的手一直在抖。"),
+        )
+    )
+    params = state.params_at(30)
+    assert params.sunk_investment > 0
+    assert params.drunkenness > 0
+    assert "倒下" in params.trauma_triggers
+    assert state.params_at(30 + 86_400).drunkenness == 0.0
+    state.reset()
+    assert state.params_at(30).sunk_investment == 0
+    assert state.params_at(30).trauma_triggers == frozenset()
+
+
+def test_runtime_params_change_retrieval_ranking():
+    from sim.agent.chenmo_memory import recall_hits
+    from sim.agent.cognition import CognitionState
+    from sim.core.events import coin_grant_event
+
+    pipe = _pipeline_with([("酒馆里想起那场火。", 0.4), ("河边走走。", 0.7)])
+    state = CognitionState()
+    sober = recall_hits(pipe, now_tick=100, top_k=2)
+    state.observe((coin_grant_event(100, "chenmo", -8, "buy:wine"),))
+    drunk = recall_hits(pipe, now_tick=100, top_k=2, params=state.params_at(100))
+    assert drunk[0].score > sober[0].score
