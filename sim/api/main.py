@@ -277,6 +277,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     coin_ledger = CoinLedger()
     app.state.coin_ledger = coin_ledger
+    from sim.npc.errand_runtime import ErrandRuntime
+
+    errands = ErrandRuntime(seed=loop.state.world_seed, coin_ledger=coin_ledger)
+    app.state.errands = errands
     wage_last: dict[str, int] = {}
     # 批次 E4：施工 runtime（事件为真相；每 tick 推进 checkpoint/完工）。
     from sim.agent.build_exec import BuildRuntime
@@ -358,6 +362,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         return batch or None
 
     loop.attach_npc_runtime(_npc_tick_hook)
+    loop.attach_npc_runtime(lambda state, tick: errands.tick(state, tick) or None)
 
     # ── 批次 D5：火灾实况（凌晨确定性起火 → 蔓延 → 死亡代价）──────────
     from sim.npc.fire_runtime import FireRuntime, ignite_due
@@ -598,6 +603,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 # 清零——旧分支的 hp/余额/关系/冷却跨分支残留会造成「一刀秒杀」
                 # /「凭空余财」（账本是**本分支**的世界状态投影，分叉即失效）。
                 # 火场账本既有同款清理由 fork 编排层承担；本批账本在此收口。
+                errands.reset()
                 cognition.reset()
                 combat_ledger.reset()
                 coin_ledger.reset()
