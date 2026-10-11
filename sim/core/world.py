@@ -184,6 +184,14 @@ def _apply_npc_act(state: WorldState, event: WorldEvent, ctx: TickContext) -> Ap
     return ApplyResult(state=state)
 
 
+def _apply_npc_lod_change(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    """LOD 只改变 NPC 档案投影；WorldState 实体不随 LOD 增减。"""
+    from sim.core.events import NpcLodChangePayload
+
+    NpcLodChangePayload.model_validate(event.payload)
+    return ApplyResult(state=state)
+
+
 def _apply_npc_monologue(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
     """NPC_MONOLOGUE（批次 C 接线）：独白记录进事件日志，状态层 no-op。
 
@@ -292,6 +300,7 @@ def build_default_bus() -> EventBus:
     bus.register(EventKind.ENTROPY_INJECT, _apply_entropy_inject)
     bus.register(EventKind.TILE_CHANGED, _apply_tile_changed)
     bus.register(EventKind.NPC_DEATH, _apply_npc_death)
+    bus.register(EventKind.NPC_LOD_CHANGE, _apply_npc_lod_change)
     bus.register(EventKind.NPC_ACT, _apply_npc_act)
     bus.register(EventKind.NPC_MONOLOGUE, _apply_npc_monologue)
     bus.register(EventKind.NPC_CHAT, _apply_npc_chat)

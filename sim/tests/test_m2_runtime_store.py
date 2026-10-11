@@ -153,6 +153,23 @@ class TestFlushLodProjection:
         assert events[0].event_type == EventKind.NPC_LOD_CHANGE.value
         assert json.loads(events[0].payload)["to_lod"] == 2
 
+    async def test_live_flush_projects_lod_from_event_bus(
+        self, store, session: AsyncSession
+    ) -> None:
+        from sim.core.clock import GameClock
+        from sim.core.tick import TickLoop
+        from sim.core.world import WorldState, build_default_bus
+
+        session.add(_profile("npc-00", lod=1))
+        await session.commit()
+        loop = TickLoop(clock=GameClock(speed=1), bus=build_default_bus(), state=WorldState())
+        loop.enqueue(npc_lod_change_event(0, "npc-00", 1, 2, "enter_range"))
+        events = loop.drain_events()
+        await NpcStore(store).flush_tick(events)
+        session.expire_all()
+        row = await session.get(NpcProfile, {"branch_id": "main", "id": "npc-00"})
+        assert row is not None and row.lod == 2
+
     async def test_lod_change_unknown_npc_rolls_back_events(
         self, store, session: AsyncSession
     ) -> None:
@@ -418,6 +435,16 @@ class TestDowngradeMemoryWriteback:
 
 @pytest.mark.t1
 class TestFlushEventsRegression:
+    async def test_flush_events_projects_lod_in_production_path(
+        self, store, session: AsyncSession
+    ) -> None:
+        session.add(_profile("npc-00", lod=1))
+        await session.commit()
+        await flush_events(store, [npc_lod_change_event(1, "npc-00", 1, 2, "enter_range")])
+        session.expire_all()
+        row = await session.get(NpcProfile, {"branch_id": "main", "id": "npc-00"})
+        assert row is not None and row.lod == 1
+
     async def test_flush_events_without_projection(self, store, session: AsyncSession) -> None:
         await flush_events(store, [npc_act_event(1, "npc-00", "work")])
         events = (await session.execute(select(Event))).scalars().all()

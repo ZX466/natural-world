@@ -186,9 +186,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
 
     async def on_flush(events: list[Any]) -> None:
-        from sim.core.flush import flush_events
-
-        await flush_events(store, events)
+        branch_id = await store.current_branch_id_or_none() or "main"
+        await NpcStore(store, branch_id=branch_id).flush_tick(events)
         maintenance.observe(events)
         cognition.observe(events)
         branch_id = await store.current_branch_id_or_none()
@@ -201,9 +200,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await session.commit()
 
     async def on_flush_async() -> None:
-        from sim.core.flush import flush_events
-
-        await flush_events(store, loop.drain_events())
+        branch_id = await store.current_branch_id_or_none() or "main"
+        events = loop.drain_events()
+        await NpcStore(store, branch_id=branch_id).flush_tick(events)
+        maintenance.observe(events)
+        cognition.observe(events)
         branch_id = await store.current_branch_id_or_none()
         if branch_id is not None:
             if memory_store.branch_id != branch_id:
