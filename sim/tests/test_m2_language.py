@@ -30,9 +30,7 @@ class TestLanguageProfile:
     def test_species_profiles_exist_for_animal_line(self) -> None:
         from sim.perception.profiles import CAT, DOG, HUMAN, RAVEN
 
-        assert {p.species for p in (HUMAN, CAT, DOG, RAVEN)} == {
-            "human", "cat", "dog", "raven"
-        }
+        assert {p.species for p in (HUMAN, CAT, DOG, RAVEN)} == {"human", "cat", "dog", "raven"}
         assert CAT.hearing_radius > 0
         assert DOG.hearing_radius > 0
         assert RAVEN.vision_radius > 0
@@ -87,7 +85,8 @@ class TestJargonRegister:
     def test_jargon_high_register_keeps(self) -> None:
         """行话命中 + 士绅听者（阶层听得懂）→ 不降质。"""
         out = degrade_observation_text(
-            "他说这批货要走漕运。", "speech",
+            "他说这批货要走漕运。",
+            "speech",
             _profile(literacy=0.9, jargon=("漕运",), class_register="士绅"),
         )
         assert out == "他说这批货要走漕运。"
@@ -100,17 +99,18 @@ class TestJargonRegister:
 
 
 class TestBannedWordsRedLine:
-    @pytest.mark.parametrize("text", [
-        "布告上写着：悬赏缉拿盗匪张三。",
-        "他说这批货要走漕运。",
-        "有块布告，画着些看不懂的符号。",
-        "他说的几个词你没听明白。",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "布告上写着：悬赏缉拿盗匪张三。",
+            "他说这批货要走漕运。",
+            "有块布告，画着些看不懂的符号。",
+            "他说的几个词你没听明白。",
+        ],
+    )
     def test_degraded_text_zero_banned_hits(self, text) -> None:
         """降质文案过 banned_words.scan() 0 命中（红线 1，K1 口径延续）。"""
-        out = degrade_observation_text(
-            text, "speech", _profile(literacy=0.2, jargon=("漕运",))
-        )
+        out = degrade_observation_text(text, "speech", _profile(literacy=0.2, jargon=("漕运",)))
         assert scan(out).hits == ()
 
 
@@ -123,8 +123,10 @@ class TestNarratedMount:
             tick=0,
             observations=(
                 Observation(
-                    channel=Channel.HEARING, subject="rt-y",
-                    description="rt-y说：这批货要走漕运。", strength=0.8,
+                    channel=Channel.HEARING,
+                    subject="rt-y",
+                    description="rt-y说：这批货要走漕运。",
+                    strength=0.8,
                 ),
             ),
         )
@@ -151,3 +153,25 @@ class TestNarratedMount:
             channel_kinds={"rt-y": "speech"},
         )
         assert frame.observations[0].description == "rt-y说：这批货要走漕运。"
+
+
+def test_protagonist_language_profile_reaches_narrative():
+    from sim.agent.language import LanguageProfile
+    from sim.content.protagonist import _profile_row
+    from sim.perception.frame import Channel, Observation, PerceptionFrame
+
+    profile = LanguageProfile.from_json(str(_profile_row()["knowledge_boundary"]))
+    frame = PerceptionFrame(
+        observer="rt-test",
+        tick=1,
+        observations=(
+            Observation(
+                channel=Channel.HEARING,
+                subject="seller",
+                description="那人说漕运这批货怕耽搁。",
+                strength=0.5,
+            ),
+        ),
+    )
+    assert "漕运" not in frame.narrated(language=profile)
+    assert "没听明白" in frame.narrated(language=profile)

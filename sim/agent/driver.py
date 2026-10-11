@@ -398,8 +398,12 @@ class ChenmoDriver:
             return
         ledger, seed = self._combat()
         target = intent.target_id
-        if target not in loop.state.entities:
+        actor = loop.state.entities.get(actor_id)
+        victim = loop.state.entities.get(target or "")
+        if target is None or actor is None or victim is None:
             return  # 目标不在场（闸门 revalidate 也会拦——双保险）
+        if abs(actor.pos[0] - victim.pos[0]) + abs(actor.pos[1] - victim.pos[1]) > 2:
+            return  # 够不着：不扣血、不抽熵、不切战斗时间尺
         tick = loop.state.tick
         roll = None
         if self._entropy_provider is not None and needs_critical_entropy(

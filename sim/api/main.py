@@ -189,6 +189,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from sim.core.flush import flush_events
 
         await flush_events(store, events)
+        maintenance.observe(events)
+        cognition.observe(events)
         branch_id = await store.current_branch_id_or_none()
         if branch_id is not None:
             if memory_store.branch_id != branch_id:
@@ -223,6 +225,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         async with store.session_factory() as session:
             await memory_store.hydrate(session)
     app.state.memory_store = memory_store
+    from sim.agent.cognition import CognitionState
+
+    cognition = CognitionState()
+    app.state.cognition = cognition
 
     # ── 批次 B：NPC 装配进实况世界 ──────────────────────────────────
     # 1) 播种 50 村民 profile（幂等；库已有则零行）；
@@ -272,6 +278,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     coin_ledger = CoinLedger()
     app.state.coin_ledger = coin_ledger
+    from sim.npc.errand_runtime import ErrandRuntime
+
+    errands = ErrandRuntime(seed=loop.state.world_seed, coin_ledger=coin_ledger)
+    app.state.errands = errands
     wage_last: dict[str, int] = {}
     # 批次 E4：施工 runtime（事件为真相；每 tick 推进 checkpoint/完工）。
     from sim.agent.build_exec import BuildRuntime
@@ -353,6 +363,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         return batch or None
 
     loop.attach_npc_runtime(_npc_tick_hook)
+    loop.attach_npc_runtime(lambda state, tick: errands.tick(state, tick) or None)
 
     # ── 批次 D5：火灾实况（凌晨确定性起火 → 蔓延 → 死亡代价）──────────
     from sim.npc.fire_runtime import FireRuntime, ignite_due
@@ -400,9 +411,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 批次 D6：感知帧 → 叙事文本投影（chenmo 的 prompt [处境] 段供数）。
     # run_perception_step 每 tick 为全员装帧（键=rtoken）；取不到/空感知 →
     # 空文本（[处境] 段省略）。感知帧是 tick 内瞬时快照——直接读最新帧即可。
+    from sim.agent.language import LanguageProfile
+    from sim.content.protagonist import _profile_row as _chenmo_profile_row
     from sim.perception.frame import PerceptionFrame
     from sim.perception.senses import rtoken_of
 
+    language = LanguageProfile.from_json(str(_chenmo_profile_row()["knowledge_boundary"]))
     chenmo_rtoken = rtoken_of("chenmo")
 
     def _chenmo_perception() -> str:
@@ -410,7 +424,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if frame is None:
             return ""
         assert isinstance(frame, PerceptionFrame)
-        return frame.narrated()
+        return frame.narrated(language=language)
 
     # 批次 D15 补线②：陈默记忆切片——感知叙述经 write() 闸门入记忆
     # （observe），决策前检索 top-k 进 prompt（recall → memory_entries）；
@@ -421,6 +435,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sim.llm.memory_scan import MemoryWritePipeline
 
     memory_pipeline = MemoryWritePipeline(store=memory_store)
+
+    def _writeback_downgrade(npc_id: str) -> None:
+        memories = chat_ledger.memories_of(npc_id)
+        if not memories:
+            return
+        memory_pipeline.write(
+            npc_id=npc_id,
+            content=memories[-1][1],
+            source="reason",
+            event_seq=None,
+            importance=0.5,
+            emotion_tag=None,
+        )
+
+    npc_runtime.on_downgrade = _writeback_downgrade
     _ = CHENMO_ID  # 反思 npc_ids 用（见补线③）
     # 批次 E6：战斗账本（hp 进程内；死亡走 npc.death 事件——C4 零新增 kind）。
     from sim.agent.combat_exec import CombatLedger
@@ -487,7 +516,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 loop.state,
                 loop.state.tick,
                 memory_entries=merge_ledger_entries(
-                    _mem_recall(memory_pipeline, now_tick=loop.state.tick),
+                    _mem_recall(
+                        memory_pipeline,
+                        now_tick=loop.state.tick,
+                        params=cognition.params_at(loop.state.tick),
+                    ),
                     _ledger_texts,
                     top_k=3,
                 ),
@@ -589,6 +622,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 # 清零——旧分支的 hp/余额/关系/冷却跨分支残留会造成「一刀秒杀」
                 # /「凭空余财」（账本是**本分支**的世界状态投影，分叉即失效）。
                 # 火场账本既有同款清理由 fork 编排层承担；本批账本在此收口。
+                errands.reset()
+                cognition.reset()
                 combat_ledger.reset()
                 coin_ledger.reset()
                 chat_ledger.reset()
@@ -598,6 +633,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 chat_last.clear()
                 retell_last.clear()
                 wage_last.clear()
+                from sim.core.persistence.npc_store import NpcStore
+
+                branch_id = await store.current_branch_id_or_none()
+                if branch_id is None:
+                    raise RuntimeError("fork completed without an active branch")
+                branch_store = NpcStore(store, branch_id=branch_id)
+                maintenance.ledger = await branch_store.materialize_matter()
+                maintenance.structures = await branch_store.materialize_structures()
+                maintenance._cascades.clear()
+                maintenance._collapsed.clear()
                 memory_store.attach_branch(await store.current_branch_id_or_none())
                 logger.info("fork.runtime_ledgers_reset", anchor_id=anchor_id)
                 logger.info("fork.load_completed", anchor_id=anchor_id)

@@ -42,6 +42,7 @@ def _defer_label(action: str) -> str:
         "request_chat": "找人说话",
     }.get(action, action)
 
+
 #: D14 默认逐人意愿合成器（(profile, action, tick) → verdict）。
 #: 模块级常量供测试 monkeypatch（test_m4d14_defers 用）。
 _VERDICT_OF_DEFAULT = synthesize_verdict
@@ -68,6 +69,7 @@ class NpcRuntime:
     willingness: WillingnessVerdict | None = None
     willingness_of: object | None = None
     power: dict[str, float] | None = None
+    on_downgrade: Callable[[str], None] | None = None
     _order: list[str] = field(default_factory=list, init=False)
     _lod_events: list[WorldEvent] = field(default_factory=list, init=False, repr=False)
 
@@ -212,6 +214,8 @@ class NpcRuntime:
             return
         from sim.core.events import npc_lod_change_event
 
+        if profile.lod == 2 and target == 1 and self.on_downgrade is not None:
+            self.on_downgrade(npc_id)
         self.profiles[npc_id] = profile.with_lod(target)
         self._lod_events.append(
             npc_lod_change_event(

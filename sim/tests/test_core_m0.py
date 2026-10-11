@@ -188,6 +188,30 @@ class TestRng:
         entropy = next(e for e in events if e.event_type is EventKind.ENTROPY_INJECT)
         assert EntropyInjectPayload.model_validate(entropy.payload).stream == ENCOUNTER_STREAM
 
+    def test_daily_encounter_selects_present_pair_by_seed_and_day(self):
+        from sim.core.events import entropy_event
+        from sim.core.world import EntityState
+
+        ids = ("chenmo", *(f"villager_{i:02d}" for i in range(1, 51)))
+        pairs = set()
+        for day in range(1, 6):
+            state = WorldState(
+                world_seed=42,
+                tick=day * 86_400,
+                entities={eid: EntityState(entity_id=eid, pos=(i, 1)) for i, eid in enumerate(ids)},
+            )
+            loop = TickLoop(clock=GameClock(speed=1.0), bus=build_default_bus(), state=state)
+            loop.attach_entropy(
+                lambda stream, tick: entropy_event(tick=tick, stream=stream, payload_hex="00" * 16)
+            )
+            loop._maybe_encounter_entropy()
+            chats = [e for e in loop.drain_events() if e.event_type is EventKind.NPC_CHAT]
+            assert len(chats) == 1
+            pair = (chats[0].payload["npc_id"], chats[0].payload["to_id"])
+            assert set(pair) <= set(ids) and pair[0] != pair[1]
+            pairs.add(pair)
+        assert len(pairs) >= 2  # 50 人镇不应总是字典序前两人
+
     @pytest.mark.parametrize(
         ("stream", "tick", "nbytes"),
         (

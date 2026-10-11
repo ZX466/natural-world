@@ -168,9 +168,19 @@ class TickLoop:
             chaos=self.chaos,
             entropy_roll=roll,
         ):
+            import hashlib
+
             from sim.core.events import npc_chat_event
 
-            first, second = sorted(self.state.entities)[:2]
+            present = sorted(self.state.entities)
+            digest = hashlib.sha256(
+                f"encounter-pair:{self.state.world_seed}:{self.state.tick}".encode()
+            ).digest()
+            first_index = int.from_bytes(digest[:8], "big") % len(present)
+            second_index = int.from_bytes(digest[8:16], "big") % (len(present) - 1)
+            if second_index >= first_index:
+                second_index += 1
+            first, second = present[first_index], present[second_index]
             self.enqueue(
                 npc_chat_event(
                     tick=self.state.tick,

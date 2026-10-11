@@ -23,6 +23,7 @@ SqlMemoryStore：其 sync sqlite3 连接与实况 flush 的 aiosqlite 单写者�
 
 from __future__ import annotations
 
+from sim.agent.cognition import CognitionParams
 from sim.content.protagonist import CHENMO_ID
 from sim.llm.memory_scan import MemoryWritePipeline, WriteResult
 from sim.npc.memory import MemoryHit, MemoryQuery, retrieve
@@ -61,9 +62,12 @@ def recall(
     *,
     now_tick: int,
     top_k: int = _RECALL_TOP_K,
+    params: CognitionParams | None = None,
 ) -> tuple[str, ...]:
     """纯基础分检索 → 叙事句 tuple（C5：同输入同输出；空记忆返回 ()）。"""
-    return tuple(h.entry.content for h in _hits(pipeline, now_tick=now_tick, top_k=top_k))
+    return tuple(
+        h.entry.content for h in _hits(pipeline, now_tick=now_tick, top_k=top_k, params=params)
+    )
 
 
 def recall_hits(
@@ -71,9 +75,10 @@ def recall_hits(
     *,
     now_tick: int,
     top_k: int = _RECALL_TOP_K,
+    params: CognitionParams | None = None,
 ) -> tuple[MemoryHit, ...]:
     """打分细节版 recall（观测/调参面；与 recall 同源同分——C5 同输入同输出）。"""
-    return _hits(pipeline, now_tick=now_tick, top_k=top_k)
+    return _hits(pipeline, now_tick=now_tick, top_k=top_k, params=params)
 
 
 def _hits(
@@ -81,6 +86,7 @@ def _hits(
     *,
     now_tick: int,
     top_k: int,
+    params: CognitionParams | None = None,
 ) -> tuple[MemoryHit, ...]:
     """共享检索核（批次 E5）：retrieve + 偏差 scorers——非理性框架回接（§8）。
 
@@ -90,7 +96,9 @@ def _hits(
     from sim.agent.cognition import CognitionParams
 
     query = MemoryQuery(npc_id=CHENMO_ID, now_tick=now_tick, top_k=top_k)
-    return tuple(retrieve(pipeline, query, scorers=CognitionParams().retrieval_scorers()))
+    return tuple(
+        retrieve(pipeline, query, scorers=(params or CognitionParams()).retrieval_scorers())
+    )
 
 
 def merge_ledger_entries(

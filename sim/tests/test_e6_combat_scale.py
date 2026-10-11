@@ -116,3 +116,25 @@ def test_critical_attack_records_entropy_event():
 
     assert len(events) == 1
     assert events[0].event_type is EventKind.ENTROPY_INJECT
+
+
+def test_attack_requires_melee_distance_and_records_no_entropy():
+    from sim.agent.intent import Intent
+
+    state = WorldState(
+        world_seed=42,
+        entities={
+            "chenmo": EntityState(entity_id="chenmo", pos=(10, 10)),
+            "villager_01": EntityState(entity_id="villager_01", pos=(22, 10)),
+        },
+    )
+    loop = TickLoop(clock=GameClock(speed=1.0), bus=build_default_bus(), state=state)
+    calls = []
+    driver = _driver(
+        combat_provider=lambda: (_AlwaysHitLedger(), 42),
+        entropy_provider=lambda stream, tick: calls.append((stream, tick)),
+    )
+    driver._pending.append(Intent(action="attack", target_id="villager_01", reason="他欺人太甚"))
+    driver.execute_pending(loop, pathfinder=None)
+    assert not calls
+    assert EventKind.COMBAT_SCALE_CHANGE not in [e.event_type for e in loop.drain_events()]

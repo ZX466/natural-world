@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from sim.core.events import WorldEvent
 from sim.llm.memory_scan import MemoryEntry
 from sim.npc.memory import MemoryQuery, Scorer
 
@@ -138,6 +139,51 @@ class CognitionParams:
             Scorer(name=BIAS_NAMES[2], fn=sunk, mode="add"),
             Scorer(name=BIAS_NAMES[4], fn=trauma, mode="add"),
             Scorer(name=BIAS_NAMES[5], fn=drunk, mode="mul"),
+        )
+
+
+class CognitionState:
+    """陈默跨决策轮认知供数；只读取已入事件流的事件，分叉时清零。"""
+
+    def __init__(self) -> None:
+        self.reset()
+
+    def reset(self) -> None:
+        self._spent = 0
+        self._wine_tick: int | None = None
+        self._trauma: set[str] = set()
+
+    def observe(self, events: tuple[WorldEvent, ...] | list[WorldEvent]) -> None:
+        from sim.core.events import EventKind
+
+        for event in events:
+            if (
+                event.event_type is EventKind.COIN_GRANT
+                and event.payload.get("owner_id") == "chenmo"
+            ):
+                delta = event.payload.get("delta")
+                note = event.payload.get("note")
+                if isinstance(delta, int) and delta < 0 and isinstance(note, str):
+                    if note.startswith(("buy:", "build:")):
+                        self._spent += -delta
+                    if note == "buy:wine":
+                        self._wine_tick = event.tick
+            elif (
+                event.event_type is EventKind.NPC_MONOLOGUE
+                and event.payload.get("npc_id") == "chenmo"
+                and isinstance(event.payload.get("content"), str)
+                and "倒下" in str(event.payload["content"])
+            ):
+                self._trauma.add("倒下")
+
+    def params_at(self, tick: int) -> CognitionParams:
+        drunk = 0.0
+        if self._wine_tick is not None and 0 <= tick - self._wine_tick < 3_600:
+            drunk = 1.0 - (tick - self._wine_tick) / 3_600
+        return CognitionParams(
+            sunk_investment=min(1.0, self._spent / 100),
+            trauma_triggers=frozenset(self._trauma),
+            drunkenness=drunk,
         )
 
 

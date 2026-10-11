@@ -39,7 +39,7 @@ def test_ledger_applies_and_rejects_negative():
 
 def test_goods_catalog_and_price_bounds():
     ids = [g.id for g in GOODS]
-    assert ids == ["herb", "salve", "meal"]
+    assert ids == ["herb", "salve", "meal", "wine"]
     for good in GOODS:
         price = buy_price(good.id, tick=12345, seed=42)
         assert int(good.price * 0.8) <= price <= int(good.price * 1.2) + 1
@@ -119,3 +119,37 @@ def test_buy_insufficient_funds_no_grant():
     events = loop.drain_events()
     assert not [e for e in events if e.event_type.value == "coin.grant"]
     assert [e for e in events if e.event_type.value == "npc.monologue"]
+
+
+def test_wine_purchase_is_real_input_to_cognition():
+    from sim.agent.cognition import CognitionState
+    from sim.agent.driver import ChenmoDriver
+    from sim.agent.intent import Intent
+    from sim.api.main import _fallback_map
+    from sim.content.protagonist import build_anchor
+    from sim.core.clock import GameClock
+    from sim.core.events import world_create_event
+    from sim.core.tick import TickLoop
+    from sim.world.pathfinding import Pathfinder
+
+    ledger = CoinLedger()
+    ledger.apply_grant("chenmo", 100, tick=0)
+    state = WorldState(world_seed=42)
+    loop = TickLoop(clock=GameClock(speed=1), bus=build_default_bus(), state=state)
+    loop.enqueue(world_create_event(tick=0, seed=42, entity_ids=("chenmo",)))
+    loop.drain_events()
+    driver = ChenmoDriver(
+        anchor=build_anchor(),
+        llm=cast("LlmClient", object()),
+        profile_provider=lambda: None,
+        economy_provider=lambda: (ledger, 42),
+    )
+    driver._pending.append(Intent(action="buy", target_id="wine", reason="买碗酒喝。"))
+    assert driver.execute_pending(loop, pathfinder=Pathfinder(_fallback_map())) == 1
+    events = loop.drain_events()
+    assert any(
+        e.event_type is EventKind.COIN_GRANT and e.payload["note"] == "buy:wine" for e in events
+    )
+    cognition = CognitionState()
+    cognition.observe(events)
+    assert cognition.params_at(loop.state.tick).drunkenness > 0

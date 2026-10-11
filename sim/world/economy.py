@@ -25,6 +25,7 @@ GOODS: tuple[Good, ...] = (
     Good(id="herb", name="草药", price=12),
     Good(id="salve", name="药膏", price=30),
     Good(id="meal", name="饭食", price=8),
+    Good(id="wine", name="米酒", price=8),
 )
 
 _GOOD_INDEX: dict[str, Good] = {g.id: g for g in GOODS}
