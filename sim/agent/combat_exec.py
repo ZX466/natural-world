@@ -30,6 +30,35 @@ def help_line(attacker_name: str, *, tick: int) -> str:
     return HELP_TEMPLATES[pick].format(attacker=attacker_name)
 
 
+POSTURES: tuple[str, ...] = ("attack", "defend", "withdraw", "aim", "flee", "shout")
+EXCHANGE_TICKS = 10
+
+
+class CombatExchange:
+    """10 tick 交换单元；预取姿态在下单元边界生效。"""
+
+    def __init__(self) -> None:
+        self.active_posture = POSTURES[0]
+        self.pending_posture: str | None = None
+        self.elapsed = 0
+
+    def prefetch(self, posture: str) -> None:
+        if posture not in POSTURES:
+            raise ValueError("unknown combat posture")
+        self.pending_posture = posture
+
+    def advance(self, ticks: int = 1) -> None:
+        if ticks < 0:
+            raise ValueError("ticks must be non-negative")
+        self.elapsed += ticks
+        if self.elapsed < EXCHANGE_TICKS:
+            return
+        self.elapsed %= EXCHANGE_TICKS
+        if self.pending_posture is not None:
+            self.active_posture = self.pending_posture
+            self.pending_posture = None
+
+
 @dataclass(frozen=True)
 class AttackOutcome:
     """一次攻击结算（frozen；damage/hp 数值禁出戏内文本）。"""

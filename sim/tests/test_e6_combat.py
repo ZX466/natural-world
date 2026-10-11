@@ -73,3 +73,17 @@ def test_help_template_format_and_determinism():
     line = help_line("赵铁柱", tick=5)
     assert "赵铁柱" in line
     assert line == help_line("赵铁柱", tick=5)  # C5
+
+
+def test_combat_exchange_unit_has_six_postures_and_delayed_prefetch():
+    from sim.agent.combat_exec import POSTURES, CombatExchange
+
+    assert len(POSTURES) == 6
+    exchange = CombatExchange()
+    assert exchange.active_posture == "attack"
+    exchange.prefetch("defend")
+    assert exchange.active_posture == "attack"
+    exchange.advance(9)
+    assert exchange.active_posture == "attack"
+    exchange.advance(1)
+    assert exchange.active_posture == "defend"
