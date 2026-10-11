@@ -2757,3 +2757,8 @@ uv run ruff check . && uv run pyright <改动文件>
 - 全量 uv run pytest -m 'not bench' -q --disable-warnings --no-header：2675 passed / 121 skipped / 70 deselected；ruff check . 通过；pyright 0；主树定向 77 passed + ruff/pyright 绿。
 - 诚实边界：§9 十 tick 交换单元/六姿态/下一单元生效仍缺；L0 千人统计、动物实体、角色专属、T4 真模型仍未完成；差事 20/20 为独立合成状态验收，并非长跑完成率。
 - 主树当前 fc28943，未 push；codex 工作树 8c7ccfa 干净。
+
+## 2026-10-11 follow-up（主树 22d09ca）
+- 061b6ca 差事必须返回委托人交差后才发工钱；8c7ccfa 已落事件刷新维护拓扑并在分叉后重物化；c70e28e 修巧合连锁：火/死亡/坍塌从唯一事件入口抬升 hidden chain，每日冷却而非每 tick 清零。
+- 合入主树后：本树 2676 passed / 121 skipped / 70 deselected；ruff check . 绿；pyright 0。主树定向 22 passed、ruff/pyright 绿；主树 HEAD 22d09ca，双树干净；无远端 push。
+- 尚未兑现：§9 交换单元/六姿态/延迟生效、L0 千人模拟、动物实体及角色专属、T4 真模型与 T5 全量场景；不能称「所有玩法已实现」。
