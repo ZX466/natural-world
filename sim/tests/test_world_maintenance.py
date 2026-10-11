@@ -70,3 +70,22 @@ def test_runtime_tracks_new_structures_and_cascade_does_not_repeat():
     assert not [
         e for e in runtime.tick(tick=4, seed=42) if e.event_type is EventKind.STRUCTURE_COLLAPSED
     ]
+
+
+def test_collapse_hurts_only_nearby_living_entities():
+    from sim.agent.combat_exec import CombatLedger
+    from sim.core.events import structure_collapsed_event
+    from sim.core.world import EntityState, WorldState
+    from sim.world.maintenance import collapse_injuries
+
+    ledger = CombatLedger()
+    state = WorldState(
+        entities={
+            "near": EntityState(entity_id="near", pos=(4, 0)),
+            "far": EntityState(entity_id="far", pos=(20, 20)),
+        }
+    )
+    events = [structure_collapsed_event(0, structure_id="base", cause="support_lost")]
+    deaths = collapse_injuries(state, events, {"base": _structure("base")}, ledger)
+    assert [e.payload["entity_id"] for e in deaths] == ["near"]
+    assert ledger.hp_of("near") == 0 and ledger.hp_of("far") == 10

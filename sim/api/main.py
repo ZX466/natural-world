@@ -48,6 +48,9 @@ manager = ConnectionManager()
 GENESIS_ENTITIES: tuple[str, ...] = (
     "chenmo",
     *(f"villager_{i + 1:02d}" for i in range(50)),
+    "cat_grey",
+    "dog_black",
+    "raven",
 )
 #: 出生点（build_town.py SPAWN 同源：药铺屋前空地；创世 (0,0) 落树墙内 → 事件搬运）
 SPAWN_TILE: tuple[int, int] = (8, 16)
@@ -108,11 +111,12 @@ async def build_loop() -> tuple[TickLoop, Any]:
     from sim.content.villagers import territory_spawn_positions
 
     tile_map_for_spawn = _default_map()
-    roster = list(GENESIS_ENTITIES[1:])
+    roster = [eid for eid in GENESIS_ENTITIES if eid.startswith("villager_")]
     positions = territory_spawn_positions(tile_map_for_spawn, roster)
     spawn_of: dict[str, tuple[int, int]] = {"chenmo": SPAWN_TILE}
     for eid, pos in positions.items():
         spawn_of[eid] = pos
+    spawn_of.update({"cat_grey": (9, 16), "dog_black": (10, 16), "raven": (11, 16)})
     for eid in GENESIS_ENTITIES:
         loop.issue_move(eid, [(0, 0), spawn_of[eid]])
     loop.advance_frame(1.0)
@@ -173,6 +177,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     _display_names: dict[str, str] = dict(zip(VILLAGER_IDS, VILLAGER_NAMES, strict=True))
     _display_names[CHENMO_ID] = "陈默"
+    from sim.content.animals import ANIMALS, animal_events, seed_animals
+
+    _display_names.update({eid: name for eid, (name, _) in ANIMALS.items()})
+    from sim.npc.roles import ROLES, role_events
+
+    _display_names.update({eid: role[0] for eid, role in ROLES.items()})
 
     # 批次 D10：头顶名字供数——快照 actor.name 出站（同源映射，感知真名一致）。
     from sim.api.ws import set_display_names
@@ -181,7 +191,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     loop.attach_perception(
         lambda state, tick_events: run_perception_step(
-            state, tile_map, tick_events, display_name_of=_display_names
+            state,
+            build_runtime.tile_map,
+            tick_events,
+            display_name_of=_display_names,
+            species_of={eid: species for eid, (_, species) in ANIMALS.items()},
         )
     )
 
@@ -200,8 +214,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await session.commit()
 
     async def on_flush_async() -> None:
-        branch_id = await store.current_branch_id_or_none() or "main"
         events = loop.drain_events()
+        branch_id = await store.current_branch_id_or_none() or "main"
         await NpcStore(store, branch_id=branch_id).flush_tick(events)
         maintenance.observe(events)
         cognition.observe(events)
@@ -244,6 +258,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     seeded = await seed_villagers(store.session_factory)
     if seeded:
         logger.info("npc.seeded", count=seeded)
+    await seed_animals(store.session_factory)
     npc_store = NpcStore(store)
     npc_runtime, _hidden_states = await assemble_runtime(npc_store)
     # 批次 D14：真实意愿面——逐人合成（性格/需求/处境 → band 全谱），
@@ -283,6 +298,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     errands = ErrandRuntime(seed=loop.state.world_seed, coin_ledger=coin_ledger)
     app.state.errands = errands
+    from sim.npc.demography import Demography
+
+    demography = Demography(seed=loop.state.world_seed)
+    app.state.demography = demography
+    loop.attach_npc_runtime(lambda state, tick: demography.tick(tick))
     wage_last: dict[str, int] = {}
     # 批次 E4：施工 runtime（事件为真相；每 tick 推进 checkpoint/完工）。
     from sim.agent.build_exec import BuildRuntime
@@ -328,6 +348,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         chenmo = state.entities.get(CHENMO_ID)
         if chenmo is not None:
             for npc_id, _profile in npc_runtime.profiles.items():
+                if _profile.species != "human":
+                    continue
                 entity = state.entities.get(npc_id)
                 nearby = (
                     entity is not None
@@ -363,7 +385,33 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     set_action_anim(npc_id, anim_of_action(str(event.payload.get("action", ""))))
         return batch or None
 
+    role_last: dict[str, int] = {}
+
+    def _role_tick(state: Any, tick: int) -> list[Any]:
+        events: list[Any] = []
+        for npc_id in ROLES:
+            if npc_id not in state.entities or tick - role_last.get(npc_id, -600) < 600:
+                continue
+            frame = loop.perception_frames.get(rtoken_of(npc_id))
+            if isinstance(frame, PerceptionFrame):
+                batch = role_events(npc_id, frame, tick)
+                if batch:
+                    role_last[npc_id] = tick
+                    for event in batch:
+                        memory_pipeline.write(
+                            npc_id,
+                            str(event.payload["content"]),
+                            source="reason",
+                            event_seq=None,
+                            importance=0.7,
+                            emotion_tag=None,
+                        )
+                    events.extend(batch)
+        return events
+
+    loop.attach_npc_runtime(_role_tick)
     loop.attach_npc_runtime(_npc_tick_hook)
+    loop.attach_npc_runtime(lambda state, tick: animal_events(state, build_runtime.tile_map, tick))
     loop.attach_npc_runtime(lambda state, tick: errands.tick(state, tick) or None)
 
     # ── 批次 D5：火灾实况（凌晨确定性起火 → 蔓延 → 死亡代价）──────────
@@ -479,6 +527,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         entropy_provider=_combat_entropy,
     )
     app.state.chenmo_driver = driver
+    loop.attach_maintenance(lambda state, tick: driver.combat_tick(loop, pathfinder=pathfinder))
     set_impulse_trigger(driver.request_decision)
 
     async def _chenmo_loop() -> None:
@@ -601,6 +650,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         return True  # 受理即 True；失败由 driver 侧记 load_failed
 
     async def _drain_loads() -> None:
+        nonlocal demography
         """driver 每帧调用：执行 pending fork（事件循环内，可 await）。
 
         失败帧（案 B 最小形，K16 审计稿 §3.2）：失败走既有 `_error_frame` +
@@ -623,8 +673,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 # 清零——旧分支的 hp/余额/关系/冷却跨分支残留会造成「一刀秒杀」
                 # /「凭空余财」（账本是**本分支**的世界状态投影，分叉即失效）。
                 # 火场账本既有同款清理由 fork 编排层承担；本批账本在此收口。
+                demography = Demography(seed=loop.state.world_seed)
+                app.state.demography = demography
                 errands.reset()
                 cognition.reset()
+                role_last.clear()
+                driver.reset_combat()
                 combat_ledger.reset()
                 coin_ledger.reset()
                 chat_ledger.reset()
@@ -680,7 +734,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 压成 reason 摘要（write() 闸门照扫；无素材零产物是常态路径）。
     from sim.npc.reflection import make_day_switch_reflector
 
-    _day_reflector = make_day_switch_reflector(memory_pipeline, npc_ids=(CHENMO_ID,))
+    _day_reflector = make_day_switch_reflector(
+        memory_pipeline,
+        npc_ids=(CHENMO_ID, *VILLAGER_IDS),
+    )
     app.state.driver = asyncio.create_task(
         run_world_driver(
             loop,

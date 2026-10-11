@@ -53,6 +53,7 @@ class EventKind(StrEnum):
     #: 铜钱入账/出账（E3）：账单面（余额归 runtime CoinLedger，账单即真相——
     #: 事件流可重放重建余额）。零归因键（note 记事非归因）。
     COIN_GRANT = "coin.grant"
+    DEMOGRAPHY_TICK = "demography.tick"
     # ---- M5（批次 D 火灾生态，裁 33；K12 事件面判定 + A8 数据面预研）----
     #: 起火：火场诞生（**信号≠状态**：起火那一刻没有任何物质变更，故既有族表达不了）。
     #: 「蔓延」与「烧毁」**不新增 kind**：走既有 ``matter.damage`` / ``matter.collapse`` /
@@ -208,6 +209,22 @@ class CoinGrantPayload(BaseModel):
     owner_id: str
     delta: int
     note: str = Field(min_length=1, max_length=128)
+
+
+class DemographyPayload(BaseModel):
+    """图外统计事件，仅内部账本；无戏内投影。"""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    population: tuple[int, int, int, int]
+    grain: tuple[int, int, int, int]
+    traders: int = Field(ge=0)
+
+    @field_validator("population", "grain")
+    @classmethod
+    def nonnegative(cls, value: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+        if any(v < 0 for v in value):
+            raise ValueError("negative offmap count")
+        return value
 
 
 class MatterPayload(BaseModel):

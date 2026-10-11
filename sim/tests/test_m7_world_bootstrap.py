@@ -50,7 +50,7 @@ class TestGenesis:
         from sim.api.main import build_loop
 
         loop, _store = asyncio.run(build_loop())
-        assert len(loop.state.entities) == ROSTER + 1
+        assert len(loop.state.entities) == ROSTER + 4
         assert loop.state.entities["chenmo"].pos == SPAWN
         villager_ids = [k for k in loop.state.entities if k.startswith("villager_")]
         assert len(villager_ids) == ROSTER

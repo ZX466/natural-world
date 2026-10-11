@@ -122,6 +122,14 @@ class CombatLedger:
         """清空 hp 账本（读档=分叉：旧分支 hp 残留会「一刀秒杀」——review I2）。"""
         self._hp.clear()
 
+    def apply_damage(self, target: str, amount: int) -> bool:
+        """环境伤害；归零由调用方产 npc.death 事件。"""
+        if amount < 0:
+            raise ValueError("damage amount must be non-negative")
+        new_hp = max(0, self.hp_of(target) - amount)
+        self._hp[target] = new_hp
+        return new_hp == 0
+
     def apply_attack(
         self,
         attacker: str,
@@ -130,17 +138,17 @@ class CombatLedger:
         tick: int,
         seed: int,
         entropy_roll: float | None = None,
+        damage_scale: float = 1.0,
     ) -> AttackOutcome:
         """结算并扣血；hp 归零 → outcome=kill（死亡事件由调用方发——C4）。"""
         out = settle_attack(attacker, target, tick=tick, seed=seed, entropy_roll=entropy_roll)
+        if not 0.0 <= damage_scale <= 2.0:
+            raise ValueError("damage scale must be in [0, 2]")
         if out.outcome == "miss":
             return out
-        new_hp = max(0, self.hp_of(target) - out.damage)
+        damage = max(0, round(out.damage * damage_scale))
+        new_hp = max(0, self.hp_of(target) - damage)
         self._hp[target] = new_hp
         if new_hp == 0:
-            return AttackOutcome(
-                outcome="kill", damage=out.damage, target_hp=0, critical=out.critical
-            )
-        return AttackOutcome(
-            outcome="hit", damage=out.damage, target_hp=new_hp, critical=out.critical
-        )
+            return AttackOutcome(outcome="kill", damage=damage, target_hp=0, critical=out.critical)
+        return AttackOutcome(outcome="hit", damage=damage, target_hp=new_hp, critical=out.critical)

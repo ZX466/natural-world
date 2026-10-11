@@ -23,7 +23,7 @@ from typing import Any, NamedTuple
 
 import structlog
 
-from sim.core.events import WorldEvent
+from sim.core.events import EventKind, WorldEvent
 from sim.core.world import WorldState
 from sim.perception.frame import Channel, PerceptionFrame
 from sim.perception.narrate import (
@@ -94,6 +94,7 @@ class _SoundEvent(NamedTuple):
     base: float
     kind: str  # footstep | door
     source_id: str
+    line: str = ""
 
 
 def _sound_events_from(
@@ -114,6 +115,14 @@ def _sound_events_from(
             x = int(ev.payload.get("x", 0))  # type: ignore[arg-type]  # payload 由 schema 保证
             y = int(ev.payload.get("y", 0))  # type: ignore[arg-type]
             sounds.append(_SoundEvent((x, y), DOOR_BASE, "door", ""))
+    for ev in tick_events:
+        if ev.event_type is EventKind.NPC_CHAT or (
+            ev.event_type is EventKind.NPC_MONOLOGUE and ev.payload.get("form") == "bubble"
+        ):
+            ent = state.entities.get(ev.actor_id)
+            line = ev.payload.get("line", ev.payload.get("content", ""))
+            if ent is not None and isinstance(line, str):
+                sounds.append(_SoundEvent(ent.pos, 1.0, "speech", ev.actor_id, line))
     return sounds
 
 
@@ -210,6 +219,7 @@ class PerceptionEngine:
         sounds: list[_SoundEvent] | None = None,
         concentrations: dict[str, float] | None = None,
         display_name_of: dict[str, str] | None = None,
+        profile: PerceptionProfile | None = None,
     ) -> PerceptionFrame:
         """为 observer 装配本 tick 感知帧。纯读：不改 state、无全局态。
 
@@ -231,7 +241,7 @@ class PerceptionEngine:
             msg = f"感知对象不存在: {observer_id}"
             raise KeyError(msg)
 
-        profile = self._profile
+        profile = profile or self._profile
         positions = {eid: e.pos for eid, e in state.entities.items()}
         moving = {eid for eid, e in state.entities.items() if e.path}
         light = self.light_for_tick(state.tick)
@@ -274,17 +284,17 @@ class PerceptionEngine:
             sounds = _sound_events_from(tick_events, moving, state)
         hearing_floor = profile.hearing_floor
         wall_decay = WALL_DECAY
-        for pos, base, kind, src_id in sounds:
+        for pos, base, kind, src_id, line in sounds:
             if src_id == observer_id:
                 continue  # 自己的脚步/动静不进自己的听觉（自己的身体走内感受）
             dx = pos[0] - ox
             dy = pos[1] - oy
             dist = math.hypot(dx, dy)
-            if dist > hearing_radius or dist <= 0.0:
+            if dist > hearing_radius or (dist <= 0.0 and kind != "speech"):
                 continue
             # 穿墙计算前剪枝：即使 0 墙也低于地板的源，免算 Bresenham
             # （墙只会再打折，0 墙上限 = base/dist；这是保守上界，不丢真观测）
-            zero_wall = base / dist
+            zero_wall = base / max(1.0, dist)
             if zero_wall < hearing_floor:
                 continue
             walls = self._walls_crossed(observer.pos, pos)
@@ -298,7 +308,7 @@ class PerceptionEngine:
                 if (display_name_of is not None and src_id in display_name_of)
                 else (rtoken_of(src_id) if src_id in state.entities else None)
             )
-            desc = _sound_desc(kind, src_label)
+            desc = f"{src_label or '有人'}说：{line}" if line else _sound_desc(kind, src_label)
             subject = src_label if src_label else f"sound:{pos[0]},{pos[1]}"
             raw.append((Channel.HEARING, subject, desc, strength))
 
@@ -338,6 +348,7 @@ def run_perception_step(
     tile_map,
     tick_events: list[WorldEvent],
     display_name_of: dict[str, str] | None = None,
+    species_of: dict[str, str] | None = None,
 ) -> dict[str, PerceptionFrame]:
     """TickLoop 感知挂载点钩子（attach_perception 的标准实现）。
 
@@ -354,13 +365,20 @@ def run_perception_step(
     # 嗅觉：源=全体实体（含观察者自己——他人靠风/扩散把气味带过来）；
     # wind = weather.wind_at 纯函数派生（档内恒定），档位缓存免每 tick 重算哈希。
     wind = _wind_for_tick(state.tick, state.world_seed)
-    concentrations = smell_world.step(
-        {eid: e.pos for eid, e in state.entities.items()}, wind=wind
-    )
+    concentrations = smell_world.step({eid: e.pos for eid, e in state.entities.items()}, wind=wind)
     frames: dict[str, PerceptionFrame] = {}
+    from sim.perception.profiles import CAT, DOG, HUMAN, RAVEN
+
+    profiles = {p.species: p for p in (HUMAN, CAT, DOG, RAVEN)}
     for eid in state.entities:
         frames[rtoken_of(eid)] = engine.assemble(
-            state, eid, tick_events, sounds, concentrations, display_name_of
+            state,
+            eid,
+            tick_events,
+            sounds,
+            concentrations,
+            display_name_of,
+            profiles.get((species_of or {}).get(eid, "human"), HUMAN),
         )
     return frames
 
