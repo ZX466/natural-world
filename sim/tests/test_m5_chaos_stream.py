@@ -102,3 +102,23 @@ class TestInjectReswitch:
 
     def test_stream_constant(self) -> None:
         assert CHAOS_STREAM == "chaos"
+
+
+def test_adverse_events_feed_chain_and_only_daily_cool():
+    from sim.core.clock import GameClock
+    from sim.core.events import fire_ignited_event, world_create_event
+    from sim.core.tick import TickLoop
+    from sim.core.world import WorldState, build_default_bus
+
+    loop = TickLoop(
+        clock=GameClock(speed=1), bus=build_default_bus(), state=WorldState(world_seed=42)
+    )
+    loop.enqueue(world_create_event(tick=0, seed=42, entity_ids=("chenmo", "villager_01")))
+    loop.enqueue(fire_ignited_event(tick=0, fire_id="fire-1", x=5, y=5))
+    assert loop.chaos.chain > 0
+    loop.state = loop.state.model_copy(update={"tick": 100})
+    loop._maybe_encounter_entropy()
+    assert loop.chaos.chain > 0
+    loop.state = loop.state.model_copy(update={"tick": 86_400})
+    loop._maybe_encounter_entropy()
+    assert 0 <= loop.chaos.chain < 0.25

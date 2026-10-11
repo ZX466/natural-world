@@ -152,7 +152,9 @@ class TickLoop:
         self._entropy_hook = hook
 
     def _maybe_encounter_entropy(self) -> None:
-        if self.state.tick % 86_400 != 0 or len(self.state.entities) < 2:
+        if self.state.tick % 86_400 != 0:
+            return
+        if len(self.state.entities) < 2:
             self.chaos = self.chaos.cool()
             return
         if self._entropy_hook is None:
@@ -264,6 +266,14 @@ class TickLoop:
             raise ValueError(msg)
         result = self.bus.apply(self.state, event, self.context)
         self.state = result.state
+        from sim.core.events import EventKind
+
+        if event.event_type in (
+            EventKind.FIRE_IGNITED,
+            EventKind.NPC_DEATH,
+            EventKind.STRUCTURE_COLLAPSED,
+        ):
+            self.chaos = self.chaos.adverse(event.event_type.value)
         self.pending_events.append(event)
         for d in result.derived:
             self.pending_events.append(d)
