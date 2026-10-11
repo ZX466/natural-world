@@ -189,6 +189,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from sim.core.flush import flush_events
 
         await flush_events(store, events)
+        maintenance.observe(events)
         cognition.observe(events)
         branch_id = await store.current_branch_id_or_none()
         if branch_id is not None:
@@ -632,6 +633,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 chat_last.clear()
                 retell_last.clear()
                 wage_last.clear()
+                from sim.core.persistence.npc_store import NpcStore
+
+                branch_id = await store.current_branch_id_or_none()
+                if branch_id is None:
+                    raise RuntimeError("fork completed without an active branch")
+                branch_store = NpcStore(store, branch_id=branch_id)
+                maintenance.ledger = await branch_store.materialize_matter()
+                maintenance.structures = await branch_store.materialize_structures()
+                maintenance._cascades.clear()
+                maintenance._collapsed.clear()
                 memory_store.attach_branch(await store.current_branch_id_or_none())
                 logger.info("fork.runtime_ledgers_reset", anchor_id=anchor_id)
                 logger.info("fork.load_completed", anchor_id=anchor_id)
