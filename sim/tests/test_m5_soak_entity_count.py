@@ -13,7 +13,7 @@
   ⇒ 计数里没有 LOD 维度、也没有「死了但还被数」这个形态的**现状**载体。
 - **增删钉**：只有 `world.create` 往字典里插键；`move` 事件与 tick 内移动只改既有键的字段
   ⇒ 今天 `end == start` 恒真的是因为**没有删除路径**，不是因为死亡不计数。
-- **LOD 钉**：`npc.lod_change` 在默认总线上**未注册**（进不了 `WorldState`）；`lod > 0`
+- **LOD 钉**：`npc.lod_change` 由总线校验但对 `WorldState` no-op；`lod > 0`
   过滤只存在于 `sim/npc/runtime.py` 的 L1 决策层 ⇒ LOD 0 既不被计数排除，也不影响计数。
 - **采样点钉**：计数在**第一个 tick 之前**与**最后一个 tick 之后**各采一次；稳定性依赖
   「harness 预置实体」（app 形态是 `world.create` 在 tick 1 才落 ⇒ 那里 start 会是 0）。
@@ -69,12 +69,12 @@ class TestEntityCountSource:
         """结构钉：`EntityState` 只有 `entity_id/pos/path` ⇒ 没有 LOD、没有生死列。"""
         assert set(EntityState.model_fields) == {"entity_id", "pos", "path"}
 
-    def test_lod_change_event_cannot_reach_world_state(self) -> None:
-        """LOD 钉：`npc.lod_change` 在默认总线上**未注册** ⇒ 进不了 `WorldState.entities`。"""
+    def test_lod_change_event_does_not_change_world_state(self) -> None:
+        """LOD 只投影到档案，不改变世界实体数或状态指纹。"""
         bus = build_default_bus()
         state = _state(1)
-        with pytest.raises(ValueError, match="未注册"):
-            bus.apply(state, npc_lod_change_event(1, "npc0", 1, 0, "far"), TickContext())
+        event = npc_lod_change_event(1, "npc0", 1, 0, "far")
+        assert bus.apply(state, event, TickContext()).state.state_hash() == state.state_hash()
 
 
 class TestNoAddNoRemoveToday:
