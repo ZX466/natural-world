@@ -41,6 +41,8 @@ def _rss_linux() -> float:
 
 
 def _rss_windows() -> float:
+    if sys.platform != "win32":  # pyright 平台窄化：Linux runner 上 WinDLL 不存在
+        return -1.0
     from ctypes import wintypes
 
     class _PMC(ctypes.Structure):
@@ -83,7 +85,7 @@ def rss_mb() -> float:
 
 def handle_count() -> int:
     """进程句柄数（Windows）；其他平台返回 -1（Linux 无稳定等价量）。"""
-    if not is_windows():
+    if sys.platform != "win32":  # pyright 平台窄化（同 _rss_windows）
         return -1
     try:
         from ctypes import wintypes
