@@ -112,6 +112,7 @@ def utility_scores_matrix(
     power: list[float] | None = None,
     *,
     night_bias: bool = False,
+    suppress_chat: tuple[bool, ...] | None = None,
 ) -> np.ndarray:
     """50 NPC 全量打分：需求加权和 + 外向偏置 → (n_npc, n_actions) float32。
 
@@ -124,6 +125,12 @@ def utility_scores_matrix(
     night_bias（D19 作息接线）：夜相位面——True 时非生存非 rest 动作列压
     _NIGHT_ACTION_PENALTY（凌晨全村睡觉；False=与旧管线逐位一致，调用方
     判相位传入）。eat/rest 生存与恢复列零触碰（夜里饿照吃）。
+
+    suppress_chat（2026-10-11 决策面节流）：与 profiles 等长的布尔——True 时
+    该 npc 的 request_chat 列压到 -inf（argmax 必不选）。治「开口冷却只挡
+    事件不挡决策」的写库膨胀（实况 4.9 日 request_chat 733 万行 / 转化
+    0.06%）；开口冷却账本仍归执行面（sim_exec chat_last），本参数只压
+    **决策**面。None = 无抑制（打分逐位同旧，零回归钉 test 钉死）。
     """
     needs = model._needs_matrix(profiles)  # (n, 3)
     weights = model._weights_matrix(profiles)  # (n, 3)
@@ -162,6 +169,16 @@ def utility_scores_matrix(
                 continue
             col = model.action_index[action]
             scores[:, col] = scores[:, col] - np.float32(_NIGHT_ACTION_PENALTY)
+
+    # 决策面节流（2026-10-11）：冷却内的人 chat 列压 -inf——argmax 必落其他列。
+    # 布尔掩码向量化（同 P10 红线口径：整列运算，禁逐人 Python 循环）。
+    if suppress_chat is not None:
+        if len(suppress_chat) != len(profiles):
+            msg = f"suppress_chat 长度 {len(suppress_chat)} 与 profiles 数 {len(profiles)} 不一致"
+            raise ValueError(msg)
+        mask = np.array(suppress_chat, dtype=bool)
+        chat_col = model.action_index["request_chat"]
+        scores[mask, chat_col] = -np.inf
     return scores
 
 
@@ -171,12 +188,16 @@ def evaluate_batch(
     power: list[float] | None = None,
     *,
     night_bias: bool = False,
+    suppress_chat: tuple[bool, ...] | None = None,
 ) -> list[UtilityDecision]:
     """批量评估 → 每 NPC 一个 UtilityDecision（argmax；scores 全量随行供审计）。
 
     power（M6 批次 C）：透传给打分矩阵（None = 无权力面，行为逐位同旧）。
+    suppress_chat（决策面节流）：透传（见 utility_scores_matrix）。
     """
-    scores = utility_scores_matrix(profiles, model, power=power, night_bias=night_bias)
+    scores = utility_scores_matrix(
+        profiles, model, power=power, night_bias=night_bias, suppress_chat=suppress_chat
+    )
     best = scores.argmax(axis=1)
     return [
         UtilityDecision(

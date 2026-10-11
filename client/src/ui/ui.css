@@ -243,7 +243,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
-  width: 20.5rem;
+  width: 17rem;
   flex-shrink: 0;
   overflow-y: auto;
   padding: 0.9rem;
@@ -274,8 +274,17 @@
   flex: 1;
   overflow-y: auto;
 }
+/* 三面板等权：心声不再 flex-shrink:0（20 条撑满就压扁街谈巷议/计划——
+   2026-10-11 实况反馈）；改内部滚动，各面板独立滚动互不挤压。 */
 .od-panel--voice {
+  flex: 1;
+  min-height: 6rem;
+  overflow-y: auto;
+}
+.od-panel--plan {
   flex-shrink: 0;
+  max-height: 9rem;
+  overflow-y: auto;
 }
 /* 铜钉：把纸钉在木墙上 */
 .od-panel__pin {

@@ -461,7 +461,42 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
         "fog": _fog_snapshot(loop),
         "combat": None,
         "time": _time_payload(loop.state.tick),
+        # 2026-10-11 心声历史：重启/重连面板不空（可选键——查询失败=无键/空表）。
+        "monologue_history": monologue_history_payload(loop),
     }
+
+
+def monologue_history_payload(loop: TickLoop, *, cap: int = 20) -> list[dict[str, Any]]:
+    """快照附带的心声历史（2026-10-11 症状面修复：重启/重连面板不空）。
+
+    从事件日志**最近一个游戏日窗口**（tick 下界 = 当前-86400，走 idx_events_
+    branch_tick 索引）倒查 npc.monologue,取尾部 cap 条投影为既有 monologue
+    帧形。历史是**已发生事实的投影**（事件即真相），快照带出属重同步语义，
+    同 fog/structures。查不到/查询失败 → 空数组（尽力投递不拖垮快照）。
+    """
+    from sim.core.persistence.store import SqlEventStore
+
+    store = getattr(loop, "_event_store_ref", None)
+    if not isinstance(store, SqlEventStore):
+        return []
+    try:
+        import asyncio
+
+        branch = asyncio.get_event_loop().run_until_complete(store.current_branch_id())
+        frm = max(0, loop.state.tick - 86_400)
+        rows = asyncio.get_event_loop().run_until_complete(
+            store.read_range(branch, frm, loop.state.tick)
+        )
+    except Exception:
+        return []
+    monos = [r for r in rows if r.get("event_type") == "npc.monologue"][-cap:]
+    frames: list[dict[str, Any]] = []
+    for r in monos:
+        payload = r.get("payload") or {}
+        form = str(payload.get("form", ""))
+        name = _display_name_of(str(r.get("actor_id", ""))) if form == "bubble" else None
+        frames.append(monologue_payload(form, str(payload.get("content", "")), name=name))
+    return frames
 
 
 def _fog_revealed_payload(chunks: set[tuple[int, int]]) -> dict[str, Any]:

@@ -1215,6 +1215,12 @@
           },
           "fog": {
             "$ref": "#/components/schemas/FogState"
+          },
+          "monologue_history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonologueMessage"
+            }
           }
         },
         "additionalProperties": false

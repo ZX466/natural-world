@@ -17,7 +17,7 @@ class _FakeRuntime:
         self._events = events
         self.profiles = profiles or {}
 
-    def tick(self, tick):
+    def tick(self, tick, *, chat_cooldown_until=None):
         return list(self._events)
 
 

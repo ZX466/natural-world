@@ -87,8 +87,15 @@ class NpcRuntime:
         ticks: int = 1,
         hidden_states: dict[str, HiddenState] | None = None,
         context_of: Callable[[str], str] | None = None,
+        chat_cooldown_until: dict[str, int] | None = None,
     ) -> list[WorldEvent]:
         """推进一 tick：隐藏档重估(+E1 浮现事件) → 需求 → 效用 → 事件批次（顺序固定，可重放）。
+
+        chat_cooldown_until（2026-10-11 决策面节流）：{npc_id: 冷却截止 tick}——
+        调用方（main.py）从执行面 chat_last 冷却账本换算传入（账本本身仍归
+        sim_exec 执行面持有）；冷却内的人 request_chat 列压 -inf（argmax 落
+        其他动作）。治「开口冷却只挡事件不挡决策」的写库膨胀（实况 4.9 日
+        request_chat 733 万行/转化 0.06%）。None = 无抑制（行为逐位同旧）。
 
         ticks：本拍推进的游戏秒数（批次 B 决策节拍 10 → 需求按 10 tick 推进，
         保持「每游戏秒一推进」的语义不随节拍漂移）。其余同上。
@@ -148,11 +155,16 @@ class NpcRuntime:
         from sim.npc.schedule import current_slot
 
         night = current_slot(tick).phase is DayPhase.NIGHT
+        # 决策面节流：冷却内的人 chat 列压掉（suppress_chat 与 active_ids 对齐）。
+        suppress_chat: tuple[bool, ...] | None = None
+        if chat_cooldown_until is not None:
+            suppress_chat = tuple(chat_cooldown_until.get(nid, 0) > tick for nid in active_ids)
         decisions = evaluate_batch(
             [advanced[nid] for nid in active_ids],
             self.utility,
             power=power_values,
             night_bias=night,
+            suppress_chat=suppress_chat,
         )
 
         # 3. 事件产出：params 只带白名单键（eat/rest/wander/move 无参数动作 → 空 params）

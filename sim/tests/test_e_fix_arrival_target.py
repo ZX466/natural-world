@@ -55,7 +55,7 @@ def test_opening_talks_to_whomever_is_present():
         def __init__(self) -> None:
             self.profiles: dict = {}
 
-        def tick(self, tick):
+        def tick(self, tick, *, chat_cooldown_until=None):
             return list(rt_events)
 
     events = npc_events_for_tick(

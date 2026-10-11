@@ -54,6 +54,20 @@ def _chat_cooldown_ticks(npc_id: str) -> int:
     return _CHAT_COOLDOWN_MIN_TICKS + span
 
 
+def chat_cooldown_until_of(chat_last: dict[str, int], *, tick: int) -> dict[str, int]:
+    """执行面开口账本 → 决策面抑制表（2026-10-11 节流接线）。
+
+    {npc_id: 上次开口 tick} → {npc_id: 冷却截止 tick}（上次开口 + 本人冷却）。
+    冷却未到期的人，决策面把 request_chat 压出候选（治 733 万空转决策）。
+    纯函数：同输入同输出（C5）；调用方每决策节拍调一次。
+    """
+    return {
+        npc_id: last + _chat_cooldown_ticks(npc_id)
+        for npc_id, last in chat_last.items()
+        if tick < last + _chat_cooldown_ticks(npc_id)
+    }
+
+
 #: E2 retell 冷却：[3600, 14400) tick = 60~240 游戏分（学舌比聊天更稀）。
 _RETELL_COOLDOWN_MIN_TICKS = 3600
 _RETELL_COOLDOWN_SPAN_TICKS = 10800
@@ -521,7 +535,15 @@ def npc_events_for_tick(
     runtime 参数是 NpcRuntime（object 注解避免内核↔npc 域反向依赖——
     实际调用点在 main.py 装配层）。
     """
-    acts = runtime.tick(tick)  # type: ignore[attr-defined]
+    tick_runtime = getattr(runtime, "tick", None)
+    if tick_runtime is None:  # runtime 契约必有 tick（object 注解防域反向依赖）
+        return []
+    acts = tick_runtime(
+        tick,
+        chat_cooldown_until=chat_cooldown_until_of(chat_last, tick=tick)
+        if chat_last is not None
+        else None,
+    )
     events: list[WorldEvent] = []
     for event in acts:
         if event.event_type.value == "npc.monologue":

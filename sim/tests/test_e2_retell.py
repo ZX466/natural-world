@@ -46,7 +46,7 @@ def test_villager_with_memory_retells_on_chat_beat():
         def __init__(self) -> None:
             self.profiles: dict = {}
 
-        def tick(self, tick):
+        def tick(self, tick, *, chat_cooldown_until=None):
             return list(rt_events)
 
     events = npc_events_for_tick(
@@ -101,7 +101,7 @@ def test_retell_cooldown_blocks_repeat():
         def __init__(self) -> None:
             self.profiles: dict = {}
 
-        def tick(self, tick):
+        def tick(self, tick, *, chat_cooldown_until=None):
             return list(rt_events)
 
     # 刚学过（tick=100 刚 retell，tick=110 再试——距上次 10 tick < 冷却下限）

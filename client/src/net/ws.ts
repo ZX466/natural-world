@@ -136,6 +136,12 @@ export class WsClient {
         if (msg.fog) this.mirror.revealFog(msg.fog.revealed); // D17 快照全集
         if (msg.structures) this.mirror.applyStructures(msg.structures); // E7 快照全集
         if (msg.time) worldClock.apply(msg.time); // M7-R3：时钟权威帧
+        // 2026-10-11 心声历史：重启/重连面板不空（后端带最近 20 条，逐条回放）
+        if (msg.monologue_history) {
+          for (const frame of msg.monologue_history) {
+            this.cb.onMonologue?.(frame as MonologueMessage);
+          }
+        }
         this.cb.onSnapshot(msg);
         break;
       case 'state_delta':

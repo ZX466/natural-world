@@ -304,6 +304,7 @@ export type components = {
       readonly fog?: components['schemas']['FogState'];
       readonly lights: readonly components['schemas']['Light'][];
       readonly map: components['schemas']['MapInfo'];
+      readonly monologue_history?: readonly components['schemas']['MonologueMessage'][];
       readonly structures: readonly components['schemas']['Structure'][];
       readonly time: components['schemas']['TimeInfo'];
       /**
