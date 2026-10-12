@@ -159,7 +159,8 @@ class TestTilesetName:
         from sim.api.ws import map_static_payload
 
         raw = map_static_payload(_default_map())
-        assert raw["tileset"] == "zelda_like_v1"
+        # 2026-10-12 D6-D8 换图：TOWN_MAP_PATH 已指向桃花源整图产物
+        assert raw["tileset"] == "god_town_v1"
 
     def test_fallback_map_stays_grid(self, monkeypatch, tmp_path):
         import sim.api.main as main_mod
@@ -173,6 +174,9 @@ class TestTilesetName:
         from sim.api.ws import _tileset_name
         from sim.world.map import TileMap
 
-        assert _tileset_name(TileMap(width=96, height=96)) == "zelda_like_v1"  # D16 扩图
+        # 2026-10-12 D6-D8 换图：140×100 桃花源整图 → god_town_v1；
+        # 96×96 旧 Zelda 图名保留（D10 退休出运行时但产物语义留档）
+        assert _tileset_name(TileMap(width=140, height=100)) == "god_town_v1"
+        assert _tileset_name(TileMap(width=96, height=96)) == "zelda_like_v1"
         assert _tileset_name(TileMap(width=48, height=48)) == "grid"  # 旧尺寸不再特判
         assert _tileset_name(TileMap(width=32, height=32)) == "grid"

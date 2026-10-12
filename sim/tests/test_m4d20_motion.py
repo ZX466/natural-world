@@ -45,7 +45,7 @@ class TestPathJitter:
         from sim.npc.sim_exec import _jitter_path
 
         pf = _town_pf()
-        base = pf.find((28, 42), (40, 47))
+        base = pf.find((95, 52), (100, 52))
         paths = {
             _jitter_path(base, f"villager_{i:02d}", tick=100, pathfinder=pf) for i in range(1, 11)
         }
@@ -56,7 +56,7 @@ class TestPathJitter:
         from sim.npc.sim_exec import _jitter_path
 
         pf = _town_pf()
-        base = pf.find((28, 42), (40, 47))
+        base = pf.find((95, 52), (100, 52))
         a = _jitter_path(base, "villager_01", tick=100, pathfinder=pf)
         b = _jitter_path(base, "villager_01", tick=100, pathfinder=pf)
         assert a == b
@@ -66,7 +66,7 @@ class TestPathJitter:
         from sim.npc.sim_exec import _jitter_path
 
         pf = _town_pf()
-        base = pf.find((28, 42), (40, 47))
+        base = pf.find((95, 52), (100, 52))
         for tick in range(30):
             p = _jitter_path(base, "villager_02", tick=tick, pathfinder=pf)
             assert p[0] == base[0] and p[-1] == base[-1]
@@ -77,7 +77,7 @@ class TestPathJitter:
         from sim.npc.sim_exec import _jitter_path
 
         pf = _town_pf()
-        base = pf.find((28, 42), (40, 47))
+        base = pf.find((95, 52), (100, 52))
         for tick in range(30):
             p = _jitter_path(base, "villager_03", tick=tick, pathfinder=pf)
             assert len(p) <= max(2, int(len(base) * 1.6) + 1), (
@@ -89,7 +89,7 @@ class TestPathJitter:
         from sim.npc.sim_exec import _jitter_path
 
         pf = _town_pf()
-        base = pf.find((28, 42), (28, 44))
+        base = pf.find((95, 52), (97, 52))
         assert _jitter_path(base, "villager_01", tick=7, pathfinder=pf) == base
 
     def test_plan_move_applies_jitter(self) -> None:
@@ -100,7 +100,7 @@ class TestPathJitter:
         paths = set()
         for i in range(1, 11):
             nid = f"villager_{i:02d}"
-            st = _state_at(**{nid: (28, 42)})
+            st = _state_at(**{nid: (100, 53)})  # 换图：药铺（村广场带可走）
             ev = plan_npc_move(st, nid, "eat", pf, seed=42, tick=100 + i)
             if ev is not None:
                 path = cast("list[list[int]]", ev.payload["path"])

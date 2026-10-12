@@ -52,8 +52,9 @@ GENESIS_ENTITIES: tuple[str, ...] = (
     "dog_black",
     "raven",
 )
-#: 出生点（build_town.py SPAWN 同源：药铺屋前空地；创世 (0,0) 落树墙内 → 事件搬运）
-SPAWN_TILE: tuple[int, int] = (8, 16)
+#: 出生点（2026-10-12 D6-D8 换图：村广场 anchor 侧可走格；桃花源
+#: Spawning Blocks 候选 90 格内取村广场带（行 51-54）确定性选点）
+SPAWN_TILE: tuple[int, int] = (100, 53)
 TOWN_MAP_PATH = Path(__file__).resolve().parents[1] / "content" / "linhe-town.json"
 
 
@@ -112,11 +113,16 @@ async def build_loop() -> tuple[TickLoop, Any]:
 
     tile_map_for_spawn = _default_map()
     roster = [eid for eid in GENESIS_ENTITIES if eid.startswith("villager_")]
-    positions = territory_spawn_positions(tile_map_for_spawn, roster)
+    # 主角先占 SPAWN（村民散布避开同格——2026-10-12 换图后药铺=村广场带，
+    # 定籍锚点 (100,52) 邻域恰含 SPAWN，无 occupied 参数时首个村民撞主角格）
     spawn_of: dict[str, tuple[int, int]] = {"chenmo": SPAWN_TILE}
+    positions = territory_spawn_positions(
+        tile_map_for_spawn, roster, occupied={"chenmo": SPAWN_TILE}
+    )
     for eid, pos in positions.items():
         spawn_of[eid] = pos
-    spawn_of.update({"cat_grey": (9, 16), "dog_black": (10, 16), "raven": (11, 16)})
+    # 动物落点：村广场带可走格（2026-10-12 换图；旧 (9..11,16) 随旧图退役）
+    spawn_of.update({"cat_grey": (99, 52), "dog_black": (101, 52), "raven": (101, 53)})
     for eid in GENESIS_ENTITIES:
         loop.issue_move(eid, [(0, 0), spawn_of[eid]])
     loop.advance_frame(1.0)
@@ -566,9 +572,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # 不知道任何坐标（[计划] 恒空、target_pos 无从填起），输出收敛
             # wait/短移=行动面空转。地标=戏内地点名+坐标（戏内事实可出站）。
             _landmarks = (
-                "你知道这些去处：药铺（8,16，你的铺子）、镇集食摊（10,15）、"
-                "东村路口（70,38）、南村农田（40,80）、北村村口（70,72）、"
-                "西村十字路（20,62）。想去哪就 move_to 它的坐标。"
+                "你知道这些去处：药铺（100,53，你的铺子）、染坊市集（72,52）、"
+                "桃门（15,18）、溪桥（66,19）、梯田（122,19）、客栈院（44,53）。"
+                "想去哪就 move_to 它的坐标。"
             )
             await driver.decide_once(
                 loop.state,

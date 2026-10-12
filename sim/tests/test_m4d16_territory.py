@@ -52,25 +52,33 @@ def _state_at(**positions: tuple[int, int]):
 
 
 # ---------------------------------------------------------------------------
-# ① 扩图 96×96
+# ① 整图替换 140×100（2026-10-12 D6-D8；96×96 旧图断言随 D10 退役）
 # ---------------------------------------------------------------------------
 
 
-class TestTown96:
-    def test_dimensions_96(self) -> None:
+class TestTownGodMap:
+    def test_dimensions_140x100(self) -> None:
         town = _town()
-        assert town.width == 96 and town.height == 96
-
-    def test_border_impassable(self) -> None:
-        town = _town()
-        for i in range(96):
-            assert not town.is_walkable(i, 0)
-            assert not town.is_walkable(i, 95)
-            assert not town.is_walkable(0, i)
-            assert not town.is_walkable(95, i)
+        assert town.width == 140 and town.height == 100
 
     def test_spawn_walkable(self) -> None:
-        assert _town().is_walkable(8, 16), "SPAWN (8,16) 必须可走（main.py 同源依赖）"
+        assert _town().is_walkable(100, 53), "SPAWN (100,53) 必须可走（main.py 同源依赖）"
+
+    def test_landmarks_walkable(self) -> None:
+        """10 桃花源地标 anchor 全可走（差事/地标文案的选点库）。"""
+        town = _town()
+        for name, (x, y) in {
+            "peach_gate": (15, 18),
+            "ancestral_hall": (40, 18),
+            "stream_bridge": (66, 19),
+            "old_school": (93, 19),
+            "terraced_fields": (122, 19),
+            "guest_yard": (44, 53),
+            "craft_market": (72, 52),
+            "village_square": (100, 52),
+            "archive_room": (124, 52),
+        }.items():
+            assert town.is_walkable(x, y), f"{name} ({x},{y}) 不可走"
 
     def test_all_home_bases_walkable(self) -> None:
         from sim.npc.sim_exec import HOME_BASES
@@ -79,18 +87,19 @@ class TestTown96:
         for base in HOME_BASES:
             assert town.is_walkable(*base), f"片区锚点 {base} 必须可走（锚点兜底依赖）"
 
-    def test_deterministic_build(self, tmp_path: Path) -> None:
+    def test_deterministic_build(self) -> None:
+        """换图后确定性真相源 = build_god_town.py（build_town.py 随 D10 退役）。"""
         before = _TOWN_JSON.read_bytes()
         import subprocess
         import sys
 
         subprocess.run(
-            [sys.executable, str(REPO / "sim" / "content" / "build_town.py")],
+            [sys.executable, "-m", "sim.content.build_god_town"],
             check=True,
             cwd=REPO,
             capture_output=True,
         )
-        assert _TOWN_JSON.read_bytes() == before, "build_town.py 重跑产物漂移"
+        assert _TOWN_JSON.read_bytes() == before, "build_god_town.py 重跑产物漂移"
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +163,8 @@ class TestPlanMoveTerritory:
         )
 
         pf = _town_pf()
-        state = _state_at(villager_01=(5, 5))
+        # 换图：起点=药铺（新图可走；旧 (5,5) 不可走）
+        state = _state_at(villager_01=(100, 53))
         event = plan_npc_move(state, "villager_01", "eat", pf, seed=42, tick=100)
         assert event is not None
         goal = cast("tuple[int, int]", event.payload["goal"])  # payload 值 object → 收窄
@@ -172,7 +182,8 @@ class TestPlanMoveTerritory:
         from sim.npc.sim_exec import home_base_of, plan_npc_move
 
         pf = _town_pf()
-        state = _state_at(villager_01=(5, 5))
+        # 换图：起点=药铺（新图可走）
+        state = _state_at(villager_01=(100, 53))
         event = plan_npc_move(state, "villager_01", "rest", pf, seed=42, tick=100)
         assert event is not None
         goal = cast("tuple[int, int]", event.payload["goal"])  # payload 值 object → 收窄
@@ -185,7 +196,8 @@ class TestPlanMoveTerritory:
 
         pf = _town_pf()
         home = home_base_of("villager_02")
-        state = _state_at(villager_02=(5, 5))
+        # 换图：起点=村广场（新图可走；旧 (5,5) 在新图不可走）
+        state = _state_at(villager_02=(100, 53))
         event = plan_npc_move(state, "villager_02", "wander", pf, seed=42, tick=7)
         assert event is not None
         goal = cast("tuple[int, int]", event.payload["goal"])  # payload 值 object → 收窄
@@ -198,8 +210,8 @@ class TestPlanMoveTerritory:
         from sim.npc.sim_exec import plan_npc_move
 
         pf = _town_pf()
-        # villager_03 在 (5,5)，villager_04 在远端 (80,80)——聊天目标照常可达
-        state = _state_at(villager_03=(5, 5), villager_04=(80, 80))
+        # 换图：起点村广场(100,53)，对端梯田(121,20)——两端可走且跨片区
+        state = _state_at(villager_03=(100, 53), villager_04=(121, 20))
         event = plan_npc_move(state, "villager_03", "request_chat", pf, seed=42, tick=100)
         assert event is not None  # 跨区移动不该被定籍拦下
 

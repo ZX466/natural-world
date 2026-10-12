@@ -104,11 +104,13 @@ def _cooldown_ticks(npc_id: str) -> int:
 
 #: eat → 食摊锚点（「做事的地方」是**邻域**而非一格——D12 散点化，
 #: 50 人目的地 distinct 23→40+，最热点 13→≤6 人，聚团定量钉锁死）
-EAT_SITE: tuple[int, int] = (10, 15)
+#: 2026-10-12 D6-D8 换图：染坊市集（craft_market anchor，语义对位镇集食摊）
+EAT_SITE: tuple[int, int] = (72, 52)
 #: rest → 两宅门前锚点（按 npc_id 哈希选一家；「家」概念随 M4 日程域细化）
-REST_SITES: tuple[tuple[int, int], ...] = ((34, 13), (34, 39))
-#: work → 农田锚点
-WORK_SITE: tuple[int, int] = (13, 35)
+#: 换图：祖屋院（guest_yard）与桃门（peach_gate）侧
+REST_SITES: tuple[tuple[int, int], ...] = ((44, 53), (15, 18))
+#: work → 农田锚点（换图：梯田 terraced_fields）
+WORK_SITE: tuple[int, int] = (122, 19)
 
 #: 站点散点半径（曼哈顿距离；散点生成在锚点 ±R 内挑可走格）。
 #: 4 = 5×9 邻域（约 30+ 可走格），50 人同拍打散后最热点 ≤6 人。
@@ -118,14 +120,15 @@ _SITE_SCATTER_RADIUS = 4
 # D16 定籍领地（「每个 npc 在固定的区域呆着」——用户验收口径）
 # ---------------------------------------------------------------------------
 
-#: 五片区锚点（build_town.py 96×96 布局同源，锚点自身必须可走）：
-#: 中心镇集 / 西村 / 东村 / 南村 / 北村——每区一宅（rest=自家门前）。
+#: 五片区锚点（2026-10-12 D6-D8 换图：桃花源 10 地标选 5，D9 避开
+#: signal_hill 瑕疵区；锚点自身可走 + 最小两两距 39.7 实证选优）：
+#: 村广场 / 桃门 / 溪桥 / 客栈院 / 梯田——每区一核（rest=锚点侧）。
 HOME_BASES: tuple[tuple[int, int], ...] = (
-    (28, 42),  # 中心镇集（药铺/食摊一带）
-    (14, 68),  # 西村（西村宅前）
-    (82, 38),  # 东村（东村宅前，水塘上方）
-    (46, 86),  # 南村（南村宅前，农田带）
-    (78, 75),  # 北村（北村宅前，水塘下方）
+    (100, 52),  # 村广场（village_square，中央对位旧镇集）
+    (15, 18),   # 桃门（peach_gate，西北）
+    (66, 19),   # 溪桥（stream_bridge，北中）
+    (44, 53),   # 客栈院（guest_yard，中西南）
+    (122, 19),  # 梯田（terraced_fields，东北）
 )
 
 #: 领地内散步半径（曼哈顿）：闲逛只在本人片区 ±R 内——「一部分区域乱走」
@@ -169,29 +172,32 @@ _TERRITORY_ORDER = {
 
 
 #: 片区 → 本区站点（eat/rest/work 全部落本人片区——不再全镇挤唯一摊）。
-#: 布局与 build_town.py 96×96 同源：rest=本区宅门前；eat=本区路旁食摊；
-#: work=南村农田带（农活集中在南村，其余区走田埂路去——劳作是跨街的，
-#: 去程也是「在片区间活动」的戏内图景）。
+#: 2026-10-12 换图：各站点=本区锚点近旁可走格（eat/rest/work 三表选点
+#: 全部在产物图上实测可走；语义对位随桃花源地标走）。
 _TERRITORY_EAT: dict[tuple[int, int], tuple[int, int]] = {
-    (28, 42): (30, 46),  # 中心镇集：食摊
-    (14, 68): (20, 62),  # 西村：十字路西南口
-    (82, 38): (70, 38),  # 东村：村口路旁（D18：本区吃饭，不再走去镇集）
-    (46, 86): (40, 80),  # 南村：农田带路旁
-    (78, 75): (70, 72),  # 北村：村口（D18：本区吃饭，不再走去镇集）
+    (100, 52): (100, 53),  # 村广场：药铺一带
+    (15, 18): (15, 19),    # 桃门：门内道
+    (66, 19): (66, 20),    # 溪桥：桥头
+    (44, 53): (44, 54),    # 客栈院：院前
+    (122, 19): (121, 20),  # 梯田：田埂
 }
 _TERRITORY_REST: dict[tuple[int, int], tuple[int, int]] = {
-    (28, 42): (28, 41),  # 中心区 → 中心住宅门前
-    (14, 68): (14, 67),  # 西村 → 西村宅门前
-    (82, 38): (82, 37),  # 东村 → 东村宅门前
-    (46, 86): (48, 85),  # 南村 → 南村宅门前
-    (78, 75): (78, 73),  # 北村 → 北村宅门前
+    # 2026-10-12 换图：rest 点=本片区锚点近旁可走格（原「宅门前」随旧图退役；
+    # 选取以锚点 ±2 内邻格语义对位，产物图上实测可走）
+    (100, 52): (100, 53),  # 村广场 → 广场南侧
+    (15, 18): (15, 19),    # 桃门 → 门内道
+    (66, 19): (66, 20),    # 溪桥 → 桥头
+    (44, 53): (44, 54),    # 客栈院 → 院门前
+    (122, 19): (121, 20),  # 梯田 → 田埂
 }
 _TERRITORY_WORK: dict[tuple[int, int], tuple[int, int]] = {
-    (28, 42): (26, 76),  # 中心区 → 农田北缘
-    (14, 68): (26, 76),  # 西村 → 农田北缘
-    (82, 38): (26, 76),  # 东村 → 农田北缘
-    (46, 86): (26, 80),  # 南村 → 农田心（就近）
-    (78, 75): (26, 76),  # 北村 → 农田北缘
+    # 2026-10-12 换图：work 点=梯田带（terraced_fields 东北区）；非梯田片区
+    # 就近对位——村广场→染坊市集、桃门→门内道、溪桥→桥头、客栈院→院前
+    (100, 52): (72, 52),   # 村广场 → 染坊市集（craft_market）
+    (15, 18): (15, 19),    # 桃门 → 门内道
+    (66, 19): (66, 20),    # 溪桥 → 桥头
+    (44, 53): (44, 54),    # 客栈院 → 院门前
+    (122, 19): (121, 20),  # 梯田 → 田埂（本区即农田）
 }
 
 #: D14：动作 → 呈现用 anim 词（前端姿势行选择；villager 素材行序
@@ -486,14 +492,29 @@ def plan_npc_move(
             goal=path[-1],
             path=path,
         )
-    # wander/move：D16 定籍闲逛——目标锚定本人片区（人在片区外=归巢途中）
-    goal = wander_near(home_base_of(npc_id), npc_id, pathfinder, seed=seed, tick=tick)
-    if goal is None or goal == start:
-        return None
-    try:
-        path = pathfinder.find(start, goal)
-    except ValueError:
-        return None
+    # wander/move：D16 定籍闲逛——目标锚定本人片区（人在片区外=归巢途中）。
+    # 2026-10-12 换图补：wander_near 只查目标格自身可走，不保证**可达**——
+    # 桃花源图 820 可走格里 25 格孤立（寻路 ValueError）→ 原地发呆拍空转。
+    # 修法：确定性有限重试（tick+1..+8 连续 8 拍，哈希序列仍 C5），全不可达
+    # 才 None（原地待着，语义同「不可达不退化」）。
+    home = home_base_of(npc_id)
+    for offset in range(8):
+        goal = wander_near(home, npc_id, pathfinder, seed=seed, tick=tick + offset)
+        if goal is None or goal == start:
+            return None
+        try:
+            path = pathfinder.find(start, goal)
+        except ValueError:
+            continue  # 孤立格：换下一拍重挑（不 None——闲逛目标有的是）
+        path = _jitter_path(path, npc_id, tick=tick, pathfinder=pathfinder)
+        return move_event(
+            tick=0,
+            actor_id=npc_id,
+            start=start,
+            goal=path[-1],
+            path=path,
+        )
+    return None
     path = _jitter_path(path, npc_id, tick=tick, pathfinder=pathfinder)  # D20 轨迹扰动
     return move_event(
         tick=0,

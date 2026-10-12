@@ -1,9 +1,11 @@
 """M7 小镇地图：调色板值域钉 + 可加载性 + 结构判据。
 
 设计：docs/arch/m7-render-art.md §3（R5 调色板单源 / R6 确定性构建）。
+2026-10-12 D6-D10 换图：真相源 = build_god_town.py（桃花源整图 140×100）；
+Zelda-like 旧图管线（build_town.py/sprout 调色板）退役出运行时但保留
+（D10 回退保险），旧 96×96 断言随图退休。
 """
 
-import json
 from pathlib import Path
 
 import pytest
@@ -14,7 +16,9 @@ pytestmark = pytest.mark.t1
 
 REPO = Path(__file__).resolve().parents[2]
 TOWN_JSON = REPO / "sim" / "content" / "linhe-town.json"
-PALETTE = REPO / "client" / "public" / "assets" / "tilesets" / "sprout-palette.json"
+#: 换图后调色板判据失效（GOD 整图 gid 直用，非调色板值域）——R5 钉随旧管线
+#: 保留在 build_palette.py 侧，不再约束新图。
+TOWN_SPAWN = (100, 53)  # main.py SPAWN_TILE 同源
 
 
 @pytest.fixture(scope="module")
@@ -22,51 +26,43 @@ def town() -> TileMap:
     return TileMap.from_json_file(TOWN_JSON)
 
 
-@pytest.fixture(scope="module")
-def palette_ground_ids() -> set[int]:
-    return set(json.loads(PALETTE.read_text(encoding="utf-8"))["ground"].values())
-
-
 class TestTownMap:
-    def test_dimensions_96(self, town: TileMap):
-        assert town.width == 96 and town.height == 96
-
-    def test_ground_ids_within_palette(self, town: TileMap, palette_ground_ids: set[int]):
-        """R5 防漂移钉：地图引用的每个 tile id 必须在调色板值域内。"""
-        used: set[int] = set()
-        for chunk in town.chunks.values():
-            used.update(chunk.ground)
-        unknown = used - palette_ground_ids
-        assert not unknown, f"地图使用了调色板外的 tile id: {sorted(unknown)}"
+    def test_dimensions_140x100(self, town: TileMap):
+        assert town.width == 140 and town.height == 100
 
     def test_spawn_walkable(self, town: TileMap):
-        """主角出生点 (16,32) 可通行（build_town SPAWN 同源依赖，D16 扩图）。"""
-        assert town.is_walkable(16, 32)
+        """主角出生点可通行（main.py SPAWN_TILE 同源依赖）。"""
+        assert town.is_walkable(*TOWN_SPAWN)
 
-    def test_border_impassable(self, town: TileMap):
-        """四周树林墙：边界格不可走（防走出图）。"""
-        for i in range(96):
-            assert not town.is_walkable(i, 0)
-            assert not town.is_walkable(i, 95)
-            assert not town.is_walkable(0, i)
-            assert not town.is_walkable(95, i)
+    def test_ground_no_zero_in_mainland(self, town: TileMap):
+        """主图区（140×100 内）ground 无 0 哨兵（Bottom Ground 100% 覆盖实证；
+        0 只允许出现在边缘 chunk 的越界兜底格）。"""
+        for (cx, cy), chunk in town.chunks.items():
+            for ly in range(16):
+                for lx in range(16):
+                    gx, gy = cx * 16 + lx, cy * 16 + ly
+                    if gx < town.width and gy < town.height:
+                        assert chunk.ground[ly * 16 + lx] > 0, (
+                            f"主图区 ({gx},{gy}) ground=0"
+                        )
 
     def test_has_variety(self, town: TileMap):
-        """至少 6 种不同 tile（草变体+路+水+农田+建筑，防「全草地」退化）。"""
+        """至少 6 种不同 tile（整图切片天然满足，防「全同格」退化）。"""
         seen: set[int] = set()
         for chunk in town.chunks.values():
             seen.update(chunk.ground)
         assert len(seen) >= 6
 
     def test_deterministic_build(self):
-        """R6：重跑构建产物逐字节一致（确定性）。"""
+        """R6：重跑构建产物逐字节一致（确定性；换图后真相源=build_god_town）。"""
         import subprocess
         import sys
 
         before = TOWN_JSON.read_bytes()
         subprocess.run(
-            [sys.executable, str(REPO / "sim" / "content" / "build_town.py")],
+            [sys.executable, "-m", "sim.content.build_god_town"],
             capture_output=True,
             check=True,
+            cwd=REPO,
         )
-        assert TOWN_JSON.read_bytes() == before, "build_town.py 重跑产物漂移"
+        assert TOWN_JSON.read_bytes() == before, "build_god_town.py 重跑产物漂移"

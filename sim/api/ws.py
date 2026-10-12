@@ -749,13 +749,16 @@ def map_static_payload(tile_map: TileMap) -> dict[str, Any]:
 
 
 def _tileset_name(tile_map: TileMap) -> str:
-    """真实小镇图（96×96，D16 扩图）→ 'zelda_like_v1'；占位图 → 'grid'
-    （前端色块开关，C-1）。
+    """真实小镇图 → 图集名（前端瓦片渲染开关）；占位图 → 'grid'（C-1）。
 
-    判据用尺寸而非引用传递（map_static_payload 无 app 上下文）；96×96 恰是
-    build_town.py 产物尺寸（D16 起家 48×48，扩图后同函数同步），占位图恒
-    32×32——两值是内容常量而非魔数。
+    判据用尺寸而非引用传递（map_static_payload 无 app 上下文）：
+    - 140×100 = 桃花源整图（2026-10-12 D6-D8 换图，build_god_town.py 产物）
+      → 'god_town_v1'；
+    - 96×96 = 旧 Zelda 图（D10 退休出运行时，名值留档兼容历史产物）；
+    - 其余/占位 32×32 → 'grid'（前端色块回退）。
     """
+    if (tile_map.width, tile_map.height) == (140, 100):
+        return "god_town_v1"
     return "zelda_like_v1" if (tile_map.width, tile_map.height) == (96, 96) else "grid"
 
 

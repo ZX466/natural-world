@@ -173,21 +173,27 @@ def build_roster() -> tuple[NpcProfileData, ...]:
 # 出生位散布（世界装配用：创世名册 50+1 实体错格落可走草地）
 # ---------------------------------------------------------------------------
 
-#: 散布基点（build_town.SPAWN 同源——药铺屋前空地；环形向外找可走格）
-SPAWN_BASE: tuple[int, int] = (8, 16)
+#: 散布基点（2026-10-12 D6-D8 换图：村广场 anchor 侧；与 main.SPAWN_TILE 同源）
+SPAWN_BASE: tuple[int, int] = (100, 53)
 
 
-def territory_spawn_positions(tile_map: TileMap, roster: list[str]) -> dict[str, tuple[int, int]]:
+def territory_spawn_positions(
+    tile_map: TileMap,
+    roster: list[str],
+    *,
+    occupied: dict[str, tuple[int, int]] | None = None,
+) -> dict[str, tuple[int, int]]:
     """出生=定籍点（D18）：每人落本人片区锚点邻域可走格（曼哈顿 ≤6 内确定性
     挑位，同环内 (x,y) 字典序；锚点被占向外退）。
 
     修前：全员从 SPAWN_BASE（药铺）环形散布 → 开局全员同向走回五片区=挤巷
     大迁徙。定籍出生后人就在村里，无迁徙。占位冲突按 roster 序先到先得
     （确定性，C5）。
+    occupied（2026-10-12 换图补）: 先占格（主角 SPAWN 等）——村民不得同格。
     """
     from sim.npc.sim_exec import home_base_of
 
-    taken: set[tuple[int, int]] = set()
+    taken: set[tuple[int, int]] = set(occupied.values()) if occupied else set()
     out: dict[str, tuple[int, int]] = {}
     for nid in roster:
         home = home_base_of(nid)

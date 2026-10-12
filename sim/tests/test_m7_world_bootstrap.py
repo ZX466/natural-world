@@ -10,7 +10,7 @@ import pytest
 
 pytestmark = pytest.mark.t1
 
-SPAWN = (8, 16)
+SPAWN = (100, 53)  # 2026-10-12 D6-D8 换图：村广场（main.py SPAWN_TILE 同源）
 ROSTER = 50
 
 
@@ -19,9 +19,9 @@ class TestDefaultMap:
         from sim.api.main import _default_map
 
         m = _default_map()
-        assert m.width == 96 and m.height == 96  # D16 扩图
+        assert m.width == 140 and m.height == 100  # D6-D8 桃花源整图
         assert m.is_walkable(*SPAWN)
-        assert not m.is_walkable(0, 0)  # 树林墙
+        assert not m.is_walkable(0, 0)  # GOD 图西南角不可走带
 
     def test_fallback_on_missing_file(self, monkeypatch, tmp_path):
         """文件缺失回退 32×32 占位（fail-safe：启动不炸）。"""

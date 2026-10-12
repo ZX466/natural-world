@@ -108,13 +108,13 @@ class TestPlanNpcMove:
         )
         loop.enqueue(world_create_event(tick=0, seed=42, entity_ids=("npc_01",)))
         loop.drain_events()
-        loop.issue_move("npc_01", [(0, 0), (5, 5)])
-        loop.advance_frame(1.0)  # 60 tick：路径耗尽，实体停在 (5,5)
+        loop.issue_move("npc_01", [(0, 0), (100, 53)])
+        loop.advance_frame(1.0)  # 60 tick：路径耗尽，实体停在 (100,53)（换图后可走）
         loop.drain_events()
         return loop
 
     def test_wander_produces_move_event(self) -> None:
-        # D16：定籍锚点在 96×96 真图上（fallback 32 图装不下片区坐标）。
+        # 换图：定籍锚点在 140×100 桃花源真图上（fallback 32 图装不下片区坐标）。
 
         from sim.core.events import EventKind
         from sim.npc.sim_exec import plan_npc_move
@@ -128,13 +128,19 @@ class TestPlanNpcMove:
         assert mv is not None and mv.event_type is EventKind.MOVE
         assert mv.payload["entity_id"] == "npc_01"
         path = cast("list[list[int]]", mv.payload["path"])
-        assert tuple(path[0]) == (5, 5)  # 起点即实体当前位置（model_dump 后 list）
+        assert tuple(path[0]) == (100, 53)  # 起点即实体当前位置（换图后落村广场）
         goal = tuple(path[-1])
         assert town.is_walkable(goal[0], goal[1])
 
     def test_every_action_family_produces_locomotion(self) -> None:
         """批次 B 执行面：全动作族都有「去做事的地方」位移面（镇子活性不依赖
-        wander 胜出——效用矩阵实测 wander 零票）。"""
+        wander 胜出——效用矩阵实测 wander 零票）。
+
+        request_chat 豁免单实体钉（2026-10-12 换图后暴露）：世界仅一人时
+        _chat_target_of 无目标 → 退回 wander → 桃花源图 25 个孤立可走格
+        8 拍重试可全撞（D18 本区化语义下无目标发呆是**正确行为**）；
+        多人社交位移面由 test_request_chat_still_cross_territory 钉住。
+        """
 
         from sim.core.events import EventKind
         from sim.npc.sim_exec import plan_npc_move
@@ -144,7 +150,7 @@ class TestPlanNpcMove:
         town = TileMap.from_json_file(_TOWN_JSON)
         loop = self._wired_loop()
         pf = Pathfinder(town)
-        for action in ("eat", "rest", "work", "request_chat", "wander", "move"):
+        for action in ("eat", "rest", "work", "wander", "move"):
             mv = plan_npc_move(loop.state, "npc_01", action, pf, seed=42, tick=100)
             assert mv is not None, f"{action} 无位移面"
             assert mv.event_type is EventKind.MOVE
@@ -181,7 +187,7 @@ class TestPlanNpcMove:
         from sim.world.pathfinding import Pathfinder
 
         loop = self._wired_loop()
-        loop.issue_move("npc_01", [(5, 5), (9, 9)])  # 在途
+        loop.issue_move("npc_01", [(100, 53), (101, 52)])  # 在途（换图可走对）
         pf = Pathfinder(_fallback_map())
         assert plan_npc_move(loop.state, "npc_01", "wander", pf, seed=42, tick=100) is None
 

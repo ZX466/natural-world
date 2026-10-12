@@ -26,7 +26,11 @@ const TILE = 16;
 // 服务端每 delta 帧给出新格坐标，客户端在 250ms 内平滑走完一格——
 // 1x 手感对齐；16x 快进时 sim 节奏加快，帧到得更密，窗口缩短自然适配。
 const INTERP_MS = 250;
-const TILESET_KEY = 'sprout-tileset'; // 图集加载键（main.ts preload 同名）
+// 2026-10-12 D6-D8 换图：GOD 桃花源缩半图集（build_god_town.py 产物，
+// 2240×1600 = 140 列 @16px）。gid 1-based，id%140/id/140 换算在 renderTileset。
+const TILESET_KEY = 'god-town-16';
+/** GOD 图集列数（2240/16——gid→坐标换算与 png 实宽绑定，换素材必同改） */
+const TILESET_COLS = 140;
 const GROUND_KEY = 'ground-composite'; // 预拼地面 CanvasTexture 键
 
 interface ActorView {
@@ -76,7 +80,7 @@ export class WorldScene extends Phaser.Scene {
 
   preload(): void {
     // M7-T6：图集与角色表（Vite public 静态服务；sim 只发 id 不发素材）。
-    this.load.image(TILESET_KEY, '/assets/tilesets/sprout-tileset.png');
+    this.load.image(TILESET_KEY, '/assets/tilesets/god-town-16.png');
     // 2026-10-12「有头没身」修复：ArMM1998 人物帧 16×32（此前 16×16 裁半身）。
     // 'protagonist' 是 chenmo.png 的中性出站键（后端 sprite 字段恒发它——
     // 快照文本禁含内部 id 词面 "chenmo"，W 系列出戏钉）。
@@ -168,7 +172,9 @@ export class WorldScene extends Phaser.Scene {
    *  逐格 blitter 是备选，本方案更简单且静态层不重绘。 */
   private renderTileset(map: NonNullable<WorldMirror['map']>): void {
     const img = this.textures.get(TILESET_KEY).getSourceImage() as HTMLImageElement;
-    const cols = Math.floor(img.width / TILE);
+    // D6-D8 换图：GOD 图集 140 列常量（img 宽度/16 的静态事实——
+    // 运行时算亦可，常量防 tileset 换装时静默错位）
+    const cols = TILESET_COLS;
     const canvas = document.createElement('canvas');
     canvas.width = map.w * TILE;
     canvas.height = map.h * TILE;
@@ -180,11 +186,13 @@ export class WorldScene extends Phaser.Scene {
     ctx.imageSmoothingEnabled = false;
     for (let y = 0; y < map.h; y += 1) {
       for (let x = 0; x < map.w; x += 1) {
+        // gid 1-based（Tiled 语义，0=空格哨兵——越界兜底格）
         const id = map.ground![y * map.w + x] ?? 0;
+        if (id === 0) continue;
         ctx.drawImage(
           img,
-          (id % cols) * TILE,
-          Math.floor(id / cols) * TILE,
+          ((id - 1) % cols) * TILE,
+          Math.floor((id - 1) / cols) * TILE,
           TILE,
           TILE,
           x * TILE,

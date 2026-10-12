@@ -87,7 +87,7 @@ class TestArrivalStays:
         from sim.npc.sim_exec import plan_npc_move
 
         pf = _town_pf()
-        state = _state_at(npc_01=(40, 40))
+        state = _state_at(npc_01=(100, 53))  # 换图：村广场带可走
         mv = plan_npc_move(state, "npc_01", "eat", pf, seed=42, tick=1000)
         assert mv is not None and mv.event_type is EventKind.MOVE
 
@@ -99,7 +99,7 @@ class TestWanderNearby:
         from sim.npc.sim_exec import _WANDER_RADIUS, wander_near
 
         pf = _town_pf()
-        home = (8, 16)
+        home = (100, 53)  # 换图：药铺=村广场带
         for i in range(30):
             g = wander_near(home, f"npc_{i}", pf, seed=42, tick=i)
             assert g is not None
@@ -111,8 +111,8 @@ class TestWanderNearby:
         from sim.npc.sim_exec import wander_near
 
         pf = _town_pf()
-        a = wander_near((8, 16), "npc_01", pf, seed=42, tick=1000)
-        b = wander_near((8, 16), "npc_01", pf, seed=42, tick=1000)
+        a = wander_near((100, 53), "npc_01", pf, seed=42, tick=1000)
+        b = wander_near((100, 53), "npc_01", pf, seed=42, tick=1000)
         assert a == b
 
     def test_wander_move_uses_nearby(self) -> None:
@@ -120,7 +120,7 @@ class TestWanderNearby:
         from sim.npc.sim_exec import _WANDER_RADIUS, home_base_of, plan_npc_move
 
         pf = _town_pf()
-        state = _state_at(npc_01=(8, 16))
+        state = _state_at(npc_01=(100, 53))
         home = home_base_of("npc_01")
         for i in range(10):
             mv = plan_npc_move(state, "npc_01", "wander", pf, seed=42, tick=1000 + i)
@@ -435,3 +435,25 @@ class TestAnimLedger:
             ws_mod._ACTION_ANIMS = saved
         actor = payload["actors"][0]
         assert actor.get("anim") == "work"
+
+
+class TestWanderUnreachableRetry:
+    """2026-10-12 换图补：wander 目标孤立（可走但不可达）→ 确定性重挑不空转。
+
+    桃花源图 820 可走格中 25 格孤立——修前 wander_near 只查目标格可走，
+    寻路 ValueError → None（原地发呆拍空转）；修后 tick+offset 有限重试。
+    """
+
+    def test_plan_move_survives_isolated_goals(self) -> None:
+        from sim.npc.sim_exec import plan_npc_move
+
+        pf = _town_pf()
+        # 从村广场（主连通块）wander 到桃门片区——中间偶发抽中孤立格，
+        # 10 拍里至少半数该产出 move（重挑机制在工作）
+        produced = 0
+        for i in range(10):
+            state = _state_at(npc_01=(100, 53))
+            mv = plan_npc_move(state, "npc_01", "wander", pf, seed=42, tick=2000 + i)
+            if mv is not None:
+                produced += 1
+        assert produced >= 5, f"10 拍仅 {produced} 拍产出移动——孤立格重挑未生效"

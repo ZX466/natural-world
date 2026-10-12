@@ -91,3 +91,6 @@ sim/content/assets/god-packs/
 
 # D13: LLM 主密钥引导文件（本机私有，绝不入库）
 .linhe/
+
+# GOD 换图施工临时预览区（止损门产物，不入库）
+/_god_map_preview/
