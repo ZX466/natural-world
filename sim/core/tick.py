@@ -294,6 +294,15 @@ class TickLoop:
             path=tuple(path),
         )
         self.enqueue(event)
+        # 2026-10-12 迷雾修复：issue_move 落位（含创世 spawn）→ 主角落点 chunk
+        # 直接记入 fog_seen/ctx（与逐格移动同口径）——修前 spawn 站的 chunk 从未
+        # 揭示（开局/重连快照 fog 全集缺主角所在块 → 前端连主角都压在雾里）。
+        # 村民移动不揭示（裁 40-4：迷雾=陈默观察面）。
+        if entity_id == self._FOG_PROTAGONIST_ID:
+            goal_chunk = (path[-1][0] // 16, path[-1][1] // 16)
+            if goal_chunk not in self.fog_seen:
+                self.fog_seen.add(goal_chunk)
+                self.context.fog_revealed.add(goal_chunk)
         return event
 
     def issue_combat_scale(self, entering: bool) -> WorldEvent:

@@ -153,6 +153,10 @@ export class WorldScene extends Phaser.Scene {
     canvas.height = map.h * TILE;
     const ctx = canvas.getContext('2d');
     if (ctx === null) return;
+    // 2026-10-12 贴图锐度：canvas drawImage 默认双线性模糊像素风——关掉
+    // 平滑，tile 边界与纹理保持硬边（pixelArt: true 只管 Phaser 内部纹理，
+    // 管不到自拼 CanvasTexture）。
+    ctx.imageSmoothingEnabled = false;
     for (let y = 0; y < map.h; y += 1) {
       for (let x = 0; x < map.w; x += 1) {
         const id = map.ground![y * map.w + x] ?? 0;

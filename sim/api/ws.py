@@ -40,6 +40,7 @@ import hmac
 import secrets
 import struct
 import time
+from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
@@ -466,37 +467,35 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
     }
 
 
-def monologue_history_payload(loop: TickLoop, *, cap: int = 20) -> list[dict[str, Any]]:
-    """快照附带的心声历史（2026-10-11 症状面修复：重启/重连面板不空）。
+#: 心声历史环形缓冲（2026-10-12 卡顿修复：不在快照里查库——run_until_complete
+#: 会阻塞 WS 事件循环，重连即卡全部连接）。进程内 20 条，monologue 帧投递时
+#: 由 run_world_driver 侧记账（monologue_history_push）；快照直接取，零 IO。
+_MONO_HISTORY: deque[dict[str, Any]] = deque(maxlen=20)
 
-    从事件日志**最近一个游戏日窗口**（tick 下界 = 当前-86400，走 idx_events_
-    branch_tick 索引）倒查 npc.monologue,取尾部 cap 条投影为既有 monologue
-    帧形。历史是**已发生事实的投影**（事件即真相），快照带出属重同步语义，
-    同 fog/structures。查不到/查询失败 → 空数组（尽力投递不拖垮快照）。
-    """
-    from sim.core.persistence.store import SqlEventStore
+#: 心声历史出站形（帧形即 monologue_payload；内容已过 banned 面——来源是
+#: 既有事件投影，非新表达面）。
 
-    store = getattr(loop, "_event_store_ref", None)
-    if not isinstance(store, SqlEventStore):
-        return []
-    try:
-        import asyncio
 
-        branch = asyncio.get_event_loop().run_until_complete(store.current_branch_id())
-        frm = max(0, loop.state.tick - 86_400)
-        rows = asyncio.get_event_loop().run_until_complete(
-            store.read_range(branch, frm, loop.state.tick)
-        )
-    except Exception:
-        return []
-    monos = [r for r in rows if r.get("event_type") == "npc.monologue"][-cap:]
-    frames: list[dict[str, Any]] = []
-    for r in monos:
-        payload = r.get("payload") or {}
+def monologue_history_push(events: list[WorldEvent]) -> None:
+    """事件批次 → 心声历史账本（每帧由 driver 调；O(本帧 monologue 数)）。"""
+    for e in events:
+        if e.event_type is not EventKind.NPC_MONOLOGUE:
+            continue
+        payload = e.payload
         form = str(payload.get("form", ""))
-        name = _display_name_of(str(r.get("actor_id", ""))) if form == "bubble" else None
-        frames.append(monologue_payload(form, str(payload.get("content", "")), name=name))
-    return frames
+        name = _display_name_of(e.actor_id) if form == "bubble" else None
+        _MONO_HISTORY.append(monologue_payload(form, str(payload.get("content", "")), name=name))
+
+
+def monologue_history_payload(loop: TickLoop, *, cap: int = 20) -> list[dict[str, Any]]:
+    """快照附带的心声历史（进程内账本直取——零 IO 零阻塞）。
+
+    历史是**已发生事实的投影**（事件即真相），快照带出属重同步语义，
+    同 fog/structures。账本为进程态（重启即清——快照此键为空数组，
+    面板空但世界不损：历史事件仍在库里）。
+    """
+    del loop, cap  # 账本自持上限；签名保留 loop 供调用点稳定
+    return list(_MONO_HISTORY)
 
 
 def _fog_revealed_payload(chunks: set[tuple[int, int]]) -> dict[str, Any]:
@@ -1352,6 +1351,7 @@ async def run_world_driver(
         # K8：意愿独白帧（事件进流案的 WS 侧投影）。按 form 投递面路由；
         # 事件已随上面 on_flush 落库（真相先于投递，与 delta 同帧；广播在落库之后
         # 与主 delta 相反是有意的——独白是「已发生」的叙述，须事件先入日志）。
+        monologue_history_push(events)  # 2026-10-12：心声历史账本（快照零 IO 供数）
         for actor_id, frame in monologue_events_to_frames(events):
             seq += 1
             frame["ws_seq"] = seq

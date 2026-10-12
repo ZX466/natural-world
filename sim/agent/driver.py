@@ -124,6 +124,7 @@ class ChenmoDriver:
         memory_entries: tuple[str, ...] = (),
         perception_text: str = "",
         interoception_text: str = "",
+        landmarks_text: str = "",
     ) -> bool:
         """一轮决策：prompt → LLM → 解析 → 闸门 → pending。True = 有意图入队。
 
@@ -147,7 +148,9 @@ class ChenmoDriver:
             anchor=self._anchor,
             memory=MemorySlice(entries=memory_entries),
             situation=SituationSlice(
-                perception_text=perception_text, interoception_text=interoception_text
+                perception_text=perception_text,
+                interoception_text=interoception_text,
+                landmarks_text=landmarks_text,
             ),
             plan=PlanSlice(),
             user_input=InputSlice(thought=impulse or ""),

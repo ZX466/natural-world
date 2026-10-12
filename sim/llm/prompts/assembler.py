@@ -78,10 +78,18 @@ class NormSlice:
 
 @dataclass(frozen=True)
 class SituationSlice:
-    """[处境] 段原料：感知帧叙事文本 + 内感受。"""
+    """[处境] 段原料：感知帧叙事文本 + 内感受 + 可去地标（2026-10-11 增）。
+
+    landmarks（2026-10-12「LLM 只心声不动」修复）：模型此前**不知道任何
+    坐标**——[处境] 只有感知叙述，[计划] 恒空，target_pos 无从填起，输出
+    收敛为 wait/短移=行动面空转。地标表（名字+坐标）给模型可去的去处，
+    move_to/buy/build 终于有真实目标。词面全部戏内（无系统词），坐标是
+    戏内事实（§10 感官流转换表同口径：pos 出现在 Agent 视角是「地点」）。
+    """
 
     perception_text: str = ""
     interoception_text: str = ""
+    landmarks_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -154,6 +162,8 @@ def assemble_prompt(
         situation_parts.append(situation.interoception_text)
     if situation.perception_text:
         situation_parts.append(situation.perception_text)
+    if situation.landmarks_text:
+        situation_parts.append(situation.landmarks_text)
     if situation_parts:
         sections.append("\n".join(situation_parts))
 

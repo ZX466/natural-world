@@ -562,6 +562,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from sim.agent.chenmo_memory import merge_ledger_entries
 
             _ledger_texts = tuple(text for _, text in chat_ledger.memories_of(CHENMO_ID)[-3:])
+            # 2026-10-12「只心声不动」修复：[处境] 附可去地标表——模型此前
+            # 不知道任何坐标（[计划] 恒空、target_pos 无从填起），输出收敛
+            # wait/短移=行动面空转。地标=戏内地点名+坐标（戏内事实可出站）。
+            _landmarks = (
+                "你知道这些去处：药铺（8,16，你的铺子）、镇集食摊（10,15）、"
+                "东村路口（70,38）、南村农田（40,80）、北村村口（70,72）、"
+                "西村十字路（20,62）。想去哪就 move_to 它的坐标。"
+            )
             await driver.decide_once(
                 loop.state,
                 loop.state.tick,
@@ -575,6 +583,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     top_k=3,
                 ),
                 perception_text=_perception_text,
+                landmarks_text=_landmarks,
             )
             driver.execute_pending(loop, pathfinder=pathfinder)
 
