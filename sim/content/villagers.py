@@ -76,6 +76,44 @@ VILLAGER_NAMES: tuple[str, ...] = (
 
 VILLAGER_IDS: tuple[str, ...] = tuple(f"villager_{i + 1:02d}" for i in range(len(VILLAGER_NAMES)))
 
+#: GOD 古风外观池（2026-10-12 D1-D5 裁决兑现；产物由 build_god_characters.py
+#: 生成 → client/public/assets/sprites/god_villager_*.png，前端 texture key 同名）。
+#: D4 红线：军事/名人不入池；桃花源 12 张 + 空城计平民 5 张 = 17 张确定性轮转，
+#: 治「全员同皮」。
+GOD_SPRITE_POOL: tuple[str, ...] = (
+    "god_villager_taocunzhang",
+    "god_villager_acheng",
+    "god_villager_ali",
+    "god_villager_xiaolan",
+    "god_villager_zhouyue",
+    "god_villager_mengjiaoshou",
+    "god_villager_xuning",
+    "god_villager_taobo",
+    "god_villager_axiu",
+    "god_villager_ayuan",
+    "god_villager_linkai",
+    "god_villager_ada",
+    "god_villager_zhibufu",
+    "god_villager_liangcangguanshi",
+    "god_villager_chuanlingbing",
+    "god_villager_laojunhou",
+    "god_villager_zuheshishen",
+)
+
+
+def sprite_for_entity(entity_id: str) -> str:
+    """entity_id → 前端 texture key（确定性纯函数，sha256，C5 无 RNG）。
+
+    chenmo 恒 "protagonist"（中性 texture key——出戏红线：快照文本禁含内部
+    id 词面 "chenmo"，test_ws_gateway W 系列钉；villager → GOD 池哈希取模。
+    只吃 entity_id，不吃世界状态——零出戏泄漏面（ws.py 出站口与
+    测试同源调用，单一真相源）。
+    """
+    if entity_id == "chenmo":
+        return "protagonist"
+    digest = hashlib.sha256(f"sprite:{entity_id}".encode()).digest()
+    return GOD_SPRITE_POOL[int.from_bytes(digest[0:4], "big") % len(GOD_SPRITE_POOL)]
+
 #: 职业池（按序循环分配；与姓名风味对齐即可，无机械耦合）
 OCCUPATIONS: tuple[str, ...] = (
     "农人",

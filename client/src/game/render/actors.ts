@@ -60,6 +60,44 @@ export const CHENMO_SHEET: SheetGeometry = { cols: 17, framesPerRow: 3, standCol
  *  R4-7 姿势行在 32px 帧几何下不存在——静止姿势退化为朝向站立帧）。 */
 export const VILLAGER_SHEET: SheetGeometry = { cols: 4, framesPerRow: 4, standCol: 0 };
 
+/** GOD 古风外观池几何（build_god_characters.py 产物 48×128 = 3 列 × 4 行 @16×32；
+ *  源 96×128@32×32 缩半+行序重排为 下/上/右/左——与 facingRow 直接对齐）。
+ *  2026-10-12 D1-D5 裁决接入：D4 只摘平民，军事/名人不入池。 */
+export const GOD_SHEET: SheetGeometry = { cols: 3, framesPerRow: 3, standCol: 1 };
+
+/** GOD 池 texture key（与后端 villagers.GOD_SPRITE_POOL 同名——
+ *  sprite_for_entity 单一真相源，两端清单漂移 = 兜底 villager 皮）。 */
+export const GOD_SPRITE_KEYS: readonly string[] = [
+  'god_villager_taocunzhang',
+  'god_villager_acheng',
+  'god_villager_ali',
+  'god_villager_xiaolan',
+  'god_villager_zhouyue',
+  'god_villager_mengjiaoshou',
+  'god_villager_xuning',
+  'god_villager_taobo',
+  'god_villager_axiu',
+  'god_villager_ayuan',
+  'god_villager_linkai',
+  'god_villager_ada',
+  'god_villager_zhibufu',
+  'god_villager_liangcangguanshi',
+  'god_villager_chuanlingbing',
+  'god_villager_laojunhou',
+  'god_villager_zuheshishen',
+];
+
+/** GOD 皮帧号合成：3 列几何（col1 站立 + 行内 3 帧走环）。
+ *  劳作姿势与 villager 同口径——16×32 帧无独立姿势行，静止退朝向站立帧。 */
+export function godVillagerFrame(
+  sheet: SheetGeometry,
+  anim: string,
+  facing: Facing,
+  animClockMs: number,
+): number {
+  return villagerFrame(sheet, anim, facing, animClockMs);
+}
+
 /** D14：劳作姿势 → 素材行号。16×32 帧几何下 villager 无独立姿势行（原 R4-R7
  *  是 16px 帧误算的产物，实为 R0-R3 的下半身）——work/eat/rest/chat 静止统一
  *  退朝向站立帧（与 walk/idle 同帧；姿势差异化待换带姿势行的素材再启用）。 */

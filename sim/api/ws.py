@@ -273,6 +273,18 @@ def _display_name_of(entity_id: str) -> str | None:
     return name
 
 
+def sprite_name_of(entity_id: str) -> str:
+    """entity_id → 出站 sprite 值（前端 texture key）。
+
+    2026-10-12 D1-D5 接入：从「rtoken 原样」改为确定性外观分配
+    （villagers.sprite_for_entity 单一真相源）——schema 零变更
+    （sprite 本就是自由 string），前端 texture key 已注册同名表项。
+    """
+    from sim.content.villagers import sprite_for_entity
+
+    return sprite_for_entity(entity_id)
+
+
 #: 批次 D14：动作姿势账本 {entity_id: anim 词}——npc.act 执行面写入
 #: （work/eat/rest/chat → 姿势；wander/move → walk）。「当前动作」是戏内
 #: 可观察事实（他正在干活/吃饭/歇着），anim 是既有协议字段（纯启用）。
@@ -436,7 +448,7 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
             "x": entity.pos[0],
             "y": entity.pos[1],
             "facing": "s",
-            "sprite": rt,
+            "sprite": sprite_name_of(entity_id),
             "anim": _anim_of(entity_id),  # D14：动作姿势账本（缺省 idle）
         }
         name = _display_name_of(entity_id)

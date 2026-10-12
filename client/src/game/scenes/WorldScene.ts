@@ -13,6 +13,9 @@ import {
   advanceAnimClock,
   inferFacing,
   VILLAGER_SHEET,
+  GOD_SHEET,
+  GOD_SPRITE_KEYS,
+  godVillagerFrame,
   type Facing,
 } from '../render/actors';
 import { useUiStore } from '../../store/uiStore';
@@ -75,7 +78,13 @@ export class WorldScene extends Phaser.Scene {
     // M7-T6：图集与角色表（Vite public 静态服务；sim 只发 id 不发素材）。
     this.load.image(TILESET_KEY, '/assets/tilesets/sprout-tileset.png');
     // 2026-10-12「有头没身」修复：ArMM1998 人物帧 16×32（此前 16×16 裁半身）。
+    // 'protagonist' 是 chenmo.png 的中性出站键（后端 sprite 字段恒发它——
+    // 快照文本禁含内部 id 词面 "chenmo"，W 系列出戏钉）。
     this.load.spritesheet('chenmo', '/assets/actors/chenmo.png', {
+      frameWidth: 16,
+      frameHeight: 32,
+    });
+    this.load.spritesheet('protagonist', '/assets/actors/chenmo.png', {
       frameWidth: 16,
       frameHeight: 32,
     });
@@ -83,6 +92,15 @@ export class WorldScene extends Phaser.Scene {
       frameWidth: 16,
       frameHeight: 32,
     });
+    // 2026-10-12 D1-D5 接入：GOD 古风外观池 17 张（后端 sprite 字段确定性
+    // 分派；texture key 与后端 slug 同名——sprite_for_entity 单一真相源）。
+    // 几何 48×128 = 3 列 × 4 行 @16×32（行序 下/上/右/左，与 facingRow 对齐）。
+    for (const key of GOD_SPRITE_KEYS) {
+      this.load.spritesheet(key, `/assets/sprites/${key}.png`, {
+        frameWidth: 16,
+        frameHeight: 32,
+      });
+    }
   }
 
   create(): void {
@@ -299,13 +317,16 @@ export class WorldScene extends Phaser.Scene {
         // 2026-10-12「有头没身」修复：ArMM1998 人物帧是 **16×32**（头+身一格
         // 高两格），frameHeight:16 把每帧裁掉下半身。改 32 帧高 + 底对齐
         // origin(0.5,1)——脚踩格底（y=格底边），头顶伸出上一格（遮挡正确）。
+        // 2026-10-12 D1-D5：texture key 取后端 sprite 字段（GOD 古风池，
+        // chenmo 恒主角皮）；字段缺席/texture 未注册时兜底 villager。
+        const textureKey =
+          isProtagonist || !actor.sprite || !this.textures.exists(actor.sprite)
+            ? isProtagonist
+              ? 'protagonist'
+              : 'villager'
+            : actor.sprite;
         const sprite = this.add
-          .sprite(
-            actor.x * TILE + TILE / 2,
-            actor.y * TILE + TILE,
-            isProtagonist ? 'chenmo' : 'villager',
-            0,
-          )
+          .sprite(actor.x * TILE + TILE / 2, actor.y * TILE + TILE, textureKey, 0)
           .setOrigin(0.5, 1)
           .setDepth(10);
         // 批次 D10：头顶戏内名（快照 actor.name 供数；canvas 内 Text——
@@ -365,15 +386,25 @@ export class WorldScene extends Phaser.Scene {
       const row = facingRow(view.lastFacing);
       // D14：村民姿势——静止 + work/eat/rest/chat → 劳作姿势行（R4-7）；
       // 行走中 → 四向走环。主角仍走 chenmo 走环（素材无姿势行）。
+      // 2026-10-12 D1-D5：GOD 皮走 godVillagerFrame（3 列几何）；villager
+      // 兜底皮仍走 VILLAGER_SHEET（4 列）——几何按 texture 分派。
+      const isGod = GOD_SPRITE_KEYS.includes(view.sprite.texture.key);
       view.sprite.setFrame(
         rtoken === this.mirror.protagonist
           ? walkFrame(row, view.animClockMs)
-          : villagerFrame(
-              VILLAGER_SHEET,
-              moved ? 'walk' : (actor.anim ?? 'idle'),
-              view.lastFacing,
-              view.animClockMs,
-            ),
+          : isGod
+            ? godVillagerFrame(
+                GOD_SHEET,
+                moved ? 'walk' : (actor.anim ?? 'idle'),
+                view.lastFacing,
+                view.animClockMs,
+              )
+            : villagerFrame(
+                VILLAGER_SHEET,
+                moved ? 'walk' : (actor.anim ?? 'idle'),
+                view.lastFacing,
+                view.animClockMs,
+              ),
       );
       view.prevX = actor.x;
       view.prevY = actor.y;

@@ -14,6 +14,9 @@ import {
   facingRow,
   VILLAGER_SHEET,
   villagerFrame,
+  GOD_SHEET,
+  GOD_SPRITE_KEYS,
+  godVillagerFrame,
 } from './actors';
 
 describe('inferFacing', () => {
@@ -118,5 +121,25 @@ describe('walkFrameFor（D10：villager 4 列帧表）', () => {
     const CHENMO = { cols: 17, framesPerRow: 3, standCol: 1 } as const;
     expect(walkFrameFor(CHENMO, 0, -1)).toBe(1);
     expect(walkFrameFor(CHENMO, 1, 150)).toBe(18);
+  });
+});
+
+describe('GOD 古风外观池（2026-10-12 D1-D5 接入）', () => {
+  it('几何 3 列 3 帧 standCol 1（48×128 产物实证）', () => {
+    expect(GOD_SHEET).toEqual({ cols: 3, framesPerRow: 3, standCol: 1 });
+  });
+  it('池 17 张且 key 与后端 slug 同名（D4 红线：无军事/名人词面）', () => {
+    expect(GOD_SPRITE_KEYS).toHaveLength(17);
+    for (const banned of ['banshi', 'chicheng', 'gushou', 'zhuge', 'sima']) {
+      expect(GOD_SPRITE_KEYS.some((k) => k.includes(banned))).toBe(false);
+    }
+  });
+  it('godVillagerFrame：站立 = row*3+1；走环行内 0..2 循环', () => {
+    expect(godVillagerFrame(GOD_SHEET, 'idle', 's', -1)).toBe(0 * 3 + 1);
+    expect(godVillagerFrame(GOD_SHEET, 'idle', 'n', -1)).toBe(1 * 3 + 1);
+    expect(godVillagerFrame(GOD_SHEET, 'walk', 'e', 0)).toBe(2 * 3 + 0);
+    expect(godVillagerFrame(GOD_SHEET, 'walk', 'e', 150)).toBe(2 * 3 + 1);
+    expect(godVillagerFrame(GOD_SHEET, 'walk', 'e', 300)).toBe(2 * 3 + 2);
+    expect(godVillagerFrame(GOD_SHEET, 'walk', 'e', 450)).toBe(2 * 3 + 0); // 回卷
   });
 });

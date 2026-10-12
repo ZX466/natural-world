@@ -154,7 +154,7 @@ export class WorldMirror {
           x: d.x ?? 0,
           y: d.y ?? 0,
           facing: d.facing ?? 's',
-          sprite: d.sprite ?? 'placeholder',
+          sprite: d.sprite ?? 'villager',
           anim: d.anim ?? 'idle',
           tint: d.tint,
           name: d.name,
