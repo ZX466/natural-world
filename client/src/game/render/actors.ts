@@ -54,18 +54,16 @@ export interface SheetGeometry {
 
 /** chenmo 几何（17 列 × 步-站-步） */
 export const CHENMO_SHEET: SheetGeometry = { cols: 17, framesPerRow: 3, standCol: 1 };
-/** villager 几何（NPC_test.png 64×128 = 4 列 × 8 行；每行 4 帧全参与行走环，
- *  行序 下/上/右/左（R0-R3 目视定案，与 chenmo 同款）；R4-7 劳作姿势——
- *  D14 启用：work/eat/rest/chat 静止时切对应姿势行） */
+/** villager 几何（NPC_test.png 64×128；帧 16×32——2026-10-12「有头没身」修正：
+ *  此前按 16px 帧算 4×8 行是错的，实为 **4 列 × 4 行 @16×32**。每行 4 帧全参与
+ *  行走环，行序 下/上/右/左（R0-R3）。16×32 素材无独立劳作姿势行（D14 的
+ *  R4-7 姿势行在 32px 帧几何下不存在——静止姿势退化为朝向站立帧）。 */
 export const VILLAGER_SHEET: SheetGeometry = { cols: 4, framesPerRow: 4, standCol: 0 };
 
-/** D14：劳作姿势 → 素材行号（R4-R7；目视定案逐行对应，行走/未知退 R0-R3 走环）。 */
-const POSE_ROW: Record<string, number> = {
-  work: 4,
-  eat: 5,
-  rest: 6,
-  chat: 7,
-};
+/** D14：劳作姿势 → 素材行号。16×32 帧几何下 villager 无独立姿势行（原 R4-R7
+ *  是 16px 帧误算的产物，实为 R0-R3 的下半身）——work/eat/rest/chat 静止统一
+ *  退朝向站立帧（与 walk/idle 同帧；姿势差异化待换带姿势行的素材再启用）。 */
+const POSE_ROW: Record<string, number> = {};
 
 /** villager 帧号合成：行走中（animClock≥0）→ facing 走环；静止 → 劳作姿势行
  *  站立帧（work/eat/rest/chat），walk/idle 姿势 = facing 走环站立帧。 */

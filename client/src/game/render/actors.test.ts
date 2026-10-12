@@ -80,12 +80,13 @@ describe('walkFrame（C-2 修复钉：17 列线性换算）', () => {
 });
 
 describe('villagerFrame（D14：劳作姿势行）', () => {
-  it('work/eat/rest/chat → 姿势行 R4-7 站立帧（idle 时）', () => {
-    // villager 素材 R4-R7 = 劳作姿势（目视定案）；idle 姿势取各姿势行 standCol
-    expect(villagerFrame(VILLAGER_SHEET, 'work', 's', -1)).toBe(4 * 4 + 0); // R4
-    expect(villagerFrame(VILLAGER_SHEET, 'eat', 's', -1)).toBe(5 * 4 + 0); // R5
-    expect(villagerFrame(VILLAGER_SHEET, 'rest', 's', -1)).toBe(6 * 4 + 0); // R6
-    expect(villagerFrame(VILLAGER_SHEET, 'chat', 's', -1)).toBe(7 * 4 + 0); // R7
+  it('work/eat/rest/chat → 朝向站立帧（16×32 帧几何无独立姿势行，2026-10-12 修正）', () => {
+    // 原 R4-R7「姿势行」是 16px 帧误算产物（实为 R0-R3 下半身）——
+    // 32px 帧几何下姿势统一退朝向站立帧（POSE_ROW 空）。
+    expect(villagerFrame(VILLAGER_SHEET, 'work', 's', -1)).toBe(0 * 4 + 0); // R0 站立
+    expect(villagerFrame(VILLAGER_SHEET, 'eat', 's', -1)).toBe(0 * 4 + 0);
+    expect(villagerFrame(VILLAGER_SHEET, 'rest', 'n', -1)).toBe(1 * 4 + 0); // 朝向仍生效
+    expect(villagerFrame(VILLAGER_SHEET, 'chat', 's', -1)).toBe(0 * 4 + 0);
   });
   it('walk/idle → 四向走环（R0-R3，D10 语义不变）', () => {
     expect(villagerFrame(VILLAGER_SHEET, 'walk', 's', -1)).toBe(0 * 4 + 0);

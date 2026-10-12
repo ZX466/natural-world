@@ -74,13 +74,14 @@ export class WorldScene extends Phaser.Scene {
   preload(): void {
     // M7-T6：图集与角色表（Vite public 静态服务；sim 只发 id 不发素材）。
     this.load.image(TILESET_KEY, '/assets/tilesets/sprout-tileset.png');
+    // 2026-10-12「有头没身」修复：ArMM1998 人物帧 16×32（此前 16×16 裁半身）。
     this.load.spritesheet('chenmo', '/assets/actors/chenmo.png', {
       frameWidth: 16,
-      frameHeight: 16,
+      frameHeight: 32,
     });
     this.load.spritesheet('villager', '/assets/actors/villager.png', {
       frameWidth: 16,
-      frameHeight: 16,
+      frameHeight: 32,
     });
   }
 
@@ -94,10 +95,12 @@ export class WorldScene extends Phaser.Scene {
     // 批次 D7：雨层（短雨丝 Graphics；雨落动画在 update 里逐帧推进）
     this.rainLayer = this.add.graphics().setScrollFactor(0).setDepth(99);
     this.goalMarker = this.add.circle(0, 0, 3, 0xffd75e).setVisible(false).setDepth(50);
-    // D17 视觉雾罩：遮地形（depth 5 < 实体 10）——未揭示区压暗，踏入即揭。
-    this.fogOverlay = this.add.graphics().setDepth(5);
-    // E7 建筑投影层：完工结构占格（depth 4 < 雾 5——未揭示区的建筑同被压暗）
-    this.structureLayer = this.add.graphics().setDepth(4);
+    // E7 建筑投影层：完工结构占格（depth 14——雾 15 之下，未揭示区建筑同被压暗）
+    this.structureLayer = this.add.graphics().setDepth(14);
+    // D17 视觉雾罩：2026-10-12 修「阴影 bug」——depth 5→15（雾**盖过精灵**：
+    // 未揭示区的人不该看得见，裁 40-4 迷雾=观察面；此前 5<10 精灵浮在雾上，
+    // 雾里一个个头颅悬浮=「阴影 bug」观感）。
+    this.fogOverlay = this.add.graphics().setDepth(15);
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.handlePointer(pointer);
@@ -292,14 +295,18 @@ export class WorldScene extends Phaser.Scene {
       let view = this.views.get(rtoken);
       if (view === undefined) {
         const isProtagonist = rtoken === this.mirror.protagonist;
-        // M7-T7：矩形色块 → 真精灵（主角=chenmo 走环；村民=villager 走环）
+        // M7-T7：矩形色块 → 真精灵（主角=chenmo 走环；村民=villager 走环）。
+        // 2026-10-12「有头没身」修复：ArMM1998 人物帧是 **16×32**（头+身一格
+        // 高两格），frameHeight:16 把每帧裁掉下半身。改 32 帧高 + 底对齐
+        // origin(0.5,1)——脚踩格底（y=格底边），头顶伸出上一格（遮挡正确）。
         const sprite = this.add
           .sprite(
             actor.x * TILE + TILE / 2,
-            actor.y * TILE + TILE / 2,
+            actor.y * TILE + TILE,
             isProtagonist ? 'chenmo' : 'villager',
             0,
           )
+          .setOrigin(0.5, 1)
           .setDepth(10);
         // 批次 D10：头顶戏内名（快照 actor.name 供数；canvas 内 Text——
         // DESIGN §4 硬约束：Phaser 画 canvas 世界，React 画 canvas 外 UI）。
