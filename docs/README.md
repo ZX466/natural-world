@@ -20,6 +20,7 @@
 | `DESIGN.md` | 架构（Claude） | ✅ main | 冻结基线 v2.1：六条约束 C1–C6（含守卫测试与里程碑）、架构、数据契约、感知/认知/战斗/存档/测试分级 T1–T5、里程碑 M0–M6、禁止事项 |
 | `docs/arch/m0-core.md` | 架构（Claude） | ✅ main | M0 内核：clock（TimeScale/累加器）/ rng（分流 PCG64）/ entropy（注入走 apply）/ events（EventBus 唯一写路径）/ tick loop（异步驱动 + 同步确定性 tick + 固定执行序）/ map（chunk）/ pathfinding（A* + chunk 失效）/ EventStore Protocol 边界 |
 | `docs/arch/m0-client.md` | 前端/体验（Claude） | ✅ main | M0 渲染闭环：Phaser(canvas 世界) 与 React(canvas 外 UI) 经 Zustand store 单桥、对象池、插值、摄像机；M0 边界与出戏字段禁令 |
+| `docs/arch/m1-core.md` | 架构（Claude） | ✅ main | M1 认知内核（收官后补记 2026-10-12）：LLM 客户端（api_key 用完即丢）/六段 prompt 装配（装配产物过禁词闸）/Intent schema+闸门两道校验/感知引擎（视觉遮挡+听觉衰减+叙事化零元信息）/自我未知；内核零依赖认知域（钩子注入制）、LLM 失败零阻断 |
 | `docs/arch/m3-plan.md` | 架构（Claude） | ✅ main | M3 规划整合稿：批次 A-D 切分（A 向量 / C 地图可并行，B 等 A 接口冻结，D 收尾）+ 安规钉子横切 + §6 待裁决队列；第五批续写批次 B 模块/文件级施工图与 B1 |
 | `docs/arch/m4-plan.md` | 架构（Claude） | ✅ main | M4 规划：批次 A–D 切分 + 裁 14 六条裁决记录 + 门禁归属速查 + **「T4 全绿」定义**（锁定模型版本下 nightly 连续通过，非每次提交绿） |
 | `docs/arch/m5-plan.md` | 架构/文档（cline 起草 · Claude 裁） | ✅ main（**裁 21 已回填**） | M5 规划：§17 M5 行七件事拆条（混沌/双轨存档分叉重放/时间刻度/权力牙齿/火灾蔓延/生态/断线降级演练）+ 批次 A–E 切分（**边界沿用骨架**）＋ **各批次行已回填裁 21 裁决指针与已派任务**（A＝裁 21-A D-1~D-4，**时间刻度＝玩家侧快进/变速**非日历；B＝裁 21-B 裁 1~12 ＋ F3/0008-a 前置；C/D＝**§18 可砍序位 5 / 生态 1 / 蔓延 2，只注不砍**；E＝裁 21-C③ 演练级挂 T5 体系）＋ 门禁归属（**M5 预期新增 nightly 只有「演练级」＝ `golden-nightly` 扩展候选、批次 E 接线**）＋ **§2 G-6 解锁条件（F1 ＋ F3 两前置齐）** ＋ §6 裁决区七条逐条落裁况（**两条留待开工前补裁**：权力牙齿验收判据 / 离线判据量纲）；验收＝「离线再回来世界已变；C6 测试绿」（C6＝T1 历史不可销毁） |
@@ -117,9 +118,9 @@ M1 范围与量化验收：DESIGN §17（认知闭环：LLM 客户端 + Profile 
 - `docs/perf/budget.md` M1 分解：感知启用、LLM 预取调度进 tick（0.05/0.20ms，异步推理不进）；合计名义 7.00 / 上限 12.35 ≤16.6 ✓
 - **cline 评审结论：通过**（3 项非阻断建议：① `_vision_partitioned_v2` 实为「半径剪枝参考」非空间分区，命名待正；② `RNG_TICK_LIMIT_MS=0.10` 逐调用口径偏紧，建议放宽或改向量化；③ `test_bench_rng.py` 头注释 100ms 待同步 300ms）
 
-### 占位（待产出）
+### 占位（已清）
 
-- arch 域 M1 设计文档，落点 docs/arch/m1-core.md（待 Claude）——产出后在此登记并在 §2 文档地图加行
+- ~~arch 域 M1 设计文档，落点 docs/arch/m1-core.md（待 Claude）~~——**已补**（2026-10-12，收官后补记；见 §2 文档地图行）。
 
 ### W6 鉴权依赖核（cline 结论：零新依赖）
 
