@@ -81,6 +81,10 @@ _incoming/
 sim/content/assets/zelda-like/pkg/
 _rev_game_frames_0-11.png
 
+# GOD 素材原件（Apache-2.0，可重建：下载源与选片规则见 sim/content/assets/god-packs/README.md
+# 与 docs/data/god-reuse-final.md；运行时副本入库的惯例同 zelda-like 管线）
+sim/content/assets/god-packs/
+
 # D8 调色板分析临时图（根目录 *.png 已清理，防再生成）
 /tile_*.png
 /palette_fix_*.png
