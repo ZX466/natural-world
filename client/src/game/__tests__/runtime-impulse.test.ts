@@ -162,30 +162,4 @@ describe('runtime impulse 链路（批次 A）', () => {
     onError({ ref: 'load_anchor', message: '这个档读不出来了。' });
     expect(store.impulseError).toBe('这个念头进不去。'); // 非 impulse ref 不覆盖
   });
-
-  it('mock 模式 sendImpulse：本地 feedback（accepted + 模板独白）', async () => {
-    const { callbacks, store, sent } = mockDeps();
-    installWsMock(callbacks, sent);
-    installMirrorMock();
-    MOCK_OTHERS();
-    vi.doMock('../../store/uiStore', () => ({
-      useUiStore: { getState: () => store },
-    }));
-    const { runtime } = await import('../runtime');
-    runtime.start();
-    // 触发 mock 接管（wsStatus 未 open → 2.5s 定时进 mock；直接调私有方法太脆，
-    // 用 vi.useFakeTimers 推进）
-    vi.useFakeTimers();
-    try {
-      runtime.start(); // start 幂等性由 ws 实例重建保证（测试内二次 start 仅推定时）
-      await vi.advanceTimersByTimeAsync(3000);
-    } finally {
-      vi.useRealTimers();
-    }
-    runtime.sendImpulse('心里想想');
-    expect(sent).toHaveLength(0); // mock 不发帧
-    expect(store.lastImpulseCue).toBe('accepted');
-    expect(store.monologues.length).toBe(1);
-    expect(store.monologues[0]?.form).toBe('thought');
-  });
 });

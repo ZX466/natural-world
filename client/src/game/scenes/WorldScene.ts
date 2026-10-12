@@ -108,7 +108,7 @@ export class WorldScene extends Phaser.Scene {
 
     this.scale.on('resize', () => this.redrawMap());
     this.redrawMap();
-    // 地图 HTTP 加载是异步的：真实模式下晚于镜像到达 → 轮询重绘（mock 即时 setMap 无需等待）
+    // 地图 HTTP 加载是异步的：晚于镜像到达 → 轮询重绘（后端未起时镜像恒 null，轮询空转无害）
     const waitMap = setInterval(() => {
       if (this.mirror.map !== null) {
         clearInterval(waitMap);

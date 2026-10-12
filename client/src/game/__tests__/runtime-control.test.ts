@@ -181,30 +181,4 @@ describe('runtime 控制回执（批次 D11）', () => {
     expect(store.speed).toBe(16);
     expect(store.paused).toBe(true);
   });
-
-  it('mock 模式 pause/resume：本地立即翻转（无后端也保持按钮可用）', async () => {
-    const { store } = mockDeps();
-    const callbacks: Record<string, unknown> = {};
-    const sent: Record<string, unknown>[] = [];
-    installWsMock(callbacks, sent);
-    installMirrorMock();
-    MOCK_OTHERS();
-    vi.doMock('../../store/uiStore', () => ({
-      useUiStore: { getState: () => store },
-    }));
-    const { runtime } = await import('../runtime');
-    runtime.start();
-    vi.useFakeTimers();
-    try {
-      runtime.start();
-      await vi.advanceTimersByTimeAsync(3000);
-    } finally {
-      vi.useRealTimers();
-    }
-
-    runtime.sendControl('pause');
-    expect(store.paused).toBe(true);
-    runtime.sendControl('resume');
-    expect(store.paused).toBe(false);
-  });
 });
