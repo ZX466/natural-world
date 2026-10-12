@@ -57,16 +57,12 @@ class WorldState(BaseModel):
 class TickContext(BaseModel):
     """tick 内共享上下文：时间尺开关 + RNG 抽签状态缓存（不入快照）。
 
-    fog_revealed（D17 视觉雾）：本帧主角新踏入的 chunk 账本（WS 投影 drain
-    后清空）——迷雾是观察者投影不进世界态（裁 40-4：事件即真相），账本只
-    服务「事件已入流后 delta/snapshot 投影何时带 fog 键」。
     """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     combat_active: bool = False
     rng_cache: dict[str, Any] = Field(default_factory=dict)
-    fog_revealed: set = Field(default_factory=set)
 
     def with_combat(self, active: bool) -> TickContext:
         return self.model_copy(update={"combat_active": active})
@@ -233,9 +229,8 @@ def _apply_coin_grant(state: WorldState, event: WorldEvent, ctx: TickContext) ->
 
 
 def _apply_fog_reveal(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
-    """迷雾揭示折叠：no-op 状态层（裁 40-4：迷雾是事件即真相的观察者投影，
-    不进 state_hash；揭示集由投影侧 fold_fog_reveal 按事件流重建——同
-    _apply_npc_act 口径：注册 handler 即可重放，状态零变更）。"""
+    """fog.reveal 折叠：no-op（迷雾机制 2026-10-12 用户裁决移除；handler 保留
+    =历史事件流重放不炸——C4 事件不可销毁，no-op 即重放安全）。"""
     return ApplyResult(state=state)
 
 

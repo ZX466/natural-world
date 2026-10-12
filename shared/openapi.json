@@ -1213,9 +1213,6 @@
           "time": {
             "$ref": "#/components/schemas/TimeInfo"
           },
-          "fog": {
-            "$ref": "#/components/schemas/FogState"
-          },
           "monologue_history": {
             "type": "array",
             "items": {
@@ -1284,9 +1281,6 @@
           },
           "time": {
             "$ref": "#/components/schemas/TimeInfo"
-          },
-          "fog": {
-            "$ref": "#/components/schemas/FogState"
           }
         },
         "additionalProperties": false
@@ -2230,34 +2224,6 @@
           },
           "is_market_day": {
             "type": "boolean"
-          }
-        },
-        "additionalProperties": false
-      },
-      "FogState": {
-        "type": "object",
-        "required": [
-          "revealed"
-        ],
-        "properties": {
-          "revealed": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "cx",
-                "cy"
-              ],
-              "properties": {
-                "cx": {
-                  "type": "integer"
-                },
-                "cy": {
-                  "type": "integer"
-                }
-              },
-              "additionalProperties": false
-            }
           }
         },
         "additionalProperties": false

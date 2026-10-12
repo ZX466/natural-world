@@ -68,6 +68,7 @@ client ◄──hello_ack── { "v": "1.1", "server_versions": ["1.0","1.1"], 
 | 1.5 | **D12 街谈巷议署名加法变更**：① `MonologueMessage.name`（新增**可选**字段，`string`，说话人戏内名——**仅 bubble**（外在可观察面：路人看见谁在嘟囔，署名不破 W7 字段最小化：无 rtoken/entity_id）；thought（私密面）不带；未装配显示名映射则缺省）；② `state_delta`/`monologue` 帧构造同源（`monologue_events_to_frames` 投影）。**纯加法**——旧客户端忽略 `name` 不受影响 | client+sim | 2026-10-07 |
 | 1.6 | **D17 视觉雾（迷雾 B 案）加法变更**：① 新增 `FogState` schema（`revealed: [{cx,cy},…]`，chunk 坐标整数对，`additionalProperties:false`）；② `StateDeltaMessage.fog`（**可选**，仅本帧有新揭示时出现——增量不制造噪声）；③ `FullSnapshotMessage.fog`（**可选**，已揭示全集——重连/读档重同步）。chunk 粒度（16px），零枚举零内部数值（出戏预核 D-10）；机制面 `fog.reveal` 事件既有（裁 40-4 事件即真相），本版只开 WS 投影面。**纯加法**——旧客户端忽略 `fog` 不受影响 | sim+client | 2026-10-08 |
 | 1.7 | **批次 E4/E7 建造投影加法变更**：① `state_delta.structures`（**可选**，`StructureDelta[]`——M 面预留 schema 首次生产启用：`{op, rtoken, x, y, phase}`，phase ∈ built/collapsing/rubble；本批只产 `built`——在建工地不投影，完工才画）；② `full_snapshot.structures` 由硬编码 `[]` 换真实投影（空账本=空数组，形不变）；③ 增量过滤（相位无变化不出键——同 plan/fog 手法）。**纯加法**——旧客户端忽略 `structures` 不受影响 | sim+client | 2026-10-09 |
+| 1.8 | **迷雾机制移除（减法变更）**：① `full_snapshot.fog` / `state_delta.fog` 两键删除（`FogState` schema 同撤）；② sim 内核不再产 `fog.reveal` 生产事件（事件 kind 与 no-op handler **保留**——C4 历史事件流不可销毁，旧日志重放不炸）；③ 前端 fog 罩渲染全撤。**纯减法**——雾面本就是观察者投影（裁 40-4），删除不影响世界态与重放确定性；旧客户端收不到 fog 键=本来语义。用户裁决 2026-10-12 | sim+client | 2026-10-12 |
 
 > **1.2 升版说明（M6-K2）**：**新增端点 + 新增响应 schema** 属 §3 兼容性表里的 **minor**
 > （纯新增，旧客户端不受影响；无 major 语义反转、无既有字段改型）⇒ 只升 minor 位。

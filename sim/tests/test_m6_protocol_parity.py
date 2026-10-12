@@ -46,15 +46,11 @@ STATE_DELTA_WHITELIST: frozenset[str] = frozenset(
         "plan",
         "weather",
         "time",
-        "fog",  # D17（1.6）：视觉雾增量（迷雾 B 案落地，例外转正）
     }
 )
 
-#: **预登记例外**：迷雾视觉 B 案要给 `state_delta` 加**可选** `fog={revealed:[{cx,cy}]}`
-#: （`m6-content-outbound-prestudy.md` §3.3 已写死形状）。本表把该键登记为「**将来合法**」，
-#: 于是 B 案落地时只需改本表（去掉注释即生效），而**别的**新键仍会红。
-#: ⚠ 若 B 案**最终不做**（裁 42 未采），把 `fog` 从这里移除即可——那时它就是未授权键。
-STATE_DELTA_RESERVED_OPTIONAL: frozenset[str] = frozenset({"fog"})
+#: （2026-10-12 雾机制删除后：fog 键随协议 1.8 消失，预登记例外清空——
+#: 新键出现即红的原语义恢复。）STATE_DELTA_RESERVED_OPTIONAL 已删。
 
 
 def _live() -> dict[str, Any]:
@@ -199,7 +195,7 @@ class TestStateDeltaFieldSurface:
         借一条 delta 帧进协议面，而 K5 ②组（查 kind 值）与 K11（查路由）都抓不到**字段面**。
         """
         live, snap = specs
-        allowed = STATE_DELTA_WHITELIST | STATE_DELTA_RESERVED_OPTIONAL
+        allowed = STATE_DELTA_WHITELIST  # 雾机制已删，预留例外集清空
         for label, spec in (("live", live), ("snapshot", snap)):
             props = set(spec["components"]["schemas"]["StateDeltaMessage"]["properties"])
             extra = props - allowed
@@ -215,20 +211,3 @@ class TestStateDeltaFieldSurface:
         _live, snap = specs
         schema = snap["components"]["schemas"]["StateDeltaMessage"]
         assert schema.get("additionalProperties") is False, schema.get("additionalProperties")
-
-    def test_fog_slot_shape(self, specs: tuple[dict[str, Any], dict[str, Any]]) -> None:
-        """**D17（1.6）B 案已落地**：`fog` 槽位形状封闭且引用 FogState。
-
-        （原「预登记未落地」现状钉在 B 案落地时按其设计转正为正向钉——
-        形状对齐 openapi_ext 与 shared/openapi.json 两处同源。）
-        """
-        _live, snap = specs
-        props = snap["components"]["schemas"]["StateDeltaMessage"]["properties"]
-        assert "fog" in props, "B 案已落地，fog 槽位必须在"
-        assert props["fog"]["$ref"] == "#/components/schemas/FogState"
-        fog = snap["components"]["schemas"]["FogState"]
-        assert fog["additionalProperties"] is False
-        assert fog["required"] == ["revealed"]
-        item = fog["properties"]["revealed"]["items"]
-        assert item["required"] == ["cx", "cy"]
-        assert item["additionalProperties"] is False

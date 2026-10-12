@@ -64,11 +64,7 @@ export class WorldScene extends Phaser.Scene {
   private goalMarker: Phaser.GameObjects.Arc | null = null;
   /** D14 头顶气泡 Text 池（键=戏内名；mirror.bubbles 驱动增删） */
   private bubbleTexts = new Map<string, Phaser.GameObjects.Text>();
-  /** D17 视觉雾：未揭示区压暗罩（chunk 粒度矩形；揭示集变化才重绘） */
-  private fogOverlay: Phaser.GameObjects.Graphics | null = null;
-  /** 雾罩脏标记：mirror.fog 引用计数变化才重绘（揭示只增——size 即版本） */
-  private lastFogSize = -1;
-  /** E7 建筑投影层（depth 4 < 雾 5——雾罩未揭示区连建筑一起压暗） */
+  /** E7 建筑投影层（depth 14——旧雾层随雾机制删除退役，此层保留压暗未揭示区语义已无） */
   private structureLayer: Phaser.GameObjects.Graphics | null = null;
   /** 建筑投影脏标记：structures.size 变化才重绘 */
   private lastStructureCount = -1;
@@ -117,12 +113,8 @@ export class WorldScene extends Phaser.Scene {
     // 批次 D7：雨层（短雨丝 Graphics；雨落动画在 update 里逐帧推进）
     this.rainLayer = this.add.graphics().setScrollFactor(0).setDepth(99);
     this.goalMarker = this.add.circle(0, 0, 3, 0xffd75e).setVisible(false).setDepth(50);
-    // E7 建筑投影层：完工结构占格（depth 14——雾 15 之下，未揭示区建筑同被压暗）
+    // E7 建筑投影层：完工结构占格（depth 14）
     this.structureLayer = this.add.graphics().setDepth(14);
-    // D17 视觉雾罩：2026-10-12 修「阴影 bug」——depth 5→15（雾**盖过精灵**：
-    // 未揭示区的人不该看得见，裁 40-4 迷雾=观察面；此前 5<10 精灵浮在雾上，
-    // 雾里一个个头颅悬浮=「阴影 bug」观感）。
-    this.fogOverlay = this.add.graphics().setDepth(15);
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.handlePointer(pointer);
@@ -230,7 +222,6 @@ export class WorldScene extends Phaser.Scene {
     this.syncOverlay();
     this.syncRain(delta);
     this.syncBubbles(time);
-    this.syncFog();
     this.syncStructures();
   }
 
@@ -245,27 +236,6 @@ export class WorldScene extends Phaser.Scene {
       for (const [x, y] of structure.tiles) {
         g.fillStyle(0x6b4f2a, structure.phase === 'built' ? 0.92 : 0.5);
         g.fillRect(x * TILE, y * TILE, TILE - 1, TILE - 1);
-      }
-    }
-  }
-
-  /** D17 视觉雾：未揭示 chunk 压暗（揭示只增→size 变化才重绘，静态层零每帧成本）。 */
-  private syncFog(): void {
-    const g = this.fogOverlay;
-    const map = this.mirror.map;
-    if (g === null || map === null) return;
-    if (this.mirror.fog.size === this.lastFogSize) return;
-    this.lastFogSize = this.mirror.fog.size;
-    g.clear();
-    const CHUNK = 16;
-    const totalChunksX = Math.ceil(map.w / CHUNK);
-    const totalChunksY = Math.ceil(map.h / CHUNK);
-    if (this.mirror.fog.size === 0 && totalChunksX === 0) return;
-    g.fillStyle(0x06080f, 0.82);
-    for (let cy = 0; cy < totalChunksY; cy += 1) {
-      for (let cx = 0; cx < totalChunksX; cx += 1) {
-        if (this.mirror.fog.has(`${cx},${cy}`)) continue;
-        g.fillRect(cx * CHUNK * TILE, cy * CHUNK * TILE, CHUNK * TILE, CHUNK * TILE);
       }
     }
   }
@@ -368,15 +338,20 @@ export class WorldScene extends Phaser.Scene {
         if (isProtagonist) this.cameras.main.startFollow(sprite, true, 0.12, 0.12);
       }
       // D20 漂移修：快照对快照插值——逻辑格变化时以「此刻」为起点、
-      // 从上一快照格线性走到新快照格（INTERP_MS 走完，到点即停）；
+      // 从上一快照格线性走到新快照格（插值窗走完，到点即停）；
       // 修前的帧对帧指数逼近每帧只走剩余距离的 t 比例 → 永远落后
       // 目标渐近=滑行漂移感。位置未变时保持原地（不重复计时）。
+      // 2026-10-12 移动手感修：插值窗按当前倍速缩放——sim 每格 15 tick
+      // 是游戏时恒定，1x=250ms；16x=15.6ms，固定 250ms 窗在倍速下逐帧
+      // 重置起点 → 永远追不上下一格=滑行。窗=max(帧预算, 15000/speed ms)。
       if (view.prevX !== actor.x || view.prevY !== actor.y) {
         view.fromX = view.sprite.x;
         view.fromY = view.sprite.y;
         view.snapAtMs = timeMs;
       }
-      const k = Math.min(1, (timeMs - view.snapAtMs) / INTERP_MS);
+      const speed = useUiStore.getState().speed;
+      const interpMs = Math.max(1000 / 60, INTERP_MS / speed);
+      const k = Math.min(1, (timeMs - view.snapAtMs) / interpMs);
       const targetX = actor.x * TILE + TILE / 2;
       const targetY = actor.y * TILE + TILE / 2;
       view.sprite.x = view.fromX + (targetX - view.fromX) * k;
