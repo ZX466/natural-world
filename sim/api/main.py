@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import contextlib
+import ipaddress
 import uuid
 from collections import deque
 from collections.abc import AsyncIterator, Mapping, Sequence
@@ -14,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import structlog
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, ConfigDict, Field
 
 from sim.api.anchors import router as anchors_router
@@ -22,6 +23,7 @@ from sim.api.errors import install_error_handlers
 from sim.api.settings import router as settings_router
 from sim.api.ws import (
     ConnectionManager,
+    _error_frame,
     check_origin,
     frames_of,
     handle_client_message,
@@ -29,6 +31,7 @@ from sim.api.ws import (
     run_world_driver,
     session_state_payload,
     snapshot_payload,
+    ws_auth_token,
 )
 from sim.core.events import world_create_event
 from sim.core.persistence.database import create_session_factory, init_database
@@ -796,7 +799,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 raise result
 
 
-app = FastAPI(title="临河镇 sim", version="1.10", lifespan=lifespan)
+app = FastAPI(title="临河镇 sim", version="1.11", lifespan=lifespan)
 app.include_router(settings_router)
 app.include_router(anchors_router)  # M5-K7：玩家档读路径（落库 → WS 查表集供数）
 
@@ -892,6 +895,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
     pf = _pathfinder()
     # M5-K3 / 裁 21-A D-3：会话态**连接级**——由 ConnectionManager 每连接一份
     control = manager.control_of(ws)
+    authed = False
     try:
         # 接入即发全量快照（kilo ws-protocol：sync 的答案）。
         # M6-K5 裁 41-4：出站**一律走咽喉**（`manager.send_json_to`）——直发
@@ -910,11 +914,25 @@ async def ws_endpoint(ws: WebSocket) -> None:
         )
         while True:
             raw = await ws.receive_json()
-            if raw.get("type") in {"move_request", "set_control"}:
+            if not isinstance(raw, dict):
+                raw = {}
+            msg_type = raw.get("type")
+            if not isinstance(msg_type, str):
+                msg_type = "unknown"
+                raw = {**raw, "type": msg_type}
+            if not authed and msg_type not in {"hello", "sync_request"}:
+                reply = _error_frame(
+                    msg_type if isinstance(msg_type, str) else "unknown",
+                    "auth_error",
+                    "authentication required",
+                )
+            elif msg_type in {"move_request", "set_control"}:
                 async with app.state.world_write_lock:
                     reply = handle_client_message(raw, app.state.loop, pf, control)
             else:
                 reply = handle_client_message(raw, app.state.loop, pf, control)
+            if msg_type == "hello":
+                authed = any(frame.get("type") == "hello_ack" for frame in frames_of(reply))
             # M5-K3：读档成功回两帧（分叉告知 + 全量），其余仍单帧/无帧
             for frame in frames_of(reply):
                 await manager.send_json_to(ws, frame)
@@ -922,6 +940,34 @@ async def ws_endpoint(ws: WebSocket) -> None:
         pass
     finally:
         manager.unregister(ws)
+
+
+class WsTokenResponse(BaseModel):
+    """本机 WS 握手凭据；只经 HTTP 返回，不写入世界或持久化。"""
+
+    model_config = ConfigDict(extra="forbid")
+    token: str
+
+
+@app.get("/api/ws-token", response_model=WsTokenResponse)
+async def websocket_token(request: Request, response: Response) -> WsTokenResponse:
+    origin = request.headers.get("origin")
+    try:
+        local_peer = (
+            request.client is not None and ipaddress.ip_address(request.client.host).is_loopback
+        )
+    except ValueError:
+        local_peer = False
+    if (
+        not local_peer
+        or request.url.hostname not in {"localhost", "127.0.0.1", "::1"}
+        or origin == "null"
+        or not check_origin(origin)
+    ):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Vary"] = "Origin"
+    return WsTokenResponse(token=ws_auth_token())
 
 
 def _current_anchor_pointer() -> dict[str, str] | None:

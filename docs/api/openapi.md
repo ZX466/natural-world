@@ -19,7 +19,8 @@
 
 - 前端通过设置页提交 `api_key` → 后端 Fernet 加密落库（§6 SQLite）。
 - 响应**永不返回** `api_key` 明文，只回掩码指示（如 `sk-…3Xy`）与 `profile_id`。
-- 前端持有 `profile_id`（戏外会话引用），不含任何密钥；sim 调 LLM 时服务端解密取用。
+- 前端持有 `profile_id`（戏外会话引用），不含供应商密钥；sim 调 LLM 时服务端解密取用。
+- `GET /api/ws-token`（1.11 / 2026-10-20 单 G）返回单键 `{token}`，供本机 WS hello 握手；仅回环连接、合法 Host/Origin 可取，响应不缓存。它是进程级临时会话凭据，与供应商 api_key 分离，客户端只在内存中使用，hello_ack 前不发送写命令。
 - 建议加一个本地 `session` 绑定（非密钥），供 WS 连接关联活动 profile——细节留给 cline 配置域与 codex 安全域。
 
 ## 3. 端点清单

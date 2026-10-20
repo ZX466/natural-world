@@ -18,6 +18,7 @@ sim/api/ws  (FastAPI WebSocket 网关)
 - 前端分两个渲染边界（§4 硬约束）：**Phaser** 只画 canvas 内世界（消费 render 通道），**React** 只画 canvas 外 UI（消费 narrative 通道）。两者不共享 DOM。
 - WS 一条连接复用两类通道，靠消息 `channel` 字段区分，避免 Phaser/React 各开一条。
 - 连接生命周期 = 一个游戏会话。断线重连走 `full_snapshot` 全量重建（见 §3.2）。
+- **W6（2026-10-20 单 G，协议 1.11）**：客户端先经同源 `GET /api/ws-token` 取得进程级临时凭据（开发环境 `/api` 由 Vite 代理），连接首条客户端消息为 `hello{channel:"session",token:…}`。收到 `hello_ack` 后才发送暂存命令；失败即关闭并重新取凭据。服务端按连接鉴权，未 hello 成功的写命令一律回 `error{ref:<type>,code:"auth_error"}`。接入快照、session_state 与只读 sync 仍可在鉴权前使用。token 端点仅允许回环连接、localhost/回环 Host 与白名单 Origin，拒绝 `Origin:null`，返回 `Cache-Control:no-store`；凭据不持久化、不进世界日志或 prompt。
 
 ## 2. 信封格式
 

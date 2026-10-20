@@ -267,6 +267,8 @@ class TestLoadHookBoundedReturn:
         with client.websocket_connect("/ws") as ws:
             ws.receive_json()  # full_snapshot
             ws.receive_json()  # session_state
+            ws.send_json({"type": "hello", "channel": "session", "token": ws_mod.ws_auth_token()})
+            assert ws.receive_json()["type"] == "hello_ack"
             ws.send_json({"type": "load_anchor", "channel": "session", "anchor_id": anchor["id"]})
             reply = ws.receive_json()
         elapsed = _t.perf_counter() - t0
@@ -276,11 +278,14 @@ class TestLoadHookBoundedReturn:
     def test_driver_drains_pending_loads(self, client: TestClient) -> None:
         """pending 请求由 driver 侧 drain 执行（受理后最终落 outcome）。"""
         from sim.api.main import app
+        from sim.api.ws import ws_auth_token
 
         anchor = client.post("/api/anchors", json={"name": "溪边小驻"}).json()
         with client.websocket_connect("/ws") as ws:
             ws.receive_json()
             ws.receive_json()
+            ws.send_json({"type": "hello", "channel": "session", "token": ws_auth_token()})
+            assert ws.receive_json()["type"] == "hello_ack"
             ws.send_json({"type": "load_anchor", "channel": "session", "anchor_id": anchor["id"]})
             ws.receive_json()
         # drain 是协作式的：TestClient 请求结束后手动跑一轮 drain 断言 outcome

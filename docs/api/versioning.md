@@ -60,6 +60,7 @@ client ◄──hello_ack── { "v": "1.1", "server_versions": ["1.0","1.1"], 
 
 | 版本 | 变更 | 影响端 | 日期 |
 |---|---|---|---|
+| 1.11 | W6 鉴权闭环：新增本机 `GET /api/ws-token`（来源/Host/回环连接校验，响应不缓存），生产 WS 在 hello 成功前拒绝写命令，客户端先取 token 并发 hello，hello_ack 后才发同步及暂存命令。既有只读接入问候与 sync 保留；hello/hello_ack 仍为会话握手，不加入世界消息联合。 | sim+client | 2026-10-20 |
 | 1.10 | 战斗幽灵帧接线：既有 `combat.scale_change` 事件转发为 `timescale`，交换结算投影为既有 `combat_event`；客户端消费战斗态与表现帧，角标使用戏内措辞。沿用既有 schema，不新增世界事件 kind，不改变战斗结算。 | sim+client | 2026-10-20 |
 | 1.9 | S4 建造念头加法：`PlayerImpulseMessage.action?: "build"` 与 `target_pos?: [x,y]` 成对提供；坐标为非负整数且地块可施工。仍先过念头扫描、仅生成世界内念头，实际建造由既有决策/执行边界复验到站、资金和地块。动物复用既有 actors[]，生态/语域不新增帧字段。 | sim+client | 2026-10-20 |
 | 1.0 | 协议基线（ws-protocol.md 全量消息 + rtoken/时间口径裁决） | client+sim | 2026-09-19 |

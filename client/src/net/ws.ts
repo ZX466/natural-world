@@ -46,7 +46,7 @@ function useControlState(speed: number, paused: boolean): void {
  * `sim/tests/test_protocol_version.py` 的跨树钉锁死
  * （本文件是**第二落点**，真相源在 ws.py；改一处必改另一处）。
  */
-const PROTOCOL_VERSION = '1.10';
+const PROTOCOL_VERSION = '1.11';
 
 export type WsStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
 
@@ -71,6 +71,8 @@ export class WsClient {
   private attempt = 0;
   private closedByUser = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private authenticated = false;
+  private pendingMessages: Record<string, unknown>[] = [];
 
   constructor(
     private readonly url: string,
@@ -84,28 +86,47 @@ export class WsClient {
   }
 
   private open(): void {
+    this.authenticated = false;
+    this.pendingMessages = [];
     this.cb.onStatus(this.attempt === 0 ? 'connecting' : 'reconnecting');
     const ws = new WebSocket(this.url);
     this.ws = ws;
 
-    ws.onopen = () => {
-      this.attempt = 0;
-      this.cb.onStatus('open');
-      // 重连后的首条消息：请求全量快照（M0 sim 未实现时收不到，镜像保持空直到 mock）
-      this.sendRaw({
-        type: 'sync_request',
-        channel: 'session',
-        reason: 'reconnect',
-        v: PROTOCOL_VERSION,
-        ws_seq: this.nextSeq(),
-      });
+    ws.onopen = async () => {
+      try {
+        const response = await fetch('/api/ws-token', { cache: 'no-store' });
+        if (!response.ok) throw new Error('handshake unavailable');
+        const body: unknown = await response.json();
+        if (
+          !body ||
+          typeof body !== 'object' ||
+          !('token' in body) ||
+          typeof body.token !== 'string' ||
+          !body.token
+        )
+          throw new Error('invalid handshake');
+        if (this.ws !== ws || ws.readyState !== WebSocket.OPEN) return;
+        this.sendRaw({
+          type: 'hello',
+          channel: 'session',
+          token: body.token,
+          v: PROTOCOL_VERSION,
+          ws_seq: this.nextSeq(),
+        });
+      } catch {
+        if (this.ws === ws) ws.close();
+      }
     };
 
     ws.onmessage = (ev: MessageEvent) => {
+      if (this.ws !== ws) return;
       this.dispatch(String(ev.data));
     };
 
     ws.onclose = () => {
+      if (this.ws !== ws) return;
+      this.authenticated = false;
+      this.pendingMessages = [];
       this.cb.onStatus('closed');
       if (!this.closedByUser) this.scheduleReconnect();
     };
@@ -116,13 +137,24 @@ export class WsClient {
   }
 
   private dispatch(raw: string): void {
-    let msg: WsMessage;
+    let msg: WsMessage | { type: 'hello_ack' };
     try {
-      msg = JSON.parse(raw) as WsMessage;
+      msg = JSON.parse(raw) as WsMessage | { type: 'hello_ack' };
     } catch {
       return; // 非 JSON 静默忽略
     }
     switch (msg.type) {
+      case 'hello_ack': {
+        if (this.authenticated) break;
+        this.authenticated = true;
+        this.attempt = 0;
+        this.cb.onStatus('open');
+        this.send({ type: 'sync_request', channel: 'session', reason: 'reconnect' });
+        const pending = this.pendingMessages;
+        this.pendingMessages = [];
+        for (const frame of pending) this.send(frame);
+        break;
+      }
       case 'full_snapshot':
         this.mirror.applySnapshot(msg.actors, msg.lights);
         if (msg.weather) {
@@ -183,6 +215,10 @@ export class WsClient {
         this.cb.onImpulseFeedback?.(msg as ImpulseFeedbackMessage);
         break;
       case 'error':
+        if (msg.code === 'auth_error') {
+          this.ws?.close();
+          break;
+        }
         this.cb.onError?.(msg as WsErrorMessage);
         break;
       default:
@@ -195,6 +231,10 @@ export class WsClient {
    *  注：Omit 对联合不分发（会坍缩成公共键），所以用可分配性宽松的入参 +
    *  序列化前统一附加信封字段；消息形状由调用方与生成的类型保证。 */
   send(msg: Record<string, unknown>): void {
+    if (this.ws?.readyState === WebSocket.OPEN && !this.authenticated) {
+      this.pendingMessages.push(msg);
+      return;
+    }
     this.sendRaw({ ...msg, v: PROTOCOL_VERSION, ws_seq: this.nextSeq() });
   }
 
@@ -222,6 +262,8 @@ export class WsClient {
 
   close(): void {
     this.closedByUser = true;
+    this.authenticated = false;
+    this.pendingMessages = [];
     if (this.timer !== null) clearTimeout(this.timer);
     this.ws?.close();
   }
