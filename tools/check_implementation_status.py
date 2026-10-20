@@ -75,9 +75,20 @@ def check_ws_frames() -> list[str]:
     protocol_doc = _read("docs/api/ws-protocol.md")
     exempt = "`perception` 不经 WS 出站" in protocol_doc
 
-    # 双向错配
+    #: 鉴权握手帧：客户端不消费是**设计如此**（握手成功无需游戏侧动作）。
+    #: 证据：client/src/net/__tests__/protocol-types.test.ts 明确断言
+    #: hello/hello_ack「不进游戏协议清单」（安全域，非游戏帧）。
+    handshake = {"hello", "hello_ack"}
+
+    # 双向错配（握手帧单列，标明豁免）
     for frame in sorted(emitted - consumed):
-        problems.append(f"[ws] 服务端发送 '{frame}'，客户端 dispatch 无 case（静默丢弃）")
+        if frame in handshake:
+            problems.append(
+                f"[ws] 服务端发送 '{frame}'，客户端 dispatch 无 case——"
+                "**豁免**（W6 鉴权握手层，设计上不进游戏协议清单）"
+            )
+        else:
+            problems.append(f"[ws] 服务端发送 '{frame}'，客户端 dispatch 无 case（静默丢弃）")
     for frame in sorted(consumed - emitted):
         problems.append(f"[ws] 客户端消费 '{frame}'，服务端从不发送（幽灵分支）")
 
