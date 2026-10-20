@@ -78,7 +78,12 @@ export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }): Reac
             </button>
           ))}
         </div>
-        <span className={`od-status ${STATUS_CLASS[wsStatus] ?? 'od-status--closed'}`} />
+        <span
+          className={`od-status ${STATUS_CLASS[wsStatus] ?? 'od-status--closed'}`}
+          role="status"
+          aria-label={connectionLabel ?? '连接正常'}
+          title={connectionLabel ?? '连接正常'}
+        />
       </div>
     </header>
   );

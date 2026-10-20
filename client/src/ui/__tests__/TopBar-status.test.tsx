@@ -35,3 +35,16 @@ it.each([
 it('hides the connection hint while open', () => {
   expect(render()).not.toContain('data-connection-status');
 });
+
+it.each([
+  ['open', '连接正常'],
+  ['connecting', '连接中…'],
+  ['reconnecting', '正在重连…'],
+  ['closed', '已断开，正在重试'],
+])('gives the status dot an accessible label for %s', (status, label) => {
+  state.wsStatus = status;
+  const dot = render().match(/<span[^>]*class="od-status [^"]*"[^>]*>/)?.[0];
+  expect(dot).toContain('role="status"');
+  expect(dot).toContain(`aria-label="${label}"`);
+  expect(dot).toContain(`title="${label}"`);
+});
