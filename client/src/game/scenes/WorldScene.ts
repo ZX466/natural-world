@@ -6,7 +6,7 @@
  */
 import Phaser from 'phaser';
 import { createFaunaTextures } from '../render/fauna';
-import { placeBubble, selectBubbleNames } from '../presentation';
+import { placeBubble, selectBubbleNames } from '../render/bubbles';
 import type { WorldMirror } from '../world-mirror';
 import {
   facingRow,

@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { WorldMirror } from '../world-mirror';
-import { MAX_VISIBLE_BUBBLES } from '../presentation';
+import { MAX_VISIBLE_BUBBLES } from '../render/bubbles';
 
 vi.mock('phaser', () => ({ default: { Scene: class {} } }));
 
