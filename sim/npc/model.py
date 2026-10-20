@@ -49,6 +49,7 @@ class NpcProfileData:
     needs: tuple[Need, ...] = ()
     skills: dict[str, int] = field(default_factory=dict)
     lod: int = 1  # 0=统计 1=效用 2=LLM（变更走 NPC_LOD_CHANGE 事件，不直改）
+    class_register: str = "平民"
 
     def utility_scores(self) -> dict[str, float]:
         """需求加权 urgency（L1 效用输入；utility.py 消费）。"""

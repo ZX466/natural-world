@@ -11,7 +11,7 @@ import uuid
 from collections import deque
 from collections.abc import AsyncIterator, Mapping, Sequence
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import structlog
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -203,6 +203,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             tick_events,
             display_name_of=_display_names,
             species_of={eid: species for eid, (_, species) in ANIMALS.items()},
+            include_fauna=True,
         )
     )
 
@@ -210,6 +211,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         branch_id = await store.current_branch_id_or_none() or "main"
         await NpcStore(store, branch_id=branch_id).flush_tick(events)
         maintenance.observe(events)
+        for event in events:
+            if event.event_type.value == "structure.completed":
+                from sim.api.ws import set_structure_phase
+
+                sid = str(event.payload["structure_id"])
+                structure = maintenance.structures.get(sid)
+                if structure is not None:
+                    set_structure_phase(sid, list(structure.tiles), "built")
         cognition.observe(events)
         branch_id = await store.current_branch_id_or_none()
         if branch_id is not None:
@@ -221,6 +230,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     async def on_flush_async() -> None:
         await on_flush(loop.drain_events())
+
+    async def flush_for_anchor() -> None:
+        events = list(loop.pending_events)
+        await on_flush(events)
+        del loop.pending_events[:len(events)]
+        loop.pending_broadcast_events.extend(events)
+
+    app.state.flush_for_anchor = flush_for_anchor
 
     app.state.loop = loop
     app.state.store = store
@@ -272,6 +289,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await PowerStore(store).materialize(None),
     )
     pathfinder = Pathfinder(tile_map)
+    app.state.pathfinder = pathfinder
+    loop.pathfinder = pathfinder
+    loop.fauna_enabled = True
     app.state.npc_runtime = npc_runtime
     monologue_last: dict[str, int] = {}
     monologue_quota: dict[int, int] = {}  # D10：每节拍出镇配额账本（撞拍保险丝）
@@ -304,9 +324,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     build_runtime = BuildRuntime(tile_map, seed=loop.state.world_seed)
     app.state.build_runtime = build_runtime
 
-    # 批次 E7：structure_id → tiles（started 时记；completed 时投影 built——
-    # StructureDelta phase 枚举无 building,在建工地不投影,完工才画）。
-    build_tiles_log: dict[str, list[tuple[int, int]]] = {}
+    # 结构瓦片以 maintenance 的事件折叠为准，on_flush 完工后投影 built。
     from sim.world.maintenance import WorldMaintenance
 
     matter_ledger = await npc_store.materialize_matter()
@@ -319,16 +337,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # TILE_CHANGED → 寻路缓存失效（§14 chunk 失效；图换新实例后
             # pathfinder 需感知——observe_map 对齐新几何）。
             pathfinder.observe_map(build_runtime.tile_map)
-            from sim.api.ws import set_structure_phase
-
-            for ev in events:
-                if ev.event_type.value == "structure.started":
-                    sid = str(ev.payload.get("structure_id", ""))
-                    raw_tiles = cast("Sequence[Sequence[int]]", ev.payload.get("tiles") or ())
-                    build_tiles_log[sid] = [(int(t[0]), int(t[1])) for t in raw_tiles]
-                elif ev.event_type.value == "structure.completed":
-                    sid = str(ev.payload.get("structure_id", ""))
-                    set_structure_phase(sid, build_tiles_log.get(sid, []), "built")
         return events or None
 
     loop.attach_npc_runtime(_build_tick_hook)
@@ -364,6 +372,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             retell_last=retell_last,  # 批次 E2：学舌通路（review C3 修复）
             wage_last=wage_last,
             coin_ledger=coin_ledger,
+            build_runtime=build_runtime,
         )
         # 批次 D14：npc.act → 动作姿势账本（快照/delta 的 anim 字段供数）。
         from sim.api.ws import set_action_anim
@@ -508,6 +517,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         return event
 
     loop.attach_entropy(_combat_entropy)
+    from sim.npc.speech_register import SpeechContext
 
     driver = ChenmoDriver(
         anchor=build_anchor(),
@@ -519,6 +529,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         build_runtime_provider=lambda: build_runtime,  # 批次 E4
         combat_provider=lambda: (combat_ledger, loop.state.world_seed),  # 批次 E6
         entropy_provider=_combat_entropy,
+        speech_context_provider=lambda target: SpeechContext(
+            language.class_register,
+            in_circle=target is None or target in chat_ledger.relations_of(CHENMO_ID),
+        ),
     )
     app.state.chenmo_driver = driver
     loop.attach_maintenance(lambda state, tick: driver.combat_tick(loop, pathfinder=pathfinder))
@@ -541,6 +555,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         last = _time.monotonic()
         while True:
             await asyncio.sleep(0.5)
+            if not getattr(app.state, "world_source_ready", True):
+                continue
             now = _time.monotonic()
             due = (now - last) >= interval
             if not driver.take_requested() and not due:
@@ -686,7 +702,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 combat_ledger.reset()
                 coin_ledger.reset()
                 chat_ledger.reset()
-                build_tiles_log.clear()
                 monologue_last.clear()
                 monologue_quota.clear()
                 chat_last.clear()
@@ -742,6 +757,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         memory_pipeline,
         npc_ids=(CHENMO_ID, *VILLAGER_IDS),
     )
+    # 只允许空库开线；已有分支但无当前行时保持故障态，禁止后台猜 main 修复真源。
+    from sqlalchemy import select
+
+    from sim.core.persistence.models import Branch
+
+    source_ready = await store.current_branch_id_or_none() is not None
+    if not source_ready:
+        async with store.session_factory() as session:
+            source_ready = await session.scalar(select(Branch.id).limit(1)) is None
+    app.state.world_source_ready = source_ready
     app.state.driver = asyncio.create_task(
         run_world_driver(
             loop,
@@ -752,10 +777,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             drain_loads=_drain_loads,
             write_lock=world_write_lock,
         )
+        if source_ready else asyncio.Event().wait()
     )
     try:
         yield
     finally:
+        app.state.flush_for_anchor = None
+        app.state.pathfinder = None
+        delattr(app.state, "world_source_ready")
         tasks = (app.state.chenmo_task, app.state.driver)
         for task in tasks:
             task.cancel()
@@ -829,7 +858,7 @@ async def health() -> HealthStatus:
     loop: TickLoop = app.state.loop
     return HealthStatus(
         status="ok",
-        world_running=True,
+        world_running=getattr(app.state, "world_source_ready", True),
         in_combat=loop.context.combat_active,
     )
 
@@ -915,4 +944,7 @@ def _current_anchor_pointer() -> dict[str, str] | None:
 def _pathfinder():
     from sim.world.pathfinding import Pathfinder
 
+    active = getattr(app.state, "pathfinder", None)
+    if active is not None:
+        return active
     return Pathfinder(app.state.tile_map)

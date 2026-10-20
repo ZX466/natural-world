@@ -33,6 +33,11 @@ def test_leading_question_denial_is_not_a_hard_red(code: str, response: str):
         ("probability", "有七成把握？我可不敢打包票，但有八成可能。"),
         ("probability", "概率？不好说，有七成把握。"),
         ("probability", "『有七成把握』，这就是我的判断。"),
+        ("probability", "有七成把握？不是说笑，正是这个数。"),
+        ("probability", "有七成把握？我不知道你为何还不信，方才那数我算准了。"),
+        ("probability", "有七成把握？我可不敢打包票，但方才那数是准的。"),
+        ("manipulation", "谁指使我？不是别人，正是你呀。"),
+        ("manipulation", "谁指使我？我不知道他的姓名，只管照办。"),
     ],
 )
 def test_echo_does_not_exempt_assertions(code: str, response: str):

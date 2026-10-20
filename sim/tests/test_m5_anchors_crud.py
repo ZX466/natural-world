@@ -186,6 +186,9 @@ class TestColumnSwitchedReads:
         client.post("/api/anchors", json={"name": "档二"})
         with anchors_mod.get_anchor_store().session() as s:
             s.query(PlayerAnchor).update({"protected": False})
+            # 准备明确的先后态；Windows 墙钟可同刻，同刻本应按 id 降序兜底。
+            s.query(PlayerAnchor).filter_by(name="档一").update({"updated_at": 100.0})
+            s.query(PlayerAnchor).filter_by(name="档二").update({"updated_at": 200.0})
             s.commit()
         r = client.get("/api/anchors/current")
         assert r.status_code == 200

@@ -430,7 +430,12 @@ class TestCursorTripleCoherence:
             assert r.status_code == 201, r.text
             item = _anchors(world_db)[-1]
             assert item.branch_id == CHILD, "档的 branch 指向错误世界线（R-4）"
-            assert item.seq == CHILD_HEAD, "seq 来自另一条线 ⇒ 三元组自相矛盾"
+            # 实况 driver / 存档 preflush 可继续追加；游标须落在真源已有前缀，
+            # main 的诱饵头部仍为 3，取错线必低于 CHILD_HEAD=7。
+            assert CHILD_HEAD <= item.seq <= _head_seq(world_db, CHILD), (
+                "seq 来自另一条线 ⇒ 三元组自相矛盾"
+            )
+            assert _head_seq(world_db, MAIN) == MAIN_HEAD
 
     def test_post_does_not_move_current_line(self, world_db: Path) -> None:
         """记档对当前行**只读**，不得顺手改 `is_current`（否则记一次档就换线）。"""

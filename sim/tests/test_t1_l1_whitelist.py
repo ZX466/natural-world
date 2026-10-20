@@ -67,10 +67,11 @@ def make_hidden_profile() -> HiddenProfile:
 
 
 class TestL1ActionWhitelist:
-    def test_six_actions_locked(self) -> None:
-        """动作全集锁定：与 m2-npc-cognition §2.1 六项一致。"""
+    def test_seven_actions_locked(self) -> None:
+        """原六项加显式 build；坐标/资金仍在执行边界检查。"""
         assert (
-            frozenset({"move", "work", "eat", "rest", "wander", "request_chat"}) == ACTION_WHITELIST
+            frozenset({"move", "work", "eat", "rest", "wander", "request_chat", "build"})
+            == ACTION_WHITELIST
         )
 
     @pytest.mark.parametrize(
@@ -82,6 +83,7 @@ class TestL1ActionWhitelist:
             ("rest", {"hours"}),
             ("wander", {"radius"}),
             ("request_chat", {"to_npc"}),
+            ("build", {"x", "y"}),
         ],
     )
     def test_payload_keys_whitelisted(self, action: str, keys: set[str]) -> None:

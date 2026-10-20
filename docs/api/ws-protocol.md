@@ -164,6 +164,11 @@ sim/api/ws  (FastAPI WebSocket 网关)
 
 #### player_impulse.data（C→S，M4）
 
+1.9：可选 `action: "build"` 与 `target_pos: [x,y]` 必须成对提供；坐标只接受
+非负整数，布尔/浮点/缺项/越界或不可施工地块均返回 `bad_impulse`。
+文本仍须过三扫；坐标只补为世界内建造念头，不保证角色立即开工。
+开工沿既有决策与执行链，到站且资金足够才扣工料，地块失效则退款。
+
 ```jsonc
 {
   "text": "去赚钱",               // 玩家原始直觉输入，≤ 64 字

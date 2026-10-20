@@ -142,6 +142,11 @@ def _validate_npc_act(payload: BaseModel) -> None:
         raise EventValidationError(
             f"npc.act: 动作 {payload.action!r} 的 params 键越界: {sorted(payload.params)}"
         )
+    if payload.action == "build" and (
+        set(payload.params) != {"x", "y"}
+        or any(not v.isascii() or not v.isdecimal() for v in payload.params.values())
+    ):
+        raise EventValidationError("npc.act: build 需要非负十进制坐标 x/y")
 
 
 def _validate_witnesses(witnesses: Any) -> None:

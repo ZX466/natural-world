@@ -24,7 +24,8 @@ from sim.npc.schedule import ScheduleSlot
 
 #: 动作固定序（向量化列序；确定性契约——不随 set 迭代序漂移）
 ACTION_ORDER: tuple[str, ...] = tuple(
-    a for a in ("move", "work", "eat", "rest", "wander", "request_chat") if a in ACTION_WHITELIST
+    a for a in ("move", "work", "eat", "rest", "wander", "request_chat", "build")
+    if a in ACTION_WHITELIST
 )
 
 N_ACTIONS = len(ACTION_ORDER)
@@ -34,9 +35,9 @@ N_ACTIONS = len(ACTION_ORDER)
 NEED_ORDER: tuple[str, ...] = ("hunger", "energy", "social")
 _GAIN = np.array(
     [
-        [0.0, 0.0, 0.9, 0.1, 0.0, 0.0],  # hunger: eat 治饥饿
-        [0.0, 0.0, 0.1, 0.9, 0.2, 0.0],  # energy: rest 恢复精力
-        [0.0, 0.2, 0.0, 0.0, 0.3, 0.8],  # social: work/wander/chat
+        [0.0, 0.0, 0.9, 0.1, 0.0, 0.0, 0.0],  # hunger: eat 治饥饿
+        [0.0, 0.0, 0.1, 0.9, 0.2, 0.0, 0.0],  # energy: rest 恢复精力
+        [0.0, 0.2, 0.0, 0.0, 0.3, 0.8, 0.0],  # social: work/wander/chat
     ],
     dtype=np.float32,
 )  # (n_needs, n_actions)

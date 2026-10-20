@@ -13,6 +13,7 @@ import json
 from collections.abc import Callable
 
 from sim.llm.prompts.banned_words import REWRITE_MAP, scan
+from sim.npc.speech_register import SpeechContext, speech_register
 
 #: 模板池（第一人称世界内台词；{listener} 为称呼占位）。
 _CHAT_TEMPLATES: tuple[str, ...] = (
@@ -24,11 +25,23 @@ _CHAT_TEMPLATES: tuple[str, ...] = (
 )
 
 
-def template_line(speaker: str, listener_name: str, tick: int) -> str:
+_REGISTER_TEMPLATES = {
+    "粗": ("喂，{listener}，有事快说。", "{listener}，忙着呢，回头再说。"),
+    "文雅": ("{listener}，您近来可好？", "{listener}，您得空不妨来坐坐。"),
+    "日常": _CHAT_TEMPLATES,
+}
+
+
+def template_line(
+    speaker: str, listener_name: str, tick: int, *, speech_context: SpeechContext | None = None
+) -> str:
     """模板兜底：sha256(speaker:listener:tick) 挑句（C5 同输入同输出）。"""
     digest = hashlib.sha256(f"chat:{speaker}:{listener_name}:{tick}".encode()).digest()
-    pick = int.from_bytes(digest[0:4], "big") % len(_CHAT_TEMPLATES)
-    return _CHAT_TEMPLATES[pick].format(listener=listener_name)
+    pool = (
+        _REGISTER_TEMPLATES[speech_register(speech_context)] if speech_context else _CHAT_TEMPLATES
+    )
+    pick = int.from_bytes(digest[0:4], "big") % len(pool)
+    return pool[pick].format(listener=listener_name)
 
 
 def validate_provider_line(line: str) -> str | None:

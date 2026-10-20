@@ -76,6 +76,8 @@ class TickLoop:
     _entropy_hook: Callable[[str, int], WorldEvent] | None = field(
         default=None, repr=False, compare=False
     )
+    fauna_enabled: bool = False
+    pending_broadcast_events: list[WorldEvent] = field(default_factory=list)
 
     def advance_frame(self, real_dt: float) -> int:
         """喂入真实秒数，推进 0..N 个 tick（catch-up 封顶）。返回推进数。"""
@@ -201,6 +203,10 @@ class TickLoop:
             if batch:
                 for event in batch:
                     self.enqueue(event)
+        from sim.world.nature import nature_events_at
+
+        for event in nature_events_at(self.state.tick):
+            self.enqueue(event)
 
     def _run_npc_runtime(self) -> None:
         """定时任务挂载点（M0 预留 → 批次 B 兑现）：决策节拍驱动全部 NPC 钩子。"""

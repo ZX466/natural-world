@@ -295,7 +295,7 @@ def _profile_row(p: NpcProfileData) -> dict[str, object]:
         "skills": json.dumps({}),
         "goals": json.dumps({}),
         "inventory": json.dumps([]),
-        "knowledge_boundary": json.dumps({}),
+        "knowledge_boundary": json.dumps({"class_register": p.class_register}),
         "lod": p.lod,
         "created_at_tick": 0,
         "updated_at_tick": 0,

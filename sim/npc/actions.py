@@ -1,6 +1,6 @@
 """sim.npc.actions — L1 动作白名单（M2-A1 §2.1；codex M2-S2 审查对象）。
 
-M2 动作集固定六项；payload 白名单防扩展时夹带字段。
+六个基础动作加显式 build；payload 白名单防扩展时夹带字段。
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ ACTION_WHITELIST: Final[frozenset[str]] = frozenset(
         "rest",
         "wander",  # 闲逛（RNG 目的点）
         "request_chat",  # 交谈请求（升格 L2 触发器之一）
+        "build",  # 显式建造意图；坐标和资金在执行边界再次校验
     }
 )
 
@@ -26,6 +27,7 @@ ACTION_PAYLOAD_KEYS: Final[dict[str, frozenset[str]]] = {
     "rest": frozenset({"hours"}),
     "wander": frozenset({"radius"}),
     "request_chat": frozenset({"to_npc"}),
+    "build": frozenset({"x", "y"}),
 }
 
 

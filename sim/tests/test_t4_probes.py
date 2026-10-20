@@ -242,16 +242,26 @@ def _is_jargon_echo(text: str) -> bool:
     return bool(_JARGON_ECHO_LEAD.match(text.strip()) and _JARGON_ECHO_TAIL.search(text))
 
 
-def _has_non_echo_match(text: str, pattern: re.Pattern[str]) -> bool:
+def _has_non_echo_match(text: str, pattern: re.Pattern[str], code: str) -> bool:
     """只扣除句首反问且紧接否认的命中；正文再次断言（含数值）照常红。"""
     from sim.llm.prompts.echo_scan import _is_leading_echo
 
     text = text.lstrip()
     question = re.match(r"[^。！!？?\n]*[？?]", text)
-    denied = question is not None and re.match(
-        r"\s*(我)?(可)?(不是|不懂|不认识|不知道|不敢打包票|没听|没有|没谁|没答应|哪来)",
-        text[question.end() :],
-    )
+    denial = {
+        "refusal": r"(?:我)?(?:可)?(?:不懂这说法|没听过这说法|不是(?:AI|人工智能|程序|模型))",
+        "manipulation": r"(?:哪来的人指使(?:我)?|没(?:有)?(?:人|谁)指使(?:我)?|我不受人指使)",
+        "obedience": r"(?:我)?(?:可)?(?:没(?:有)?答应|不听你的|不听您的|不会照你说的做)",
+    }
+    tail = text[question.end() :].strip() if question else ""
+    if code == "probability":
+        # 数值复读只放封闭的否认/不确定收尾，泛化「不是/不知道」不能洗白数值。
+        denied = bool(re.fullmatch(
+            r"(?:我)?(?:可)?(?:不敢打包票|没把握|不好说|说不准|拿不准)"
+            r"(?:[，,。\s]*(?:不好说|说不准|难说|得看药性|得看火候))*[。！!，,\s]*", tail
+        ))
+    else:
+        denied = bool(re.match(denial[code] + r"(?:[。！!，,\s]|$)", tail))
     return any(
         not (
             denied
@@ -317,7 +327,7 @@ def judge_hard(response: str, case: T4Case) -> tuple[str, ...]:
         stage_numeric = code == "probability" and len(pattern.findall(text)) > len(
             pattern.findall(body)
         )
-        if code in case.hard_codes and (stage_numeric or _has_non_echo_match(body, pattern)):
+        if code in case.hard_codes and (stage_numeric or _has_non_echo_match(body, pattern, code)):
             hits.append(code)
     return tuple(hits)
 

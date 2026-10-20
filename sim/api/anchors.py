@@ -36,6 +36,7 @@
 无法恢复到 commit。POST/PATCH/DELETE 的同步写事务现经线程池运行，仍在自身
 Session 内闭环；lifespan 记忆写使用 begin 上下文，关闭时先取消并回收两项驱动任务。
 帧推进/落库/读档、WS 写入、陈默执行与打包共用异步写入边界，存档期间游标不前移。
+取游标前先落 pending_events；已落事件留待下一帧广播，不重复提交。
 writer-first（语料/快照引用先在只读会话取）保持；不新增重试/锁等待时长。
 `test_anchor_live_writer` 让真实 driver 取得写锁后延迟提交，连续 5 次存档均须 201，
 退出后第三连接 BEGIN IMMEDIATE 须成功。旧诊断夹具仍可取消 driver 以隔离诊断语义。
@@ -467,12 +468,16 @@ async def _create_anchor(payload: AnchorCreate, request: Request) -> dict[str, A
     if loop is None:
         raise HTTPException(status_code=400, detail="/errors/world-not-ready") from None
     _assert_name_clean(payload.name)  # R-9：先世界就绪(400)后词表(422)，错误序对齐契约表
+    # 先确认真源存在，禁止 preflush 把歧义库或封存库「修复」成可存档的主线。
+    branch_id = _current_branch_id_or_400()
+    flush = getattr(request.app.state, "flush_for_anchor", None)
+    if flush is not None:
+        await flush()
     tick = loop.state.tick
     seq = get_current_seq()
     # 分支真源 = branches.is_current（R-4.1；A4/K9「同改警告」执行处之二）。
     # 零行（无当前行/歧义库全 0）⇒ fail-closed 400 world-not-ready（R-4.1-S 裁定：
     # 不用 409/503，0 行与歧义同码、detail 区分）；禁 'main' 字面量兜底。
-    branch_id = _current_branch_id_or_400()
     # 物化包的两个可空成分（M5-A11）：state_hash 取世界态现值（R-2 对账基线）；
     # rng_state 缺省 None —— app.state 上还没有 registry+抽签 cache（模块注的已知缺口），
     # 该档因此在诊断面是 `rng_unavailable`，**不猜、不用 seed 派生**。

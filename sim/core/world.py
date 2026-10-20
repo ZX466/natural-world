@@ -293,6 +293,14 @@ def _apply_tile_changed(state: WorldState, event: WorldEvent, ctx: TickContext) 
     return ApplyResult(state=state)
 
 
+def _apply_nature_event(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    from sim.core.events import EcologyShiftPayload, FaunaTickPayload
+
+    model = EcologyShiftPayload if event.event_type is EventKind.ECOLOGY_SHIFT else FaunaTickPayload
+    model.model_validate(event.payload)
+    return ApplyResult(state=state)
+
+
 def build_default_bus() -> EventBus:
     """M0 默认事件总线（批次 B 增 NPC_ACT no-op——决策记录面）。"""
     bus = EventBus()
@@ -317,4 +325,6 @@ def build_default_bus() -> EventBus:
     bus.register(EventKind.FIRE_IGNITED, _apply_fire_event)
     bus.register(EventKind.FOG_REVEAL, _apply_fog_reveal)
     bus.register(EventKind.FIRE_EXTINGUISHED, _apply_fire_event)
+    bus.register(EventKind.ECOLOGY_SHIFT, _apply_nature_event)
+    bus.register(EventKind.FAUNA_TICK, _apply_nature_event)
     return bus

@@ -29,6 +29,7 @@ from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sim.agent.language import LanguageProfile
 from sim.core.events import EventKind, WorldEvent
 from sim.core.flush import flush_rows
 from sim.core.persistence.fire_store import FIRE_KINDS
@@ -91,6 +92,7 @@ def _row_to_profile_data(row: NpcProfile) -> NpcProfileData:
         needs=needs_from_json(row.needs),
         skills=_skills_from_json(row.skills),
         lod=row.lod,
+        class_register=LanguageProfile.from_json(row.knowledge_boundary).class_register,
     )
 
 

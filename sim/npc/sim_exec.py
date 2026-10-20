@@ -18,6 +18,7 @@ import hashlib
 from collections.abc import Mapping
 from dataclasses import replace
 
+from sim.agent.build_exec import BuildRuntime
 from sim.core.events import WorldEvent, move_event, npc_chat_event, npc_monologue_event
 from sim.core.world import EntityState, WorldState
 from sim.npc.schedule import MARKET_SITE
@@ -555,6 +556,7 @@ def npc_events_for_tick(
     retell_last: dict[str, int] | None = None,
     wage_last: dict[str, int] | None = None,
     coin_ledger: object | None = None,
+    build_runtime: BuildRuntime | None = None,
 ) -> list[WorldEvent]:
     """一个决策节拍的事件批次：NpcRuntime.tick → NPC_ACT 批次 + MOVE 交错。
 
@@ -610,6 +612,23 @@ def npc_events_for_tick(
         npc_id = str(event.payload.get("npc_id", ""))
         action = str(event.payload.get("action", ""))
         target = str(event.payload.get("target", ""))
+        if action == "build":
+            from sim.npc.build_action import build_action_events
+            from sim.world.economy import CoinLedger
+
+            params = event.payload.get("params")
+            if (
+                build_runtime is not None and isinstance(coin_ledger, CoinLedger)
+                and isinstance(params, dict) and set(params) == {"x", "y"}
+                and all(
+                    isinstance(v, str) and v.isascii() and v.isdecimal() for v in params.values()
+                )
+            ):
+                events.extend(build_action_events(
+                    state, npc_id, (int(params["x"]), int(params["y"])), tick=tick,
+                    runtime=build_runtime, ledger=coin_ledger,
+                ))
+            continue
         # 批次 D3：生理闭环——动作**到站**才回写需求（吃了才算吃）。
         # D14 到站口径与 plan_npc_move 同源：人在站点锚点邻域（≤散点半径）
         # 即视为到站——散点私位与锚点的偏差不再让回写漏账。
@@ -669,7 +688,16 @@ def npc_events_for_tick(
                     from sim.agent.dialogue import template_line
 
                     listener = (display_name_of or {}).get(target_id, target_id)
-                    line = template_line(npc_id, listener, tick)
+                    from sim.npc.chat_ledger import ChatLedger
+                    from sim.npc.speech_register import SpeechContext
+
+                    profile = getattr(runtime, "profiles", {}).get(npc_id)
+                    context = SpeechContext(
+                        profile.class_register if profile is not None else "平民",
+                        in_circle=isinstance(chat_ledger, ChatLedger)
+                        and target_id in chat_ledger.relations_of(npc_id),
+                    )
+                    line = template_line(npc_id, listener, tick, speech_context=context)
                     events.append(
                         npc_chat_event(tick=tick, npc_id=npc_id, to_id=target_id, line=line)
                     )
