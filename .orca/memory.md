@@ -2307,6 +2307,8 @@ uv run ruff check . && uv run pyright <改动文件>
 - cline P05：`*.tsbuildinfo` 已加 .gitignore ✅；`_PROTOCOL_VERSION` 与前端 `v` 统一 1.0（并代改了我前端域 `client/src/net/ws.ts` 的硬编码，见 §3.10）；K04 前置就绪。
 - 待我：若有 K04 之外的 M2 派发，以 talking.txt 为准。
 # ④ codex 树（安全/合规/风险域）
+【2026-10-20 单 K｜拒绝日志与 prompt 体检完成】gate_rejected 仅加 action/target_id/reason_len，不记录 reason 全文或改变决策。红钉 1 failed→定向 29 passed，ruff/pyright 通过。调查：assembler 要求目标直接说名字，main 感知提供中文名，没有显式 name→id 候选映射；gate 按 state.entities 内部键查，存在姓名/ID 契约不一致。受控 prompt 捕获：姓名有、villager_01 无，未调用真模型；无法恢复此前两次被拒目标。只提可见姓名唯一解析方案，未改 prompt/闸门。I ad4d554；H 26d9008；J 0e008e2+43ed58c；L 已撤回；最新有效 J/H/I/K 队列全部完成，D/E 后置。
+
 【2026-10-20 单 I｜连接状态可见】TopBar 只读消费既有 wsStatus，连接/重连/断开显示文字角标，open 收起；沿用现有样式，不动状态机。SSR 组件红钉 3 failed/1 passed→4 passed；客户端全量 119 passed，tsc/prettier/build 通过。H 26d9008；J 0e008e2+43ed58c；L 撤回未动。下一步 K（只补拒绝日志并调查 prompt，不改行为）。
 
 【2026-10-20 单 H｜气泡拥挤修复】只在 presentation/WorldScene 与测试施工：最多 4 个 Text，主角优先，其余最先到期先淘汰；实测文本宽高向上堆叠避让，淘汰及时销毁；到期时钟对齐 runtime 的 Date.now，不改 mirror 数据结构。实际渲染池红钉 3 failed→3 passed，客户端全量 115 passed，tsc/prettier/build 通过。J 代码 0e008e2、文档补齐 43ed58c 已提交；L 已撤回未动；下一步 I→K，D/E 后置。

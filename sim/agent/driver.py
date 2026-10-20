@@ -173,7 +173,14 @@ class ChenmoDriver:
             return False
         verdict = self._gate.validate(intent, state, self._anchor.entity_id)
         if verdict.rejected:
-            logger.info("chenmo.gate_rejected", tick=tick, reason=verdict.reason)
+            logger.info(
+                "chenmo.gate_rejected",
+                tick=tick,
+                reason=verdict.reason,
+                action=intent.action,
+                target_id=intent.target_id,
+                reason_len=len(intent.reason),
+            )
             return True  # 决策成立但被闸门拦下（幻觉隔离：不入 pending）
         if intent.action == "talk_to" and intent.target_id is not None:
             self._chat_lines[id(intent)] = await self._dialogue_line(
