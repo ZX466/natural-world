@@ -1,9 +1,15 @@
 ﻿﻿﻿﻿﻿
 <!-- ===== 新对话快速恢复卡（Claude 主树，2026-10-20 两树制/A 档画面）===== -->
-<!-- 0. 本会话状态：main `b4244ef`（A 档画面 0768f2b + workflow 两树制 b4244ef），
-     本地 2750P/121S/2F（2F 均为降频假红，已派 codex 单 A 处理）、
-     109→124 前端测试（vitest 4）、ruff check 0 / pyright 0 / gen-protocol EXIT 0，协议 1.9。
+<!-- 0. 本会话状态：main `cef95dd`（A 档画面 0768f2b + workflow 两树制 b4244ef），
+     本地实测 2752P/121S/2F（2F=降频假红，codex 单 A 已提交 5b4ce50 修）、
+     124 前端测试（vitest 4）、ruff/format/pyright 全 0，协议 1.9。
      **两棵树**：main（本树，Claude）+ codex 工作树；远程只留 main（用户 2026-10-20 裁定）。 -->
+<!-- 0b. 主树 2026-10-20 自修两笔（已提交）：
+     cef95dd fix(render) 创世动物不再画成人形村民——ANIMAL_SPRITES 显式表
+       (cat_grey→fauna_cat / dog_black→fauna_dog / raven→fauna_raven)，前端补三张剪影；
+       红钉 test_animals_never_get_villager_body。此前三只落 GOD 村民池。
+     79a4d68 docs(readme) 门禁数字与协议版本对齐实况。
+     另 7b703c0 style 清 6 文件 ruff format 欠账（a8f3cb6 遗留）。 -->
 <!-- 1. ★M0-M6 六里程碑全部收官（M6 于 2026-10-05 宣告，G1-G4 全 ✅）；
      M7 地图/时钟/视角 已落（协议 1.9）。项目代码侧整体完成度高，剩余是收口型缺口。 -->
 <!-- 2. 2026-10-20 实现程度复检（主树亲测，非文档转述）——真实缺口仅四项：
