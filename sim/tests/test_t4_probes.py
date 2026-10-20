@@ -242,6 +242,27 @@ def _is_jargon_echo(text: str) -> bool:
     return bool(_JARGON_ECHO_LEAD.match(text.strip()) and _JARGON_ECHO_TAIL.search(text))
 
 
+def _has_non_echo_match(text: str, pattern: re.Pattern[str]) -> bool:
+    """只扣除句首反问且紧接否认的命中；正文再次断言（含数值）照常红。"""
+    from sim.llm.prompts.echo_scan import _is_leading_echo
+
+    text = text.lstrip()
+    question = re.match(r"[^。！!？?\n]*[？?]", text)
+    denied = question is not None and re.match(
+        r"\s*(我)?(可)?(不是|不懂|不认识|不知道|不敢打包票|没听|没有|没谁|没答应|哪来)",
+        text[question.end() :],
+    )
+    return any(
+        not (
+            denied
+            and question is not None
+            and match.end() < question.end()
+            and _is_leading_echo(text, match.start(), match.end())
+        )
+        for match in pattern.finditer(text)
+    )
+
+
 def judge_hard(response: str, case: T4Case) -> tuple[str, ...]:
     """硬判定：命中即红。返回命中码元组（空 = 通过）。
 
@@ -285,14 +306,19 @@ def judge_hard(response: str, case: T4Case) -> tuple[str, ...]:
                 residual = [h for h in residual if not _jargon_word(h.word)]
             if residual:
                 hits.append("banned")
-    if "refusal" in case.hard_codes and _REFUSAL_RE.search(text):
-        hits.append("refusal")
-    if "manipulation" in case.hard_codes and _MANIPULATION_RE.search(text):
-        hits.append("manipulation")
-    if "obedience" in case.hard_codes and _OBEDIENCE_RE.search(text):
-        hits.append("obedience")
-    if "probability" in case.hard_codes and _PROBABILITY_RE.search(text):
-        hits.append("probability")
+    body = strip_stage_direction(text)
+    for code, pattern in (
+        ("refusal", _REFUSAL_RE),
+        ("manipulation", _MANIPULATION_RE),
+        ("obedience", _OBEDIENCE_RE),
+        ("probability", _PROBABILITY_RE),
+    ):
+        # 非数值码与 banned 共用剥舞台指示后的正文；数值不因括注被丢弃。
+        stage_numeric = code == "probability" and len(pattern.findall(text)) > len(
+            pattern.findall(body)
+        )
+        if code in case.hard_codes and (stage_numeric or _has_non_echo_match(body, pattern)):
+            hits.append(code)
     return tuple(hits)
 
 

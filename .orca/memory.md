@@ -1377,6 +1377,7 @@ uv run pyright sim/
 > 每次完成后更新本文件「当前任务 / 进行中 / 已完成」；过时内容删掉。
 
 ## ④ codex（安全 / 合规 / 风险域）
+- 【2026-10-20 S1｜完成，后续 S2→S5】四码只豁免 leading-echo 反问后明确否认；后文再次命中、概率陈述/括注数值仍红。红钉 4F/8P，收紧拒绝语态另 1F/12P；全门禁 2711 passed/126 skipped/70 deselected，ruff/pyright 0。新树测试须从主树复制 ignored 的 taohuayuan-online/tiled-map.json 与 assets/tileset-0.png，否则两条地图构建钉 FileNotFoundError。用户最新纪律：只本地提交，不推远程、不 merge main。完整 S1-S5 派单与执行计划见本树 talking.txt；接下来 S2 查 async 路由中同步 SQLite 写入阻塞驱动提交的死锁链。
 - 【2026-09-27 M4-S4b F-1 词表补落】793137d：banned += 概率/注定（裁 16-4/19）+ 17 用例守卫（命中·骰·程度副词不误伤钉住防扩面走偏）+ preaudit F-1 已落。全量 1411 绿。动态门等 T5 绿 + F-2 接线。
 - 【2026-09-27 M4-S4 交付】2004d1f：m4-closure-preaudit.md——静态门通过（四钉 99 绿 + M3 141 零回归 + S4 7 + 1391 全绿 + pyright0/ruff clean）；两缝 F-1 裁 16-4 概率·注定已裁未落（我域 CR 补）/ F-2 impulse_gate 无生产调用方（三扫不生效，待 Claude 接线）；P5 因果未知措辞未落地；T5 熵排除口径正确。动态门等 T5 绿。
 - 【2026-09-26 M4-S3 交付】df7aa94：impulse_gate 行为表 + 27 RED 钉子——签名 ImpulseVerdict(admitted/content/reason/hits/observation)、判梯 hidden→banned→操纵感、I-3 词族三类、接线点=ws 长度校验后。Claude 照此实现转绿。
