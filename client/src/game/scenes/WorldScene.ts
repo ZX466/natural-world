@@ -6,6 +6,7 @@
  */
 import Phaser from 'phaser';
 import { createFaunaTextures } from '../render/fauna';
+import { placeBubble, selectBubbleNames } from '../presentation';
 import type { WorldMirror } from '../world-mirror';
 import {
   facingRow,
@@ -23,7 +24,6 @@ import {
   assignStackOffsets,
   actorDepth,
   bubbleDepth,
-  bubbleY,
   labelDepth,
   labelY,
   manhattan,
@@ -238,7 +238,7 @@ export class WorldScene extends Phaser.Scene {
     this.syncCamera();
     this.syncOverlay();
     this.syncRain(delta);
-    this.syncBubbles(time);
+    this.syncBubbles(Date.now()); // 与 mirror.setBubble 的到期时钟一致
     this.syncStructures();
   }
 
@@ -259,16 +259,25 @@ export class WorldScene extends Phaser.Scene {
 
   /** D14 头顶气泡：mirror.bubbles（name→text/到期）→ Text 池增删/跟随。 */
   private syncBubbles(nowMs: number): void {
-    if (this.mirror.pruneBubbles(nowMs)) {
-      // 过期清理：池里有而账本没有的 → 销毁
-      for (const [name, text] of this.bubbleTexts) {
-        if (!this.mirror.bubbles.has(name)) {
-          text.destroy();
-          this.bubbleTexts.delete(name);
-        }
+    this.mirror.pruneBubbles(nowMs);
+    const anchors = new Map<string, { x: number; y: number }>();
+    for (const actor of this.mirror.actors.values()) {
+      const view = this.views.get(actor.rtoken);
+      if (actor.name && view) anchors.set(actor.name, view.sprite);
+    }
+    const candidates = new Map([...this.mirror.bubbles].filter(([name]) => anchors.has(name)));
+    const protagonistName = this.mirror.actors.get(this.mirror.protagonist ?? '')?.name;
+    const selected = selectBubbleNames(candidates, protagonistName);
+    const retained = new Set(selected);
+    for (const [name, text] of this.bubbleTexts) {
+      if (!retained.has(name)) {
+        text.destroy();
+        this.bubbleTexts.delete(name);
       }
     }
-    for (const [name, bubble] of this.mirror.bubbles) {
+    const placed: ReturnType<typeof placeBubble>[] = [];
+    for (const name of selected) {
+      const bubble = this.mirror.bubbles.get(name)!;
       let text = this.bubbleTexts.get(name);
       if (text === undefined) {
         text = this.add
@@ -287,14 +296,18 @@ export class WorldScene extends Phaser.Scene {
           .setDepth(12);
         this.bubbleTexts.set(name, text);
       }
-      // 跟随同名精灵（actor.name ↔ 气泡键；找不到就先挂原地）
-      const actor = [...this.mirror.actors.values()].find((a) => a.name === name);
-      const view = actor ? this.views.get(actor.rtoken) : undefined;
-      if (view) {
-        text.setPosition(view.sprite.x, bubbleY(view.sprite.y));
-        // A 档：气泡随脚底深度抬升，避免被邻格更大的脚底深度精灵压住
-        text.setDepth(bubbleDepth(view.sprite.y));
-      }
+      // 内容变了才重设（setText 会触发重新排版，每帧调会抖）
+      if (text.text !== bubble.text) text.setText(bubble.text);
+      const anchor = anchors.get(name)!;
+      // H：被选中后按优先级依次避让已放置的气泡矩形（主角优先 → 不会互相压字）
+      const box = placeBubble(
+        { x: anchor.x, y: anchor.y - TILE - 2, width: text.width, height: text.height },
+        placed,
+      );
+      text.setPosition(box.x, box.y);
+      // A 档：气泡随脚底深度抬升，避免被邻格更大的脚底深度精灵压住
+      text.setDepth(bubbleDepth(anchor.y));
+      placed.push(box);
     }
   }
 

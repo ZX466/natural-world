@@ -2317,6 +2317,12 @@ uv run ruff check . && uv run pyright <改动文件>
 - cline P05：`*.tsbuildinfo` 已加 .gitignore ✅；`_PROTOCOL_VERSION` 与前端 `v` 统一 1.0（并代改了我前端域 `client/src/net/ws.ts` 的硬编码，见 §3.10）；K04 前置就绪。
 - 待我：若有 K04 之外的 M2 派发，以 talking.txt 为准。
 # ④ codex 树（安全/合规/风险域）
+【2026-10-20 单 K｜拒绝日志与 prompt 体检完成】gate_rejected 仅加 action/target_id/reason_len，不记录 reason 全文或改变决策。红钉 1 failed→定向 29 passed，ruff/pyright 通过。调查：assembler 要求目标直接说名字，main 感知提供中文名，没有显式 name→id 候选映射；gate 按 state.entities 内部键查，存在姓名/ID 契约不一致。受控 prompt 捕获：姓名有、villager_01 无，未调用真模型；无法恢复此前两次被拒目标。只提可见姓名唯一解析方案，未改 prompt/闸门。I ad4d554；H 26d9008；J 0e008e2+43ed58c；L 已撤回；最新有效 J/H/I/K 队列全部完成，D/E 后置。
+
+【2026-10-20 单 I｜连接状态可见】TopBar 只读消费既有 wsStatus，连接/重连/断开显示文字角标，open 收起；沿用现有样式，不动状态机。SSR 组件红钉 3 failed/1 passed→4 passed；客户端全量 119 passed，tsc/prettier/build 通过。H 26d9008；J 0e008e2+43ed58c；L 撤回未动。下一步 K（只补拒绝日志并调查 prompt，不改行为）。
+
+【2026-10-20 单 H｜气泡拥挤修复】只在 presentation/WorldScene 与测试施工：最多 4 个 Text，主角优先，其余最先到期先淘汰；实测文本宽高向上堆叠避让，淘汰及时销毁；到期时钟对齐 runtime 的 Date.now，不改 mirror 数据结构。实际渲染池红钉 3 failed→3 passed，客户端全量 115 passed，tsc/prettier/build 通过。J 代码 0e008e2、文档补齐 43ed58c 已提交；L 已撤回未动；下一步 I→K，D/E 后置。
+
 【2026-10-20 单 J｜token 缺 Origin 拒绝】端点新增非空 Origin 判据，保留 WS check_origin、Host/回环校验；客户端向 WS 后端取凭据以使浏览器携 Origin，只为已校验来源返回 CORS 许可。无 Origin 红钉 200!=403 → 鉴权 18 passed，客户端 112 passed/tsc 通过；文档同步，协议形状不变。G 已提交 d712bac；最新队列 J→H→I→L→K，D/E 暂后置；各单回执见 talking.txt。
 
 【2026-10-20 单 G｜W6 鉴权闭环完成】生产 ws_endpoint 按连接强制 hello 后才允许四类写命令；只读问候/sync 保留。新增回环连接+Host+Origin 受限且 no-store 的 /api/ws-token；客户端 hello_ack 前暂存命令，失败关闭、重连重取。协议 1.11，源/快照/生成物同步；红钉服务端 9 failed、客户端 2 failed → 定向集 118 passed、客户端 112 passed，ruff/pyright/tsc/prettier/build/gen check 通过；按用户指示不重跑 Python 全量。B 已独立提交 39d55b8；下一步 D/E。

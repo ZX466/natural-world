@@ -125,6 +125,34 @@ class _FakeProfile:
 
 
 class TestChenmoDriver:
+    def test_rejected_intent_logs_action_target_and_reason_length(self) -> None:
+        import json
+
+        from structlog.testing import capture_logs
+
+        reason = "我想问问他今天的事。"
+        llm = _FakeLlm(
+            json.dumps(
+                {
+                    "action": "talk_to",
+                    "target_id": "missing_person",
+                    "reason": reason,
+                },
+                ensure_ascii=False,
+            )
+        )
+        driver = self._driver(llm, profile=_FakeProfile())
+        loop = self._loop_with_chenmo()
+        with capture_logs() as logs:
+            asyncio.run(driver.decide_once(loop.state, 1))
+        entry = next(row for row in logs if row.get("event") == "chenmo.gate_rejected")
+        assert entry["reason"] == "unknown_target"
+        assert entry.get("action") == "talk_to"
+        assert entry.get("target_id") == "missing_person"
+        assert entry.get("reason_len") == len(reason)
+        assert reason not in str(entry)
+        assert not driver._pending
+
     @staticmethod
     def _driver(llm: Any, *, profile: Any | None = None) -> Any:
         from sim.agent.driver import ChenmoDriver
