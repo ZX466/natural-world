@@ -1,29 +1,29 @@
 ﻿﻿﻿﻿﻿
-<!-- ===== 新对话快速恢复卡（Claude 主树，2026-10-05 M6 收官/README 落地）===== -->
-<!-- 0. 本会话状态：main `a562adf`（README 已落），2416 passed/122 skipped（全量）、
-     2347/121（not-bench），ruff/pyright 0，gen-protocol EXIT 0，协议 1.2，
-     双远程推齐，六树同头 `a562adf`，工作树全干净 -->
-<!-- 1. ★M0-M6 六里程碑全部收官（M6 于 2026-10-05 宣告，四道门 G1-G4 全 ✅）；
-     全项目代码侧完成。README.md 已落仓库根（项目入口：定位/快速开始/架构/里程碑/文档地图/约定） -->
-<!-- 2. M6 收官构成（24 单收编+我域八件施工，详见 55/56 快照）：
-     机制面=inject 生产化/rng_capture/hooks 四步+权力传导（POWER 0.18 翻硬）/
-     driver 双修（drain 案 B+写锁收口）/fire 机制面（O(G)+N=2）/npc.death 对称删除；
-     内容面=生态（到期桶）/动物三只（零事件不进 entities）/语言阶层（三边界签名层）/
-     迷雾（事件化 fold=并集）——四 kind 全进 EventKind+PAYLOAD_MODELS；
-     契约面=soak 阶段 A 四侧判据/终扫兜底/对拍钉 8 例/字段面闭合钉/协议总账 -->
-<!-- 3. 收官门四道终判：G1 ✅（⏳ 仅存引述）/G2 ✅（2416/122/0+三件套 0）/
-     G3 ✅（协议 1.2 零 wire+幻影端点清）/G4 ✅（H 系全闭或移交有主）；
-     判据链=S6 终版预审（可放行）+P7 性能预审（可收官带限制）+C6/C7 索引+K7 协议总账 -->
-<!-- 4. 移交清单（M7/后续，逐项有主，全非代码阻塞）：
-     ①定标轮三案（CHAOS/FIRE/MATERIALIZE）→机器窗（判据=连续 3 次探针 ≤1.8+跑前跑后双探针，runbook 就绪）
-     ②迷雾 B 案视觉雾→产品裁 ③幻影端点 getProfile→用户裁（K8 考古已备）
-     ④7 日完整 soak→PI_M2_FULL_SOAK=1 ⑤W-A 机制面复验→authority/ 施工触发
-     ⑥META_SHELL 8 词→首个戏外消费 CR -->
-<!-- 5. 纪律（全轮血泪）：核库后再报（虚构事故已记档）；门禁数字同场测基线比 delta；
-     探针现测不引用他人读数；跑前+跑后双探针；写入后独立校验产物（UTF8-BOM/锚定插入）；
-     StrEnum 按值查找（成员名≠kind 值）；skip 分型逐条读原始 SKIPPED 行 -->
-<!-- 6. 恢复序：本卡 → .orca/talking.txt（当前派单板）→ workflow.txt+agent-registry.md
-     → git fetch+merge origin/main → git log --oneline -15（轮次勾账） -->
+<!-- ===== 新对话快速恢复卡（Claude 主树，2026-10-20 两树制/A 档画面）===== -->
+<!-- 0. 本会话状态：main `b4244ef`（A 档画面 0768f2b + workflow 两树制 b4244ef），
+     本地 2750P/121S/2F（2F 均为降频假红，已派 codex 单 A 处理）、
+     109→124 前端测试（vitest 4）、ruff check 0 / pyright 0 / gen-protocol EXIT 0，协议 1.9。
+     **两棵树**：main（本树，Claude）+ codex 工作树；远程只留 main（用户 2026-10-20 裁定）。 -->
+<!-- 1. ★M0-M6 六里程碑全部收官（M6 于 2026-10-05 宣告，G1-G4 全 ✅）；
+     M7 地图/时钟/视角 已落（协议 1.9）。项目代码侧整体完成度高，剩余是收口型缺口。 -->
+<!-- 2. 2026-10-20 实现程度复检（主树亲测，非文档转述）——真实缺口仅四项：
+     ①计时测试漏标 bench 被 CI 每提交当普通测试跑（willingness 那例漏 @pytest.mark.bench；
+       fire 复杂度例整文件无 marker）→ 全量跑到末尾降频必假红（实测 2F）。
+     ②战斗 timescale / combat_event 两帧 = 幽灵帧：schema+客户端类型齐，但 ws.py 零发射、
+       ws.ts 零 case（GAP-E 仍属实）。**CombatExchange 决策点制主体已完整接线，勿重做**。
+     ③BuildRuntime 重启/读档不恢复（main.py:324 启动时新建；恢复路径只装 RNG）。
+     ④文档过时登记三条（anchors R-4 / sim-npc 权力档 / GAP-E）。 -->
+<!-- 3. 前端 A 档画面（0768f2b）：深度分层带（精灵10-70/名字71-80/气泡81-89/雨99/夜幕100）、
+     标签反向缩放 1/PIXEL_SCALE、头顶锚点 labelY/bubbleY、同格偏移 assignStackOffsets、
+     接触阴影 Ellipse；PIXEL_SCALE 3→3.5。纯函数在 render/presentation.ts + 单测钉。 -->
+<!-- 4. 五单已派 codex（2026-10-20），派单板在其树 .orca/talking.txt：
+     A 计时测试标 bench｜B 战斗幽灵帧补两端｜C（并入 B）｜D 施工 runtime 恢复｜E 文档清账。 -->
+<!-- 5. 纪律（血泪，逐条有效）：**核库后再报**——小写 grep 会漏驼峰符号（本轮 CombatExchange
+     误判即此因），查符号用 codegraph 或大小写不敏感；门禁数字同场测基线比 delta；
+     探针现测不引用他人读数；skip 分型逐条读原始 SKIPPED 行；agent 间只走 talking.txt。 -->
+<!-- 6. 恢复序：本卡 → .orca/talking.txt → workflow.txt+agent-registry.md
+     → git fetch+merge origin/main → git log --oneline -15 → 看 codex 树 talking.txt 回执区。
+     历史快照正文在下（M0-M6 各轮），需要细节再读。 -->
 <!-- ============ 恢复卡结束，以下为各轮快照正文 ============ -->
 【2026-10-04 纠偏+M6 两波十单真收编（main bf22ada）】
 **纠偏（如实记档）**：此前数轮我域汇报含虚构——「批次A/C/D接线合入、M5收官
