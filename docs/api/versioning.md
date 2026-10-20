@@ -60,6 +60,7 @@ client ◄──hello_ack── { "v": "1.1", "server_versions": ["1.0","1.1"], 
 
 | 版本 | 变更 | 影响端 | 日期 |
 |---|---|---|---|
+| 1.10 | 战斗幽灵帧接线：既有 `combat.scale_change` 事件转发为 `timescale`，交换结算投影为既有 `combat_event`；客户端消费战斗态与表现帧，角标使用戏内措辞。沿用既有 schema，不新增世界事件 kind，不改变战斗结算。 | sim+client | 2026-10-20 |
 | 1.9 | S4 建造念头加法：`PlayerImpulseMessage.action?: "build"` 与 `target_pos?: [x,y]` 成对提供；坐标为非负整数且地块可施工。仍先过念头扫描、仅生成世界内念头，实际建造由既有决策/执行边界复验到站、资金和地块。动物复用既有 actors[]，生态/语域不新增帧字段。 | sim+client | 2026-10-20 |
 | 1.0 | 协议基线（ws-protocol.md 全量消息 + rtoken/时间口径裁决） | client+sim | 2026-09-19 |
 | 1.1 | **M5 三个 minor 级变更合入**（逐项 commit 见右侧登记）：① `a149bb9` M5-K3 批次 B——`fast_forward` action（`SetControlMessage.action` 扩枚举）+ `session_state` 首帧（SessionAnchor 游标指针 `name`/`story_label`）+ `GET /api/anchors/current`（末梢档读路径）；② `f7f6e1b` M5-K7——`GET /api/anchors/{anchor_id}` 单档读端点（响应 `AnchorListItem`，五键白名单）+ `state_delta.plan` 字段（**顶层可选数组**）；③ `7dc8d69` M5-K10——`PlanDelta` **封闭 schema** 补齐（裁 19 CRITICAL：`state_delta.plan` 越界冻结，`additionalProperties:false`） | client+sim | 2026-10-03 |

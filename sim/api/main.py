@@ -796,7 +796,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 raise result
 
 
-app = FastAPI(title="临河镇 sim", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="临河镇 sim", version="1.10", lifespan=lifespan)
 app.include_router(settings_router)
 app.include_router(anchors_router)  # M5-K7：玩家档读路径（落库 → WS 查表集供数）
 

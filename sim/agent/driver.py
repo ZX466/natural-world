@@ -88,6 +88,7 @@ class ChenmoDriver:
         self._exchange: Any = None
         self._combat_target: str | None = None
         self._combat_tick_last = 0
+        self._combat_visual_index = 0
         # impulse 置位（ws handler 在事件循环线程调，driver 循环也在事件循环——
         # 单线程语义本就安全；锁是防御性的，防将来跨线程调用）
         self._requested_lock = threading.Lock()
@@ -290,6 +291,7 @@ class ChenmoDriver:
         return executed
 
     def reset_combat(self) -> None:
+        self._combat_visual_index = 0
         self._combat_until_tick = None
         self._exchange = None
         self._combat_target = None
@@ -321,6 +323,8 @@ class ChenmoDriver:
             return
         self.request_decision()
         posture = self._exchange.active_posture
+        loop.pending_combat_visuals.append((self._combat_visual_index, actor_id, posture))
+        self._combat_visual_index += 1
         from sim.agent.intent import Intent
         from sim.core.events import npc_monologue_event
 

@@ -78,6 +78,8 @@ class TickLoop:
     )
     fauna_enabled: bool = False
     pending_broadcast_events: list[WorldEvent] = field(default_factory=list)
+    # 交换边界的表现通知（交换内序、实体、姿态）；不进入世界状态或结算。
+    pending_combat_visuals: list[tuple[int, str, str]] = field(default_factory=list)
 
     def advance_frame(self, real_dt: float) -> int:
         """喂入真实秒数，推进 0..N 个 tick（catch-up 封顶）。返回推进数。"""
