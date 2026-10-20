@@ -95,9 +95,7 @@ class TestSiteScatter:
         state = WorldState(
             world_seed=42,
             # 换图：药铺=村广场带（旧 (8,16) 新图不可走）
-        entities={
-            p.npc_id: EntityState(entity_id=p.npc_id, pos=(100, 53)) for p in roster
-        },
+            entities={p.npc_id: EntityState(entity_id=p.npc_id, pos=(100, 53)) for p in roster},
         )
         for i, p in enumerate(roster):
             for action in ("eat", "rest", "work"):
@@ -160,9 +158,7 @@ class TestSiteScatter:
         state = WorldState(
             world_seed=42,
             # 换图：药铺=村广场带（旧 (8,16) 新图不可走）
-        entities={
-            p.npc_id: EntityState(entity_id=p.npc_id, pos=(100, 53)) for p in roster
-        },
+            entities={p.npc_id: EntityState(entity_id=p.npc_id, pos=(100, 53)) for p in roster},
         )
         decisions = evaluate_batch(roster, UtilityModel(n_npc=50))
         goals = [

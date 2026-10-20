@@ -42,9 +42,7 @@ class TestTownMap:
                 for lx in range(16):
                     gx, gy = cx * 16 + lx, cy * 16 + ly
                     if gx < town.width and gy < town.height:
-                        assert chunk.ground[ly * 16 + lx] > 0, (
-                            f"主图区 ({gx},{gy}) ground=0"
-                        )
+                        assert chunk.ground[ly * 16 + lx] > 0, f"主图区 ({gx},{gy}) ground=0"
 
     def test_has_variety(self, town: TileMap):
         """至少 6 种不同 tile（整图切片天然满足，防「全同格」退化）。"""

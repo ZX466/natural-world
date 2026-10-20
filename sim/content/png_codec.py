@@ -58,10 +58,7 @@ def read_png_rgba(path: Path) -> list[list[tuple[int, int, int, int]]]:
                 for x in range(width)
             ]
         else:
-            row = [
-                (line[x * 3], line[x * 3 + 1], line[x * 3 + 2], 255)
-                for x in range(width)
-            ]
+            row = [(line[x * 3], line[x * 3 + 1], line[x * 3 + 2], 255) for x in range(width)]
         pixels.append(row)
     return pixels
 

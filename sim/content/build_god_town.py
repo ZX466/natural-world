@@ -86,10 +86,7 @@ def halve_tileset(png_path: Path, out_path: Path) -> None:
         msg = f"tileset 尺寸异常: {(w, h)}"
         raise ValueError(msg)
     out_w, out_h = w // 2, h // 2
-    canvas = [
-        [pixels[y * 2][x * 2] for x in range(out_w)]
-        for y in range(out_h)
-    ]
+    canvas = [[pixels[y * 2][x * 2] for x in range(out_w)] for y in range(out_h)]
     write_png_rgba(out_path, out_w, out_h, canvas)
 
 
