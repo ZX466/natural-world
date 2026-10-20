@@ -961,12 +961,14 @@ async def websocket_token(request: Request, response: Response) -> WsTokenRespon
     if (
         not local_peer
         or request.url.hostname not in {"localhost", "127.0.0.1", "::1"}
+        or not origin
         or origin == "null"
         or not check_origin(origin)
     ):
         raise HTTPException(status_code=403, detail="Forbidden")
     response.headers["Cache-Control"] = "no-store"
     response.headers["Vary"] = "Origin"
+    response.headers["Access-Control-Allow-Origin"] = origin
     return WsTokenResponse(token=ws_auth_token())
 
 

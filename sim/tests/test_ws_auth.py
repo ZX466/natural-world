@@ -46,6 +46,9 @@ def client(monkeypatch):
 
 
 class TestW6Auth:
+    def test_token_route_rejects_missing_origin(self, client):
+        assert client.get("/api/ws-token").status_code == 403
+
     @pytest.mark.parametrize(
         "command",
         [
@@ -77,6 +80,7 @@ class TestW6Auth:
         assert response.status_code == 200
         assert set(response.json()) == {"token"}
         assert response.headers["cache-control"] == "no-store"
+        assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
         with client.websocket_connect("/ws") as ws:
             _greet(ws)
             ws.send_json({"type": "hello", "channel": "session", **response.json()})

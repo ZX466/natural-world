@@ -39,7 +39,9 @@ it('sends hello first and releases commands only after hello_ack', async () => {
   client.connect();
   const socket = Socket.last;
   await socket.onopen?.();
-  expect(fetchToken).toHaveBeenCalledWith('/api/ws-token', { cache: 'no-store' });
+  expect(fetchToken).toHaveBeenCalledWith('http://127.0.0.1:8000/api/ws-token', {
+    cache: 'no-store',
+  });
   expect(socket.sent.map((frame) => frame.type)).toEqual(['hello']);
   client.send({ type: 'set_control', channel: 'control', action: 'pause' });
   expect(socket.sent.map((frame) => frame.type)).toEqual(['hello']);

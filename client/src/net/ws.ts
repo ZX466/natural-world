@@ -94,7 +94,8 @@ export class WsClient {
 
     ws.onopen = async () => {
       try {
-        const response = await fetch('/api/ws-token', { cache: 'no-store' });
+        const tokenUrl = new URL('/api/ws-token', this.url.replace(/^ws/, 'http'));
+        const response = await fetch(tokenUrl.toString(), { cache: 'no-store' });
         if (!response.ok) throw new Error('handshake unavailable');
         const body: unknown = await response.json();
         if (
