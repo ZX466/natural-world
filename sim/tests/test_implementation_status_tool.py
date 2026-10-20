@@ -80,18 +80,44 @@ def test_protocol_version_badge_matches_code():
 
 
 @pytest.mark.t1
-def test_combat_is_flagged_as_ghost_package_while_empty():
-    """sim/combat 空壳包若仍声称四个子模块，必须被报出来。
+def test_ghost_package_rule_actually_fires():
+    """幽灵包规则必须真的会报——用构造目录验证，不依赖当前仓库状态。
 
-    这是回归钉：将来真把 exchange/posture/resolve/timescale 建起来，
-    或者把 docstring 改成现状，本用例会自然失效——届时改断言即可。
+    原钉依赖「sim/combat 仍是空壳」这一时点事实；2026-10-20 单 B 把该包
+    docstring 改成现状后自然失效。改为直接喂构造包，规则永远有覆盖。
     """
     tool = _load_tool()
-    problems = tool.check_ghost_packages()
-    combat_lines = [p for p in problems if "sim/combat/" in p]
-    combat_dir = _REPO / "sim" / "combat"
-    has_real_modules = any(
-        p.suffix == ".py" and p.name != "__init__.py" for p in combat_dir.iterdir()
-    )
-    if not has_real_modules:
-        assert combat_lines, "空壳 sim/combat 必须被幽灵包检查报出"
+    tmp_pkg = _REPO / "sim" / "__ghost_probe__"
+    tmp_pkg.mkdir(exist_ok=True)
+    try:
+        # 必须复刻被检出的真实形态：bullet 清单 `- 模块名  描述`
+        (tmp_pkg / "__init__.py").write_text(
+            '"""命名空间。\n\n模块划分：\n- exchange   交换单元\n- posture    姿态\n"""\n',
+            encoding="utf-8",
+        )
+        problems = tool.check_ghost_packages()
+        assert any("__ghost_probe__" in p for p in problems), (
+            "空壳包声称子模块却未被报出——幽灵包规则失效"
+        )
+    finally:
+        for f in tmp_pkg.iterdir():
+            f.unlink()
+        tmp_pkg.rmdir()
+
+
+@pytest.mark.t1
+def test_ghost_package_rule_ignores_honest_docstring():
+    """如实描述现状的空壳包（不点名子模块）不得误报。"""
+    tool = _load_tool()
+    tmp_pkg = _REPO / "sim" / "__honest_probe__"
+    tmp_pkg.mkdir(exist_ok=True)
+    try:
+        (tmp_pkg / "__init__.py").write_text(
+            '"""战斗域命名空间；本包尚无子模块。"""\n', encoding="utf-8"
+        )
+        problems = tool.check_ghost_packages()
+        assert not any("__honest_probe__" in p for p in problems)
+    finally:
+        for f in tmp_pkg.iterdir():
+            f.unlink()
+        tmp_pkg.rmdir()
