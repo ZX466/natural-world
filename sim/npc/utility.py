@@ -20,6 +20,7 @@ import numpy as np
 
 from sim.npc.actions import ACTION_WHITELIST
 from sim.npc.model import NpcProfileData
+from sim.npc.schedule import ScheduleSlot
 
 #: 动作固定序（向量化列序；确定性契约——不随 set 迭代序漂移）
 ACTION_ORDER: tuple[str, ...] = tuple(
@@ -113,6 +114,7 @@ def utility_scores_matrix(
     *,
     night_bias: bool = False,
     suppress_chat: tuple[bool, ...] | None = None,
+    schedule_slots: list[ScheduleSlot] | None = None,
 ) -> np.ndarray:
     """50 NPC 全量打分：需求加权和 + 外向偏置 → (n_npc, n_actions) float32。
 
@@ -170,6 +172,14 @@ def utility_scores_matrix(
             col = model.action_index[action]
             scores[:, col] = scores[:, col] - np.float32(_NIGHT_ACTION_PENALTY)
 
+    if schedule_slots is not None:
+        if len(schedule_slots) != len(profiles):
+            raise ValueError("schedule_slots 与 profiles 长度不一致")
+        if any(slot.action not in model.action_index for slot in schedule_slots):
+            raise ValueError("日程动作不在效用候选中")
+        columns = np.array([model.action_index[slot.action] for slot in schedule_slots], dtype=int)
+        scores[np.arange(len(profiles)), columns] += np.float32(0.18)
+
     # 决策面节流（2026-10-11）：冷却内的人 chat 列压 -inf——argmax 必落其他列。
     # 布尔掩码向量化（同 P10 红线口径：整列运算，禁逐人 Python 循环）。
     if suppress_chat is not None:
@@ -189,6 +199,7 @@ def evaluate_batch(
     *,
     night_bias: bool = False,
     suppress_chat: tuple[bool, ...] | None = None,
+    schedule_slots: list[ScheduleSlot] | None = None,
 ) -> list[UtilityDecision]:
     """批量评估 → 每 NPC 一个 UtilityDecision（argmax；scores 全量随行供审计）。
 
@@ -196,14 +207,21 @@ def evaluate_batch(
     suppress_chat（决策面节流）：透传（见 utility_scores_matrix）。
     """
     scores = utility_scores_matrix(
-        profiles, model, power=power, night_bias=night_bias, suppress_chat=suppress_chat
+        profiles,
+        model,
+        power=power,
+        night_bias=night_bias,
+        suppress_chat=suppress_chat,
+        schedule_slots=schedule_slots,
     )
     best = scores.argmax(axis=1)
     return [
         UtilityDecision(
             npc_id=p.npc_id,
             action=ACTION_ORDER[int(best[i])],
-            target="",
+            target=schedule_slots[i].target
+            if schedule_slots is not None and ACTION_ORDER[int(best[i])] == schedule_slots[i].action
+            else "",
             scores={a: float(scores[i, j]) for j, a in enumerate(ACTION_ORDER)},
         )
         for i, p in enumerate(profiles)

@@ -20,6 +20,7 @@ from dataclasses import replace
 
 from sim.core.events import WorldEvent, move_event, npc_chat_event, npc_monologue_event
 from sim.core.world import EntityState, WorldState
+from sim.npc.schedule import MARKET_SITE
 from sim.world.pathfinding import Pathfinder
 
 # ---------------------------------------------------------------------------
@@ -304,10 +305,12 @@ def wander_near(
     return candidates[digest % len(candidates)]
 
 
-def _site_anchor_of(action: str, npc_id: str) -> tuple[int, int] | None:
+def _site_anchor_of(action: str, npc_id: str, *, target: str = "") -> tuple[int, int] | None:
     """动作 → 站点锚点（D16 定籍制：eat/rest/work 全部落**本人片区**站点；
     None=无站点）。片区锚点表缺项时退回全镇站点（fail-safe 不炸）。
     """
+    if target == "market" and action in ("move", "work"):
+        return MARKET_SITE
     home = home_base_of(npc_id)
     if action == "eat":
         return _TERRITORY_EAT.get(home, EAT_SITE)
@@ -362,6 +365,7 @@ def _resolve_goal(
     w: int,
     h: int,
     pathfinder: Pathfinder,
+    target: str = "",
 ) -> tuple[int, int] | None:
     """动作 → 目的地（纯函数）；None = 该动作无位移面。
 
@@ -369,6 +373,8 @@ def _resolve_goal(
     D16：站点=本人片区站点（定籍制）；闲逛锚定**本片区**（不再锚定当前
     位置——随机游走漂移收口）；request_chat 仍跨片区（社交不缩水）。
     """
+    if target == "market" and action in ("move", "work"):
+        return _scatter_near(MARKET_SITE, npc_id, pathfinder, seed=seed)
     if action in ("wander", "move"):
         # D16：闲逛锚定本人片区（人在片区外先走回家再溜达——归巢语义）。
         return wander_near(home_base_of(npc_id), npc_id, pathfinder, seed=seed, tick=tick)
@@ -377,10 +383,10 @@ def _resolve_goal(
         assert anchor is not None  # 三动作恒有锚点
         return _scatter_near(anchor, npc_id, pathfinder, seed=seed)
     if action == "request_chat":
-        target = _chat_target_of(state, npc_id, tick=tick)
-        if target is None:
+        chat_target = _chat_target_of(state, npc_id, tick=tick)
+        if chat_target is None:
             return wander_near(home_base_of(npc_id), npc_id, pathfinder, seed=seed, tick=tick)
-        return _scatter_near(state.entities[target].pos, npc_id, pathfinder, seed=seed)
+        return _scatter_near(state.entities[chat_target].pos, npc_id, pathfinder, seed=seed)
     return None
 
 
@@ -442,6 +448,7 @@ def plan_npc_move(
     *,
     seed: int,
     tick: int,
+    target: str = "",
 ) -> WorldEvent | None:
     """单个动作 → move_event（去「做事的地方」）；不该动/动不了 → None。
 
@@ -461,9 +468,17 @@ def plan_npc_move(
         return None
     w, h = pathfinder.tile_map.width, pathfinder.tile_map.height
     start = entity.pos
-    if action in ("eat", "rest", "work", "request_chat"):
+    if action in ("eat", "rest", "work", "request_chat") or target == "market":
         goal = _resolve_goal(
-            state, npc_id, action, seed=seed, tick=tick, w=w, h=h, pathfinder=pathfinder
+            state,
+            npc_id,
+            action,
+            seed=seed,
+            tick=tick,
+            w=w,
+            h=h,
+            pathfinder=pathfinder,
+            target=target,
         )
         if goal is None:
             return None
@@ -473,7 +488,7 @@ def plan_npc_move(
         if action != "request_chat":
             from sim.npc.sim_exec import _site_anchor_of
 
-            anchor = _site_anchor_of(action, npc_id)
+            anchor = _site_anchor_of(action, npc_id, target=target)
             if anchor is not None:
                 dist = abs(start[0] - anchor[0]) + abs(start[1] - anchor[1])
                 if dist <= _SITE_SCATTER_RADIUS:
@@ -594,12 +609,13 @@ def npc_events_for_tick(
         events.append(event)
         npc_id = str(event.payload.get("npc_id", ""))
         action = str(event.payload.get("action", ""))
+        target = str(event.payload.get("target", ""))
         # 批次 D3：生理闭环——动作**到站**才回写需求（吃了才算吃）。
         # D14 到站口径与 plan_npc_move 同源：人在站点锚点邻域（≤散点半径）
         # 即视为到站——散点私位与锚点的偏差不再让回写漏账。
         entity = state.entities.get(npc_id)
         if entity is not None and not entity.path and action in ("eat", "rest", "work"):
-            anchor = _site_anchor_of(action, npc_id)
+            anchor = _site_anchor_of(action, npc_id, target=target)
             profiles = getattr(runtime, "profiles", None)
             if anchor is not None and profiles is not None and npc_id in profiles:
                 dist = abs(entity.pos[0] - anchor[0]) + abs(entity.pos[1] - anchor[1])
@@ -695,6 +711,7 @@ def npc_events_for_tick(
             pathfinder,
             seed=seed,
             tick=tick,
+            target=target,
         )
         if mv is not None:
             events.append(_retick(mv, tick))
