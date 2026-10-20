@@ -201,6 +201,23 @@ export type paths = {
     readonly patch?: never;
     readonly trace?: never;
   };
+  readonly '/api/ws-token': {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    /** Websocket Token */
+    readonly get: operations['websocket_token_api_ws_token_get'];
+    readonly put?: never;
+    readonly post?: never;
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
 };
 export type webhooks = Record<string, never>;
 export type components = {
@@ -692,6 +709,10 @@ export type components = {
       | components['schemas']['ControlAckMessage']
       | components['schemas']['SessionStateMessage']
       | components['schemas']['WsErrorMessage'];
+    /** @description 本机 WS 握手凭据；只经 HTTP 返回，不写入世界或持久化。 */
+    readonly WsTokenResponse: {
+      readonly token: string;
+    };
   };
   responses: {
     /** @description RFC 7807 问题详情（戏外工程措辞，不回灌 Agent） */
@@ -1083,6 +1104,26 @@ export interface operations {
         };
         content: {
           readonly 'application/json': components['schemas']['WorldMapResponse'];
+        };
+      };
+    };
+  };
+  readonly websocket_token_api_ws_token_get: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly requestBody?: never;
+    readonly responses: {
+      /** @description Successful Response */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly 'application/json': components['schemas']['WsTokenResponse'];
         };
       };
     };

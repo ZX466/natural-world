@@ -65,7 +65,7 @@ logger = structlog.get_logger(__name__)
 #: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
 #: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
 #: PlanDelta 封闭）；1.2 = 批次 E 只读诊断面进协议快照（M6-K2）——登记见 versioning.md §7。
-_PROTOCOL_VERSION = "1.10"
+_PROTOCOL_VERSION = "1.11"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 
 # K4 提案 §2.2/§3.2：五类 C→S 消息在此与 _CHANNEL_FOR **成对**注册
@@ -235,7 +235,7 @@ def check_origin(origin: str | None) -> bool:
 def check_hello_auth(raw: dict[str, Any]) -> bool:
     """hello 消息携带的 token 比对（hmac.compare_digest 防时序侧信道）。"""
     provided = raw.get("token")
-    if not isinstance(provided, str):
+    if not isinstance(provided, str) or not provided.isascii():
         return False
     return hmac.compare_digest(provided, ws_auth_token())
 

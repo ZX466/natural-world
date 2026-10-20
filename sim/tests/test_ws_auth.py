@@ -27,15 +27,78 @@ def _greet(ws) -> None:
     assert ws.receive_json()["type"] == "session_state"
 
 
+def _command_reply(ws):
+    # 世界广播与命令回执共用连接；只跳过表现帧，不把它们误当回执。
+    for _ in range(50):
+        frame = ws.receive_json()
+        if frame["type"] in {"error", "hello_ack", "control_ack"}:
+            return frame
+    raise AssertionError("no command reply received")
+
+
 @pytest.fixture()
-def client():
+def client(monkeypatch):
+    monkeypatch.setattr("sim.api.main._active_profile_snapshot_provider", lambda: lambda: None)
     reset_ws_auth_token()
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://127.0.0.1", client=("127.0.0.1", 50000)) as c:
         yield c
     reset_ws_auth_token()
 
 
 class TestW6Auth:
+    @pytest.mark.parametrize(
+        "command",
+        [
+            {"type": "move_request", "channel": "render", "target_x": 8, "target_y": 4},
+            {"type": "set_control", "channel": "control", "action": "pause"},
+            {"type": "player_impulse", "channel": "control", "text": "去街上看看。"},
+            {"type": "load_anchor", "channel": "session", "anchor_id": "missing"},
+        ],
+    )
+    def test_commands_without_hello_are_rejected(self, client, command):
+        with client.websocket_connect("/ws") as ws:
+            _greet(ws)
+            ws.send_json(command)
+            reply = ws.receive_json()
+            assert reply["type"] == "error"
+            assert reply["code"] == "auth_error"
+            assert reply["ref"] == command["type"]
+
+    def test_bad_hello_cannot_unlock_commands(self, client):
+        with client.websocket_connect("/ws") as ws:
+            _greet(ws)
+            ws.send_json({"type": "hello", "channel": "session", "token": "invalid"})
+            assert ws.receive_json()["code"] == "auth_error"
+            ws.send_json({"type": "set_control", "channel": "control", "action": "pause"})
+            assert ws.receive_json()["code"] == "auth_error"
+
+    def test_http_token_unlocks_only_the_authenticated_connection(self, client):
+        response = client.get("/api/ws-token", headers={"origin": "http://localhost:5173"})
+        assert response.status_code == 200
+        assert set(response.json()) == {"token"}
+        assert response.headers["cache-control"] == "no-store"
+        with client.websocket_connect("/ws") as ws:
+            _greet(ws)
+            ws.send_json({"type": "hello", "channel": "session", **response.json()})
+            assert ws.receive_json()["type"] == "hello_ack"
+            ws.send_json({"type": "set_control", "channel": "control", "action": "pause"})
+            assert _command_reply(ws)["type"] == "control_ack"
+            with client.websocket_connect("/ws") as other:
+                _greet(other)
+                other.send_json({"type": "set_control", "channel": "control", "action": "pause"})
+                assert other.receive_json()["code"] == "auth_error"
+
+    @pytest.mark.parametrize(
+        "headers",
+        [
+            {"origin": "https://evil.example"},
+            {"host": "evil.example"},
+            {"origin": "null"},
+        ],
+    )
+    def test_token_route_rejects_untrusted_origin_or_host(self, client, headers):
+        assert client.get("/api/ws-token", headers=headers).status_code == 403
+
     def test_no_token_rejected(self, client: TestClient):
         """无 token 的 hello → auth_error。"""
         with client.websocket_connect("/ws") as ws:
