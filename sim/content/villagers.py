@@ -101,16 +101,30 @@ GOD_SPRITE_POOL: tuple[str, ...] = (
 )
 
 
+#: 创世动物 → 专属剪影 texture key（2026-10-20 修：此前动物落 GOD 村民池，
+#: 猫狗鸦被渲染成人形村民）。key 与 client/src/game/render/fauna.ts 注册名同源；
+#: 前端 `isFauna = actor.sprite.startsWith('fauna_')` 会走单帧剪影分支。
+ANIMAL_SPRITES: dict[str, str] = {
+    "cat_grey": "fauna_cat",
+    "dog_black": "fauna_dog",
+    "raven": "fauna_raven",
+}
+
+
 def sprite_for_entity(entity_id: str) -> str:
     """entity_id → 前端 texture key（确定性纯函数，sha256，C5 无 RNG）。
 
     chenmo 恒 "protagonist"（中性 texture key——出戏红线：快照文本禁含内部
-    id 词面 "chenmo"，test_ws_gateway W 系列钉；villager → GOD 池哈希取模。
+    id 词面 "chenmo"，test_ws_gateway W 系列钉）；创世三动物走 ANIMAL_SPRITES
+    专属剪影；其余（villager → GOD 池哈希取模）。
     只吃 entity_id，不吃世界状态——零出戏泄漏面（ws.py 出站口与
     测试同源调用，单一真相源）。
     """
     if entity_id == "chenmo":
         return "protagonist"
+    animal = ANIMAL_SPRITES.get(entity_id)
+    if animal is not None:
+        return animal
     digest = hashlib.sha256(f"sprite:{entity_id}".encode()).digest()
     return GOD_SPRITE_POOL[int.from_bytes(digest[0:4], "big") % len(GOD_SPRITE_POOL)]
 

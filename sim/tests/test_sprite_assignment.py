@@ -39,3 +39,26 @@ def test_ws_sprite_name_of_wiring():
     assert sprite_name_of("chenmo") == "protagonist"
     s = sprite_name_of("villager_03")
     assert s.startswith("god_villager_")
+
+
+def test_animals_never_get_villager_body():
+    """创世动物不得落到人形外观池（2026-10-20 实测 bug）。
+
+    灰/黑子/鸦是 GENESIS_ENTITIES 成员，会走 ws.py `_actor_rows` 的主循环，
+    此前一律落到 `sprite_for_entity` 的 GOD 村民池 → 猫狗鸦被渲染成人形村民。
+    钉住：三只动物各自拿到 `fauna_` 前缀的专属剪影，且**不在** GOD 池内。
+    """
+    from sim.content.villagers import GOD_SPRITE_POOL
+
+    expected = {"cat_grey": "fauna_cat", "dog_black": "fauna_dog", "raven": "fauna_raven"}
+    for entity_id, sprite in expected.items():
+        assert sprite_for_entity(entity_id) == sprite, entity_id
+        assert sprite not in GOD_SPRITE_POOL, entity_id
+        assert sprite_name_of(entity_id) == sprite, entity_id
+
+
+def test_unknown_non_villager_still_has_safe_fallback():
+    """非动物、非主角的未知 id 仍走 GOD 池（零行为回退；只有显式动物表改道）。"""
+    from sim.content.villagers import GOD_SPRITE_POOL
+
+    assert sprite_for_entity("some_new_entity") in GOD_SPRITE_POOL
