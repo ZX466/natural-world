@@ -1377,6 +1377,7 @@ uv run pyright sim/
 > 每次完成后更新本文件「当前任务 / 进行中 / 已完成」；过时内容删掉。
 
 ## ④ codex（安全 / 合规 / 风险域）
+- 【2026-10-20 S2｜完成，后续 S3→S5】真实红钉确认 async 路由同步 SQLite 等锁会阻塞 driver 提交；同步写转线程池，存档/帧推进及落库/读档/陈默执行/WS 世界写入共用异步边界，另一红钉锁定打包期间 tick 稳定。记忆写显式 begin，退出 finally 取消并回收两任务、dispose 引擎；不延长超时、不加重试、保留 writer-first。握手/读档受理不等写锁（否则 delta 抢到 ack 前）。全门禁 2713P/126S/70D，ruff/pyright/gen-protocol/diff-check 均 0。client/node_modules 原不存在，已 npm ci --ignore-scripts 安装锁定依赖；无 push/merge。S1 本地提交 f2b5214；下一步 S3 日程/效用/赴集接线。
 - 【2026-10-20 S1｜完成，后续 S2→S5】四码只豁免 leading-echo 反问后明确否认；后文再次命中、概率陈述/括注数值仍红。红钉 4F/8P，收紧拒绝语态另 1F/12P；全门禁 2711 passed/126 skipped/70 deselected，ruff/pyright 0。新树测试须从主树复制 ignored 的 taohuayuan-online/tiled-map.json 与 assets/tileset-0.png，否则两条地图构建钉 FileNotFoundError。用户最新纪律：只本地提交，不推远程、不 merge main。完整 S1-S5 派单与执行计划见本树 talking.txt；接下来 S2 查 async 路由中同步 SQLite 写入阻塞驱动提交的死锁链。
 - 【2026-09-27 M4-S4b F-1 词表补落】793137d：banned += 概率/注定（裁 16-4/19）+ 17 用例守卫（命中·骰·程度副词不误伤钉住防扩面走偏）+ preaudit F-1 已落。全量 1411 绿。动态门等 T5 绿 + F-2 接线。
 - 【2026-09-27 M4-S4 交付】2004d1f：m4-closure-preaudit.md——静态门通过（四钉 99 绿 + M3 141 零回归 + S4 7 + 1391 全绿 + pyright0/ruff clean）；两缝 F-1 裁 16-4 概率·注定已裁未落（我域 CR 补）/ F-2 impulse_gate 无生产调用方（三扫不生效，待 Claude 接线）；P5 因果未知措辞未落地；T5 熵排除口径正确。动态门等 T5 绿。

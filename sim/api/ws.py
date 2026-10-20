@@ -1289,6 +1289,7 @@ async def run_world_driver(
     on_flush: Any = None,
     on_day_switch: Any = None,
     drain_loads: Any = None,
+    write_lock: asyncio.Lock | None = None,
 ) -> None:
     """外层 asyncio 驱动：固定节拍喂 real_dt → drain 事件（on_flush 落库）→ 广播增量。
 
@@ -1317,24 +1318,27 @@ async def run_world_driver(
     last = time.monotonic()
     seq = 0
     prev_day = game_time(loop.state.tick).day
+    frame_lock = write_lock if write_lock is not None else asyncio.Lock()
     while True:
         await asyncio.sleep(FRAME_BUDGET_SECONDS)
         now = time.monotonic()
         real_dt = now - last
         last = now
-        n = loop.advance_frame(real_dt)
-        fast_forwarding = manager.any_fast_forward_active()
-        if n == 0 and manager.count == 0:
-            continue
-        if fast_forwarding:
-            step_fast_forward(loop, manager.controls())
-        moved = set() if fast_forwarding else loop.drain_delta()
-        events = loop.drain_events()
-        if events and on_flush is not None:
-            await on_flush(events)
-        # 案 B 接线（K16）：flush 写事务收口之后才跑读档分叉（写者串行）。
-        if drain_loads is not None:
-            await drain_loads()
+        # 与存档打包共用边界：SQL 会话闭环前不接受另一个世界写者。
+        async with frame_lock:
+            n = loop.advance_frame(real_dt)
+            fast_forwarding = manager.any_fast_forward_active()
+            if n == 0 and manager.count == 0:
+                continue
+            if fast_forwarding:
+                step_fast_forward(loop, manager.controls())
+            moved = set() if fast_forwarding else loop.drain_delta()
+            events = loop.drain_events()
+            if events and on_flush is not None:
+                await on_flush(events)
+            # flush 写事务收口之后才跑读档分叉（写者串行）。
+            if drain_loads is not None:
+                await drain_loads()
         if on_day_switch is not None:
             new_day = game_time(loop.state.tick).day
             if new_day != prev_day:

@@ -97,8 +97,7 @@ async def build_loop() -> tuple[TickLoop, Any]:
     )
     await init_database(engine)  # 开发库快速起步；生产走 alembic upgrade head
     # D20：WAL 日志模式（库级持久设置，一次即可）——读写并行、写锁等待
-    # 而非硬炸；与 connect_args timeout 构成双层止血（根治在写事务收口，
-    # anchors.py 头注已立案归 kilo/Claude 面）。
+    # 而非硬炸；S2 已让同步存档写在线程池内闭环，避免阻塞 driver 的异步提交。
     from sqlalchemy import text
 
     async with engine.begin() as conn:
@@ -174,6 +173,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     setup_logging()  # K8：redact_sensitive 进全局日志链（第二道防线）
     loop, store = await build_loop()
+    world_write_lock = asyncio.Lock()
+    app.state.world_write_lock = world_write_lock
     tile_map = _default_map()
     # C06-③：感知挂载进 tick 固定执行序第 3 步（帧键=rtoken，WS 不广播）
     # 批次 D8：感知叙事接真名（rtoken→戏内名映射；名册 villagers + 陈默）。
@@ -214,25 +215,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if branch_id is not None:
             if memory_store.branch_id != branch_id:
                 memory_store.attach_branch(branch_id)
-            async with store.session_factory() as session:
+            async with store.session_factory.begin() as session:
                 await memory_store.hydrate_if_empty(session)
                 await memory_store.flush(session)
-                await session.commit()
 
     async def on_flush_async() -> None:
-        events = loop.drain_events()
-        branch_id = await store.current_branch_id_or_none() or "main"
-        await NpcStore(store, branch_id=branch_id).flush_tick(events)
-        maintenance.observe(events)
-        cognition.observe(events)
-        branch_id = await store.current_branch_id_or_none()
-        if branch_id is not None:
-            if memory_store.branch_id != branch_id:
-                memory_store.attach_branch(branch_id)
-            async with store.session_factory() as session:
-                await memory_store.hydrate_if_empty(session)
-                await memory_store.flush(session)
-                await session.commit()
+        await on_flush(loop.drain_events())
 
     app.state.loop = loop
     app.state.store = store
@@ -591,7 +579,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 perception_text=_perception_text,
                 landmarks_text=_landmarks,
             )
-            driver.execute_pending(loop, pathfinder=pathfinder)
+            async with world_write_lock:
+                driver.execute_pending(loop, pathfinder=pathfinder)
 
     app.state.chenmo_task = asyncio.create_task(_chenmo_loop())
 
@@ -761,15 +750,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             on_flush,
             on_day_switch=_day_reflector,
             drain_loads=_drain_loads,
+            write_lock=world_write_lock,
         )
     )
-    yield
-    app.state.chenmo_task.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await app.state.chenmo_task
-    app.state.driver.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await app.state.driver
+    try:
+        yield
+    finally:
+        tasks = (app.state.chenmo_task, app.state.driver)
+        for task in tasks:
+            task.cancel()
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        await store.session_factory.kw["bind"].dispose()
+        for result in results:
+            if isinstance(result, BaseException) and not isinstance(result, asyncio.CancelledError):
+                raise result
 
 
 app = FastAPI(title="临河镇 sim", version="0.1.0", lifespan=lifespan)
@@ -886,7 +880,11 @@ async def ws_endpoint(ws: WebSocket) -> None:
         )
         while True:
             raw = await ws.receive_json()
-            reply = handle_client_message(raw, app.state.loop, pf, control)
+            if raw.get("type") in {"move_request", "set_control"}:
+                async with app.state.world_write_lock:
+                    reply = handle_client_message(raw, app.state.loop, pf, control)
+            else:
+                reply = handle_client_message(raw, app.state.loop, pf, control)
             # M5-K3：读档成功回两帧（分叉告知 + 全量），其余仍单帧/无帧
             for frame in frames_of(reply):
                 await manager.send_json_to(ws, frame)
