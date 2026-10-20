@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from sim.core.events import EventKind
 from sim.world.fire import BURNED_TO_REF, FireCell, step_fires
 
@@ -28,6 +30,7 @@ def _cells(n: int, *, seed: int = 1) -> tuple[FireCell, ...]:
     return tuple(cells)
 
 
+@pytest.mark.bench
 class TestSpreadComplexity:
     def test_spread_is_linear_in_cell_count(self) -> None:
         """规模外推：格数 ×10 ⇒ 耗时同阶（中位数 ≤ ~15x）。O(G²) 会 ~100x，当场红。

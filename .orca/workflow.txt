@@ -17,16 +17,18 @@
 - Claude 通过 talking.txt 分配任务；agent 通过 talking.txt 接受任务，接受后即执行。
 - 每几轮对话，Claude 检查所有工作树的 `.orca/talking.txt`：删除没用的内容（避免干扰执行任务），同步精简版更新各工作树的 talking.txt —— **工作流一一对应**。
 
-## 3. Agent 分工（概览，详见 agent-registry.md）
+## 3. Agent 分工（概况，**2026-10-20 用户裁定：只保留两棵树**）
 
 | Agent | 工作树 | 负责能力域 |
 |-------|--------|-----------|
-| Claude（主导/组织） | 主工作树 E:/zxdevelop/project7 | 架构/代码质量/逻辑/测试 + 前端/体验/发布/运维 |
-| cline | .orca/worktrees/project7/cline | 依赖/配置/文档 |
-| codex | .orca/worktrees/project7/codex | 安全/合规/风险 |
-| pi | .orca/worktrees/project7/pi | 性能 |
-| opencode | .orca/worktrees/project7/opencode | 数据/数据库 |
-| kilo | .orca/worktrees/project7/kilo | 接口/兼容性 |
+| Claude（主导/组织） | 主工作树 E:/zxdevelop/project7（分支 main） | 架构/代码质量/逻辑/测试 + 前端/体验/发布/运维，兼收编 |
+| codex | .orca/worktrees/project7/codex（分支 codex） | 安全/合规/风险；同时承接主树派发的其余实现任务（用户授权可越域派工） |
+
+> 历史六树（cline/pi/opencode/kilo）已于 2026-10-20 由用户裁定移除；
+> `.orca/agent-registry.md` 保留历史登记，实际协作**以本表两棵树为准**。
+>
+> **每个 agent 行动前必须先读本文件**，确认自己的域与本轮任务；
+> 本轮任务只在各树 `.orca/talking.txt` 的「当前任务」区，越界即停手。
 
 评审配对（谁评审谁的工作）：见 `.orca/agent-registry.md`。
 
