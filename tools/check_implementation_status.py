@@ -53,16 +53,23 @@ def _inbound_names() -> set[str]:
     return set(re.findall(r'"([a-z_]+)"', block.group(1)))
 
 
+def _strip_comments(src: str) -> str:
+    """剥掉 Python 行注释——否则注释里举例的 JSON（如 `{"type":"hello"}`）
+    会被当成真实发射面，产生假缺口（2026-10-20 实测踩到）。"""
+    return "\n".join(line.split("#", 1)[0] for line in src.splitlines())
+
+
 def check_ws_frames() -> list[str]:
     problems: list[str] = []
 
     type_of = _type_of_map()
     inbound = _inbound_names()
 
-    ws_py = _read("sim/api/ws.py")
+    ws_py = _strip_comments(_read("sim/api/ws.py"))
     emitted = set(re.findall(r'"type":\s*"([a-z_]+)"', ws_py))
 
-    ws_ts = _read("client/src/net/ws.ts")
+    # TypeScript 注释同样要剥：ws.ts 里就有 `// ... 不消费 'xxx'` 这类举例
+    ws_ts = "\n".join(line.split("//", 1)[0] for line in _read("client/src/net/ws.ts").splitlines())
     consumed = set(re.findall(r"case '([a-z_]+)':", ws_ts))
 
     protocol_doc = _read("docs/api/ws-protocol.md")
@@ -129,14 +136,28 @@ def check_ghost_packages() -> list[str]:
 
 
 def check_stale_placeholders() -> list[str]:
+    # encoding 显式给 utf-8：Windows 默认 GBK 会在这类中文匹配上解码崩掉
     result = subprocess.run(
-        ["git", "grep", "-nI", "-E", r"M0\s*协议暂缺", "--", "*.py", "*.ts", "*.tsx"],
+        [
+            "git",
+            "grep",
+            "-nI",
+            "-E",
+            r"M0\s*协议暂缺",
+            "--",
+            "*.py",
+            "*.ts",
+            "*.tsx",
+            ":!tools/check_implementation_status.py",  # 排除自指（本文件 docstring 提到该词）
+        ],
         cwd=REPO,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
-    return [f"[stale] {line}" for line in result.stdout.splitlines()[:20]]
+    return [f"[stale] {line}" for line in (result.stdout or "").splitlines()[:20]]
 
 
 def main() -> int:

@@ -48,6 +48,20 @@ def test_inbound_names_excludes_outbound_frames():
 
 
 @pytest.mark.t1
+def test_comment_stripping_prevents_false_positive():
+    """注释里举例的 JSON 不算发射面。
+
+    实测踩过：ws.py:195 注释写 `{"type":"hello","token":...}`，未剥注释时
+    工具把 hello 当成「服务端发送但客户端不消费」的真缺口报出来。
+    """
+    tool = _load_tool()
+    sample = 'x = {"type": "full_snapshot"}\n# 举例 {"type": "hello"}\n'
+    stripped = tool._strip_comments(sample)
+    assert '"full_snapshot"' in stripped
+    assert '"hello"' not in stripped
+
+
+@pytest.mark.t1
 def test_perception_is_reported_as_exempt_not_gap():
     """perception 是设计预留（ws-protocol.md 明示），必须标豁免而非真缺口。"""
     tool = _load_tool()
