@@ -19,6 +19,10 @@
        ws.ts 零 case（GAP-E 仍属实）。**CombatExchange 决策点制主体已完整接线，勿重做**。
      ③BuildRuntime 重启/读档不恢复（main.py:324 启动时新建；恢复路径只装 RNG）。
      ④文档过时登记三条（anchors R-4 / sim-npc 权力档 / GAP-E）。 -->
+<!-- 2b. 幽灵帧辨析（2026-10-20，防后人误判）：`WsMessage` 联合里有而**不是**缺口的成员——
+     `perception`：ws-protocol.md:65 明示「不经 WS 出站」，保留只为冻结形状（Agent 侧
+     perception_frames → prompt，玩家侧看 monologue）。**唯一真缺口是 timescale/combat_event**
+     （文档 §4.3 注也这么写）。派单前先查该文档的豁免登记，别把预留当欠账。 -->
 <!-- 3. 前端 A 档画面（0768f2b）：深度分层带（精灵10-70/名字71-80/气泡81-89/雨99/夜幕100）、
      标签反向缩放 1/PIXEL_SCALE、头顶锚点 labelY/bubbleY、同格偏移 assignStackOffsets、
      接触阴影 Ellipse；PIXEL_SCALE 3→3.5。纯函数在 render/presentation.ts + 单测钉。 -->

@@ -227,7 +227,9 @@ export class WorldScene extends Phaser.Scene {
     if (map.collision[wy * map.w + wx] !== 1) return; // 目标不可通行，不请求
     this.goalMarker?.setPosition(wx * TILE + TILE / 2, wy * TILE + TILE / 2).setVisible(true);
     // sim 负责寻路（世界真相在 sim）；前端发的是玩家对主角的「移动请求」——
-    // M0 协议暂缺 move 消息，用 player_impulse 的移动意图占位（kilo 已知缺口，见主树留言）
+    // move_request 协议早已落地（ws.py `_handle_move_request` → `issue_move`，
+    // 含 bad_target 错误帧与不可达静默两条路径）。旧注释说「用 player_impulse
+    // 占位」是 M0 时代残留，2026-10-20 核实后更正。
     this.game.events.emit('client:move_request', { x: wx, y: wy });
   }
 
