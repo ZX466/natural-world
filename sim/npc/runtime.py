@@ -155,6 +155,7 @@ class NpcRuntime:
         from sim.npc.schedule import current_slot
 
         night = current_slot(tick).phase is DayPhase.NIGHT
+        schedule_slots = [current_slot(tick, advanced[nid]) for nid in active_ids]
         # 决策面节流：冷却内的人 chat 列压掉（suppress_chat 与 active_ids 对齐）。
         suppress_chat: tuple[bool, ...] | None = None
         if chat_cooldown_until is not None:
@@ -165,6 +166,7 @@ class NpcRuntime:
             power=power_values,
             night_bias=night,
             suppress_chat=suppress_chat,
+            schedule_slots=schedule_slots,
         )
 
         # 3. 事件产出：params 只带白名单键（eat/rest/wander/move 无参数动作 → 空 params）

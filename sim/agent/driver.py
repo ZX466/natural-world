@@ -38,6 +38,7 @@ from sim.llm.prompts.assembler import (
     assemble_prompt,
 )
 from sim.llm.prompts.identity import IdentityAnchor
+from sim.npc.speech_register import SpeechContext
 
 logger = structlog.get_logger(__name__)
 
@@ -59,6 +60,7 @@ class ChenmoDriver:
         build_runtime_provider: Callable[[], Any] | None = None,
         combat_provider: Callable[[], tuple[Any, int]] | None = None,
         entropy_provider: Callable[[str, int], WorldEvent] | None = None,
+        speech_context_provider: Callable[[str | None], SpeechContext] | None = None,
     ) -> None:
         self._anchor = anchor
         self._llm = llm
@@ -76,9 +78,10 @@ class ChenmoDriver:
         # 批次 E6：战斗面注入（() -> (CombatLedger, world_seed)）；None = 无攻击面。
         self._combat = combat_provider
         self._entropy_provider = entropy_provider
+        self._speech_context_of = speech_context_provider
         self._gate = IntentGate()
         self._pending: deque[Intent] = deque()
-        self._chat_lines: dict[tuple[str, int], str] = {}
+        self._chat_lines: dict[int, str] = {}
         # 批次 E6 战斗尺（§9）：attack 命中 → 进战斗尺 60 tick；过期即退出。
         # None = 不在战斗尺；issue_combat_scale 发既有 combat.scale_change 事件。
         self._combat_until_tick: int | None = None
@@ -155,6 +158,7 @@ class ChenmoDriver:
             plan=PlanSlice(),
             user_input=InputSlice(thought=impulse or ""),
             chain_id=f"chenmo-{tick}",
+            speech_context=self._speech_context_of(None) if self._speech_context_of else None,
         )
         try:
             result = await self._llm.complete(profile, list(prompt.messages))
@@ -171,7 +175,7 @@ class ChenmoDriver:
             logger.info("chenmo.gate_rejected", tick=tick, reason=verdict.reason)
             return True  # 决策成立但被闸门拦下（幻觉隔离：不入 pending）
         if intent.action == "talk_to" and intent.target_id is not None:
-            self._chat_lines[(intent.target_id, tick)] = await self._dialogue_line(
+            self._chat_lines[id(intent)] = await self._dialogue_line(
                 profile, intent.target_id, intent.reason, tick
             )
         self._pending.append(intent)
@@ -190,7 +194,10 @@ class ChenmoDriver:
         )
 
         name = self._display_name_of(target_id) or target_id
-        fallback = template_line(self._anchor.entity_id, name, tick)
+        context_register = self._speech_context_of(target_id) if self._speech_context_of else None
+        fallback = template_line(
+            self._anchor.entity_id, name, tick, speech_context=context_register
+        )
         prompt = assemble_prompt(
             anchor=self._anchor,
             memory=MemorySlice(),
@@ -203,6 +210,7 @@ class ChenmoDriver:
                 )
             ),
             chain_id=f"chat-{tick}-{target_id}",
+            speech_context=context_register,
         )
         try:
             result = await self._llm.complete(
@@ -231,6 +239,7 @@ class ChenmoDriver:
                 intent, loop.state, actor_id, planned_tick=loop.state.tick
             )
             if verdict.rejected:
+                self._chat_lines.pop(id(intent), None)
                 logger.info("chenmo.revalidate_rejected", reason=verdict.reason)
                 continue
             if (
@@ -380,9 +389,10 @@ class ChenmoDriver:
                 except ValueError:
                     pass  # 不可达：原地喊话（fail-soft，聊天仍发生）
         listener_name = self._display_name_of(target_id) or target_id
-        line = self._chat_lines.pop(
-            (target_id, state.tick), template_line(actor_id, listener_name, state.tick)
-        )
+        line = self._chat_lines.pop(id(intent), None)
+        if line is None:
+            context = self._speech_context_of(target_id) if self._speech_context_of else None
+            line = template_line(actor_id, listener_name, state.tick, speech_context=context)
         loop.enqueue(npc_chat_event(tick=state.tick, npc_id=actor_id, to_id=target_id, line=line))
 
     def _issue_trade(self, loop: TickLoop, intent: Intent) -> None:
@@ -424,52 +434,32 @@ class ChenmoDriver:
         )
 
     def _issue_build(self, loop: TickLoop, actor_id: str, intent: Intent) -> None:
-        """build：扣工料（余额不足=不开工）→ structure.started + 独白（E4）。"""
-        from sim.core.events import coin_grant_event, npc_monologue_event
+        """L2 与 NPC 共用到站/资金/退款判据和结构事件翻译。"""
+        from sim.core.events import npc_act_event
+        from sim.npc.build_action import build_action_events
         from sim.world.economy import CoinLedger
 
-        assert self._build is not None  # 调用分支已保证（pyright 收窄）
+        assert self._build is not None
         build_runtime = self._build()
         pos = intent.target_pos
         assert pos is not None
-        assert self._economy is not None  # 调用分支已保证
+        assert self._economy is not None
         ledger, _seed = self._economy()
         assert isinstance(ledger, CoinLedger)
         tick = loop.state.tick
-        cost = build_runtime.build_cost
-        if not ledger.apply_grant(actor_id, -cost, tick=tick):
-            loop.enqueue(
-                npc_monologue_event(
-                    tick=tick + 1,
-                    npc_id=actor_id,
-                    form="thought",
-                    content=f"手里凑不齐这{cost}文的工料钱，搭棚的事再缓缓。",
-                )
-            )
-            return
-        started = build_runtime.start(actor_id, pos, tick=tick)
-        if started is None:
-            # 扣款退回（格不可走/已有工地——钱货两讫原则：没开工不收钱）
-            ledger.apply_grant(actor_id, cost, tick=tick)
-            loop.enqueue(
-                npc_monologue_event(
-                    tick=tick + 1,
-                    npc_id=actor_id,
-                    form="thought",
-                    content="这块地使不得了，另寻去处吧。",
-                )
-            )
-            return
-        loop.enqueue(coin_grant_event(tick=tick, owner_id=actor_id, delta=-cost, note="build:shed"))
-        loop.enqueue(started)
         loop.enqueue(
-            npc_monologue_event(
-                tick=tick + 1,
-                npc_id=actor_id,
-                form="thought",
-                content="地块我看好了，明天起木料，搭个棚子。",
-            )
+            npc_act_event(tick, actor_id, "build", params={"x": str(pos[0]), "y": str(pos[1])})
         )
+        for event in build_action_events(
+            loop.state,
+            actor_id,
+            pos,
+            tick=tick,
+            runtime=build_runtime,
+            ledger=ledger,
+            form="thought",
+        ):
+            loop.enqueue(event)
 
     def _issue_attack(self, loop: TickLoop, actor_id: str, intent: Intent) -> None:
         """attack：确定性结算 → hp 账本 → 死亡走 npc.death（E6 最小面）。

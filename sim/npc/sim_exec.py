@@ -18,8 +18,10 @@ import hashlib
 from collections.abc import Mapping
 from dataclasses import replace
 
+from sim.agent.build_exec import BuildRuntime
 from sim.core.events import WorldEvent, move_event, npc_chat_event, npc_monologue_event
 from sim.core.world import EntityState, WorldState
+from sim.npc.schedule import MARKET_SITE
 from sim.world.pathfinding import Pathfinder
 
 # ---------------------------------------------------------------------------
@@ -125,9 +127,9 @@ _SITE_SCATTER_RADIUS = 4
 #: 村广场 / 桃门 / 溪桥 / 客栈院 / 梯田——每区一核（rest=锚点侧）。
 HOME_BASES: tuple[tuple[int, int], ...] = (
     (100, 52),  # 村广场（village_square，中央对位旧镇集）
-    (15, 18),   # 桃门（peach_gate，西北）
-    (66, 19),   # 溪桥（stream_bridge，北中）
-    (44, 53),   # 客栈院（guest_yard，中西南）
+    (15, 18),  # 桃门（peach_gate，西北）
+    (66, 19),  # 溪桥（stream_bridge，北中）
+    (44, 53),  # 客栈院（guest_yard，中西南）
     (122, 19),  # 梯田（terraced_fields，东北）
 )
 
@@ -176,27 +178,27 @@ _TERRITORY_ORDER = {
 #: 全部在产物图上实测可走；语义对位随桃花源地标走）。
 _TERRITORY_EAT: dict[tuple[int, int], tuple[int, int]] = {
     (100, 52): (100, 53),  # 村广场：药铺一带
-    (15, 18): (15, 19),    # 桃门：门内道
-    (66, 19): (66, 20),    # 溪桥：桥头
-    (44, 53): (44, 54),    # 客栈院：院前
+    (15, 18): (15, 19),  # 桃门：门内道
+    (66, 19): (66, 20),  # 溪桥：桥头
+    (44, 53): (44, 54),  # 客栈院：院前
     (122, 19): (121, 20),  # 梯田：田埂
 }
 _TERRITORY_REST: dict[tuple[int, int], tuple[int, int]] = {
     # 2026-10-12 换图：rest 点=本片区锚点近旁可走格（原「宅门前」随旧图退役；
     # 选取以锚点 ±2 内邻格语义对位，产物图上实测可走）
     (100, 52): (100, 53),  # 村广场 → 广场南侧
-    (15, 18): (15, 19),    # 桃门 → 门内道
-    (66, 19): (66, 20),    # 溪桥 → 桥头
-    (44, 53): (44, 54),    # 客栈院 → 院门前
+    (15, 18): (15, 19),  # 桃门 → 门内道
+    (66, 19): (66, 20),  # 溪桥 → 桥头
+    (44, 53): (44, 54),  # 客栈院 → 院门前
     (122, 19): (121, 20),  # 梯田 → 田埂
 }
 _TERRITORY_WORK: dict[tuple[int, int], tuple[int, int]] = {
     # 2026-10-12 换图：work 点=梯田带（terraced_fields 东北区）；非梯田片区
     # 就近对位——村广场→染坊市集、桃门→门内道、溪桥→桥头、客栈院→院前
-    (100, 52): (72, 52),   # 村广场 → 染坊市集（craft_market）
-    (15, 18): (15, 19),    # 桃门 → 门内道
-    (66, 19): (66, 20),    # 溪桥 → 桥头
-    (44, 53): (44, 54),    # 客栈院 → 院门前
+    (100, 52): (72, 52),  # 村广场 → 染坊市集（craft_market）
+    (15, 18): (15, 19),  # 桃门 → 门内道
+    (66, 19): (66, 20),  # 溪桥 → 桥头
+    (44, 53): (44, 54),  # 客栈院 → 院门前
     (122, 19): (121, 20),  # 梯田 → 田埂（本区即农田）
 }
 
@@ -304,10 +306,12 @@ def wander_near(
     return candidates[digest % len(candidates)]
 
 
-def _site_anchor_of(action: str, npc_id: str) -> tuple[int, int] | None:
+def _site_anchor_of(action: str, npc_id: str, *, target: str = "") -> tuple[int, int] | None:
     """动作 → 站点锚点（D16 定籍制：eat/rest/work 全部落**本人片区**站点；
     None=无站点）。片区锚点表缺项时退回全镇站点（fail-safe 不炸）。
     """
+    if target == "market" and action in ("move", "work"):
+        return MARKET_SITE
     home = home_base_of(npc_id)
     if action == "eat":
         return _TERRITORY_EAT.get(home, EAT_SITE)
@@ -362,6 +366,7 @@ def _resolve_goal(
     w: int,
     h: int,
     pathfinder: Pathfinder,
+    target: str = "",
 ) -> tuple[int, int] | None:
     """动作 → 目的地（纯函数）；None = 该动作无位移面。
 
@@ -369,6 +374,8 @@ def _resolve_goal(
     D16：站点=本人片区站点（定籍制）；闲逛锚定**本片区**（不再锚定当前
     位置——随机游走漂移收口）；request_chat 仍跨片区（社交不缩水）。
     """
+    if target == "market" and action in ("move", "work"):
+        return _scatter_near(MARKET_SITE, npc_id, pathfinder, seed=seed)
     if action in ("wander", "move"):
         # D16：闲逛锚定本人片区（人在片区外先走回家再溜达——归巢语义）。
         return wander_near(home_base_of(npc_id), npc_id, pathfinder, seed=seed, tick=tick)
@@ -377,10 +384,10 @@ def _resolve_goal(
         assert anchor is not None  # 三动作恒有锚点
         return _scatter_near(anchor, npc_id, pathfinder, seed=seed)
     if action == "request_chat":
-        target = _chat_target_of(state, npc_id, tick=tick)
-        if target is None:
+        chat_target = _chat_target_of(state, npc_id, tick=tick)
+        if chat_target is None:
             return wander_near(home_base_of(npc_id), npc_id, pathfinder, seed=seed, tick=tick)
-        return _scatter_near(state.entities[target].pos, npc_id, pathfinder, seed=seed)
+        return _scatter_near(state.entities[chat_target].pos, npc_id, pathfinder, seed=seed)
     return None
 
 
@@ -442,6 +449,7 @@ def plan_npc_move(
     *,
     seed: int,
     tick: int,
+    target: str = "",
 ) -> WorldEvent | None:
     """单个动作 → move_event（去「做事的地方」）；不该动/动不了 → None。
 
@@ -461,9 +469,17 @@ def plan_npc_move(
         return None
     w, h = pathfinder.tile_map.width, pathfinder.tile_map.height
     start = entity.pos
-    if action in ("eat", "rest", "work", "request_chat"):
+    if action in ("eat", "rest", "work", "request_chat") or target == "market":
         goal = _resolve_goal(
-            state, npc_id, action, seed=seed, tick=tick, w=w, h=h, pathfinder=pathfinder
+            state,
+            npc_id,
+            action,
+            seed=seed,
+            tick=tick,
+            w=w,
+            h=h,
+            pathfinder=pathfinder,
+            target=target,
         )
         if goal is None:
             return None
@@ -473,7 +489,7 @@ def plan_npc_move(
         if action != "request_chat":
             from sim.npc.sim_exec import _site_anchor_of
 
-            anchor = _site_anchor_of(action, npc_id)
+            anchor = _site_anchor_of(action, npc_id, target=target)
             if anchor is not None:
                 dist = abs(start[0] - anchor[0]) + abs(start[1] - anchor[1])
                 if dist <= _SITE_SCATTER_RADIUS:
@@ -540,6 +556,7 @@ def npc_events_for_tick(
     retell_last: dict[str, int] | None = None,
     wage_last: dict[str, int] | None = None,
     coin_ledger: object | None = None,
+    build_runtime: BuildRuntime | None = None,
 ) -> list[WorldEvent]:
     """一个决策节拍的事件批次：NpcRuntime.tick → NPC_ACT 批次 + MOVE 交错。
 
@@ -594,12 +611,38 @@ def npc_events_for_tick(
         events.append(event)
         npc_id = str(event.payload.get("npc_id", ""))
         action = str(event.payload.get("action", ""))
+        target = str(event.payload.get("target", ""))
+        if action == "build":
+            from sim.npc.build_action import build_action_events
+            from sim.world.economy import CoinLedger
+
+            params = event.payload.get("params")
+            if (
+                build_runtime is not None
+                and isinstance(coin_ledger, CoinLedger)
+                and isinstance(params, dict)
+                and set(params) == {"x", "y"}
+                and all(
+                    isinstance(v, str) and v.isascii() and v.isdecimal() for v in params.values()
+                )
+            ):
+                events.extend(
+                    build_action_events(
+                        state,
+                        npc_id,
+                        (int(params["x"]), int(params["y"])),
+                        tick=tick,
+                        runtime=build_runtime,
+                        ledger=coin_ledger,
+                    )
+                )
+            continue
         # 批次 D3：生理闭环——动作**到站**才回写需求（吃了才算吃）。
         # D14 到站口径与 plan_npc_move 同源：人在站点锚点邻域（≤散点半径）
         # 即视为到站——散点私位与锚点的偏差不再让回写漏账。
         entity = state.entities.get(npc_id)
         if entity is not None and not entity.path and action in ("eat", "rest", "work"):
-            anchor = _site_anchor_of(action, npc_id)
+            anchor = _site_anchor_of(action, npc_id, target=target)
             profiles = getattr(runtime, "profiles", None)
             if anchor is not None and profiles is not None and npc_id in profiles:
                 dist = abs(entity.pos[0] - anchor[0]) + abs(entity.pos[1] - anchor[1])
@@ -653,7 +696,16 @@ def npc_events_for_tick(
                     from sim.agent.dialogue import template_line
 
                     listener = (display_name_of or {}).get(target_id, target_id)
-                    line = template_line(npc_id, listener, tick)
+                    from sim.npc.chat_ledger import ChatLedger
+                    from sim.npc.speech_register import SpeechContext
+
+                    profile = getattr(runtime, "profiles", {}).get(npc_id)
+                    context = SpeechContext(
+                        profile.class_register if profile is not None else "平民",
+                        in_circle=isinstance(chat_ledger, ChatLedger)
+                        and target_id in chat_ledger.relations_of(npc_id),
+                    )
+                    line = template_line(npc_id, listener, tick, speech_context=context)
                     events.append(
                         npc_chat_event(tick=tick, npc_id=npc_id, to_id=target_id, line=line)
                     )
@@ -695,6 +747,7 @@ def npc_events_for_tick(
             pathfinder,
             seed=seed,
             tick=tick,
+            target=target,
         )
         if mv is not None:
             events.append(_retick(mv, tick))

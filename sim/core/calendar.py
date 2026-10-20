@@ -12,7 +12,7 @@ from typing import NamedTuple
 TICKS_PER_GAME_DAY = 86_400  # 1 tick = 1 游戏秒（DESIGN §10 锁定）
 TICKS_PER_GAME_HOUR = 3_600
 
-MARKET_DAY_INTERVAL = 5  # 集市日间隔（内容常量，占位值）
+MARKET_DAY_INTERVAL = 5  # 集市日间隔（内容常量；日程消费，第 1、6、11…天赴集）
 
 
 class DayPhase(Enum):

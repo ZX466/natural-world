@@ -1,14 +1,17 @@
 """sim.npc.schedule — 日程/作息（M2-A1 §1.1；DESIGN §5）。
 
-按 tick 单向派生当前应做的事（与历法同源，纯函数可重放）；集市日例外
-（MARKET_DAY_INTERVAL）在 M2 只留计算位。不做计划重排（M4 意愿系统）。
+按 tick 与角色画像派生日程候选；职业、个人作息和集市日只给有限效用偏置。
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from zlib import crc32
 
-from sim.core.calendar import MARKET_DAY_INTERVAL, TICKS_PER_GAME_DAY, DayPhase, phase_of_day
+from sim.core.calendar import TICKS_PER_GAME_HOUR, DayPhase, is_market_day, phase_of_day
+from sim.npc.model import NpcProfileData
+
+MARKET_SITE = (72, 52)
 
 
 @dataclass(frozen=True)
@@ -17,6 +20,7 @@ class ScheduleSlot:
 
     phase: DayPhase
     action: str  # 白名单动作（sim/npc/actions.py）
+    target: str = ""
 
 
 #: 昼夜相位 → 缺省动作档（内容常量：白天劳作、夜里休息、晨昏闲逛）
@@ -28,11 +32,16 @@ _PHASE_ACTION: dict[DayPhase, str] = {
 }
 
 
-def current_slot(tick: int) -> ScheduleSlot:
-    """tick → 当前日程档（纯函数；同 tick 恒同档）。"""
-    return ScheduleSlot(phase=phase_of_day(tick), action=_PHASE_ACTION[phase_of_day(tick)])
-
-
-def is_market_day(tick: int) -> bool:
-    """集市日判定（M4 前只留计算位：间隔取整日）。"""
-    return (tick // TICKS_PER_GAME_DAY) % MARKET_DAY_INTERVAL == 0
+def current_slot(tick: int, profile: NpcProfileData | None = None) -> ScheduleSlot:
+    """(tick, profile) → 日程候选（纯函数；同输入恒同档，省略画像保留缺省档）。"""
+    phase = phase_of_day(tick)
+    if profile is None:
+        return ScheduleSlot(phase, _PHASE_ACTION[phase])
+    if phase is DayPhase.DAY and is_market_day(tick) and profile.species == "human":
+        return ScheduleSlot(phase, "work" if profile.occupation == "商贩" else "move", "market")
+    offset = (crc32(profile.npc_id.encode()) % 3 - 1) * TICKS_PER_GAME_HOUR
+    personal_phase = phase_of_day(max(0, tick + offset))
+    action = _PHASE_ACTION[personal_phase]
+    if personal_phase is DayPhase.DAY and profile.occupation == "艺人":
+        action = "request_chat"
+    return ScheduleSlot(phase, action)

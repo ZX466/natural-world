@@ -349,6 +349,8 @@ def run_perception_step(
     tick_events: list[WorldEvent],
     display_name_of: dict[str, str] | None = None,
     species_of: dict[str, str] | None = None,
+    *,
+    include_fauna: bool = False,
 ) -> dict[str, PerceptionFrame]:
     """TickLoop 感知挂载点钩子（attach_perception 的标准实现）。
 
@@ -358,6 +360,23 @@ def run_perception_step(
     嗅觉（M2 §5.1）：视听之后推进场 + 批量采样（场随图常驻，_SHARED_SMELL_WORLD）。
     display_name_of（批次 D8）：entity_id → 戏内名，透传 assemble（叙事说人话）。
     """
+    observers = tuple(state.entities)
+    if include_fauna:
+        from sim.core.world import EntityState
+        from sim.world.nature import fauna_projection_at
+
+        wildlife = fauna_projection_at(state.tick, state.world_seed, tile_map)
+        state = state.model_copy(
+            update={
+                "entities": {
+                    **state.entities,
+                    **{
+                        f.entity_id: EntityState(entity_id=f.entity_id, pos=f.pos) for f in wildlife
+                    },
+                }
+            }
+        )
+        display_name_of = {**(display_name_of or {}), **{f.entity_id: f.species for f in wildlife}}
     engine = _shared_engine(tile_map)
     smell_world = _shared_smell_world(tile_map)
     moving = {eid for eid, e in state.entities.items() if e.path}
@@ -370,7 +389,7 @@ def run_perception_step(
     from sim.perception.profiles import CAT, DOG, HUMAN, RAVEN
 
     profiles = {p.species: p for p in (HUMAN, CAT, DOG, RAVEN)}
-    for eid in state.entities:
+    for eid in observers:
         frames[rtoken_of(eid)] = engine.assemble(
             state,
             eid,

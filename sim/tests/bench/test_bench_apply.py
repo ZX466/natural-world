@@ -76,8 +76,8 @@ def test_apply_unknown_kind_rejected() -> None:
     """契约守卫：未注册 kind 必须拒绝（唯一写路径防线 1）。
 
     守卫须始终指向一个**未注册** kind：TILE_CHANGED/STRUCTURE_*/MATERIAL_*
-    已于批次 E4 接实况（no-op handler），改钉 ECOLOGY_SHIFT（M6 内容面，
-    尚未接实况——将来接线时随批更新此处）。
+    已于批次 E4 接实况（no-op handler）；S4 生态/动物已接线，改钉仍未启用
+    handler 的 SPEECH_SHIFT（语域保持纯派生）。
     """
     from sim.core.events import EventKind, WorldEvent
 
@@ -85,7 +85,7 @@ def test_apply_unknown_kind_rejected() -> None:
     state = make_state(1)
     bad = WorldEvent(
         tick=state.tick + 1,
-        event_type=EventKind.ECOLOGY_SHIFT,  # 尚未接实况（M6 内容面预留）
+        event_type=EventKind.SPEECH_SHIFT,  # 语域纯派生，仍不启用事件 handler
         actor_id="",
         payload={},
     )
@@ -94,7 +94,7 @@ def test_apply_unknown_kind_rejected() -> None:
     except ValueError as exc:
         assert "未注册的事件种类" in str(exc)
     else:
-        raise AssertionError("未启用事件种类未拒绝（ECOLOGY_SHIFT 未接实况应拒绝）")
+        raise AssertionError("未启用事件种类未拒绝（SPEECH_SHIFT 应拒绝）")
 
 
 def test_apply_future_event_rejected() -> None:

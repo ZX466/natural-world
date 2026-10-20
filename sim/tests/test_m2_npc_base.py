@@ -176,9 +176,10 @@ class TestM2Events:
 
 
 class TestActionWhitelist:
-    def test_six_actions_fixed(self) -> None:
+    def test_seven_actions_fixed(self) -> None:
         assert (
-            frozenset({"move", "work", "eat", "rest", "wander", "request_chat"}) == ACTION_WHITELIST
+            frozenset({"move", "work", "eat", "rest", "wander", "request_chat", "build"})
+            == ACTION_WHITELIST
         )
 
     def test_payload_keys_allowed(self) -> None:

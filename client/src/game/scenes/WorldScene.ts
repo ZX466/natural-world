@@ -5,6 +5,7 @@
  * + 昼夜色罩（读 uiStore 的 phase）。Phaser 侧不 import React 组件。
  */
 import Phaser from 'phaser';
+import { createFaunaTextures } from '../render/fauna';
 import type { WorldMirror } from '../world-mirror';
 import {
   facingRow,
@@ -104,6 +105,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create(): void {
+    createFaunaTextures(this);
     this.mapLayer = this.add.graphics();
     this.nightOverlay = this.add
       .rectangle(0, 0, this.scale.width, this.scale.height, 0x0a1030, 0)
@@ -372,22 +374,26 @@ export class WorldScene extends Phaser.Scene {
       // 2026-10-12 D1-D5：GOD 皮走 godVillagerFrame（3 列几何）；villager
       // 兜底皮仍走 VILLAGER_SHEET（4 列）——几何按 texture 分派。
       const isGod = GOD_SPRITE_KEYS.includes(view.sprite.texture.key);
+      const isFauna = actor.sprite.startsWith('fauna_');
+      view.sprite.setAlpha(isFauna && actor.anim === 'rest' ? 0.5 : 1);
       view.sprite.setFrame(
-        rtoken === this.mirror.protagonist
-          ? walkFrame(row, view.animClockMs)
-          : isGod
-            ? godVillagerFrame(
-                GOD_SHEET,
-                moved ? 'walk' : (actor.anim ?? 'idle'),
-                view.lastFacing,
-                view.animClockMs,
-              )
-            : villagerFrame(
-                VILLAGER_SHEET,
-                moved ? 'walk' : (actor.anim ?? 'idle'),
-                view.lastFacing,
-                view.animClockMs,
-              ),
+        isFauna
+          ? 0
+          : rtoken === this.mirror.protagonist
+            ? walkFrame(row, view.animClockMs)
+            : isGod
+              ? godVillagerFrame(
+                  GOD_SHEET,
+                  moved ? 'walk' : (actor.anim ?? 'idle'),
+                  view.lastFacing,
+                  view.animClockMs,
+                )
+              : villagerFrame(
+                  VILLAGER_SHEET,
+                  moved ? 'walk' : (actor.anim ?? 'idle'),
+                  view.lastFacing,
+                  view.animClockMs,
+                ),
       );
       view.prevX = actor.x;
       view.prevY = actor.y;

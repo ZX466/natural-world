@@ -65,7 +65,7 @@ logger = structlog.get_logger(__name__)
 #: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
 #: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
 #: PlanDelta 封闭）；1.2 = 批次 E 只读诊断面进协议快照（M6-K2）——登记见 versioning.md §7。
-_PROTOCOL_VERSION = "1.8"
+_PROTOCOL_VERSION = "1.9"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 
 # K4 提案 §2.2/§3.2：五类 C→S 消息在此与 _CHANNEL_FOR **成对**注册
@@ -433,6 +433,29 @@ MONOLOGUE_DELIVERY_ALL = frozenset({"bubble", "plan"})
 MONOLOGUE_DELIVERY_SELF = frozenset({"thought"})
 
 
+def _fauna_actor_rows(loop: TickLoop, tile_map: TileMap | None = None) -> list[dict[str, Any]]:
+    if not loop.fauna_enabled:
+        return []
+    if loop.pathfinder is not None:
+        tile_map = loop.pathfinder.tile_map
+    if tile_map is None:
+        return []
+    from sim.world.nature import fauna_projection_at
+
+    return [
+        {
+            "rtoken": _rtoken(f.entity_id),
+            "x": f.pos[0],
+            "y": f.pos[1],
+            "facing": "s",
+            "sprite": f.sprite,
+            "name": f.species,
+            "anim": f.anim,
+        }
+        for f in fauna_projection_at(loop.state.tick, loop.state.world_seed, tile_map)
+    ]
+
+
 def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
     """全量快照（full_snapshot）。rtoken 替身；无 tick/seed/内部 id。
 
@@ -455,6 +478,7 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
         if name is not None:
             actor["name"] = name
         actors.append(actor)
+    actors.extend(_fauna_actor_rows(loop, tile_map))
     return {
         "type": "full_snapshot",
         "channel": "render",
@@ -617,7 +641,7 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
         "channel": "render",
         "v": _PROTOCOL_VERSION,
         "ws_seq": 0,
-        "actors": actors,
+        "actors": [*actors, *_fauna_actor_rows(loop)],
         "time": _time_payload(loop.state.tick),
     }
     known = registry().entries()
@@ -784,7 +808,7 @@ def handle_client_message(
     if msg_type == "set_control":
         return _handle_set_control(raw, loop, ctrl)
     if msg_type == "player_impulse":
-        return _handle_player_impulse(raw)
+        return _handle_player_impulse(raw, tile_map=pf.tile_map)
     if msg_type == "load_anchor":
         return _handle_load_anchor(raw, loop, pf, ctrl)
     return None
@@ -1002,7 +1026,9 @@ def fast_forward_done_frames(
     ]
 
 
-def _handle_player_impulse(raw: dict[str, Any]) -> dict[str, Any]:
+def _handle_player_impulse(
+    raw: dict[str, Any], *, tile_map: TileMap | None = None
+) -> dict[str, Any]:
     """K4 提案 §2：注册 + 入站校验 + 乐观 impulse_feedback（ws-protocol.md §6 入网即回）。
 
     同步纯函数：不 await LLM、不改 Agent 状态（写路径唯一 = apply）。
@@ -1015,6 +1041,21 @@ def _handle_player_impulse(raw: dict[str, Any]) -> dict[str, Any]:
         return _error_frame("player_impulse", _ERROR_BAD_IMPULSE, "念头还没成形。")
     if len(text) > 64:  # PlayerImpulseMessage.text maxLength 64
         return _error_frame("player_impulse", _ERROR_IMPULSE_TOO_LONG, "话说得太长了，说不清。")
+    build_hint = ""
+    if "action" in raw or "target_pos" in raw:
+        pos = raw.get("target_pos")
+        if (
+            raw.get("action") != "build"
+            or not isinstance(pos, list)
+            or len(pos) != 2
+            or any(type(v) is not int or v < 0 for v in pos)
+        ):
+            return _error_frame("player_impulse", _ERROR_BAD_IMPULSE, "这块地还没想明白。")
+        if tile_map is not None and not all(
+            tile_map.is_walkable(pos[0] + dx, pos[1] + dy) for dx in (0, 1) for dy in (0, 1)
+        ):
+            return _error_frame("player_impulse", _ERROR_BAD_IMPULSE, "这块地使不得。")
+        build_hint = f"想在（{pos[0]},{pos[1]}）搭个木棚。"
     # M4-A2（裁 19-F2）：入站三扫接线（I-1 banned / I-3 操纵感；I-2 hidden 的
     # target_profile 随批次 A 感知层接线注入——玩家念头是全局注入，当前无特定
     # 目标 NPC 可查）。拒收 → injected:false + 结构化 error 码（不新增戏外词面），
@@ -1034,7 +1075,7 @@ def _handle_player_impulse(raw: dict[str, Any]) -> dict[str, Any]:
     # 批次 C：念头过闸 → 置位 chenmo 即时决策轮（携带原文进 prompt [输入] 段；
     # 钩子 None = driver 未装配，静默跳过）。乐观反馈语义不变（§2.5 异步）。
     if _IMPULSE_TRIGGER is not None:
-        _IMPULSE_TRIGGER(cleaned)
+        _IMPULSE_TRIGGER(cleaned + build_hint)
     return {
         "type": "impulse_feedback",
         "channel": "control",
@@ -1289,6 +1330,7 @@ async def run_world_driver(
     on_flush: Any = None,
     on_day_switch: Any = None,
     drain_loads: Any = None,
+    write_lock: asyncio.Lock | None = None,
 ) -> None:
     """外层 asyncio 驱动：固定节拍喂 real_dt → drain 事件（on_flush 落库）→ 广播增量。
 
@@ -1317,31 +1359,43 @@ async def run_world_driver(
     last = time.monotonic()
     seq = 0
     prev_day = game_time(loop.state.tick).day
+    frame_lock = write_lock if write_lock is not None else asyncio.Lock()
     while True:
         await asyncio.sleep(FRAME_BUDGET_SECONDS)
         now = time.monotonic()
         real_dt = now - last
         last = now
-        n = loop.advance_frame(real_dt)
-        fast_forwarding = manager.any_fast_forward_active()
-        if n == 0 and manager.count == 0:
-            continue
-        if fast_forwarding:
-            step_fast_forward(loop, manager.controls())
-        moved = set() if fast_forwarding else loop.drain_delta()
-        events = loop.drain_events()
-        if events and on_flush is not None:
-            await on_flush(events)
-        # 案 B 接线（K16）：flush 写事务收口之后才跑读档分叉（写者串行）。
-        if drain_loads is not None:
-            await drain_loads()
+        # 与存档打包共用边界：SQL 会话闭环前不接受另一个世界写者。
+        async with frame_lock:
+            n = loop.advance_frame(real_dt)
+            fast_forwarding = manager.any_fast_forward_active()
+            if (
+                n == 0
+                and manager.count == 0
+                and not loop.pending_events
+                and not loop.pending_broadcast_events
+            ):
+                continue
+            if fast_forwarding:
+                step_fast_forward(loop, manager.controls())
+            moved = set() if fast_forwarding else loop.drain_delta()
+            events = loop.drain_events()
+            if events and on_flush is not None:
+                await on_flush(events)
+            events = [*loop.pending_broadcast_events, *events]
+            loop.pending_broadcast_events = []
+            # flush 写事务收口之后才跑读档分叉（写者串行）。
+            if drain_loads is not None:
+                await drain_loads()
         if on_day_switch is not None:
             new_day = game_time(loop.state.tick).day
             if new_day != prev_day:
                 for day in range(prev_day + 1, new_day + 1):
                     on_day_switch(day)
                 prev_day = new_day
-        if moved:
+        if moved or (
+            loop.fauna_enabled and any(e.event_type is EventKind.FAUNA_TICK for e in events)
+        ):
             seq += 1
             payload = delta_payload(loop, moved)
             payload["ws_seq"] = seq

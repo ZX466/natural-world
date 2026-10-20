@@ -971,6 +971,19 @@
                 "type": "null"
               }
             ]
+          },
+          "action": {
+            "type": "string",
+            "enum": ["build"]
+          },
+          "target_pos": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         },
         "additionalProperties": false

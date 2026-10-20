@@ -114,6 +114,7 @@ def sprite_for_entity(entity_id: str) -> str:
     digest = hashlib.sha256(f"sprite:{entity_id}".encode()).digest()
     return GOD_SPRITE_POOL[int.from_bytes(digest[0:4], "big") % len(GOD_SPRITE_POOL)]
 
+
 #: 职业池（按序循环分配；与姓名风味对齐即可，无机械耦合）
 OCCUPATIONS: tuple[str, ...] = (
     "农人",
@@ -295,7 +296,7 @@ def _profile_row(p: NpcProfileData) -> dict[str, object]:
         "skills": json.dumps({}),
         "goals": json.dumps({}),
         "inventory": json.dumps([]),
-        "knowledge_boundary": json.dumps({}),
+        "knowledge_boundary": json.dumps({"class_register": p.class_register}),
         "lod": p.lod,
         "created_at_tick": 0,
         "updated_at_tick": 0,

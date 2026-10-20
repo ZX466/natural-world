@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict
 
 from sim.llm.prompts.banned_words import scan
 from sim.llm.prompts.identity import IdentityAnchor
+from sim.npc.speech_register import SpeechContext, speech_register
 
 logger = structlog.get_logger(__name__)
 
@@ -135,6 +136,8 @@ def assemble_prompt(
     user_input: InputSlice,
     chain_id: str,
     norms: NormSlice | None = None,
+    *,
+    speech_context: SpeechContext | None = None,
 ) -> AssembledPrompt:
     """六段装配 → 禁词终扫 → messages。装配失败抛 PromptAssemblyError。
 
@@ -144,6 +147,8 @@ def assemble_prompt(
     （兼容既有调用形）。
     """
     sections: list[str] = []
+    if speech_context is not None:
+        sections.append(f"说话用{speech_register(speech_context)}的口气。")
 
     # [记忆]（top-k 已由检索端排序，这里只依序列出）
     if memory.entries:

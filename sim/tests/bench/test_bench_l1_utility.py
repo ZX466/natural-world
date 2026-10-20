@@ -318,8 +318,8 @@ def test_l1_real_per_npc_within_budget(benchmark) -> None:
 def test_l1_real_impl_spec_contract() -> None:
     """契约守卫（非 bench）：真实实现的矩阵形状 / 常量序与 l1-spec.md 落盘一致。"""
     assert NEED_ORDER == ("hunger", "energy", "social")
-    assert len(ACTION_ORDER) == 6
-    assert ACTION_ORDER == ("move", "work", "eat", "rest", "wander", "request_chat")
+    assert len(ACTION_ORDER) == 7
+    assert ACTION_ORDER == ("move", "work", "eat", "rest", "wander", "request_chat", "build")
     profiles = _real_profiles()
     model = UtilityModel(n_npc=N_NPC)
     scores = utility_scores_matrix(profiles, model)

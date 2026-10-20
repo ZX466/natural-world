@@ -448,8 +448,11 @@ export type components = {
     };
     readonly PlayerImpulseMessage: {
       /** @enum {string} */
+      readonly action?: 'build';
+      /** @enum {string} */
       readonly channel: 'control';
       readonly preset?: string | null;
+      readonly target_pos?: readonly number[];
       /** @description 玩家原始直觉输入；sim 负责叙事化 */
       readonly text: string;
       /**

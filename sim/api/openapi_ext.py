@@ -284,6 +284,13 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
                 "description": "玩家原始直觉输入；sim 负责叙事化",
             },
             "preset": _oneof_null({"type": "string"}),
+            "action": {"type": "string", "enum": ["build"]},
+            "target_pos": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {"type": "integer", "minimum": 0},
+            },
         },
         ["text"],
     ),

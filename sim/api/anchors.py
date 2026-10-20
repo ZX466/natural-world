@@ -30,18 +30,16 @@
   ⚠️ 该路由**未进** `shared/openapi.json`（mock 是 gen-protocol 的唯一源，shared/ 非我域）
   ⇒ 前端类型面要等 kilo 登记（届时走 versioning §7 minor 流程）。
 
-**⚠️ 上游阻塞缺陷（非本单引入，M5-A11 实测并回执）**：driver 跑起来时，**连发几次 POST
-就会把 world.db 写锁长期占住** —— 同步写面提交时 `sqlite3.OperationalError: database is
-locked`，且锁**持续存在**（第三条连接 `BEGIN IMMEDIATE` 同样拿不到）。复现：起 lifespan
-（driver 在跑）后连发 5 次 POST，`201 / EXC / 201 / 201 / EXC`；把 `app.state.driver` 取消
-后再连发 ⇒ 全 201、锁自由。**同样的抖动在 R-4 基线（不含包写）上就能复现**
-（`201 / EXC / 201 / 201 / EXC`）⇒ 与物化包无关，是 async 驱动侧有写事务没有收口。
-本单对此的处置只有两条，都不是「绕过」：
-① 写事务 **writer-first**（语料/快照引用在只读会话先取）——这是 SQLite 唯一能吃到 busy
-   重试的形态，也顺带缩短持锁窗口；
-② 钉子层面对 driver 确定性（`test_m5_materialization_api.py` 的 `client` 夹具取消
-   `app.state.driver`）——**不把上游缺陷藏进重试里**（有界重试治不了持久锁，只会拖长失败）。
-根治在 `run_world_driver` / lifespan 侧（谁开的事务谁收口），归 Claude/kilo 面。
+**上游阻塞缺陷 — S2 已收口（2026-10-20）**：历史复现为 driver 运行时连发 5 次 POST 出现
+`201 / EXC / 201 / 201 / EXC`。审计确认 store.append/fork/flush 会话均在上下文内
+提交或回滚；真实死锁链是 async 路由里同步 SQLite 等锁阻塞事件循环，令持锁 driver
+无法恢复到 commit。POST/PATCH/DELETE 的同步写事务现经线程池运行，仍在自身
+Session 内闭环；lifespan 记忆写使用 begin 上下文，关闭时先取消并回收两项驱动任务。
+帧推进/落库/读档、WS 写入、陈默执行与打包共用异步写入边界，存档期间游标不前移。
+取游标前先落 pending_events；已落事件留待下一帧广播，不重复提交。
+writer-first（语料/快照引用先在只读会话取）保持；不新增重试/锁等待时长。
+`test_anchor_live_writer` 让真实 driver 取得写锁后延迟提交，连续 5 次存档均须 201，
+退出后第三连接 BEGIN IMMEDIATE 须成功。旧诊断夹具仍可取消 driver 以隔离诊断语义。
 """
 
 from __future__ import annotations
@@ -49,6 +47,7 @@ from __future__ import annotations
 import threading
 import time
 import uuid
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from typing import Any
 
@@ -56,6 +55,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import Session, sessionmaker
+from starlette.concurrency import run_in_threadpool
 
 from sim.api.ws import register_anchor_id, unregister_anchor_id
 from sim.core.persistence.anchor_package import (
@@ -453,6 +453,11 @@ async def current_anchor() -> dict[str, Any]:
 
 @router.post("", response_model=AnchorListItem, status_code=201)
 async def create_anchor(payload: AnchorCreate, request: Request) -> dict[str, Any]:
+    async with getattr(request.app.state, "world_write_lock", nullcontext()):
+        return await _create_anchor(payload, request)
+
+
+async def _create_anchor(payload: AnchorCreate, request: Request) -> dict[str, Any]:
     """§1.2 POST 新建游标（裁 28-G S-2/S-5/S-8）。
 
     世界未就绪（无活跃 loop）→ 400 world-not-ready（判据=app.state.loop，§1.5 ③）。
@@ -463,16 +468,22 @@ async def create_anchor(payload: AnchorCreate, request: Request) -> dict[str, An
     if loop is None:
         raise HTTPException(status_code=400, detail="/errors/world-not-ready") from None
     _assert_name_clean(payload.name)  # R-9：先世界就绪(400)后词表(422)，错误序对齐契约表
+    # 先确认真源存在，禁止 preflush 把歧义库或封存库「修复」成可存档的主线。
+    branch_id = _current_branch_id_or_400()
+    flush = getattr(request.app.state, "flush_for_anchor", None)
+    if flush is not None:
+        await flush()
     tick = loop.state.tick
     seq = get_current_seq()
     # 分支真源 = branches.is_current（R-4.1；A4/K9「同改警告」执行处之二）。
     # 零行（无当前行/歧义库全 0）⇒ fail-closed 400 world-not-ready（R-4.1-S 裁定：
     # 不用 409/503，0 行与歧义同码、detail 区分）；禁 'main' 字面量兜底。
-    branch_id = _current_branch_id_or_400()
     # 物化包的两个可空成分（M5-A11）：state_hash 取世界态现值（R-2 对账基线）；
     # rng_state 缺省 None —— app.state 上还没有 registry+抽签 cache（模块注的已知缺口），
     # 该档因此在诊断面是 `rng_unavailable`，**不猜、不用 seed 派生**。
-    item = get_anchor_store().create_item(
+    # 同步 SQLite 等锁不能占事件循环，否则持锁的 async driver 无法恢复提交。
+    item = await run_in_threadpool(
+        get_anchor_store().create_item,
         payload.name,
         branch_id=branch_id,
         tick=tick,
@@ -510,10 +521,11 @@ def _world_state_hash(loop: Any) -> str | None:
 
 
 @router.patch("/{anchor_id}", response_model=AnchorListItem)
-async def rename_anchor(anchor_id: str, payload: AnchorRename) -> dict[str, Any]:
+async def rename_anchor(anchor_id: str, payload: AnchorRename, request: Request) -> dict[str, Any]:
     """§1.3 PATCH 重命名（S-2/S-6）：只改 name；成功刷新 WS 标签（register 幂等覆盖）。"""
     _assert_name_clean(payload.name)
-    item = get_anchor_store().rename_item(anchor_id, payload.name)
+    async with getattr(request.app.state, "world_write_lock", nullcontext()):
+        item = await run_in_threadpool(get_anchor_store().rename_item, anchor_id, payload.name)
     if item is None:
         raise HTTPException(status_code=404, detail="/errors/anchor-not-found") from None
     register_anchor_id(item.id, item.name, item.story_label)  # 幂等覆盖标签
@@ -521,9 +533,10 @@ async def rename_anchor(anchor_id: str, payload: AnchorRename) -> dict[str, Any]
 
 
 @router.delete("/{anchor_id}", status_code=204)
-async def delete_anchor(anchor_id: str) -> Response:
+async def delete_anchor(anchor_id: str, request: Request) -> Response:
     """§1.4 DELETE（S-6）：409 读列判定；硬删；成功摘除 WS 注册表（D-15/S-7 调用点）。"""
-    outcome = get_anchor_store().delete_item(anchor_id)
+    async with getattr(request.app.state, "world_write_lock", nullcontext()):
+        outcome = await run_in_threadpool(get_anchor_store().delete_item, anchor_id)
     if outcome is None:
         raise HTTPException(status_code=404, detail="/errors/anchor-not-found") from None
     if outcome == "protected":
