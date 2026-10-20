@@ -8,6 +8,12 @@ import { runtime } from '../game/runtime';
 import { useUiStore, type Speed } from '../store/uiStore';
 
 const SPEEDS: readonly Speed[] = [1, 4, 16];
+const CONNECTION_LABELS = {
+  open: null,
+  connecting: '连接中…',
+  reconnecting: '正在重连…',
+  closed: '已断开，正在重试',
+};
 
 const STATUS_CLASS: Record<string, string> = {
   open: 'od-status--open',
@@ -26,6 +32,7 @@ export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }): Reac
   const speed = useUiStore((s) => s.speed);
   const paused = useUiStore((s) => s.paused);
   const combatActive = useUiStore((s) => s.combatActive);
+  const connectionLabel = CONNECTION_LABELS[wsStatus];
 
   const hh = String(gameClock?.hour ?? 0).padStart(2, '0');
   const mm = String(gameClock?.minute ?? 0).padStart(2, '0');
@@ -43,6 +50,11 @@ export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }): Reac
         </span>
       )}
       <div className="od-topbar__right">
+        {connectionLabel && (
+          <span className="od-clock-phase" role="status" data-connection-status={wsStatus}>
+            {connectionLabel}
+          </span>
+        )}
         {combatActive && <span role="status">刀光剑影</span>}
         <button type="button" onClick={onOpenSettings} className="od-tb-btn">
           设置
