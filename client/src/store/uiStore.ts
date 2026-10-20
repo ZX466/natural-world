@@ -45,6 +45,9 @@ interface UiState {
   gameClock: InGameTime | null;
   speed: Speed;
   paused: boolean;
+  combatActive: boolean;
+  /** 已消费的战斗表现帧数；仅用于观测接线，不显示在戏内。 */
+  combatEventCount: number;
   /** impulse 反馈 cue（批次 A 起接真实数据源） */
   lastImpulseCue: string | null;
   /** 独白流（环形缓冲，上限 MONOLOGUE_CAP；只进面板文本，高频位置数据不在此） */
@@ -61,6 +64,8 @@ interface UiState {
   setGameClock: (t: InGameTime | null) => void;
   setSpeed: (s: Speed) => void;
   setPaused: (p: boolean) => void;
+  setCombatActive: (active: boolean) => void;
+  recordCombatEvent: () => void;
   setLastImpulseCue: (cue: string | null) => void;
   pushMonologue: (form: MonologueForm, content: string) => void;
   pushChatter: (name: string | null, content: string) => void;
@@ -73,6 +78,8 @@ export const useUiStore = create<UiState>((set) => ({
   gameClock: null,
   speed: 1,
   paused: false,
+  combatActive: false,
+  combatEventCount: 0,
   lastImpulseCue: null,
   monologues: [],
   chatter: [],
@@ -82,6 +89,8 @@ export const useUiStore = create<UiState>((set) => ({
   setGameClock: (gameClock) => set({ gameClock }),
   setSpeed: (speed) => set({ speed }),
   setPaused: (paused) => set({ paused }),
+  setCombatActive: (combatActive) => set({ combatActive }),
+  recordCombatEvent: () => set((s) => ({ combatEventCount: s.combatEventCount + 1 })),
   setLastImpulseCue: (lastImpulseCue) => set({ lastImpulseCue }),
   pushMonologue: (form, content) =>
     set((s) => ({ monologues: [...s.monologues, { form, content }].slice(-MONOLOGUE_CAP) })),

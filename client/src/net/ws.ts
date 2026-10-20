@@ -16,6 +16,7 @@ import type {
 } from './protocol';
 import type { WorldMirror } from '../game/world-mirror';
 import { worldClock } from '../game/clock';
+import { useUiStore } from '../store/uiStore';
 
 const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
@@ -45,7 +46,7 @@ function useControlState(speed: number, paused: boolean): void {
  * `sim/tests/test_protocol_version.py` 的跨树钉锁死
  * （本文件是**第二落点**，真相源在 ws.py；改一处必改另一处）。
  */
-const PROTOCOL_VERSION = '1.9';
+const PROTOCOL_VERSION = '1.10';
 
 export type WsStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
 
@@ -168,6 +169,12 @@ export class WsClient {
         // 修前被 default 静默吞掉：暂停后按钮文字不变（永远「暂停」）、
         // 倍速高亮不跟随，用户观感「暂停后无法继续/倍速无反馈」。
         this.cb.onControlAck?.(msg as ControlAckMessage);
+        break;
+      case 'timescale':
+        useUiStore.getState().setCombatActive(msg.active);
+        break;
+      case 'combat_event':
+        useUiStore.getState().recordCombatEvent();
         break;
       case 'monologue':
         this.cb.onMonologue?.(msg as MonologueMessage);

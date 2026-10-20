@@ -236,6 +236,7 @@ def test_expression_band_mapping_contract() -> None:
         assert expr.defers is (band >= 3)
 
 
+@pytest.mark.bench
 def test_tick_overhead_delta_sanity() -> None:
     """端到端增量合理性护栏（非红线）：注入 band≥1 的 Δ 应落在 µs~亚 ms 量级。
 

@@ -6,7 +6,10 @@ delta/snapshot 载荷出戏边界（无 tick/seed/内部 id）。
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
+from fastapi import WebSocket
 
 from sim.api.ws import (
     ControlState,
@@ -19,6 +22,7 @@ from sim.api.ws import (
 from sim.core.events import world_create_event
 from sim.core.tick import TickLoop
 from sim.core.world import WorldState, build_default_bus
+from sim.llm.client import LlmClient
 from sim.world.map import CHUNK_SIZE, Chunk, TileMap
 from sim.world.pathfinding import Pathfinder
 
@@ -966,3 +970,112 @@ class TestEntropyAtomicFlush:
                 await session.execute(select(func.count()).select_from(EntropyLog))
             ).scalar()
         assert n_events == 2 and n_entropy == 2
+
+
+@pytest.mark.asyncio
+async def test_combat_scale_event_reaches_websocket(loop, tile_map):
+    import asyncio
+    import contextlib
+
+    from sim.api.ws import ConnectionManager, run_world_driver
+
+    received = asyncio.Queue()
+
+    class Socket:
+        async def send_json(self, frame):
+            await received.put(frame)
+
+    manager = ConnectionManager()
+    manager.register(cast(WebSocket, Socket()))
+    loop.issue_combat_scale(True)
+    task = asyncio.create_task(run_world_driver(loop, manager, tile_map))
+    try:
+
+        async def next_timescale():
+            while True:
+                frame = await received.get()
+                if frame["type"] == "timescale":
+                    return frame
+
+        entered = await asyncio.wait_for(next_timescale(), timeout=0.5)
+        assert entered["active"] is True
+        assert entered["mode"] == "combat"
+        assert entered["channel"] == "control"
+        assert "tick" not in entered and "seed" not in entered
+        loop.issue_combat_scale(False)
+        exited = await asyncio.wait_for(next_timescale(), timeout=0.5)
+        assert exited["active"] is False
+        assert exited["mode"] == "normal"
+        assert exited["ws_seq"] > entered["ws_seq"]
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+@pytest.mark.asyncio
+async def test_resolved_exchange_reaches_websocket(loop, tile_map):
+    import asyncio
+    import contextlib
+
+    from sim.agent.combat_exec import CombatLedger
+    from sim.agent.driver import ChenmoDriver
+    from sim.agent.intent import Intent
+    from sim.api.ws import ConnectionManager, run_world_driver
+    from sim.content.protagonist import build_anchor
+    from sim.core.world import EntityState
+
+    loop.state = loop.state.model_copy(
+        update={
+            "entities": {
+                "chenmo": EntityState(entity_id="chenmo", pos=(10, 10)),
+                "villager_01": EntityState(entity_id="villager_01", pos=(11, 10)),
+            },
+        }
+    )
+    ledger = CombatLedger()
+    driver = ChenmoDriver(
+        anchor=build_anchor(),
+        llm=cast(LlmClient, None),
+        profile_provider=lambda: None,
+        combat_provider=lambda: (ledger, 42),
+    )
+    driver._pending.append(Intent(action="attack", target_id="villager_01", reason="防身"))
+    driver.execute_pending(loop, pathfinder=None)
+    loop.state = loop.state.model_copy(update={"tick": 10})
+    driver.combat_tick(loop, pathfinder=None)
+    received = asyncio.Queue()
+
+    class Socket:
+        async def send_json(self, frame):
+            await received.put(frame)
+
+    manager = ConnectionManager()
+    manager.register(cast(WebSocket, Socket()))
+    task = asyncio.create_task(run_world_driver(loop, manager, tile_map))
+    try:
+
+        async def next_exchange():
+            while True:
+                frame = await received.get()
+                if frame["type"] == "combat_event":
+                    return frame
+
+        frame = await asyncio.wait_for(next_exchange(), timeout=0.5)
+        assert frame["exchange_resolved"] is True
+        assert frame["posture_visual"] == "attack"
+        assert frame["rtoken"] == _rtoken("chenmo")
+        assert set(frame) == {
+            "type",
+            "channel",
+            "v",
+            "ws_seq",
+            "exchange",
+            "rtoken",
+            "posture_visual",
+            "exchange_resolved",
+        }
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task

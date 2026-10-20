@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "临河镇 协议（mock，待 sim 起服务后由 FastAPI /api/openapi.json 取代）",
-    "version": "1.0.0",
+    "version": "1.10",
     "description": "接口/兼容性域（kilo TASK-002）。WS 消息 + HTTP 端点 schema 一并定义于 components/schemas，经 openapi-typescript 生成 shared/protocol.ts。出戏边界：tick/seed/seq/branch_id/内部 entity_id/source_id/raw 数值属性 一律不出现；render 通道用 rtoken 不透明替身（见 ws-protocol.md §5）。切换点见 docs/api/codegen.md。"
   },
   "paths": {

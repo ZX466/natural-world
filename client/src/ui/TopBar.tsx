@@ -25,6 +25,7 @@ export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }): Reac
   const gameClock = useUiStore((s) => s.gameClock);
   const speed = useUiStore((s) => s.speed);
   const paused = useUiStore((s) => s.paused);
+  const combatActive = useUiStore((s) => s.combatActive);
 
   const hh = String(gameClock?.hour ?? 0).padStart(2, '0');
   const mm = String(gameClock?.minute ?? 0).padStart(2, '0');
@@ -42,6 +43,7 @@ export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }): Reac
         </span>
       )}
       <div className="od-topbar__right">
+        {combatActive && <span role="status">刀光剑影</span>}
         <button type="button" onClick={onOpenSettings} className="od-tb-btn">
           设置
         </button>

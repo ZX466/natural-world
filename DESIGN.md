@@ -117,7 +117,7 @@ sim/
 │  └─ profiles/ human(M1) | cat·dog·raven(M6 前仅占位)
 ├─ npc/         model / needs / schedule / utility / memory / body / society / demography
 ├─ agent/       loop / planner / intents / cognition(非理性) / will / identity / monologue
-├─ combat/      exchange(交换单元) / posture(姿态) / resolve(确定性结算) / timescale(战斗时间尺)
+├─ combat/      战斗域命名空间；当前实现见 agent/combat_exec.py、agent/driver.py 与 core/clock.py、core/tick.py
 ├─ llm/         client / profiles / prompts/
 ├─ api/         ws / settings / main
 ├─ content/     地图源文件 / 素材清单 / 地标命名规范

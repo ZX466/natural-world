@@ -65,7 +65,7 @@ logger = structlog.get_logger(__name__)
 #: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
 #: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
 #: PlanDelta 封闭）；1.2 = 批次 E 只读诊断面进协议快照（M6-K2）——登记见 versioning.md §7。
-_PROTOCOL_VERSION = "1.9"
+_PROTOCOL_VERSION = "1.10"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 
 # K4 提案 §2.2/§3.2：五类 C→S 消息在此与 _CHANNEL_FOR **成对**注册
@@ -1374,6 +1374,7 @@ async def run_world_driver(
                 and manager.count == 0
                 and not loop.pending_events
                 and not loop.pending_broadcast_events
+                and not loop.pending_combat_visuals
             ):
                 continue
             if fast_forwarding:
@@ -1384,6 +1385,8 @@ async def run_world_driver(
                 await on_flush(events)
             events = [*loop.pending_broadcast_events, *events]
             loop.pending_broadcast_events = []
+            combat_visuals = loop.pending_combat_visuals
+            loop.pending_combat_visuals = []
             # flush 写事务收口之后才跑读档分叉（写者串行）。
             if drain_loads is not None:
                 await drain_loads()
@@ -1400,6 +1403,34 @@ async def run_world_driver(
             payload = delta_payload(loop, moved)
             payload["ws_seq"] = seq
             await manager.broadcast_json(payload)
+        for event in events:
+            if event.event_type is EventKind.COMBAT_SCALE_CHANGE:
+                active = bool(event.payload["entering"])
+                seq += 1
+                await manager.broadcast_json(
+                    {
+                        "type": "timescale",
+                        "channel": "control",
+                        "v": _PROTOCOL_VERSION,
+                        "ws_seq": seq,
+                        "mode": "combat" if active else "normal",
+                        "active": active,
+                    }
+                )
+        for exchange, actor_id, posture in combat_visuals:
+            seq += 1
+            await manager.broadcast_json(
+                {
+                    "type": "combat_event",
+                    "channel": "render",
+                    "v": _PROTOCOL_VERSION,
+                    "ws_seq": seq,
+                    "exchange": exchange,
+                    "rtoken": _rtoken(actor_id),
+                    "posture_visual": posture,
+                    "exchange_resolved": True,
+                }
+            )
         # K8：意愿独白帧（事件进流案的 WS 侧投影）。按 form 投递面路由；
         # 事件已随上面 on_flush 落库（真相先于投递，与 delta 同帧；广播在落库之后
         # 与主 delta 相反是有意的——独白是「已发生」的叙述，须事件先入日志）。
