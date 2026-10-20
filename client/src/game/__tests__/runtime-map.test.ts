@@ -10,11 +10,12 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 describe('runtime.start loads world map', () => {
-  let setMapSpy: ReturnType<typeof vi.fn>;
+  // vitest 4：Mock 类型不再可调用，用具体签名避开 `Mock<Procedure|Constructable>`
+  let setMapSpy: ReturnType<typeof vi.fn<(...args: unknown[]) => void>>;
 
   beforeEach(() => {
     vi.resetModules();
-    setMapSpy = vi.fn();
+    setMapSpy = vi.fn<(...args: unknown[]) => void>();
 
     vi.doMock('../world-mirror', () => ({
       WorldMirror: class {

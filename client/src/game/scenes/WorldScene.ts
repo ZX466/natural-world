@@ -19,9 +19,19 @@ import {
   godVillagerFrame,
   type Facing,
 } from '../render/actors';
+import {
+  assignStackOffsets,
+  actorDepth,
+  bubbleDepth,
+  bubbleY,
+  labelDepth,
+  labelY,
+  manhattan,
+  shouldShowNameLabel,
+} from '../render/presentation';
 import { useUiStore } from '../../store/uiStore';
 
-const PIXEL_SCALE = 3; // 批次 D8：2x→3x（48×48 镇铺满视口，人物可辨）
+const PIXEL_SCALE = 3.5; // A 档：3x→3.5x（人物更可辨，缓解小片区人群拥挤观感）
 const TILE = 16;
 // 批次 D1：插值窗口 = 行走节拍（sim 侧 15 tick/格 @1x = 250ms/格）。
 // 服务端每 delta 帧给出新格坐标，客户端在 250ms 内平滑走完一格——
@@ -51,6 +61,8 @@ interface ActorView {
   lastFacing: 'n' | 'e' | 's' | 'w';
   /** D10：头顶戏内名（快照 actor.name；无 name 的 actor 无此对象） */
   label: Phaser.GameObjects.Text | null;
+  /** A 档：脚下接触阴影（重叠时也能看出各自站位） */
+  shadow: Phaser.GameObjects.Ellipse | null;
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -114,7 +126,8 @@ export class WorldScene extends Phaser.Scene {
       .setDepth(100);
     // 批次 D7：雨层（短雨丝 Graphics；雨落动画在 update 里逐帧推进）
     this.rainLayer = this.add.graphics().setScrollFactor(0).setDepth(99);
-    this.goalMarker = this.add.circle(0, 0, 3, 0xffd75e).setVisible(false).setDepth(50);
+    // 目标点标记：压在精灵与名字之间（A 档分层带内，见 presentation.ts）
+    this.goalMarker = this.add.circle(0, 0, 3, 0xffd75e).setVisible(false).setDepth(70.5);
     // E7 建筑投影层：完工结构占格（depth 14）
     this.structureLayer = this.add.graphics().setDepth(14);
 
@@ -259,7 +272,7 @@ export class WorldScene extends Phaser.Scene {
         text = this.add
           .text(0, 0, bubble.text, {
             fontFamily: 'sans-serif',
-            fontSize: '10px',
+            fontSize: '13px',
             color: '#f0ead8',
             backgroundColor: '#000000aa',
             padding: { x: 3, y: 1 },
@@ -267,13 +280,19 @@ export class WorldScene extends Phaser.Scene {
             wordWrap: { width: 140 },
           })
           .setOrigin(0.5, 1)
+          // A 档：同标签——世界坐标文字需反向缩放，否则 zoom 放大后糊满画面
+          .setScale(1 / PIXEL_SCALE)
           .setDepth(12);
         this.bubbleTexts.set(name, text);
       }
       // 跟随同名精灵（actor.name ↔ 气泡键；找不到就先挂原地）
       const actor = [...this.mirror.actors.values()].find((a) => a.name === name);
       const view = actor ? this.views.get(actor.rtoken) : undefined;
-      if (view) text.setPosition(view.sprite.x, view.sprite.y - TILE - 2);
+      if (view) {
+        text.setPosition(view.sprite.x, bubbleY(view.sprite.y));
+        // A 档：气泡随脚底深度抬升，避免被邻格更大的脚底深度精灵压住
+        text.setDepth(bubbleDepth(view.sprite.y));
+      }
     }
   }
 
@@ -283,12 +302,20 @@ export class WorldScene extends Phaser.Scene {
       for (const v of this.views.values()) {
         v.sprite.destroy();
         v.label?.destroy();
+        v.shadow?.destroy();
       }
       this.views.clear();
       for (const t of this.bubbleTexts.values()) t.destroy();
       this.bubbleTexts.clear();
       this.lastResetSeen = this.mirror.resetCount;
     }
+    // A 档：同格多人视觉错位（每帧重算；逻辑坐标不动，仅精灵偏移）
+    const stackOffsets = assignStackOffsets(
+      [...this.mirror.actors].map(([rtoken, a]) => ({ rtoken, x: a.x, y: a.y })),
+    );
+    const protagonist = this.mirror.protagonist
+      ? this.mirror.actors.get(this.mirror.protagonist)
+      : undefined;
     for (const [rtoken, actor] of this.mirror.actors) {
       let view = this.views.get(rtoken);
       if (view === undefined) {
@@ -305,25 +332,33 @@ export class WorldScene extends Phaser.Scene {
               ? 'protagonist'
               : 'villager'
             : actor.sprite;
+        // A 档：脚下阴影先建，深度按脚底 y 略低于同格精灵
+        const shadow = this.add
+          .ellipse(actor.x * TILE + TILE / 2, actor.y * TILE + TILE - 1, 10, 4, 0x000000, 0.28)
+          .setDepth(actorDepth((actor.y + 1) * TILE) - 1);
         const sprite = this.add
           .sprite(actor.x * TILE + TILE / 2, actor.y * TILE + TILE, textureKey, 0)
           .setOrigin(0.5, 1)
-          .setDepth(10);
+          .setDepth(actorDepth((actor.y + 1) * TILE));
         // 批次 D10：头顶戏内名（快照 actor.name 供数；canvas 内 Text——
         // DESIGN §4 硬约束：Phaser 画 canvas 世界，React 画 canvas 外 UI）。
+        // A 档（2026-10-20）：Text 处于世界坐标，镜头 zoom 会把字号同比放大——
+        // 9px 在 3.5x 下变 ~31px 屏幕字，几人并排就把画面糊满。反向缩放
+        // 1/PIXEL_SCALE 让标签保持固定屏幕尺寸。
         const label =
           actor.name !== undefined
             ? this.add
                 .text(actor.x * TILE + TILE / 2, actor.y * TILE - 4, actor.name, {
                   fontFamily: 'sans-serif',
-                  fontSize: '9px',
+                  fontSize: '12px',
                   color: '#e7e0d0',
                   stroke: '#1a1f14',
                   strokeThickness: 2,
                   resolution: 4,
                 })
                 .setOrigin(0.5, 1)
-                .setDepth(11)
+                .setScale(1 / PIXEL_SCALE)
+                .setDepth(labelDepth((actor.y + 1) * TILE))
             : null;
         view = {
           sprite,
@@ -335,6 +370,7 @@ export class WorldScene extends Phaser.Scene {
           animClockMs: -1,
           lastFacing: 's' as Facing,
           label,
+          shadow,
         };
         this.views.set(rtoken, view);
         if (isProtagonist) this.cameras.main.startFollow(sprite, true, 0.12, 0.12);
@@ -354,11 +390,26 @@ export class WorldScene extends Phaser.Scene {
       const speed = useUiStore.getState().speed;
       const interpMs = Math.max(1000 / 60, INTERP_MS / speed);
       const k = Math.min(1, (timeMs - view.snapAtMs) / interpMs);
-      const targetX = actor.x * TILE + TILE / 2;
-      const targetY = actor.y * TILE + TILE / 2;
+      const stack = stackOffsets.get(rtoken) ?? { dx: 0, dy: 0 };
+      const targetX = actor.x * TILE + TILE / 2 + stack.dx;
+      const targetY = actor.y * TILE + TILE / 2 + stack.dy;
       view.sprite.x = view.fromX + (targetX - view.fromX) * k;
       view.sprite.y = view.fromY + (targetY - view.fromY) * k;
-      view.label?.setPosition(view.sprite.x, view.sprite.y - TILE / 2 - 3);
+      // A 档：深度随脚底（插值后）位置更新——靠下的人自然压住靠上的人。
+      // 精灵 origin(0.5,1)，sprite.y 即脚底世界像素。
+      const footDepth = actorDepth(view.sprite.y);
+      view.sprite.setDepth(footDepth);
+      view.shadow?.setPosition(view.sprite.x, view.sprite.y - 1);
+      view.shadow?.setDepth(footDepth - 1);
+      // A 档：名字挂头顶（帧高 32px，此前按半格 8px 挂 → 压在脸上）
+      view.label?.setPosition(view.sprite.x, labelY(view.sprite.y));
+      view.label?.setDepth(labelDepth(view.sprite.y));
+      // A 档：名字只在主角邻近显示（远端 50 个标签是最大噪声源）
+      if (view.label) {
+        const dist = protagonist ? manhattan(actor, protagonist) : 0;
+        const isSelf = rtoken === this.mirror.protagonist;
+        view.label.setVisible(isSelf || shouldShowNameLabel(dist));
+      }
       // R2：位移推断 anim/facing → 帧号（D10：villager 4 列帧表启用行走环；
       // 修前恒帧 0——素材有 4×8 走环/劳作表却只画迈步中间帧，人群看着呆滞）
       const moved = view.prevX !== actor.x || view.prevY !== actor.y;
@@ -403,6 +454,7 @@ export class WorldScene extends Phaser.Scene {
       if (!this.mirror.actors.has(rtoken)) {
         view.sprite.destroy();
         view.label?.destroy();
+        view.shadow?.destroy();
         this.views.delete(rtoken);
       }
     }
