@@ -2307,6 +2307,8 @@ uv run ruff check . && uv run pyright <改动文件>
 - cline P05：`*.tsbuildinfo` 已加 .gitignore ✅；`_PROTOCOL_VERSION` 与前端 `v` 统一 1.0（并代改了我前端域 `client/src/net/ws.ts` 的硬编码，见 §3.10）；K04 前置就绪。
 - 待我：若有 K04 之外的 M2 派发，以 talking.txt 为准。
 # ④ codex 树（安全/合规/风险域）
+【2026-10-20 单 J｜token 缺 Origin 拒绝】端点新增非空 Origin 判据，保留 WS check_origin、Host/回环校验；客户端向 WS 后端取凭据以使浏览器携 Origin，只为已校验来源返回 CORS 许可。无 Origin 红钉 200!=403 → 鉴权 18 passed，客户端 112 passed/tsc 通过；文档同步，协议形状不变。G 已提交 d712bac；最新队列 J→H→I→L→K，D/E 暂后置；各单回执见 talking.txt。
+
 【2026-10-20 单 G｜W6 鉴权闭环完成】生产 ws_endpoint 按连接强制 hello 后才允许四类写命令；只读问候/sync 保留。新增回环连接+Host+Origin 受限且 no-store 的 /api/ws-token；客户端 hello_ack 前暂存命令，失败关闭、重连重取。协议 1.11，源/快照/生成物同步；红钉服务端 9 failed、客户端 2 failed → 定向集 118 passed、客户端 112 passed，ruff/pyright/tsc/prettier/build/gen check 通过；按用户指示不重跑 Python 全量。B 已独立提交 39d55b8；下一步 D/E。
 
 【2026-10-20 单 B｜战斗帧接线完成】沿既有 combat.scale_change 转发 timescale；交换边界仅收集表现通知并发送 combat_event，客户端消费 combatActive/帧计数与「刀光剑影」角标；协议 1.10。settle_attack 与既有战斗机制未改。红钉两侧先红后绿；服务端定向 106 passed、客户端 110 passed，类型/构建/格式/协议生成检查通过；按用户指示不重跑 Python 全量。下一步先 G（强制 hello 与 token 获取），再 D/E；A 已提交 5b4ce50，B 提交见 git log。
