@@ -42,6 +42,7 @@ import ast
 import asyncio
 import contextlib
 import io
+import json
 import time
 import tokenize
 from collections.abc import Callable, Iterator, Sequence
@@ -183,14 +184,21 @@ def _seed_world(db: Path, spec: Sequence[tuple[str, int, bool, str]]) -> None:
         for branch_id, head, is_current, status in spec:
             session.add(Branch(id=branch_id, status=status, is_current=is_current))
             for seq in range(1, head + 1):
+                from sim.core.events import npc_monologue_event, world_create_event
+
+                event = (
+                    world_create_event(0, 42, ("chenmo",))
+                    if seq == 1
+                    else npc_monologue_event(seq, "chenmo", "thought", "风从河面吹过。")
+                )
                 session.add(
                     Event(
                         branch_id=branch_id,
                         seq=seq,
                         tick=seq,
-                        event_type="npc.lod_change",
+                        event_type=event.event_type.value,
                         actor_id="",
-                        payload="{}",
+                        payload=json.dumps(event.payload, ensure_ascii=False),
                         witnesses="[]",
                     )
                 )

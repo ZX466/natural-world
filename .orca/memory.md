@@ -2317,6 +2317,7 @@ uv run ruff check . && uv run pyright <改动文件>
 - cline P05：`*.tsbuildinfo` 已加 .gitignore ✅；`_PROTOCOL_VERSION` 与前端 `v` 统一 1.0（并代改了我前端域 `client/src/net/ws.ts` 的硬编码，见 §3.10）；K04 前置就绪。
 - 待我：若有 K04 之外的 M2 派发，以 talking.txt 为准。
 # ④ codex 树（安全/合规/风险域）
+【2026-10-21 DA-01｜冷启动恢复完成，待主树收编】用户直接授权继续修审计缺口。build_loop 只在空库创世，按 is_current 恢复完整世界检查点/事件尾部；非空批次事件与内部检查点同事务落库，含时钟/战斗尺/混沌链/PCG64。重复创世拒绝启动，不删旧日志；无当前指针只留诊断面、停止推进。新增12条重启/谱系/回滚/行走回归；红4F及子线seq0红1F→定向41P，附API/鉴权集52P；常规集排除2条已知缺素材用例后2774P/131S/74D（399.66s），ruff/format/pyright全绿。全局API夹具隔离临时world.db并停用自动模型决策，人工世界夹具已改合法创世/完整快照。尚未修DA-02历史读档链、DA-03账本等；检查点现按非空批次保存，未做长期容量压测。报告 docs/security/gameplay-integrity-audit-2026-10-21.md；日志 .orca/da01-*.log。下一步独立做DA-02，仍不merge main、不改主树、不推送；主树076ed21不在本树，避免重复P-2/P-4/P-6施工。
 【2026-10-21 深度复检｜报告完成】基准 main@3cbcd8d 的独立源码快照，未 merge main/改主树/调用真模型。确认8组（2 P0+6 P1）：重启重创世污染日志、历史读档head-only与旧快照提前确认、资金/火场清零未重建、人物/中文货名目标不兼容、建筑表现跨分支残留、坍塌还原日志未应用实时碰撞、主角走NPC死亡删除、重启后主角双控制源。既有相关62项+同夹具地图对照2项通过；新增5条完整性回归全红。报告 docs/security/gameplay-integrity-audit-2026-10-21.md；复现与JSON在 .orca/audits/20261021-main-3cbcd8d/。本轮只交审计材料，下一步优先DA-01/DA-02世界恢复链，按主树分工施工。
 
 【2026-10-20 单 M｜状态色点可访问性完成】色点增加 role=status、中文 aria-label 与 title，复用四态连接文字，视觉不变；红钉 4 failed→组件 8 passed，客户端全量 138 passed，tsc/prettier/build 通过。已 ff 同步 main defa89b（含用户 WorldScene 冲突修复与 setScale mock）。下一步 O→N→P；N 已授权名字归一化与最近 12 人姓名清单，P 恢复工地；仅本树提交。

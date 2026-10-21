@@ -112,7 +112,7 @@ class TickLoop:
         registry 本体不入 `WorldState`（不碰 schema/state_hash）：mix 内部把新
         registry 的材料记录在熵事件的 payload 里，消费方（wind/chaotic 抽签）
         按事件流重放 `replay_mix` 即逐位一致（C5）；`TickContext.rng_cache` 保持
-        抽签进度缓存（不入快照）。
+        抽签进度缓存（仅进内部世界检查点，不进表现帧）。
         """
         from sim.world.weather import WEATHER_STREAM, daily_reseed_due
 
@@ -245,6 +245,23 @@ class TickLoop:
             self.state = self.state.model_copy(
                 update={"entities": {**self.state.entities, **moved}}
             )
+
+    def replay_until(self, tick: int) -> None:
+        """只重放已记录路径的确定性行走，不重新运行 AI、维护或采集熵。"""
+        if tick < self.state.tick:
+            raise ValueError("重放不能倒退")
+        entities = dict(self.state.entities)
+        for entity_id, entity in entities.items():
+            first = self.state.tick + (
+                -(self.state.tick + entity_move_phase(entity_id)) % _MOVE_TICKS_PER_TILE
+            )
+            steps = min(len(entity.path), max(0, (tick - 1 - first) // _MOVE_TICKS_PER_TILE + 1))
+            if steps:
+                entities[entity_id] = entity.model_copy(
+                    update={"pos": entity.path[steps - 1], "path": entity.path[steps:]}
+                )
+        self.state = self.state.model_copy(update={"tick": tick, "entities": entities})
+        self.clock.restore_tick(tick)
 
     # --- 事件入队（唯一写路径的入口） ---
 

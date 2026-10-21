@@ -96,7 +96,17 @@ def _seed_current_branch(db: Path) -> None:
     R-4 之后 POST 靠 `branches.is_current` 取游标 ⇒ 没有当前行就是 400 world-not-ready。
     """
     import gzip
+    import json
     import sqlite3
+
+    from sim.core.events import world_create_event
+    from sim.core.world import EntityState, WorldState
+
+    snapshot = WorldState(
+        world_seed=42,
+        tick=1,
+        entities={"chenmo": EntityState(entity_id="chenmo", pos=(0, 0))},
+    )
 
     statements: list[tuple[str, tuple[Any, ...]]] = [
         (
@@ -107,7 +117,7 @@ def _seed_current_branch(db: Path) -> None:
         (
             "INSERT OR IGNORE INTO snapshots (branch_id, seq, tick, snapshot_data, is_cold,"
             " schema_version, created_at) VALUES ('main', 1, 1, ?, 0, 1, 0.0)",
-            (gzip.compress(b'{"tick": 1}'),),
+            (gzip.compress(snapshot.model_dump_json().encode()),),
         ),
         (
             "INSERT OR IGNORE INTO npc_memories (id, branch_id, entry_id, npc_id, content,"
@@ -135,8 +145,8 @@ def _seed_current_branch(db: Path) -> None:
         (
             "INSERT OR IGNORE INTO events (branch_id, seq, tick, event_type, actor_id, payload,"
             " witnesses, created_at)"
-            " VALUES ('main', 1, 1, 'npc.lod_change', '', '{}', '[]', 0.0)",
-            (),
+            " VALUES ('main', 1, 1, 'world.create', '', ?, '[]', 0.0)",
+            (json.dumps(world_create_event(0, 42, ("chenmo",)).payload),),
         ),
     ]
     conn = sqlite3.connect(str(db))
@@ -218,7 +228,16 @@ class TestCreateItemWritesPackage:
         # 有 capture（默认挂载）的档：rng_state 是合法 JSON 状态包
         client.post("/api/anchors", json={"name": "溪畔回声"})
         row = _packages(world_db)[-1]
-        assert row[4] == 1, "快照指针没落（应引用 seq=1 那份快照）"
+        snapshots = _query(world_db, "SELECT branch_id, seq, tick FROM snapshots")
+        eligible = [
+            (seq, tick)
+            for branch, seq, tick in snapshots
+            if branch == row[1] and seq <= row[3] and tick <= row[2]
+        ]
+        assert eligible, "存档游标之前必须存在可引用的检查点"
+        assert row[4] == max(eligible, key=lambda item: (item[1], item[0]))[0], (
+            "应引用存档游标之前最新检查点，不能继续固定引用手工 seq=1 快照"
+        )
         assert row[5] is not None, "有 rng_capture 时包应带状态包（批次 A 接线兑现）"
         import json as _json
 

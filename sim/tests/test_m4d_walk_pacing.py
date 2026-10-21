@@ -88,13 +88,20 @@ class TestWalkPacing:
 
 
 class TestBootstrapDrainsPaths:
-    def test_build_loop_entities_at_spawn(self) -> None:
+    def test_build_loop_entities_at_spawn(self, tmp_path, monkeypatch) -> None:
         """创世搬运后实体必须已到站（build_loop 内排空路径，不等实况走完）。"""
         import asyncio
 
         from sim.api.main import SPAWN_TILE, build_loop
 
-        loop, _store = asyncio.run(build_loop())
+        monkeypatch.chdir(tmp_path)
+
+        async def fresh_world():
+            loop, store = await build_loop()
+            await store.session_factory.kw["bind"].dispose()
+            return loop
+
+        loop = asyncio.run(fresh_world())
         assert loop.state.entities["chenmo"].pos == SPAWN_TILE
         assert all(not e.path for e in loop.state.entities.values()), "创世路径必须排空"
 

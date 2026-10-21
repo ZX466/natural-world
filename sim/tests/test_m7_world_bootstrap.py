@@ -43,13 +43,20 @@ class TestDefaultMap:
 
 
 class TestGenesis:
-    def test_build_loop_51_entities_scattered(self):
+    def test_build_loop_51_entities_scattered(self, tmp_path, monkeypatch):
         """创世 51 实体：主角在 SPAWN，50 村民环形散布（全部错格、可走）。"""
         import asyncio
 
         from sim.api.main import build_loop
 
-        loop, _store = asyncio.run(build_loop())
+        monkeypatch.chdir(tmp_path)
+
+        async def fresh_world():
+            loop, store = await build_loop()
+            await store.session_factory.kw["bind"].dispose()
+            return loop
+
+        loop = asyncio.run(fresh_world())
         assert len(loop.state.entities) == ROSTER + 4
         assert loop.state.entities["chenmo"].pos == SPAWN
         villager_ids = [k for k in loop.state.entities if k.startswith("villager_")]

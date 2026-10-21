@@ -57,6 +57,13 @@ class GameClock:
             raise ValueError(msg)
         self._speed = speed
 
+    def restore_tick(self, tick: int) -> None:
+        """恢复持久化游标；不把停服时间算作世界推进。"""
+        if isinstance(tick, bool) or not isinstance(tick, int) or tick < 0:
+            raise ValueError("恢复 tick 必须为非负整数")
+        self._tick = tick
+        self._accumulator = 0.0
+
     def ticks_per_real_second(self) -> float:
         base = (
             TICKS_PER_REAL_SECOND_COMBAT

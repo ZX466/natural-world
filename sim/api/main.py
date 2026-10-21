@@ -59,6 +59,7 @@ GENESIS_ENTITIES: tuple[str, ...] = (
 #: Spawning Blocks 候选 90 格内取村广场带（行 51-54）确定性选点）
 SPAWN_TILE: tuple[int, int] = (100, 53)
 TOWN_MAP_PATH = Path(__file__).resolve().parents[1] / "content" / "linhe-town.json"
+WORLD_DB_PATH = Path("world.db")
 
 
 def _fallback_map() -> TileMap:
@@ -110,7 +111,7 @@ async def build_loop() -> tuple[TickLoop, Any]:
     # ——同步 anchors 写面与 aiosqlite 驱动事务撞锁即硬炸）。WAL 允许读写并行、
     # busy_timeout 让写者等锁而不是立刻炸；不改变单写者语义（flush 串行契约不动）。
     engine = create_async_engine(
-        "sqlite+aiosqlite:///world.db",
+        f"sqlite+aiosqlite:///{WORLD_DB_PATH.as_posix()}",
         connect_args={"timeout": 10.0},  # sqlite3 busy_timeout（秒）
     )
     await init_database(engine)  # 开发库快速起步；生产走 alembic upgrade head
@@ -122,6 +123,18 @@ async def build_loop() -> tuple[TickLoop, Any]:
         await conn.execute(text("PRAGMA journal_mode=WAL"))
     session_factory = create_session_factory(engine)
     store = SqlEventStore(session_factory)
+    from sim.core.persistence.world_restore import has_world, restore_world
+
+    try:
+        if await has_world(store):
+            branch_id = await store.current_branch_id_or_none()
+            if branch_id is None:
+                # 留下只读诊断面；lifespan 的 source_ready 闸门禁止驱动/保存。
+                return TickLoop(_make_clock(), build_default_bus(), WorldState()), store
+            return await restore_world(store, branch_id), store
+    except Exception:
+        await engine.dispose()
+        raise
     loop = TickLoop(clock=_make_clock(), bus=build_default_bus(), state=WorldState(world_seed=42))
     loop.enqueue(world_create_event(tick=0, seed=42, entity_ids=GENESIS_ENTITIES))
     # 批次 B（D19 换调）：创世村民出生=**定籍点邻域**（territory_spawn_positions
@@ -231,8 +244,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
 
     async def on_flush(events: list[Any]) -> None:
+        from sim.core.persistence.world_restore import flush_world
+
         branch_id = await store.current_branch_id_or_none() or "main"
-        await NpcStore(store, branch_id=branch_id).flush_tick(events)
+        await flush_world(store, branch_id, loop, events)
         maintenance.observe(events)
         for event in events:
             if event.event_type.value == "structure.completed":
