@@ -11,8 +11,10 @@
 
 - **HEAD**：`076ed21`（P-2/P-4/P-6 收尾）+ `bb56e20`（merge P-1）+ `4a5dfa3`（P-1）
 - **协议**：1.11（真相源 `sim/api/ws.py::_PROTOCOL_VERSION`，前端 `client/src/net/ws.ts` 同源）
-- **工作树**：唯一 `main`；codex 树在 `.orca/worktrees/project7/codex`（分支 `codex`，HEAD `4a5dfa3`）
-- **远程**：本地领先 `gitee/main` 36 个提交，按纪律不推
+- **工作树：两棵**（2026-10-21 用户重申，长期有效）
+  - 主树 `E:/zxdevelop/project7` → 分支 `main`（Claude）
+  - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex` → 分支 `codex`（HEAD 随其提交推进，收编前以实际 `git log` 为准）
+- **远程**：本地领先 `gitee/main` 37 个提交，按纪律不推
 
 ## 1. 里程碑
 
@@ -66,7 +68,9 @@
 - **汇报前先核库**：git log + Test-Path，此前有过虚构汇报的教训
 
 **协作类**
-- agent 间**只走 talking.txt**：不查终端、不互发消息（2026-10-21 用户明示）
+- **两棵树是常态**：主树 `main` + codex 树 `codex`，不要再按「唯一树」记（2026-10-21 用户重申）
+- agent 间**只走 talking.txt**：**不直接向 codex 发消息**、不查终端、不用 orca-cli 通知；
+  派单/回执一律写对方工作树的 `.orca/talking.txt`（2026-10-21 用户明示）
 - 派单要**极简**：codex 只看「当前任务」一节，历史压成表格一行
 - 不推远程；只在本地分支提交，收编由主树做
 
@@ -81,7 +85,8 @@
 ## 7. 项目长期分工
 
 - **main**（Claude）：架构 / 质量 / 逻辑 / 测试 / 前端 / 体验 / 发布 / 运维，兼收编
-- **codex**：安全 / 合规 / 风险域；承接主树派单（用户授权可越域）
+- **codex**（第二棵树）：安全 / 合规 / 风险域；承接主树派单（用户授权可越域）
+- 两树间**不直接通信**，只经各自 `.orca/talking.txt` 留痕
 
 ## 8. 技术栈速查
 
