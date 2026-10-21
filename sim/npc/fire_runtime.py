@@ -10,6 +10,10 @@ bus fold（C4 唯一写路径）；火格账本是实况侧内存态（同 NpcRu
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
+from dataclasses import replace
+from typing import Any
+
 import structlog
 
 from sim.core.events import (
@@ -28,6 +32,7 @@ _IGNITE_PERIOD_TICKS = 86_400
 _IGNITE_PHASE = 3 * 3600
 #: 命中概率（约 3 游戏日一场火——镇子有代价但不毁灭；判定纯函数内联哈希）
 _IGNITE_PROB_NUM = 34
+_IGNITION_FUEL_TICKS = 12
 
 
 def ignite_due(seed: int, tick: int) -> bool:
@@ -60,6 +65,38 @@ class FireRuntime:
         self.cells = ()
         self.fire_seq = 0
 
+    def restore_from_events(self, events: Iterable[Mapping[str, Any]]) -> None:
+        """从生命周期事实恢复活火与序号；燃料按现有点火预算重新初始化。"""
+        from sim.core.persistence.fire_store import fold_fire_events
+
+        rows = fold_fire_events(events)
+        cells = tuple(
+            sorted(
+                (
+                    FireCell(
+                        x=row.x,
+                        y=row.y,
+                        fire_id=row.fire_id,
+                        fuel_ticks=_IGNITION_FUEL_TICKS,
+                        ignited_tick=row.ignited_tick,
+                    )
+                    for row in rows.values()
+                    if row.active
+                ),
+                key=lambda cell: (cell.x, cell.y, cell.fire_id),
+            )
+        )
+        fire_seq = max(
+            (
+                int(fire_id[5:])
+                for fire_id in rows
+                if fire_id.startswith("fire-") and fire_id[5:].isascii() and fire_id[5:].isdigit()
+            ),
+            default=0,
+        )
+        self.cells = cells
+        self.fire_seq = fire_seq
+
     def step(
         self,
         *,
@@ -70,18 +107,19 @@ class FireRuntime:
         old_cells = self.cells
         result = step_fires(self.cells, tick=tick, walkable=walkable)
         events: list[WorldEvent] = []
+        spread_cells: dict[tuple[int, int], FireCell] = {}
         for cell in result.spread_to:
             self.fire_seq += 1
-            events.append(
-                fire_ignited_event(tick=tick, fire_id=f"fire-{self.fire_seq}", x=cell.x, y=cell.y)
-            )
+            cell = replace(cell, fire_id=f"fire-{self.fire_seq}")
+            spread_cells[(cell.x, cell.y)] = cell
+            events.append(fire_ignited_event(tick=tick, fire_id=cell.fire_id, x=cell.x, y=cell.y))
         for fire_id in result.burned_out:
             burned_cell = next((c for c in old_cells if c.fire_id == fire_id), None)
             x, y = (burned_cell.x, burned_cell.y) if burned_cell is not None else (-1, -1)
             events.append(
                 fire_extinguished_event(tick=tick, fire_id=fire_id, x=x, y=y, end="fuel_out")
             )
-        self.cells = result.cells
+        self.cells = tuple(spread_cells.get((cell.x, cell.y), cell) for cell in result.cells)
         return events
 
     def collect_deaths(
@@ -98,6 +136,12 @@ class FireRuntime:
     def ignite_at(self, *, tick: int, x: int, y: int) -> list[WorldEvent]:
         """起火（ignite_due 命中后由世界驱动调用）：首格入账本 + ignited 事件。"""
         self.fire_seq += 1
-        cell = FireCell(x=x, y=y, fire_id=f"fire-{self.fire_seq}", fuel_ticks=12, ignited_tick=tick)
+        cell = FireCell(
+            x=x,
+            y=y,
+            fire_id=f"fire-{self.fire_seq}",
+            fuel_ticks=_IGNITION_FUEL_TICKS,
+            ignited_tick=tick,
+        )
         self.cells = (*self.cells, cell)
-        return [fire_ignited_event(tick=tick, fire_id=f"fire-{self.fire_seq}", x=x, y=y)]
+        return [fire_ignited_event(tick=tick, fire_id=cell.fire_id, x=cell.x, y=cell.y)]

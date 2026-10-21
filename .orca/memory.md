@@ -153,11 +153,11 @@ flush_tick → FireWriteError: fire_id='fire-1' 已于 tick=… 熄灭，重复�
 
 # ④ codex 树快照（权威来源：codex 树 `.orca/memory.md`；收编时原样并入）
 
-【2026-10-21 DA-02｜历史读档核心链完成，已收编】DA-01 已独立提交 846a052；本次接真实物化链，临时世界展开/RNG 恢复与存档 tick 对齐，make_current 显式交接当前子线 + seq0 检查点 + 玩家 protected 游标，默认归档分叉不变。请求登记不确认，成功后才发 session_state/timescale/full_snapshot；清旧帧与旧 LLM 等待结果。事务失败保留原世界；提交后投影失败暂停、停止 AI 并拒写命令/存档，保留原无当前线诊断。真实 SQLite 红钉 2F 起步，补跨档决策/投影失败/时间尺/游标红后修绿；定向 79P，事务 43P，错误契约 55P。最终常规集显式排除 2 条既有缺地图素材用例后 2789P/131S/74D（408.25s），ruff/format/pyright 和 gen:protocol:check 全绿。主树 076ed21 不在本树，收编 main.py 时保留主树 P-2/P-4/P-6 恢复/还原代码；本次未重复实现它们。报告 docs/security/gameplay-integrity-audit-2026-10-21.md，日志 .orca/da02-*.log。
+【2026-10-21 DA-03｜读档余额/活火完成，待收编】基准 b929406（已含主树 P-2/P-4/P-6）；每格生命周期 ID 同源写回内存与事件，真实蔓延/燃尽落库不再重复熄灭。CoinLedger/FireRuntime 从选中分支谱系重建余额、活火和全部历史最大编号；FireStore 同源 fold 保留祖先前缀，不跨分支混排 seq。红：前置2F、主体6F/4P→相关101P/1D；原始 not-bench 全量2818P/131S/72D/2F（285.72s），仅两条已知缺 tiled-map.json 的地图生成测试失败；ruff/format/pyright全绿。健康投影清单见既有审计报告DA-03：HP无完整扣血事件来源，本单只设计；燃料按现有初值12恢复，不承诺余量逐位；主树只派 _drain_loads，冷启动余额/活火接线未扩修。未改 WorldCheckpoint/协议，未merge main/改主树/推送；提交见 git log 与 talking 回执，日志 .orca/da03-*.log。下一步等主树验收/派单；仍有 DA-04/05/06/07/08，勿越界自开。
 
-【2026-10-21 DA-01｜冷启动恢复完成，已收编】用户直接授权继续修审计缺口。build_loop 只在空库创世，按 is_current 恢复完整世界检查点/事件尾部；非空批次事件与内部检查点同事务落库，含时钟/战斗尺/混沌链/PCG64。重复创世拒绝启动，不删旧日志；无当前指针只留诊断面、停止推进。新增 12 条重启/谱系/回滚/行走回归；红 4F 及子线 seq0 红 1F→定向 41P，附 API/鉴权集 52P；常规集排除 2 条已知缺素材用例后 2774P/131S/74D（399.66s），ruff/format/pyright 全绿。全局 API 夹具隔离临时 world.db 并停用自动模型决策，人工世界夹具已改合法创世/完整快照。报告 docs/security/gameplay-integrity-audit-2026-10-21.md；日志 .orca/da01-*.log。
+【已收编历史】DA-02 `de3a8ae`（真实物化/当前子线与玩家游标同事务交接/成功后回帧）；DA-01 `846a052`（世界检查点原子落库/重启恢复/拒重复创世）。均已由主树 `b929406` 收编并同步本树，旧「未含076ed21」口径已过时。完整红绿证据见 talking 回执、审计报告与 `git log --oneline -- .orca/memory.md`。
 
-【2026-10-21 深度复检｜报告完成】基准 main@3cbcd8d 的独立源码快照，未 merge main/改主树/调用真模型。确认 8 组（2 P0+6 P1）：重启重创世污染日志、历史读档 head-only 与旧快照提前确认、资金/火场清零未重建、人物/中文货名目标不兼容、建筑表现跨分支残留、坍塌还原日志未应用实时碰撞、主角走 NPC 死亡删除、重启后主角双控制源。既有相关 62 项+同夹具地图对照 2 项通过；新增 5 条完整性回归全红。复现与 JSON 在 `.orca/audits/20261021-main-3cbcd8d/`。
+【审计历史】`974611e`：基准 main@3cbcd8d 确认8组缺口；报告 `docs/security/gameplay-integrity-audit-2026-10-21.md`，原始探针/JSON在 `.orca/audits/20261021-main-3cbcd8d/`。
 
 ## 收编踩坑（2026-10-21 merge codex）
 

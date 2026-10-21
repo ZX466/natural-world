@@ -3,10 +3,10 @@
 设计稿 `docs/data/m5-fire-data-preplan.md`（A8）；接口约束 `docs/api/m5-fire-api-prestudy.md`
 §4 **F1-F5**；安规钉 `docs/security/m5-fire-threatmodel.md` **D-1..D-7**。
 
-**只存生命周期，不存火势中间态**（A8 §1.2 已裁，裁 33 沿用）：一行 = 一场火
+**只存生命周期，不存火势中间态**（A8 §1.2 已裁，裁 33 沿用）：一行 = 一个火格
 （``fire_id`` 分支内唯一），字段只有坐标 + 起火 tick + 熄灭 tick + 物理终止态。
-蔓延强度 / 燃料剩余 / 蔓延半径**不入库**——它们是**纯运行态**（每 tick 由混沌流现抽），
-入库就得新建第 5 张不可重建表 + 扩物化包 + 扩克隆清单（四处成本换「读档后续烧」）。
+蔓延强度 / 燃料剩余 / 蔓延半径**不入库**——它们是由机制步进维护的**纯运行态**，
+运行时从活火事实重新装配格与初始燃料预算，不把生命周期回放当作剩余燃料快照。
 
 **F1（签名）**：`upsert_fire` / `set_fire_end` / `active_fires` 三方法；返回的
 :class:`FireRow` **禁含归因键**（无 actor/igniter/culprit/authority_*，K12 §3 + D-10）。
@@ -24,15 +24,15 @@ N 值由 pi 定标机定（advisory），本层只立口径「无状态变更零
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sim.core.events import EventKind, FireEnd, fire_extinguished_event, fire_ignited_event
-from sim.core.persistence.models import Fire
+from sim.core.persistence.models import Branch, Fire
 from sim.core.persistence.store import SqlEventStore
 
 #: 坐标域（与 `events.py::_FIRE_COORD`、`MatterPayload` 同哨兵语义：-1 = 未定位）。
@@ -48,7 +48,7 @@ class FireWriteError(RuntimeError):
 
 @dataclass(frozen=True)
 class FireRow:
-    """一场火在某分支的当前态（frozen；**零归因键**，K12 §3）。
+    """一个火格在某分支的生命周期（frozen；**零归因键**，K12 §3）。
 
     ``ended_tick is None`` ⇔ 仍在燃烧（与库内 ``ck_fires_end_pair`` 同一条不变式）。
     """
@@ -150,6 +150,29 @@ def _row_to_fire(row: Fire) -> FireRow:
         ended_tick=None if row.ended_tick is None else int(row.ended_tick),
         end=_cast_end(row.end),
     )
+
+
+def fold_fire_events(events: Iterable[Mapping[str, Any]]) -> dict[str, FireRow]:
+    """按输入的谱系顺序折叠生命周期；不同分支的 seq 不能混排。"""
+    states: dict[str, FireRow] = {}
+    for event in events:
+        kind = str(event.get("event_type", ""))
+        if kind not in {k.value for k in FIRE_KINDS}:
+            continue
+        payload = event.get("payload") or {}
+        fire_id = str(payload.get("fire_id", ""))
+        if not fire_id:
+            raise FireWriteError(f"fire.* payload 缺 fire_id: {payload!r}")
+        end = str(payload.get("end")) if kind == EventKind.FIRE_EXTINGUISHED.value else None
+        states[fire_id] = fold_fire(
+            states.get(fire_id),
+            fire_id=fire_id,
+            x=int(payload.get("x", -1)),
+            y=int(payload.get("y", -1)),
+            tick=int(event.get("tick", 0)),
+            end=None if end is None else _check_end(end),
+        )
+    return states
 
 
 async def project_fire(session: AsyncSession, branch_id: str, event: object) -> None:
@@ -303,30 +326,21 @@ class FireStore:
     async def materialize_fires_replay(self, upto_seq: int | None = None) -> dict[str, FireRow]:
         """**重放路径**：折叠 ``fire.*`` 事件重建火场（与投影共用 :func:`fold_fire`）。
 
-        - ``upto_seq`` 给定 ⇒ 只折叠 ``seq <= upto_seq`` 的事件（**读档窗口**语义：
+        - ``upto_seq`` 给定 ⇒ 本分支只折叠 ``seq <= upto_seq`` 的事件；祖先按分叉点截断。
+          不跨分支重排 seq（**读档窗口**语义：
           anchor 点之后的火灾事件对本结果**零影响**，A8 §4 照妖镜钉的判据）；
           ``None`` ⇒ 全量折叠（冷启动）。
         - **纯读**：只读 ``events``，不落库、不投影。
         - 一致性判据：与快照路径 ``active_fires`` / 读表在窗口内**逐位相等**。
         """
-        limit = 2**62 - 1 if upto_seq is None else upto_seq
-        raw = await self._events.read_range(self._branch_id, 0, limit)
-        states: dict[str, FireRow] = {}
-        for event in sorted(raw, key=lambda e: int(e.get("seq", 0))):
-            kind = str(event.get("event_type", ""))
-            if kind not in {k.value for k in FIRE_KINDS}:
-                continue
-            payload = event.get("payload") or {}
-            fire_id = str(payload.get("fire_id", ""))
-            if not fire_id:
-                raise FireWriteError(f"fire.* payload 缺 fire_id: {payload!r}")
-            end = str(payload.get("end")) if kind == EventKind.FIRE_EXTINGUISHED.value else None
-            states[fire_id] = fold_fire(
-                states.get(fire_id),
-                fire_id=fire_id,
-                x=int(payload.get("x", -1)),
-                y=int(payload.get("y", -1)),
-                tick=int(event.get("tick", 0)),
-                end=None if end is None else _check_end(end),
-            )
-        return states
+        async with self._events.session_factory() as session:
+            if await session.get(Branch, self._branch_id) is None:
+                return {}
+        raw = await self._events.read_branch_history(self._branch_id)
+        if upto_seq is not None:
+            raw = [
+                event
+                for event in raw
+                if event["branch_id"] != self._branch_id or event["seq"] <= upto_seq
+            ]
+        return fold_fire_events(raw)
