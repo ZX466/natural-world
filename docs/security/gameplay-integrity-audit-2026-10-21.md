@@ -188,3 +188,25 @@ uv run --project E:/zxdevelop/.orca/worktrees/project7/codex pytest sim/tests/te
 恢复的是生命周期事实与活火格集合。燃料仍是纯运行态，恢复时使用现有点火预算 12，不承诺读档前剩余燃料逐位一致；没有新增持久化字段、事件种类或 WS 帧。本单只在派单指定的 `_drain_loads` 接余额/活火恢复，冷启动余额/活火装配仍未扩修；健康 HP 也未声称已恢复。
 
 验证：前置真实落库红钉 **2 failed**（格/事件 ID 不符、重复熄灭拒写），账本读档红钉 **6 failed / 4 passed**（100→0、活火/序号清空、嵌套分叉无法付款）；修复后相关集 **101 passed / 1 deselected**。原始 `uv run pytest -m 'not bench' -q --tb=short` 实测 **2818 passed / 131 skipped / 72 deselected / 2 failed**（285.72s），两条失败仍为 `test_m4d16_territory.py::TestTownGodMap::test_deterministic_build` 与 `test_m7_town_map.py::TestTownMap::test_deterministic_build`，本树缺 `tiled-map.json`，未掩盖或扩修。ruff、格式检查与 pyright 通过；原始门禁不能标为全绿。日志 `.orca/da03-{fire-red,fire-green,ledger-red,ledger-green,focused,python-full,pyright}.log`。
+
+## DA-04：戏内名规范化（2026-10-21，基准 a5377d8）
+
+本轮基准已包含主树 `afdfeb9` 冷启动补修，素材也已同步；前节的「冷启动未接」和两条缺素材失败属于历史读数。
+
+新增纯函数解析层 `sim/agent/targets.py`，使用既有 `display_name_of` 注入的名字映射，无 IO。在真实 `decide_once → parse_intent → gate.validate` 链中，唯一、存在、曼哈顿范围内的人名转换为实体 ID；成功解析才用 frozen Intent 的 `model_copy` 更新目标。未知/歧义名保留原文交给原 gate 拒绝，不把它们变成可执行目标。现有内部标识输入仍兼容，并由 gate 执行前复核。
+
+货品通过独立 `name_index()` 精确解析，`_GOOD_INDEX` 保持 ID→Good 语义；草药/药膏/饭食/米酒均支持买卖，内部 ID 继续可用。未知或歧义货名在规划与执行两处拒绝，记录 `chenmo.trade_rejected`，不再计为已执行的静默空操作。
+
+| gate 理由 | 本单处理 |
+|---|---|
+| `unknown_good` | **唯一新增的理由名**：未知/歧义货品，以及执行前货品已不在目录中 |
+| `unknown_target` | 保留：幻觉名、任何活体重名（含观察者同名）和不可解析人名仍拒绝 |
+| `missing_target` | 保留；买卖执行前也复核缺失目标 |
+| `target_gone` / `target_out_of_range` | 保留既有执行校验；目标移动超出原执行范围或消失仍拒绝 |
+| 其他既有拒绝理由 | 支持动作、空/禁词 reason、置信度、坐标边界和隐藏属性判定保留，未放宽 |
+
+候选人物按曼哈顿距离取最近最多 12 个，仅给唯一戏内名，排除自身、已知动物及内部 ID 标签。复用 `SituationSlice.landmarks_text` 的可变面；`_REQUIREMENTS_TEXT`、`_CAUSAL_UNKNOWN_TEXT`、装配段序及身份锚不变。对白缺少展示名时用自然称呼，不把内部 ID 补进模型消息。没有增加独立 replan 机制，拒绝后沿既有决策节拍继续。
+
+红钉：主链 **5 failed / 4 passed**，包含真实输出 `assert 0 == 1`（人名未入队）、`assert 100 < 100`（中文货名无扣款）、`assert 1 == 0`（未知货品空执行）；观察者同名另先复现 1 failed。新集 **26 passed**，驱动/gate/prompt/经济/社交/战斗相关集 **116 passed**。全量验证还发现日志代理缓存的测试隔离问题，以及扩大执行距离改动影响旧差事 E10：夹具改用真实新 logger 代理，执行 gate 的原距离策略保持兼容；曼哈顿 12 仅用于本单新增姓名解析/候选范围。日志 `.orca/da04-{red,ambiguity-red,green,focused,python-full,pyright}.log`。
+
+服务日志装配、真实历史读档、规范化与旧差事联合复验 **63 passed**。最终原始 `uv run pytest -m 'not bench' -q --tb=short` 得到 **2857 passed / 121 skipped / 72 deselected / 0 failed**（320.57s），两条地图确定性用例未排除。ruff/格式检查（352 files）、pyright（0 errors）及 diff check 通过。最终日志 `.orca/da04-python-verified.log`；首轮全量失败输出保留在 `.orca/da04-python-full.log`。

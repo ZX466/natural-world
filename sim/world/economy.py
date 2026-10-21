@@ -33,6 +33,14 @@ GOODS: tuple[Good, ...] = (
 _GOOD_INDEX: dict[str, Good] = {g.id: g for g in GOODS}
 
 
+def name_index() -> dict[str, Good]:
+    """只索引唯一货名；内部 ID 目录仍由 _GOOD_INDEX 持有。"""
+    from collections import Counter
+
+    counts = Counter(good.name for good in _GOOD_INDEX.values())
+    return {good.name: good for good in _GOOD_INDEX.values() if counts[good.name] == 1}
+
+
 def buy_price(good_id: str, *, tick: int, seed: int) -> int:
     """基准价 ±20% 确定性浮动（sha256(good:tick:seed)，C5 同输入同输出）。"""
     good = _GOOD_INDEX[good_id]

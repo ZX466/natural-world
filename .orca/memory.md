@@ -174,7 +174,9 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 
 # ④ codex 树快照（权威来源：codex 树 `.orca/memory.md`；收编时原样并入）
 
-【2026-10-21 DA-03｜已收编 `4ec5112`】基准 b929406（已含主树 P-2/P-4/P-6）；每格生命周期 ID 同源写回内存与事件，真实蔓延/燃尽落库不再重复熄灭。CoinLedger/FireRuntime 从选中分支谱系重建余额、活火和全部历史最大编号；FireStore 同源 fold 保留祖先前缀，不跨分支混排 seq。红：前置2F、主体6F/4P→相关101P/1D；原始 not-bench 全量2818P/131S/72D/2F（285.72s），仅两条已知缺 tiled-map.json 的地图生成测试失败；ruff/format/pyright全绿。健康投影清单见既有审计报告DA-03：HP无完整扣血事件来源，本单只设计；燃料按现有初值12恢复，不承诺余量逐位。**主树实测确认「冷启动未扩修」是 P0 而非边界**：重启后 `fire_seq` 归零重签 `fire-1` 撞主键，驱动停摆——已由主树 `afdfeb9` 补接线，不在 codex 域内追责。未改 WorldCheckpoint/协议；日志 .orca/da03-*.log。仍有 DA-04/05/06/07/08。
+【2026-10-21 DA-04｜名称规范化完成，待收编】基准a5377d8，素材已补齐，不再排除地图用例。targets纯函数+driver在parse之后/gate之前精确规范化唯一活体名/中文货名；候选曼哈顿12内最近最多12个，只放戏内人名到SituationSlice.landmarks_text。内部ID兼容；固定尾段/身份锚/协议/WorldCheckpoint不动，无新增replan。gate理由名仅新增unknown_good（买卖规划/执行）；unknown_target仍拒幻觉/重名/不可解析名，missing_target/target_gone/target_out_of_range等保留；原执行范围保留以兼容E10，不把新姓名解析的曼哈顿约束扩大为旧gate政策修改。trade_rejected可观测，缺展示名对白用自然称呼。红5F/4P、自重名1F/25P→新集26P；相关116P，真实日志装配/E10联合63P；原始not-bench全量2857P/121S/72D/0F（320.57s），ruff/format（352 files）/pyright0全绿。首轮全量11F为缓存logger捕获隔离及超范围gate改动，已修并保留日志；最终.orca/da04-python-verified.log。未merge main/改主树/推送，提交见git log和talking回执；下一步等主树验收/DA-05完整派单（必须含client边界），不自开DA-05/06/07/08。
+
+【已收编 DA-03】`d5c2931`→主树`4ec5112`，冷启动补修`afdfeb9`已同步；账本必须覆盖读档与lifespan构造两条路径，不能把生产级冷启动崩点当作范围问题遗漏。生命周期ID/余额/活火事件重建已接；燃料用初值12、HP事件来源仍未完整。旧缺素材两条失败口径已过时，当前原始门禁可全绿。历史证据见审计报告、talking和git log。
 
 【已收编历史】DA-02 `de3a8ae`（真实物化/当前子线与玩家游标同事务交接/成功后回帧）；DA-01 `846a052`（世界检查点原子落库/重启恢复/拒重复创世）。均已由主树 `b929406` 收编并同步本树，旧「未含076ed21」口径已过时。完整红绿证据见 talking 回执、审计报告与 `git log --oneline -- .orca/memory.md`。
 
