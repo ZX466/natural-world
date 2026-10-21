@@ -187,5 +187,11 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
   二选一都会丢东西——只走 `flush_world` 丢坍塌还原，只走 `flush_tick` 丢检查点。
 - **codex 树的 `.orca/memory.md` 是旧全文副本**（2797 行），主树已瘦身到 118 行；
   合并时取主树版再人工并入 codex 新快照，不要盲目 `--theirs`。
-- codex 树缺 `sim/content/assets/god-packs/taohuayuan-online/tiled-map.json`，
-  两条地图确定性生成用例在其树内必失败——**主树有该文件**，合并后不成立。
+- **`sim/content/assets/` 整个目录被 `.gitignore:86` 忽略**（`god-packs/`；另
+  `zelda-like/pkg/`）⇒ `git worktree add` **不会带过去**，新 worktree 里该目录为空。
+  症状：`test_m7_town_map.py::TestTownMap::test_deterministic_build` 与
+  `test_m4d16_territory.py::TestTownGodMap::test_deterministic_build` 失败
+  （`build_god_town` 依赖 `god-packs/taohuayuan-online/`，主树 67M）。
+  **不是代码缺陷**，别用 `--deselect` 长期掩盖——补素材即可
+  （`robocopy 主树\sim\content\assets 目标树\sim\content\assets /E`）。
+  2026-10-21 已为 codex 树补齐，两条用例转 2 passed。
