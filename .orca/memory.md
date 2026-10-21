@@ -9,9 +9,10 @@
 
 ## 0. 本会话状态
 
-- **HEAD**：`b929406`（merge codex：O 单 + 审计 + DA-01/DA-02）
-- **在飞**：DA-03 已派 codex（含 P0-3 火焰 ID 前置缺陷），回执待收；codex 树已 fast-forward 到 `b929406`
-- **未决**：是否推送双远程（2026-10-21 现测领先 origin/gitee 各 44 提交，按纪律暂不推）
+- **HEAD**：`afdfeb9`（DA-03 收编 + 冷启动账本补修）
+- **已收编**：DA-03 `d5c2931`（merge `4ec5112`）；主树另补 `afdfeb9` 冷启动接线
+- **在飞**：无。下一单建议 DA-04（人物/中文货名目标）；**DA-05 待 DA-03 落定后派**（本轮已落）
+- **未决**：是否推送双远程（按纪律不推，收编前以现测为准）
 - **协议**：1.11（真相源 `sim/api/ws.py::_PROTOCOL_VERSION`，前端 `client/src/net/ws.ts` 同源）
 - **工作树：两棵**（2026-10-21 用户重申，长期有效）
   - 主树 `E:/zxdevelop/project7` → 分支 `main`（Claude）
@@ -23,18 +24,20 @@
 **M0–M6 全部收官**（M6 于 2026-10-05，G1–G4 全 ✅）；**M7 渲染面**已落（地图/时钟/视角/昼夜）。
 代码侧整体完成，剩余是收口型缺口。
 
-## 2. 门禁（2026-10-21 实测）
+## 2. 门禁（2026-10-21 DA-03 收编后实测）
 
 | 项 | 结果 |
 |---|---|
-| sim 全量 pytest（`-m "not bench"`） | exit 0 |
-| ruff check / ruff format | clean / 343 文件已格式化 |
+| sim 全量 pytest（`-m "not bench"`） | 2831 passed / 121 skipped / 72 deselected，0 failed（303s） |
+| ruff check / ruff format | clean / 350 文件已格式化 |
 | pyright sim/ | 0 errors |
 | client tsc --noEmit | 0 错误 |
-| client vitest | 138 passed / 25 files |
-| check_implementation_status | 未发现新缺口 |
+| client vitest | 143 passed / 26 files |
+| check_implementation_status | 未发现新缺口（未在本轮重跑） |
 
-## 3. 当前剩余缺口（codex 审计 8 组：2 P0 + 6 P1，已修 2 组）
+> 旧读数 2982 收集 / 138 vitest 已过时；上表为合并后现测。
+
+## 3. 当前剩余缺口（codex 审计 8 组 + 主树 P0-3，已修 3 组）
 
 来源 `docs/security/gameplay-integrity-audit-2026-10-21.md`（codex `974611e`）：
 
@@ -42,19 +45,19 @@
 |---|---|---|
 | P0-1 | 重启二次创世污染日志 | ✅ `846a052` |
 | P0-2 | 历史读档 head-only / 世界态未恢复 | ✅ `de3a8ae` |
-| P0-3 | **火格 `fire_id` 双语义**（主树探针新发现，不在 codex 8 组内）：`sim/world/fire.py:136` 蔓延格继承 `parent.fire_id`，`sim/npc/fire_runtime.py:73-78` 却每格自增签发新 `fire-{seq}` → 同一 ID 重复熄灭 → `FireWriteError` 整批拒写；`sim/api/ws.py:1401` 的 `await on_flush(events)` 无 try/except ⇒ **世界驱动直接死** | ⬜ 未修（已并入 DA-03 前置） |
-| DA-03 | 余额/火场账本清零未重建 | ⬜ 未修 |
+| P0-3 | **火格 `fire_id` 双语义**（主树探针新发现，不在 codex 8 组内）：`sim/world/fire.py:136` 蔓延格继承 `parent.fire_id`，`sim/npc/fire_runtime.py:73-78` 却每格自增签发新 `fire-{seq}` → 同一 ID 重复熄灭 → `FireWriteError` 整批拒写；`sim/api/ws.py:1401` 的 `await on_flush(events)` 无 try/except ⇒ **世界驱动直接死** | ✅ `d5c2931` |
+| DA-03 | 余额/火场账本清零未重建 | ✅ `d5c2931`（读档）+ `afdfeb9`（冷启动） |
 | DA-04 | 人物/中文货名目标不兼容 | ⬜ 未修 |
 | DA-05 | 建筑表现跨分支残留 | ⬜ 未修 |
 | DA-06 | 坍塌还原未应用实时碰撞 | ⬜ 未修 |
 | DA-07 | 主角走 NPC 死亡删除 | ⬜ 未修 |
 | DA-08 | 重启后主角双控制源 | ⬜ 未修 |
 
-> **不得称「全部玩法已修」**——codex 明确边界：上述 6 组仍未修；主树另加 P0-3，共 7 组未修。
+> **不得称「全部玩法已修」**——上述 6 组仍未修（P0-3 与 DA-03 已修，剩 6 组）。
 > 另：`check_implementation_status` 是静态结构检查，不等于玩法验收。
 > **已关闭**：O 单（`9447d1b`，心声反馈 + 断线不谎报，客户端 143 passed）。
 
-### P0-3 实测证据（2026-10-21 主树探针，seed=42）
+### P0-3 实测证据（2026-10-21 主树探针，seed=42）— 已修 `d5c2931`
 
 ```
 IGNITED:     fire-1(10,10) fire-2(11,10) fire-3(9,10) … fire-21(12,9)
@@ -65,7 +68,22 @@ flush_tick → FireWriteError: fire_id='fire-1' 已于 tick=… 熄灭，重复�
 - 触发时间：该种子第一场火在 **tick 183600**（约 2.1 游戏日），60 天内 22 场 ⇒ 实况两天内必崩。
 - 漏网原因：`test_m4d5_fire_live.py::test_spread_emits_ignite_events` 只断言「有 ignited 事件」，
   **从未**断言事件 `fire_id` 与内存格一致，也从未跑过落库。
-- 修法方向：统一 `fire_id` 语义（蔓延格与事件必须同 ID），**不要**给每个蔓延格发新 ID。
+- 修法：codex 采用**每格一个生命周期 ID**（`fire.seq` 每格自增，蔓延格换新 ID 并替换内存格），
+  与「一行 fire = 一个火格」的库表设计一致；事件与内存格共用同一 ID。
+
+### 冷启动账本缺口（主树 `afdfeb9` 独立发现，codex 未报）
+
+DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`build_loop` 只恢复 `WorldState`：
+
+```
+重启后 BALANCE={}  （库里 DB_COIN_GRANTS=1，余额 0）
+重启后 fire_seq=0  → 新火又签 fire-1 → FireWriteError: fire_id='fire-1' 已存在
+```
+
+⇒ `ws.py` 驱动循环无 try/except，**世界直接停摆**。修法：`lifespan` 构造两账后立即
+`restore_from_events(NpcStore(store, branch_id=current_branch).read_branch_history())`；
+`current_branch is None`（空库创世）时跳过。红钉
+`test_cold_start_rebuilds_coin_balance_and_active_fires`（两次真实 lifespan）。
 
 ## 4. 本轮已修（P 单四项，读档族清零）
 
@@ -75,6 +93,9 @@ flush_tick → FireWriteError: fire_id='fire-1' 已于 tick=… 熄灭，重复�
 | P-2 `build_runtime` 读档不清零 | `reset()` + `restore_from_events()`，重放 started/checkpoint | `076ed21` |
 | P-4 `fire_runtime` 读档不清零 | `reset()`（`cells=()`、`fire_seq=0`）；**更正 main.py 原注释**「火场由 fork 层承担」——fork 层根本不引用 fire | `076ed21` |
 | P-6 `derive_tile_events` 零调用 | `on_flush` 里在 `maintenance.observe` **之前**补发逐格 `tile_changed` 还原 | `076ed21` |
+| P0-3 火格 ID 双语义 | 每格一个生命周期 ID，蔓延格换新 ID 并替换内存格；事件与内存格同 ID | `d5c2931` |
+| DA-03 余额/火场读档重建 | `CoinLedger.restore_from_events` + `FireRuntime.restore_from_events`；`FireStore` 同源 fold 计全部历史 ID 作 `fire_seq` 上界 | `d5c2931` |
+| DA-03 冷启动账本 | `lifespan` 构造两账后按当前分支谱系恢复；空库创世跳过 | `afdfeb9` |
 
 ## 5. 踩坑记录（血泪，逐条有效）
 
@@ -153,7 +174,7 @@ flush_tick → FireWriteError: fire_id='fire-1' 已于 tick=… 熄灭，重复�
 
 # ④ codex 树快照（权威来源：codex 树 `.orca/memory.md`；收编时原样并入）
 
-【2026-10-21 DA-03｜读档余额/活火完成，待收编】基准 b929406（已含主树 P-2/P-4/P-6）；每格生命周期 ID 同源写回内存与事件，真实蔓延/燃尽落库不再重复熄灭。CoinLedger/FireRuntime 从选中分支谱系重建余额、活火和全部历史最大编号；FireStore 同源 fold 保留祖先前缀，不跨分支混排 seq。红：前置2F、主体6F/4P→相关101P/1D；原始 not-bench 全量2818P/131S/72D/2F（285.72s），仅两条已知缺 tiled-map.json 的地图生成测试失败；ruff/format/pyright全绿。健康投影清单见既有审计报告DA-03：HP无完整扣血事件来源，本单只设计；燃料按现有初值12恢复，不承诺余量逐位；主树只派 _drain_loads，冷启动余额/活火接线未扩修。未改 WorldCheckpoint/协议，未merge main/改主树/推送；提交见 git log 与 talking 回执，日志 .orca/da03-*.log。下一步等主树验收/派单；仍有 DA-04/05/06/07/08，勿越界自开。
+【2026-10-21 DA-03｜已收编 `4ec5112`】基准 b929406（已含主树 P-2/P-4/P-6）；每格生命周期 ID 同源写回内存与事件，真实蔓延/燃尽落库不再重复熄灭。CoinLedger/FireRuntime 从选中分支谱系重建余额、活火和全部历史最大编号；FireStore 同源 fold 保留祖先前缀，不跨分支混排 seq。红：前置2F、主体6F/4P→相关101P/1D；原始 not-bench 全量2818P/131S/72D/2F（285.72s），仅两条已知缺 tiled-map.json 的地图生成测试失败；ruff/format/pyright全绿。健康投影清单见既有审计报告DA-03：HP无完整扣血事件来源，本单只设计；燃料按现有初值12恢复，不承诺余量逐位。**主树实测确认「冷启动未扩修」是 P0 而非边界**：重启后 `fire_seq` 归零重签 `fire-1` 撞主键，驱动停摆——已由主树 `afdfeb9` 补接线，不在 codex 域内追责。未改 WorldCheckpoint/协议；日志 .orca/da03-*.log。仍有 DA-04/05/06/07/08。
 
 【已收编历史】DA-02 `de3a8ae`（真实物化/当前子线与玩家游标同事务交接/成功后回帧）；DA-01 `846a052`（世界检查点原子落库/重启恢复/拒重复创世）。均已由主树 `b929406` 收编并同步本树，旧「未含076ed21」口径已过时。完整红绿证据见 talking 回执、审计报告与 `git log --oneline -- .orca/memory.md`。
 
