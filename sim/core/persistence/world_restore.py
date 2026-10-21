@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import gzip
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, Literal
 
 import numpy as np
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from sim.core.clock import GameClock
 from sim.core.events import CombatScaleChangePayload, EventKind, WorldEvent
+from sim.core.persistence.anchor_package import MaterializationHooks
 from sim.core.persistence.models import Branch, Snapshot
 from sim.core.persistence.npc_store import NpcStore
 from sim.core.persistence.store import SqlEventStore, decompress_snapshot
@@ -90,7 +91,7 @@ async def flush_world(
     )
 
 
-def expand_world(payload: dict[str, Any], window: Sequence[dict[str, Any]]) -> TickLoop:
+def expand_world(payload: dict[str, Any], window: Sequence[Mapping[str, Any]]) -> TickLoop:
     """展开内部快照并折叠事件尾部；表现帧缺少世界真相，拒绝直接展开。"""
     if "format" in payload:
         loop = WorldCheckpoint.model_validate(payload).make_loop()
@@ -179,3 +180,38 @@ async def has_world(store: SqlEventStore) -> bool:
     """只有真正空库才允许创世；当前指针损坏不能被新世界掩盖。"""
     async with store.session_factory() as session:
         return await session.scalar(select(Branch.id).limit(1)) is not None
+
+
+def materialization_hooks(*, target_tick: int | None = None) -> MaterializationHooks:
+    """每次读档独立展开，验证失败不触碰正在运行的世界或随机流。"""
+    restored: TickLoop | None = None
+
+    async def expand(payload: Mapping[str, Any], window: Sequence[Mapping[str, Any]]) -> TickLoop:
+        nonlocal restored
+        restored = expand_world(dict(payload), window)
+        if target_tick is not None:
+            restored.replay_until(target_tick)
+        return restored
+
+    async def override(world: Any, values: Mapping[str, Any]) -> TickLoop:
+        if values:
+            raise ValueError("unsupported agent override")
+        if not isinstance(world, TickLoop):
+            raise ValueError("materialization did not produce a world")
+        return world
+
+    async def corpus(_rows: Mapping[str, Sequence[Mapping[str, Any]]]) -> None:
+        # 包内行已由物化器校验，写入子线由 fork 的事务承担。
+        return None
+
+    async def rng(blob: str) -> None:
+        from sim.core.rng_state import restore_rng_state
+        from sim.world.weather import WEATHER_STREAM
+
+        if restored is None:
+            raise ValueError("world must be expanded before rng restoration")
+        restore_rng_state(blob, restored.context.rng_cache, (WEATHER_STREAM,))
+
+    return MaterializationHooks(
+        expand_world=expand, apply_override=override, load_corpus=corpus, restore_rng=rng
+    )

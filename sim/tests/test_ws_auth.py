@@ -46,6 +46,29 @@ def client(monkeypatch):
 
 
 class TestW6Auth:
+    @pytest.mark.parametrize(
+        "command",
+        [
+            {"type": "move_request", "channel": "render", "target_x": 8, "target_y": 4},
+            {"type": "set_control", "channel": "control", "action": "resume"},
+            {"type": "player_impulse", "channel": "control", "text": "去街上看看。"},
+        ],
+    )
+    def test_authenticated_commands_wait_until_world_restoration_is_ready(self, client, command):
+        with client.websocket_connect("/ws") as socket:
+            _greet(socket)
+            socket.send_json({"type": "hello", "channel": "session", "token": ws_auth_token()})
+            assert _command_reply(socket)["type"] == "hello_ack"
+            app.state.world_source_ready = False
+            try:
+                socket.send_json(command)
+                reply = _command_reply(socket)
+                assert reply["type"] == "error" and reply["code"] == "bad_action"
+                assert reply["ref"] == command["type"]
+                assert client.post("/api/anchors", json={"name": "此刻"}).status_code == 400
+            finally:
+                app.state.world_source_ready = True
+
     def test_token_route_rejects_missing_origin(self, client):
         assert client.get("/api/ws-token").status_code == 403
 

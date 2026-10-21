@@ -336,6 +336,7 @@ async def fork_from_anchor(
     warn: Callable[[str], None] | None = None,
     kind: ForkKind = "head",
     package: Materialization | None = None,
+    make_current: bool = False,
 ) -> ForkResult:
     """从 ``(parent_branch_id, fork_seq, fork_tick)`` 分叉出新分支（§12 读档 = 分叉）。
 
@@ -361,6 +362,8 @@ async def fork_from_anchor(
         package: 物化器产物（``kind="anchor"`` 必填；``kind="head"`` 给了则**拒绝**
             ——「传了包却被静默忽略」等于无声降级）。游标三元组必须与分叉参数逐项相符。
         warn: 警告收集回调（缺省并入返回值 ``warnings``）。
+        make_current: 生产历史读档显式选中新线。仅接受已展开且游标/哈希匹配的世界，
+            与子线 seq=0 检查点、玩家游标同事务交接；默认 False 保留归档分叉语义。
 
     Returns:
         ``ForkResult``：克隆行数、id 映射、R-2 重写/清零计数、vec 状态。
@@ -449,7 +452,20 @@ async def fork_from_anchor(
                 raise ForkError(
                     f"分叉点 tick={fork_tick} < 分支头部 tick={head_tick}（锚点数据不自洽）"
                 )
-        if kind == "anchor" and fork_tick > head_tick:
+        checkpoint = None
+        if make_current:
+            from sim.core.persistence.world_restore import WorldCheckpoint
+            from sim.core.tick import TickLoop
+
+            if kind != "anchor" or package is None or not isinstance(package.world, TickLoop):
+                raise ForkError("activating a historical branch requires a restored world")
+            world = package.world
+            if world.state.tick != fork_tick:
+                raise ForkError("restored world tick does not match anchor")
+            if package.state_hash is not None and world.state.state_hash() != package.state_hash:
+                raise ForkError("restored world hash does not match anchor")
+            checkpoint = WorldCheckpoint.capture(world)
+        if kind == "anchor" and fork_tick > head_tick and not make_current:
             raise ForkError(
                 f"分叉点 tick={fork_tick} > 分支头部 tick={head_tick}（锚点数据不自洽："
                 "分叉点不可能比父分支头部还晚）"
@@ -473,6 +489,17 @@ async def fork_from_anchor(
             )
         ).scalar_one_or_none()
         handover = bool(kind == "head" and parent_status == "active" and parent_is_current)
+        if make_current:
+            current_id = (
+                await session.execute(
+                    text("SELECT id FROM branches WHERE is_current = 1 AND status = 'active'")
+                )
+            ).scalar_one_or_none()
+            if current_id is None:
+                raise ForkError("cannot activate a branch without a current world")
+            await session.execute(
+                text("UPDATE branches SET is_current = 0 WHERE id = :bid"), {"bid": current_id}
+            )
         if handover:
             await session.execute(
                 text("UPDATE branches SET is_current = 0 WHERE id = :pid AND is_current = 1"),
@@ -491,9 +518,35 @@ async def fork_from_anchor(
                 "fseq": fork_seq,
                 "rng": effective_rng,
                 "now": time.time(),
-                "is_current": 1 if handover else 0,
+                "is_current": 1 if handover or make_current else 0,
             },
         )
+        if checkpoint is not None:
+            import gzip
+
+            from sim.core.persistence.models import Snapshot
+
+            session.add(
+                Snapshot(
+                    branch_id=child_id,
+                    seq=0,
+                    tick=fork_tick,
+                    snapshot_data=gzip.compress(checkpoint.model_dump_json().encode()),
+                    schema_version=1,
+                    is_cold=False,
+                )
+            )
+            # 玩家游标与世界线同事务切换，重连/HTTP 查询不能仍指向未来。
+            assert package is not None
+            await session.execute(text("UPDATE player_anchors SET protected = 0"))
+            selected = (
+                await session.execute(
+                    text("UPDATE player_anchors SET protected = 1 WHERE id = :aid RETURNING id"),
+                    {"aid": package.anchor_id},
+                )
+            ).scalar_one_or_none()
+            if selected is None:
+                raise ForkError("selected anchor disappeared during activation")
         if effective_rng is None:
             _warn(
                 f"未提供 rng_state：新分支 {child_id!r} 的随机流将从头开始"

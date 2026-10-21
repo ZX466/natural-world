@@ -3,7 +3,6 @@
 import asyncio
 
 import pytest
-from sqlalchemy import update
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from sim.agent.build_exec import BuildRuntime
@@ -11,7 +10,7 @@ from sim.api import main, ws
 from sim.core.clock import GameClock
 from sim.core.events import world_create_event
 from sim.core.persistence.database import create_session_factory, init_database
-from sim.core.persistence.models import Branch
+from sim.core.persistence.models import PlayerAnchor
 from sim.core.persistence.npc_store import NpcStore
 from sim.core.persistence.store import SqlEventStore
 from sim.core.tick import TickLoop
@@ -34,13 +33,27 @@ async def branch_world(monkeypatch):
     await NpcStore(store, branch_id="main").flush_tick(events)
     async with store.session_factory.begin() as session:
         session.add(
-            Branch(
-                id="earlier",
-                forked_from_branch="main",
-                forked_from_seq=1,
-                status="active",
-                is_current=False,
+            PlayerAnchor(
+                id="earlier", name="旧日", branch_id="main", tick=0, seq=1, protected=False
             )
+        )
+        from sim.core.persistence.anchor_package import (
+            collect_corpus_rows,
+            encode_corpus_blob,
+            write_anchor_package,
+        )
+        from sim.core.rng import RngRegistry
+        from sim.core.rng_state import capture_rng_state
+
+        await write_anchor_package(
+            session,
+            anchor_id="earlier",
+            branch_id="main",
+            tick=0,
+            seq=1,
+            rng_state=capture_rng_state(RngRegistry(world_seed=42), {}, ()),
+            agent_override="{}",
+            corpus_blob=encode_corpus_blob(await collect_corpus_rows(session, "main")),
         )
     loop = TickLoop(
         clock=GameClock(speed=1),
@@ -60,21 +73,10 @@ async def branch_world(monkeypatch):
     async def idle_driver(*args, **kwargs):
         await asyncio.Event().wait()
 
-    async def load_earlier(*args, **kwargs):
-        async with store.session_factory.begin() as session:
-            await session.execute(update(Branch).values(is_current=False))
-            await session.execute(
-                update(Branch).where(Branch.id == "earlier").values(is_current=True)
-            )
-
     monkeypatch.setattr(main, "build_loop", build_loop)
     monkeypatch.setattr(main, "_default_map", lambda: base)
     monkeypatch.setattr(main, "run_world_driver", idle_driver)
     monkeypatch.setattr(main, "_active_profile_snapshot_provider", lambda: lambda: None)
-    monkeypatch.setattr(
-        "sim.core.persistence.fork_orchestration.orchestrate_load_anchor",
-        load_earlier,
-    )
     yield store, pos, old.tile_map
     await engine.dispose()
 

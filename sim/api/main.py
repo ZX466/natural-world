@@ -10,7 +10,7 @@ import contextlib
 import ipaddress
 import uuid
 from collections import deque
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
@@ -579,6 +579,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     loop.attach_maintenance(lambda state, tick: driver.combat_tick(loop, pathfinder=pathfinder))
     set_impulse_trigger(driver.request_decision)
 
+    world_revision = 0
+
     async def _chenmo_loop() -> None:
         """决策循环：impulse 置位或节拍到期 → 决策 + 同拍执行（与世界 driver 平行）。
 
@@ -621,6 +623,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 "桃门（15,18）、溪桥（66,19）、梯田（122,19）、客栈院（44,53）。"
                 "想去哪就 move_to 它的坐标。"
             )
+            decision_revision = world_revision
             await driver.decide_once(
                 loop.state,
                 loop.state.tick,
@@ -637,6 +640,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 landmarks_text=_landmarks,
             )
             async with world_write_lock:
+                if decision_revision != world_revision:
+                    driver.reset_combat()
+                    continue
                 driver.execute_pending(loop, pathfinder=pathfinder)
 
     app.state.chenmo_task = asyncio.create_task(_chenmo_loop())
@@ -654,47 +660,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     app.state.rng_capture = _capture_rng
 
-    # 批次 C 接线：物化读档四步语义（A11 hooks 缝的真实实现）。
-    # expand_world：快照 payload（本仓快照是 ws 出站形，无内部态）→ 由窗口事件
-    # 重放重建世界态——这里只重建到「新开子分支的世界基线」口径（WorldState 空
-    # 起步 + 事件重放），不越域重建 ws 出站形。override 恒 {}（存档侧写死）。
-    # corpus：fork 事务内已克隆（数据面），此钩子只校验行值非空（fail-closed 不吞）。
-    # restore_rng：把包内状态装回 TickContext.rng_cache（抽签进度承接，C5）。
-    async def _expand_world(payload: Mapping[str, Any], window: Sequence[Mapping[str, Any]]) -> Any:
-        _ = payload  # 快照 payload 是出站形（rtoken/actors），不含世界内部态——
-        # 世界基线由 world_create 事件（在 window 或全前缀里）重放给出。
-        _ = window
-        return None  # 世界态重建归 bus 重放（fork 后新分支从空起步），此处只立序
+    from sim.core.persistence.fork_orchestration import set_materialization_hooks
+    from sim.core.persistence.world_restore import materialization_hooks
 
-    async def _apply_override(world: Any, override: Mapping[str, Any]) -> Any:
-        _ = (world, override)  # agent_override 存档侧恒 "{}"（anchors.py:290 写死）
-        return None
-
-    async def _load_corpus(corpus: Mapping[str, Sequence[Mapping[str, Any]]]) -> Any:
-        _ = corpus  # 语料行值由 fork 事务克隆（数据面）；此处只立序
-        return None
-
-    async def _restore_rng(blob: str) -> Any:
-        from sim.core.rng_state import restore_rng_state
-        from sim.world.weather import WEATHER_STREAM
-
-        registry = restore_rng_state(blob, loop.context.rng_cache, (WEATHER_STREAM,))
-        _ = registry  # registry 已就地装回 rng_cache；材料经重放事件可再重建
-        return None
-
-    from sim.core.persistence.fork_orchestration import (
-        MaterializationHooks,
-        set_materialization_hooks,
-    )
-
-    set_materialization_hooks(
-        MaterializationHooks(
-            expand_world=_expand_world,
-            apply_override=_apply_override,
-            load_corpus=_load_corpus,
-            restore_rng=_restore_rng,
-        )
-    )
+    set_materialization_hooks(materialization_hooks())
 
     # 生产读档 hook（裁 28-G driver 生产挂载；R-1 修复后形态，M5-K7 R-1 CRITICAL）：
     # load_anchor 分发块是**同步契约**，而 fork 事务必须跑在事件循环里——
@@ -704,14 +673,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # flush 后的 await 窗口执行；完成/失败由后续单接完成通道定向回帧。
     pending_loads: deque[tuple[str, str]] = deque()  # (request_id, anchor_id)
 
-    def _production_load_hook(anchor_id: str) -> bool:
+    def _production_load_hook(anchor_id: str) -> None:
         """登记读档请求（同步、不阻塞）；真执行在 driver 的 _drain_loads。"""
         request_id = uuid.uuid4().hex[:12]
         pending_loads.append((request_id, anchor_id))
-        return True  # 受理即 True；失败由 driver 侧记 load_failed
+        # None = 已登记、尚未完成；同步 True 路径只用于已完成的兼容 hook。
 
-    async def _drain_loads() -> None:
-        nonlocal demography, tile_map
+    async def _drain_loads() -> bool:
+        nonlocal demography, tile_map, world_revision
         """driver 每帧调用：执行 pending fork（事件循环内，可 await）。
 
         失败帧（案 B 最小形，K16 审计稿 §3.2）：失败走既有 `_error_frame` +
@@ -719,17 +688,44 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         口语零工程词——K16 白盒钉锁死）；`reason` 只进日志字段。
         """
         from sim.api import ws as _ws_mod
-        from sim.core.persistence.fork_orchestration import orchestrate_load_anchor
+        from sim.core.persistence.fork_orchestration import (
+            locate_anchor,
+            orchestrate_materialized_load_anchor,
+        )
 
+        changed = False
         while pending_loads:
             _request_id, anchor_id = pending_loads.popleft()
+            activated = False
             try:
-                await orchestrate_load_anchor(
+                location = await locate_anchor(store.session_factory, anchor_id)
+                _, materialized = await orchestrate_materialized_load_anchor(
                     store.session_factory,
                     anchor_id=anchor_id,
                     flush_in_flight=on_flush_async,
                     register_child=register_new_branch,
+                    hooks=materialization_hooks(target_tick=location.tick),
+                    make_current=True,
                 )
+                restored: TickLoop = materialized.world
+                loop.state = restored.state
+                loop.context = restored.context
+                loop.chaos = restored.chaos
+                loop.clock.restore_tick(restored.state.tick)
+                if restored.context.combat_active:
+                    loop.enter_combat()
+                else:
+                    loop.exit_combat()
+                loop.pending_events.clear()
+                loop.pending_delta_entity_ids.clear()
+                loop.pending_broadcast_events.clear()
+                loop.pending_combat_visuals.clear()
+                loop.perception_frames = {}
+                world_revision += 1
+                for control in manager.controls():
+                    control.cancel_fast_forward()
+                changed = True
+                activated = True
                 # 批次 E（review I2 修复）：读档=分叉 → 进程内 runtime 账本全部
                 # 清零——旧分支的 hp/余额/关系/冷却跨分支残留会造成「一刀秒杀」
                 # /「凭空余财」（账本是**本分支**的世界状态投影，分叉即失效）。
@@ -766,8 +762,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 memory_store.attach_branch(await store.current_branch_id_or_none())
                 logger.info("fork.runtime_ledgers_reset", anchor_id=anchor_id)
                 logger.info("fork.load_completed", anchor_id=anchor_id)
+                app.state.world_source_ready = True
                 load_outcomes.append((anchor_id, True))
+                pointer = _ws_mod.anchor_pointer(anchor_id)
+                await manager.broadcast_json(
+                    session_state_payload(
+                        speed=int(loop.clock.speed) or 1,
+                        paused=loop.clock.speed == 0,
+                        anchor=pointer,
+                        notice=_ws_mod.fork_notice(pointer.get("name", "") if pointer else ""),
+                        tick=loop.state.tick,
+                    )
+                )
+                await manager.broadcast_json(_ws_mod.timescale_payload(loop.context.combat_active))
+                await manager.broadcast_json(snapshot_payload(loop, tile_map))
             except Exception as exc:
+                if activated:
+                    app.state.world_source_ready = False
+                    loop.clock.set_speed(0)
                 logger.warning(
                     "fork.load_failed",
                     anchor_id=anchor_id,
@@ -780,6 +792,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await manager.broadcast_json(
                     _ws_mod._error_frame("load_anchor", "load_failed", "这个档读不出来了。")
                 )
+        return changed
 
     def register_new_branch(_new_branch_id: str) -> None:
         """子分支可载性登记（观察日志；两套注册表勿混，K4 §3.4）。"""
@@ -969,9 +982,12 @@ async def ws_endpoint(ws: WebSocket) -> None:
                     "auth_error",
                     "authentication required",
                 )
-            elif msg_type in {"move_request", "set_control"}:
+            elif msg_type in {"move_request", "set_control", "player_impulse"}:
                 async with app.state.world_write_lock:
-                    reply = handle_client_message(raw, app.state.loop, pf, control)
+                    if not getattr(app.state, "world_source_ready", True):
+                        reply = _error_frame(msg_type, "bad_action", "此刻动不了。")
+                    else:
+                        reply = handle_client_message(raw, app.state.loop, pf, control)
             else:
                 reply = handle_client_message(raw, app.state.loop, pf, control)
             if msg_type == "hello":

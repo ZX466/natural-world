@@ -659,6 +659,18 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
     return payload
 
 
+def timescale_payload(active: bool, *, ws_seq: int = 0) -> dict[str, Any]:
+    """当前时间尺的表现声明；既用于事件广播，也用于读档后的全量同步。"""
+    return {
+        "type": "timescale",
+        "channel": "control",
+        "v": _PROTOCOL_VERSION,
+        "ws_seq": ws_seq,
+        "mode": "combat" if active else "normal",
+        "active": active,
+    }
+
+
 def monologue_payload(form: str, content: str, *, name: str | None = None) -> dict[str, Any]:
     """独白帧（monologue，narrative 通道；§8 三形态）。
 
@@ -1192,7 +1204,8 @@ def _handle_load_anchor(
     anchor_id 是**不透明串**（§6.5：禁 anc_ 之类前缀特征校验）——非法只回 bad_anchor，
     形状不被特征拒绝。载入执行失败（重放损坏等）降级为 load_failed，绝不炸断 handler。
 
-    **M5-K3（D-6）**：成功路径返回**两帧**——`session_state`（分叉告知：一行叙事化
+    同步兼容 hook 完成后返回两帧；生产 hook 返回 None 表示排队，完成才由 driver 广播。
+    **M5-K3（D-6）**：同步成功返回**两帧**——`session_state`（分叉告知：一行叙事化
     文本 + 游标指针；branch_id/seq/tick 一律不出网关）与随后的全量 `full_snapshot`。
     失败路径仍是单帧 error（§3.3 连接不断）。
     """
@@ -1209,6 +1222,9 @@ def _handle_load_anchor(
         # 重放中世界状态损坏等执行异常：降级 load_failed，连接保持（§3.3）
         logger.warning("ws.anchor_load_failed", reason="hook_exception")
         return _load_failed_frame()
+    if ok is None:
+        # 生产 hook 只登记请求；完成帧由恢复成功后的 driver 发出。
+        return None
     if not ok:
         return _load_failed_frame()
     # 短期同步路径（§3.4）：复用 snapshot_payload；长期 driver 化后本分支由广播接替。
@@ -1388,8 +1404,13 @@ async def run_world_driver(
             combat_visuals = loop.pending_combat_visuals
             loop.pending_combat_visuals = []
             # flush 写事务收口之后才跑读档分叉（写者串行）。
-            if drain_loads is not None:
-                await drain_loads()
+            if drain_loads is not None and await drain_loads():
+                # 分支已切换，不能把旧帧的增量/独白/战斗表现再推到新快照之后。
+                moved = set()
+                events = []
+                combat_visuals = []
+                if loop.pathfinder is not None:
+                    tile_map = loop.pathfinder.tile_map
         if on_day_switch is not None:
             new_day = game_time(loop.state.tick).day
             if new_day != prev_day:
@@ -1407,16 +1428,7 @@ async def run_world_driver(
             if event.event_type is EventKind.COMBAT_SCALE_CHANGE:
                 active = bool(event.payload["entering"])
                 seq += 1
-                await manager.broadcast_json(
-                    {
-                        "type": "timescale",
-                        "channel": "control",
-                        "v": _PROTOCOL_VERSION,
-                        "ws_seq": seq,
-                        "mode": "combat" if active else "normal",
-                        "active": active,
-                    }
-                )
+                await manager.broadcast_json(timescale_payload(active, ws_seq=seq))
         for exchange, actor_id, posture in combat_visuals:
             seq += 1
             await manager.broadcast_json(
