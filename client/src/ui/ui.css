@@ -395,6 +395,24 @@
   color: #ffb4a2;
 }
 
+.od-impulse__notice {
+  margin: 0;
+  padding: 0.32rem 1rem 0;
+  font-size: 0.78rem;
+  color: #f0d9ad;
+  animation: od-impulse-notice 6s ease-out forwards;
+}
+
+@keyframes od-impulse-notice {
+  0%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 .od-impulse__form {
   position: relative;
   display: flex;
