@@ -55,7 +55,7 @@ class WorldState(BaseModel):
 
 
 class TickContext(BaseModel):
-    """tick 内共享上下文：时间尺开关 + RNG 抽签状态缓存（不入快照）。"""
+    """tick 内共享上下文：时间尺与 RNG 进度只进内部检查点，不进表现快照。"""
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 

@@ -467,6 +467,11 @@ async def _create_anchor(payload: AnchorCreate, request: Request) -> dict[str, A
     loop = getattr(request.app.state, "loop", None)
     if loop is None:
         raise HTTPException(status_code=400, detail="/errors/world-not-ready") from None
+    if not getattr(request.app.state, "world_source_ready", True):
+        _current_branch_id_or_400()  # 保留「无当前世界线」的既有诊断，不用恢复态遮盖真源故障。
+        raise HTTPException(
+            status_code=400, detail="/errors/world-not-ready|世界尚未恢复完成，请稍候。"
+        ) from None
     _assert_name_clean(payload.name)  # R-9：先世界就绪(400)后词表(422)，错误序对齐契约表
     # 先确认真源存在，禁止 preflush 把歧义库或封存库「修复」成可存档的主线。
     branch_id = _current_branch_id_or_400()

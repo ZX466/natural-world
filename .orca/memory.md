@@ -9,12 +9,12 @@
 
 ## 0. 本会话状态
 
-- **HEAD**：`076ed21`（P-2/P-4/P-6 收尾）+ `bb56e20`（merge P-1）+ `4a5dfa3`（P-1）
+- **HEAD**：`ca25abd`（两树记忆更正）→ 之上收编 codex 4 单（O / 审计 / DA-01 / DA-02）
 - **协议**：1.11（真相源 `sim/api/ws.py::_PROTOCOL_VERSION`，前端 `client/src/net/ws.ts` 同源）
 - **工作树：两棵**（2026-10-21 用户重申，长期有效）
   - 主树 `E:/zxdevelop/project7` → 分支 `main`（Claude）
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex` → 分支 `codex`（HEAD 随其提交推进，收编前以实际 `git log` 为准）
-- **远程**：本地领先 `gitee/main` 37 个提交，按纪律不推
+- **远程**：本地领先 `gitee/main`，按纪律不推
 
 ## 1. 里程碑
 
@@ -32,14 +32,24 @@
 | client vitest | 138 passed / 25 files |
 | check_implementation_status | 未发现新缺口 |
 
-## 3. 当前唯一剩余缺口
+## 3. 当前剩余缺口（codex 审计 8 组：2 P0 + 6 P1，已修 2 组）
 
-**O 单：心声提交成功无文字反馈**（`client/src/ui/ImpulseBar.tsx`）。
-- 现状：`lastImpulseCue` 只进 `data-cue`，CSS 边色一闪，**无文字**
-- 断线时 `ws.ts` 静默丢包，现象与成功完全相同
-- 派单已写入 codex 树 `.orca/talking.txt`（79 行极简版），回执区仍是「待开工」
-- **阻塞**：codex TUI 起不来 → `account/read failed ... workspace routing discovery failed (code -32603)`；
-  修复方式 `codex login` 或重启 Orca 后重新登录
+来源 `docs/security/gameplay-integrity-audit-2026-10-21.md`（codex `974611e`）：
+
+| # | 缺口 | 状态 |
+|---|---|---|
+| P0-1 | 重启二次创世污染日志 | ✅ `846a052` |
+| P0-2 | 历史读档 head-only / 世界态未恢复 | ✅ `de3a8ae` |
+| DA-03 | 余额/火场账本清零未重建 | ⬜ 未修 |
+| DA-04 | 人物/中文货名目标不兼容 | ⬜ 未修 |
+| DA-05 | 建筑表现跨分支残留 | ⬜ 未修 |
+| DA-06 | 坍塌还原未应用实时碰撞 | ⬜ 未修 |
+| DA-07 | 主角走 NPC 死亡删除 | ⬜ 未修 |
+| DA-08 | 重启后主角双控制源 | ⬜ 未修 |
+
+> **不得称「全部玩法已修」**——codex 明确边界：上述 6 组仍未修。
+> 另：`check_implementation_status` 是静态结构检查，不等于玩法验收。
+> **已关闭**：O 单（`9447d1b`，心声反馈 + 断线不谎报，客户端 143 passed）。
 
 ## 4. 本轮已修（P 单四项，读档族清零）
 
@@ -116,3 +126,23 @@
 | 旧恢复卡（M6 收官态） | 245–860 行 |
 
 **无本地归档时**：`git log -p -- .orca/memory.md` 可取回任一历史版本。
+
+---
+
+# ④ codex 树快照（权威来源：codex 树 `.orca/memory.md`；收编时原样并入）
+
+【2026-10-21 DA-02｜历史读档核心链完成，已收编】DA-01 已独立提交 846a052；本次接真实物化链，临时世界展开/RNG 恢复与存档 tick 对齐，make_current 显式交接当前子线 + seq0 检查点 + 玩家 protected 游标，默认归档分叉不变。请求登记不确认，成功后才发 session_state/timescale/full_snapshot；清旧帧与旧 LLM 等待结果。事务失败保留原世界；提交后投影失败暂停、停止 AI 并拒写命令/存档，保留原无当前线诊断。真实 SQLite 红钉 2F 起步，补跨档决策/投影失败/时间尺/游标红后修绿；定向 79P，事务 43P，错误契约 55P。最终常规集显式排除 2 条既有缺地图素材用例后 2789P/131S/74D（408.25s），ruff/format/pyright 和 gen:protocol:check 全绿。主树 076ed21 不在本树，收编 main.py 时保留主树 P-2/P-4/P-6 恢复/还原代码；本次未重复实现它们。报告 docs/security/gameplay-integrity-audit-2026-10-21.md，日志 .orca/da02-*.log。
+
+【2026-10-21 DA-01｜冷启动恢复完成，已收编】用户直接授权继续修审计缺口。build_loop 只在空库创世，按 is_current 恢复完整世界检查点/事件尾部；非空批次事件与内部检查点同事务落库，含时钟/战斗尺/混沌链/PCG64。重复创世拒绝启动，不删旧日志；无当前指针只留诊断面、停止推进。新增 12 条重启/谱系/回滚/行走回归；红 4F 及子线 seq0 红 1F→定向 41P，附 API/鉴权集 52P；常规集排除 2 条已知缺素材用例后 2774P/131S/74D（399.66s），ruff/format/pyright 全绿。全局 API 夹具隔离临时 world.db 并停用自动模型决策，人工世界夹具已改合法创世/完整快照。报告 docs/security/gameplay-integrity-audit-2026-10-21.md；日志 .orca/da01-*.log。
+
+【2026-10-21 深度复检｜报告完成】基准 main@3cbcd8d 的独立源码快照，未 merge main/改主树/调用真模型。确认 8 组（2 P0+6 P1）：重启重创世污染日志、历史读档 head-only 与旧快照提前确认、资金/火场清零未重建、人物/中文货名目标不兼容、建筑表现跨分支残留、坍塌还原日志未应用实时碰撞、主角走 NPC 死亡删除、重启后主角双控制源。既有相关 62 项+同夹具地图对照 2 项通过；新增 5 条完整性回归全红。复现与 JSON 在 `.orca/audits/20261021-main-3cbcd8d/`。
+
+## 收编踩坑（2026-10-21 merge codex）
+
+- **`world_restore.flush_world` 与 P-6 `_with_structure_tile_restore` 必须叠加**：派生在前
+  （`maintenance.observe` 会 pop REMOVED），然后整批交给 `flush_world` 写检查点。
+  二选一都会丢东西——只走 `flush_world` 丢坍塌还原，只走 `flush_tick` 丢检查点。
+- **codex 树的 `.orca/memory.md` 是旧全文副本**（2797 行），主树已瘦身到 118 行；
+  合并时取主树版再人工并入 codex 新快照，不要盲目 `--theirs`。
+- codex 树缺 `sim/content/assets/god-packs/taohuayuan-online/tiled-map.json`，
+  两条地图确定性生成用例在其树内必失败——**主树有该文件**，合并后不成立。

@@ -243,8 +243,8 @@ sim/api/ws  (FastAPI WebSocket 网关)
 - 触发 §12 读档流程：定位 (branch_id,seq) → 快照 → 重放 → 新分支 → 流 `full_snapshot`。
 - 重放毫秒级，期间客户端显示"片刻后……"叙事化过渡，绝不显示"重放中/tick"。
 - `anchor_id` 是**不透明字符串**（12 位 hex，`uuid4().hex[:12]`）——**不得**用 `startsWith('anc_')` 之类前缀特征做校验（`anchors-api.md` §6.5：`anc_` 前缀惯例不存在）。
-- **分发契约见 `ws-dispatch-proposal.md` §3**（M5-K4）：注册、入站校验、失败走 WS error 帧（`code:"load_failed"`）**且不断线**、成功发 `full_snapshot`。**M5-K6 已注册**（白名单 + `_CHANNEL_FOR: session` 成对）；`anchor_id` 缺失/空/非串 → `bad_anchor`，其余形状一律按不透明串走查表（§6.5 禁前缀特征），载入失败/异常 → `load_failed` 且**不断线**。成功走短期同步路径（提案 §8.4）：回 `full_snapshot`；「定位→快照→重放」driver 化后由广播接替（提案 §3.4 长期方案）。
-- **M5-K3 增：读档成功回两帧**（`session_state` 告知帧 + `full_snapshot`）——这是 K4 §0.1「单回复通道」的唯一增补例外（分叉这件事必须**被告知**，不能只把画面换掉）。失败路径仍单帧 error（不断线）。处置用 `ws.py::frames_of()` 摊平。
+- **分发契约见 `ws-dispatch-proposal.md` §3**（M5-K4）：注册、入站校验、失败走 WS error 帧（`code:"load_failed"`）**且不断线**、成功发 `full_snapshot`。**M5-K6 已注册**（白名单 + `_CHANNEL_FOR: session` 成对）；`anchor_id` 缺失/空/非串 → `bad_anchor`，其余形状一律按不透明串走查表（§6.5 禁前缀特征），载入失败/异常 → `load_failed` 且**不断线**。生产采用提案 §3.4 的 driver 异步恢复与广播完成通道。
+- **生产读档先登记，完成后回帧**：登记请求时不发成功确认或旧快照；driver 实际恢复世界、交接当前子线与玩家游标后，依次广播 `session_state` 告知、既有 `timescale` 战斗状态、`full_snapshot`。失败只发 error（不断线）。同步兼容 hook 已完成时仍可通过 `frames_of()` 返回告知与全量两帧。以上复用现有消息形状，协议版本不变。
 
 #### sync_request.data（C→S） / full_snapshot 响应见 §4.1
 

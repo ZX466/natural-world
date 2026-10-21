@@ -100,29 +100,34 @@ async def locate_anchor(
     """anchor 表行 → 世界线指针。
 
     anchor 行由 K7 落库路径写入（`(branch_id, seq)` 指针，不复制世界态）；
-    tick 由事件流回查（分叉点 tick 是克隆截断判据之一）。
+    tick 取存档时刻；同一事件游标后仍可能有安静时间，不能用事件 tick 代替。
     """
     async with session_factory() as session:
         row = (
             await session.execute(
-                text("SELECT branch_id, seq FROM player_anchors WHERE id = :aid AND protected = 0"),
+                text(
+                    "SELECT branch_id, seq, tick FROM player_anchors"
+                    " WHERE id = :aid AND protected = 0"
+                ),
                 {"aid": anchor_id},
             )
         ).first()
         if row is None:
             raise OrchestrationError(f"anchor 不存在: {anchor_id!r}")
-        branch_id, seq = str(row[0]), int(row[1])
-        tick = (
+        branch_id, seq, tick = str(row[0]), int(row[1]), int(row[2])
+        cursor = (
             await session.execute(
-                text("SELECT tick FROM events WHERE branch_id = :b AND seq = :s"),
+                text("SELECT 1 FROM events WHERE branch_id = :b AND seq = :s")
+                if seq > 0
+                else text("SELECT 1 FROM snapshots WHERE branch_id = :b AND seq = 0"),
                 {"b": branch_id, "s": seq},
             )
         ).scalar_one_or_none()
-    if tick is None:
-        raise OrchestrationError(
-            f"anchor {anchor_id!r} 指向的事件不存在（branch={branch_id!r}, seq={seq}）"
-        )
-    return AnchorLocation(branch_id=branch_id, seq=seq, tick=int(tick))
+        if cursor is None:
+            raise OrchestrationError(
+                f"anchor {anchor_id!r} 指向的事件不存在（branch={branch_id!r}, seq={seq}）"
+            )
+        return AnchorLocation(branch_id=branch_id, seq=seq, tick=tick)
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +198,7 @@ async def orchestrate_materialized_load_anchor(
     register_child: Callable[[str], None] | None = None,
     store: SqlEventStore | None = None,
     new_branch_id: str | None = None,
+    make_current: bool = False,
 ) -> tuple[ForkResult, Materialization]:
     """历史点读档全链：定位 → 诊断 → 物化 → 分叉 → 登记（返回 ``(fork, 物化)``）。
 
@@ -229,6 +235,7 @@ async def orchestrate_materialized_load_anchor(
         vec_conn=vec_conn,
         kind="anchor",
         package=materialization,
+        make_current=make_current,
     )
     if register_child is not None:
         register_child(result.new_branch_id)
