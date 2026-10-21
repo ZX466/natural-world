@@ -156,9 +156,8 @@ M0–M6 六个里程碑**全部收官**（M6 于 2026-10-05 宣告，四道门 G
 | M5 | 读档=分叉（anchors）+ 权力机制数据面 + 火灾数据面 + 性能治理 |
 | M6 | 权力→决策传导 + 火灾机制面 + 死亡对称删除 + 内容面 + 定标（POWER 翻硬） |
 
-**当前门禁**（2026-10-20 实测，`-m "not bench"`）：**2752 passed / 121 skipped / 2 failed** · ruff clean · pyright 0 · `gen-protocol --check` EXIT 0 · 协议版本 **1.9**。
-两个 failed 是**本机降频下的计时假红**（`test_bench_willingness::test_tick_overhead_delta_sanity`、`test_m6_fire_mechanics::TestSpreadComplexity`）——
-它们是性能护栏而非功能断言，正被补 `@pytest.mark.bench` 移出常规门禁（codex 单 A）。功能面零失败。
+**当前门禁**（2026-10-21 实测，`-m "not bench"`）：`exit 0` · ruff clean · pyright 0 · `gen-protocol --check` EXIT 0 · 协议版本 **1.11**。
+计时类护栏已移入 `bench` 标记（`5b4ce50`），常规门禁不再受本机降频影响。
 skip 全部为设计态（T4 真模型探针、T3 live-fire、T5 golden、降频自检门与环境门）。
 
 ## 实现程度速查（2026-10-20 复检）
@@ -179,7 +178,6 @@ skip 全部为设计态（T4 真模型探针、T3 live-fire、T5 golden、降频
 | `fire_runtime` 读档不清零 | 旧分支的火烧到新分支；`fire_seq` 跨分支污染 | **已修**（`reset()`，且更正了「fork 层已处理」的错误注释） |
 | `derive_tile_events` 零生产调用 | 建筑坍塌/拆除后格子**永久为墙**——事件流里没有恢复可走的事件 | **已修**（`on_flush` 在 `maintenance.observe` 前补发逐格还原） |
 | 心声提交**成功**无文字反馈 | 只有输入条边色一闪；玩家不确定「收到没有」，断线时更无声 | **未修**（O 单） |
-| `BuildRuntime` 重启/读档不恢复在建工地 | 读档后历史档里的在建建筑永久停滞 | **已修**（启动与读档两处 `restore_from_events`） |
 | `perception` 帧不出站 | **非缺口**：设计明示只进 Agent 侧（`ws-protocol.md:65`） | 已裁定 |
 | 计时类测试混在常规门禁 | 本机降频时 2 条假红，掩盖真实回归 | 已修（`5b4ce50`） |
 
