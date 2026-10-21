@@ -99,9 +99,14 @@ class IntentGate:
         ):
             return GateVerdict(False, "missing_target")
         # buy/sell：target_id 是**货名**（herb/salve/meal）非实体——不查实体表
-        # （E3 价目表校验在执行面 buy_price/_GOOD_INDEX；闸门只查缺省）。
+        # （DA-04：规范化后必须命中既有 ID 目录，幻觉货名不进执行队列）。
         if intent.action in ("buy", "sell") and intent.target_id is None:
             return GateVerdict(False, "missing_target")
+        if intent.action in ("buy", "sell"):
+            from sim.world.economy import _GOOD_INDEX
+
+            if intent.target_id not in _GOOD_INDEX:
+                return GateVerdict(False, "unknown_good")
         if (
             intent.action not in ("buy", "sell")
             and intent.target_id is not None
@@ -133,6 +138,13 @@ class IntentGate:
         # 同一 reason 混入其他未触发属性照样拒绝（浮现后仍受闸门审查）。
         if hidden is not None and hidden_leak_scan(intent.reason, hidden, triggered):
             return GateVerdict(False, "hidden_attribute_leak")
+        if intent.action in ("buy", "sell"):
+            from sim.world.economy import _GOOD_INDEX
+
+            if intent.target_id is None:
+                return GateVerdict(False, "missing_target")
+            if intent.target_id not in _GOOD_INDEX:
+                return GateVerdict(False, "unknown_good")
         if intent.action in ("talk_to", "take", "give", "attack", "use"):
             if intent.target_id is not None and intent.target_id not in state.entities:
                 return GateVerdict(False, "target_gone")

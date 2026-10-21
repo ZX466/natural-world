@@ -26,6 +26,7 @@ import structlog
 
 from sim.agent.gate import IntentGate
 from sim.agent.intent import Intent, parse_intent
+from sim.agent.targets import nearby_actor_names, resolve_actor_target, resolve_good_target
 from sim.core.events import WorldEvent
 from sim.core.tick import TickLoop
 from sim.core.world import WorldState
@@ -130,10 +131,10 @@ class ChenmoDriver:
         interoception_text: str = "",
         landmarks_text: str = "",
     ) -> bool:
-        """一轮决策：prompt → LLM → 解析 → 闸门 → pending。True = 有意图入队。
+        """一轮决策：prompt → LLM → 解析 → 闸门 → pending。
 
-        任何失败（无 profile / LlmError / 解析失败 / 闸门拒绝）→ False +
-        结构化日志，**零事件**（世界照常运转；闸门拒绝时 pending 不动）。
+        无 profile / LlmError / 解析失败返回 False；正常解析的决策轮返回 True。
+        闸门拒绝只记结构化日志，不入 pending、不产事件，沿既有节拍等待下一轮。
         """
         profile = self._profile_provider()
         if profile is None:
@@ -148,13 +149,22 @@ class ChenmoDriver:
             except Exception as exc:  # 感知面故障不拖垮决策（降级空处境）
                 logger.warning("chenmo.perception_failed", detail=str(exc))
                 perception_text = ""
+        display_names = {
+            entity_id: name
+            for entity_id in state.entities
+            if (name := self._display_name_of(entity_id))
+        }
+        people = nearby_actor_names(
+            state, display_names=display_names, actor_id=self._anchor.entity_id
+        )
+        people_text = f"你认得这些人：{'、'.join(people)}。" if people else ""
         prompt = assemble_prompt(
             anchor=self._anchor,
             memory=MemorySlice(entries=memory_entries),
             situation=SituationSlice(
                 perception_text=perception_text,
                 interoception_text=interoception_text,
-                landmarks_text=landmarks_text,
+                landmarks_text="\n".join(text for text in (landmarks_text, people_text) if text),
             ),
             plan=PlanSlice(),
             user_input=InputSlice(thought=impulse or ""),
@@ -171,8 +181,30 @@ class ChenmoDriver:
         except Exception as exc:  # IntentParseError 及任何解析异常
             logger.warning("chenmo.parse_failed", tick=tick, detail=str(exc))
             return False
+        if intent.target_id is not None:
+            resolved = (
+                resolve_good_target(intent.target_id)
+                if intent.action in ("buy", "sell")
+                else resolve_actor_target(
+                    intent.target_id,
+                    state,
+                    display_names=display_names,
+                    actor_id=self._anchor.entity_id,
+                )
+            )
+            if resolved is not None:
+                intent = intent.model_copy(update={"target_id": resolved})
+            # 未解析的原文仍送既有 gate，不把幻觉/重名改成可执行目标。
         verdict = self._gate.validate(intent, state, self._anchor.entity_id)
         if verdict.rejected:
+            if intent.action in ("buy", "sell"):
+                logger.info(
+                    "chenmo.trade_rejected",
+                    tick=tick,
+                    action=intent.action,
+                    target_id=intent.target_id,
+                    reason=verdict.reason,
+                )
             logger.info(
                 "chenmo.gate_rejected",
                 tick=tick,
@@ -201,7 +233,7 @@ class ChenmoDriver:
             assemble_prompt,
         )
 
-        name = self._display_name_of(target_id) or target_id
+        name = self._display_name_of(target_id) or "眼前的人"
         context_register = self._speech_context_of(target_id) if self._speech_context_of else None
         fallback = template_line(
             self._anchor.entity_id, name, tick, speech_context=context_register
@@ -248,6 +280,14 @@ class ChenmoDriver:
             )
             if verdict.rejected:
                 self._chat_lines.pop(id(intent), None)
+                if intent.action in ("buy", "sell"):
+                    logger.info(
+                        "chenmo.trade_rejected",
+                        tick=loop.state.tick,
+                        action=intent.action,
+                        target_id=intent.target_id,
+                        reason=verdict.reason,
+                    )
                 logger.info("chenmo.revalidate_rejected", reason=verdict.reason)
                 continue
             if (
@@ -399,7 +439,7 @@ class ChenmoDriver:
                     loop.issue_move(actor_id, list(path))
                 except ValueError:
                     pass  # 不可达：原地喊话（fail-soft，聊天仍发生）
-        listener_name = self._display_name_of(target_id) or target_id
+        listener_name = self._display_name_of(target_id) or "眼前的人"
         line = self._chat_lines.pop(id(intent), None)
         if line is None:
             context = self._speech_context_of(target_id) if self._speech_context_of else None
@@ -416,7 +456,16 @@ class ChenmoDriver:
         from sim.world.economy import _GOOD_INDEX, buy_price
 
         good = _GOOD_INDEX.get(intent.target_id or "")
-        if good is None or self._economy is None:
+        if good is None:
+            logger.info(
+                "chenmo.trade_rejected",
+                tick=loop.state.tick,
+                action=intent.action,
+                target_id=intent.target_id,
+                reason="unknown_good",
+            )
+            return
+        if self._economy is None:
             return
         actor_id = self._anchor.entity_id
         ledger, seed = self._economy()
