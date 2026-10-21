@@ -2317,6 +2317,8 @@ uv run ruff check . && uv run pyright <改动文件>
 - cline P05：`*.tsbuildinfo` 已加 .gitignore ✅；`_PROTOCOL_VERSION` 与前端 `v` 统一 1.0（并代改了我前端域 `client/src/net/ws.ts` 的硬编码，见 §3.10）；K04 前置就绪。
 - 待我：若有 K04 之外的 M2 派发，以 talking.txt 为准。
 # ④ codex 树（安全/合规/风险域）
+【2026-10-21 深度复检｜报告完成】基准 main@3cbcd8d 的独立源码快照，未 merge main/改主树/调用真模型。确认8组（2 P0+6 P1）：重启重创世污染日志、历史读档head-only与旧快照提前确认、资金/火场清零未重建、人物/中文货名目标不兼容、建筑表现跨分支残留、坍塌还原日志未应用实时碰撞、主角走NPC死亡删除、重启后主角双控制源。既有相关62项+同夹具地图对照2项通过；新增5条完整性回归全红。报告 docs/security/gameplay-integrity-audit-2026-10-21.md；复现与JSON在 .orca/audits/20261021-main-3cbcd8d/。本轮只交审计材料，下一步优先DA-01/DA-02世界恢复链，按主树分工施工。
+
 【2026-10-20 单 M｜状态色点可访问性完成】色点增加 role=status、中文 aria-label 与 title，复用四态连接文字，视觉不变；红钉 4 failed→组件 8 passed，客户端全量 138 passed，tsc/prettier/build 通过。已 ff 同步 main defa89b（含用户 WorldScene 冲突修复与 setScale mock）。下一步 O→N→P；N 已授权名字归一化与最近 12 人姓名清单，P 恢复工地；仅本树提交。
 
 【2026-10-20 单 K｜拒绝日志与 prompt 体检完成】gate_rejected 仅加 action/target_id/reason_len，不记录 reason 全文或改变决策。红钉 1 failed→定向 29 passed，ruff/pyright 通过。调查：assembler 要求目标直接说名字，main 感知提供中文名，没有显式 name→id 候选映射；gate 按 state.entities 内部键查，存在姓名/ID 契约不一致。受控 prompt 捕获：姓名有、villager_01 无，未调用真模型；无法恢复此前两次被拒目标。只提可见姓名唯一解析方案，未改 prompt/闸门。I ad4d554；H 26d9008；J 0e008e2+43ed58c；L 已撤回；最新有效 J/H/I/K 队列全部完成，D/E 后置。
