@@ -533,6 +533,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     fire_runtime = FireRuntime()
     app.state.fire_runtime = fire_runtime
 
+    # DA-03 补：两本账都是纯内存态，构造点在此（不在 build_loop）——冷启动必须
+    # 按**当前分支谱系**重放，否则进程重启后余额归零、`fire_seq` 归零会让下一场
+    # 火重发 `fire-1` 撞库里既有主键（`FireWriteError` 打死驱动）。
+    if current_branch is not None:
+        _cold_events = await NpcStore(store, branch_id=current_branch).read_branch_history()
+        coin_ledger.restore_from_events(_cold_events)
+        fire_runtime.restore_from_events(_cold_events)
+
     def _fire_tick_hook(state: Any, tick: int) -> list[Any] | None:
         events: list[Any] = []
         if ignite_due(loop.state.world_seed, tick):

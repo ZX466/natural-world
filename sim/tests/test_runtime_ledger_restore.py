@@ -145,3 +145,61 @@ def test_invalid_recorded_debit_cannot_replace_ledger_with_negative_or_partial_b
         ledger.restore_from_events(bad_history)
     assert ledger.balance_of("chenmo") == 100
     assert ledger.balance_of("villager_01") == 0
+
+
+# ---------------------------------------------------------------------------
+# 主树补充：进程重启（冷启动）也必须重建账本
+# ---------------------------------------------------------------------------
+
+
+async def test_cold_start_rebuilds_coin_balance_and_active_fires(tmp_path, monkeypatch):
+    """DA-03 补：`coin_ledger`/`fire_runtime` 在 lifespan 构造，build_loop 只恢复世界。
+
+    进程重启后两本账若不接线，余额归零（村民工钱凭空消失）且 `fire_seq` 归零
+    ⇒ 下一场火重新签发 `fire-1`，与库里既有 `fire-1` 撞主键，`flush_tick` 抛
+    `FireWriteError`（`ws.py` 驱动循环无 try/except ⇒ 世界直接停摆）。
+    """
+
+    async def idle_driver(*args, **kwargs):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(main, "run_world_driver", idle_driver)
+    monkeypatch.chdir(tmp_path)
+    captured = []
+
+    async def capture(frame):
+        captured.append(frame)
+
+    monkeypatch.setattr(main.manager, "broadcast_json", capture)
+
+    async with main.lifespan(main.app):
+        app = main.app
+        loop = app.state.loop
+        assert app.state.coin_ledger.apply_grant("chenmo", 500, tick=loop.state.tick)
+        loop.enqueue(coin_grant_event(loop.state.tick, "chenmo", 500, "工钱"))
+        positions = [
+            (x, y)
+            for y in range(app.state.tile_map.height)
+            for x in range(app.state.tile_map.width)
+            if app.state.tile_map.is_walkable(x, y)
+        ]
+        for event in app.state.fire_runtime.ignite_at(
+            tick=loop.state.tick, x=positions[0][0], y=positions[0][1]
+        ):
+            loop.enqueue(event)
+        await app.state.flush_for_anchor()
+
+    async with main.lifespan(main.app):
+        app2 = main.app
+        assert app2.state.loop.state.tick > 0
+        assert app2.state.coin_ledger.balance_of("chenmo") == 500
+        assert {cell.fire_id for cell in app2.state.fire_runtime.cells} == {"fire-1"}
+        assert app2.state.fire_runtime.fire_seq == 1
+        # 重启后的新火不得复用既有 ID（否则 flush 撞主键）
+        events = app2.state.fire_runtime.ignite_at(
+            tick=app2.state.loop.state.tick, x=positions[1][0], y=positions[1][1]
+        )
+        assert events[0].payload["fire_id"] == "fire-2"
+        for event in events:
+            app2.state.loop.enqueue(event)
+        await app2.state.flush_for_anchor()
