@@ -62,8 +62,8 @@ class FireCell:
 class FireStepResult:
     """一个 tick 的蔓延决策（纯输出；调用方落事件+更新内存格）。
 
-    - `spread_to`：本 tick 新点燃的格（调用方为**新场**建 `fire.ignited`——每场一条，
-      W-D3 按**场**聚合）；
+    - `spread_to`：本 tick 新点燃的格，暂带父格 ID；调用方给每个新格签发生命周期 ID，
+      同时替换 `cells` 中对应格，再用该格产 `fire.ignited`，不把父 ID 当作新格 ID；
     - `burn_damage`：烧毁物质事件（`matter.damage` + `material.moved{burned}`，
       一次 tick 至多各 **1 条**——「无状态变更零事件」的反面即「有变更至多一条聚合」）；
     - `burned_out`：燃料尽的 fire_id 清单（调用方走 `FireStore.set_fire_end("fuel_out")`）；

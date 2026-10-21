@@ -8,7 +8,9 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -51,6 +53,19 @@ class CoinLedger:
     def reset(self) -> None:
         """清空全部余额（读档=分叉：账本是本分支投影，分叉即失效——review I2）。"""
         self._balances.clear()
+
+    def restore_from_events(self, events: Iterable[Mapping[str, Any]]) -> None:
+        """按谱系顺序重放账单；坏账拒绝恢复，不伪造余额或夹带旧分支金额。"""
+        from sim.core.events import CoinGrantPayload
+
+        restored = CoinLedger()
+        for event in events:
+            if event.get("event_type") != "coin.grant":
+                continue
+            payload = CoinGrantPayload.model_validate(event["payload"])
+            if not restored.apply_grant(payload.owner_id, payload.delta, tick=int(event["tick"])):
+                raise ValueError("recorded coin grant would produce a negative balance")
+        self._balances = restored._balances
 
     def apply_grant(self, owner: str, delta: int, *, tick: int) -> bool:
         """入账/出账（tick 供将来记账扩展；当前纯余额）。False=余额不足拒绝。"""

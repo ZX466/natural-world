@@ -170,3 +170,21 @@ uv run --project E:/zxdevelop/.orca/worktrees/project7/codex pytest sim/tests/te
 门禁过程中补回了原有「无当前世界线」的细分错误说明，避免恢复门禁遮盖分支真源故障；分支真源、ProblemDetail、WS 鉴权与真实历史档联合复验 **55 passed**。
 
 最终常规门禁与 DA-01 一样显式排除两条既有缺地图素材用例，得到 **2789 passed / 131 skipped / 74 deselected**（408.25s）。ruff、格式、pyright 与协议生成检查通过；两条素材失败仍未修复，不把原始全量标为全绿。
+
+## DA-03：账本恢复清单与边界（2026-10-21，基准 b929406）
+
+| 必须随锚点恢复的投影 | 真源与恢复方式 | 本单状态 |
+|---|---|---|
+| 世界核心、时钟、随机上下文 | 内部世界检查点与事件尾部，沿用 DA-01/DA-02 | 不改检查点形状 |
+| 各人物余额 | 目标分支谱系的 `coin.grant` 按序重放；坏账拒绝，不造负余额 | 接入 `_drain_loads` |
+| 活火格与 ID 序号 | 同一 `fold_fire` 生命周期规则；保留未熄灭格，以全部历史编号（含已熄灭火）恢复最大序号 | 接入 `_drain_loads` |
+| 工地、物质/结构投影与碰撞图 | 沿用主树 P 系装配；工地与余额/活火共用目标谱系历史，地图仍按瓦片事件重建 | 保留既有接线；不代替 DA-05/06 验收 |
+| 健康与战斗 HP | `npc_health` 存疾病/旧伤等属性，不能充当 `CombatLedger._hp`；存活者扣血尚无完整事件来源 | 纳入设计，保留现有清零；另单补可回放健康事实后再恢复 HP |
+
+前置缺陷采用**每个火格一个生命周期 ID**，与 `FireRow` 的单坐标及既有逐格点火事件一致。`FireRuntime` 给新格签发 ID 时同时替换步进结果中的格，事件读取同一个格的 ID；原有重复起火/熄灭拒绝规则保留。真实 SQLite 红钉先复现三步蔓延后格/回放不符与燃尽重复熄灭整批写失败，再修复生产方，不吞掉 `FireWriteError`。
+
+火回放包含祖先分叉点前缀，`upto_seq` 只限制本分支；不同分支的局部 seq 不能混排。读档后新火可接续最大历史编号，父线分叉后的金额、起火和序号均不进入子线。余额重建先在临时账本完成，坏账不替换已有有效账本。
+
+恢复的是生命周期事实与活火格集合。燃料仍是纯运行态，恢复时使用现有点火预算 12，不承诺读档前剩余燃料逐位一致；没有新增持久化字段、事件种类或 WS 帧。本单只在派单指定的 `_drain_loads` 接余额/活火恢复，冷启动余额/活火装配仍未扩修；健康 HP 也未声称已恢复。
+
+验证：前置真实落库红钉 **2 failed**（格/事件 ID 不符、重复熄灭拒写），账本读档红钉 **6 failed / 4 passed**（100→0、活火/序号清空、嵌套分叉无法付款）；修复后相关集 **101 passed / 1 deselected**。原始 `uv run pytest -m 'not bench' -q --tb=short` 实测 **2818 passed / 131 skipped / 72 deselected / 2 failed**（285.72s），两条失败仍为 `test_m4d16_territory.py::TestTownGodMap::test_deterministic_build` 与 `test_m7_town_map.py::TestTownMap::test_deterministic_build`，本树缺 `tiled-map.json`，未掩盖或扩修。ruff、格式检查与 pyright 通过；原始门禁不能标为全绿。日志 `.orca/da03-{fire-red,fire-green,ledger-red,ledger-green,focused,python-full,pyright}.log`。

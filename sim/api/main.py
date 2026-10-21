@@ -822,6 +822,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 if branch_id is None:
                     raise RuntimeError("fork completed without an active branch")
                 branch_store = NpcStore(store, branch_id=branch_id)
+                branch_events = await branch_store.read_branch_history()
+                coin_ledger.restore_from_events(branch_events)
+                fire_runtime.restore_from_events(branch_events)
                 maintenance.ledger = await branch_store.materialize_matter()
                 maintenance.structures = await branch_store.materialize_structures()
                 tile_map = await rebuild_tile_map(branch_store)
@@ -829,7 +832,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 build_runtime.tile_map = tile_map
                 # P-2：工地账本纯内存，清零后须从**本分支**事件流恢复在建工地
                 # （不清零则旧工地跨分支推进并发出旧 structure_id 的事件）。
-                build_runtime.restore_from_events(await branch_store.read_branch_history())
+                build_runtime.restore_from_events(branch_events)
                 pathfinder.observe_map(tile_map)
                 pathfinder.cache.entries.clear()
                 maintenance._cascades.clear()
