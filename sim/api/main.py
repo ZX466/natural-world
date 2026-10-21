@@ -87,6 +87,21 @@ def _default_map() -> TileMap:
     return _fallback_map()
 
 
+async def rebuild_tile_map(branch_store: Any) -> TileMap:
+    """从静态底图与本分支的瓦片事件重建碰撞，不继承旧分支内存图。"""
+    from sim.core.events import TileChangedPayload
+
+    tile_map = _default_map()
+    if branch_store is not None:
+        for event in await branch_store.read_branch_history():
+            if event["event_type"] == "tile_changed":
+                payload = TileChangedPayload.model_validate(event["payload"])
+                tile_map = tile_map.with_collision(
+                    payload.x, payload.y, walkable=payload.tile_id != 0
+                )
+    return tile_map
+
+
 async def build_loop() -> tuple[TickLoop, Any]:
     """组装世界：store（建表）+ bus + TickLoop + 创世 + 出生点搬运。返回 (loop, store)。"""
     from sqlalchemy.ext.asyncio import create_async_engine
@@ -178,7 +193,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     loop, store = await build_loop()
     world_write_lock = asyncio.Lock()
     app.state.world_write_lock = world_write_lock
-    tile_map = _default_map()
+    from sim.core.persistence.npc_store import NpcStore
+
+    current_branch = await store.current_branch_id_or_none()
+    tile_map = await rebuild_tile_map(
+        NpcStore(store, branch_id=current_branch) if current_branch is not None else None
+    )
     # C06-③：感知挂载进 tick 固定执行序第 3 步（帧键=rtoken，WS 不广播）
     # 批次 D8：感知叙事接真名（rtoken→戏内名映射；名册 villagers + 陈默）。
     # 名字是戏内事实可出站；映射后 prompt 说「赵铁柱正朝这边走」而非「rt-…」。
@@ -335,11 +355,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     maintenance = WorldMaintenance(ledger=matter_ledger, structures=structure_snapshots)
 
     def _build_tick_hook(state: Any, tick: int) -> list[Any] | None:
+        nonlocal tile_map
         events = build_runtime.on_tick(tick)
         if events:
             # TILE_CHANGED → 寻路缓存失效（§14 chunk 失效；图换新实例后
             # pathfinder 需感知——observe_map 对齐新几何）。
-            pathfinder.observe_map(build_runtime.tile_map)
+            tile_map = build_runtime.tile_map
+            app.state.tile_map = tile_map
+            pathfinder.observe_map(tile_map)
         return events or None
 
     loop.attach_npc_runtime(_build_tick_hook)
@@ -673,7 +696,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         return True  # 受理即 True；失败由 driver 侧记 load_failed
 
     async def _drain_loads() -> None:
-        nonlocal demography
+        nonlocal demography, tile_map
         """driver 每帧调用：执行 pending fork（事件循环内，可 await）。
 
         失败帧（案 B 最小形，K16 审计稿 §3.2）：失败走既有 `_error_frame` +
@@ -718,6 +741,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 branch_store = NpcStore(store, branch_id=branch_id)
                 maintenance.ledger = await branch_store.materialize_matter()
                 maintenance.structures = await branch_store.materialize_structures()
+                tile_map = await rebuild_tile_map(branch_store)
+                app.state.tile_map = tile_map
+                build_runtime.tile_map = tile_map
+                pathfinder.observe_map(tile_map)
+                pathfinder.cache.entries.clear()
                 maintenance._cascades.clear()
                 maintenance._collapsed.clear()
                 memory_store.attach_branch(await store.current_branch_id_or_none())

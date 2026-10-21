@@ -272,6 +272,10 @@ class NpcStore:
         self._branch_id = branch_id
         self._memory_pipeline = memory_pipeline or MemoryWritePipeline()
 
+    async def read_branch_history(self) -> list[dict]:
+        """当前分支的完整、有界谱系事件，供可重建 runtime 投影使用。"""
+        return await self._events.read_branch_history(self._branch_id)
+
     @property
     def branch_id(self) -> str:
         return self._branch_id
