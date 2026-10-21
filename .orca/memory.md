@@ -11,7 +11,7 @@
 
 - **HEAD**：`b929406`（merge codex：O 单 + 审计 + DA-01/DA-02）
 - **在飞**：DA-03 已派 codex（含 P0-3 火焰 ID 前置缺陷），回执待收；codex 树已 fast-forward 到 `b929406`
-- **未决**：是否推送双远程（本地领先 43 提交，按纪律暂不推）
+- **未决**：是否推送双远程（2026-10-21 现测领先 origin/gitee 各 44 提交，按纪律暂不推）
 - **协议**：1.11（真相源 `sim/api/ws.py::_PROTOCOL_VERSION`，前端 `client/src/net/ws.ts` 同源）
 - **工作树：两棵**（2026-10-21 用户重申，长期有效）
   - 主树 `E:/zxdevelop/project7` → 分支 `main`（Claude）
