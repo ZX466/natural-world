@@ -1,9 +1,26 @@
 ﻿﻿﻿﻿﻿
-<!-- ===== 新对话快速恢复卡（Claude 主树，2026-10-20 两树制/A 档画面）===== -->
-<!-- 0. 本会话状态：main `cef95dd`（A 档画面 0768f2b + workflow 两树制 b4244ef），
+<!-- ===== 新对话快速恢复卡（Claude 主树，2026-10-21 P 单收清）===== -->
+<!-- 0. 本会话状态：main `bb56e20`（合并 P-1）+ 本轮 P-2/P-4/P-6 待提交；
+     协议 1.9；两棵树制未变（远程只留 main）。
+     **P 单四项已全部落地**（此前 README「真实缺口」的读档族清零）：
+       P-1 `4a5dfa3`：`rebuild_tile_map` + `SqlEventStore.read_branch_history`
+         （沿 fork 链取祖先前缀，闭区间 [0,fork_seq]，seq 从 1 起故 0 不命中）；
+         启动 lifespan 与 `_drain_loads` 两处重建，同步 state/runtime/pathfinder。
+       P-2 `BuildRuntime.reset()` + `restore_from_events()`：重放 started/checkpoint
+         重建 `_site`，遇 completed/collapsed/removed 清空；启动与读档两处调用。
+       P-4 `FireRuntime.reset()`：**更正了 main.py 原注释**「火场由 fork 编排层承担」
+         ——fork_orchestration 根本不引用 fire，旧火确实会烧进新分支。
+       P-6 `_with_structure_tile_restore()`：`on_flush` 里在 `maintenance.observe`
+         **之前**补发逐格 `tile_changed(静态原值)`（observe 会 pop REMOVED，晚了没 tiles）。
+         还原值逐格取 `_ground_tile_id`，不能共用首格（水面格要仍是水）。
+     测试：`sim/tests/test_p_branch_restore.py` 11 条 + 契约测试 skip 解除共 15 条全绿。
+     坑：`WorldEvent.payload` 是 **dict**（不是 pydantic 对象），测试断言用 `["x"]`；
+        `StructureSnapshot` 字段是 `phase: StructurePhase`，无 `state`/`integrity`；
+        `collision=True` 表示**可走**（变量名误导）；`_default_map()` 的 (3,4) 恰是障碍，
+        契约测试不可写死坐标。 -->
+<!-- 0a. 本会话状态（上一轮，供对照）：main `cef95dd`（A 档画面 0768f2b + workflow 两树制 b4244ef），
      本地实测 2752P/121S/2F（2F=降频假红，codex 单 A 已提交 5b4ce50 修）、
-     124 前端测试（vitest 4）、ruff/format/pyright 全 0，协议 1.9。
-     **两棵树**：main（本树，Claude）+ codex 工作树；远程只留 main（用户 2026-10-20 裁定）。 -->
+     124 前端测试（vitest 4）、ruff/format/pyright 全 0，协议 1.9。 -->
 <!-- 0b. 主树 2026-10-20 自修两笔（已提交）：
      cef95dd fix(render) 创世动物不再画成人形村民——ANIMAL_SPRITES 显式表
        (cat_grey→fauna_cat / dog_black→fauna_dog / raven→fauna_raven)，前端补三张剪影；

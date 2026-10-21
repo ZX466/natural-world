@@ -51,6 +51,15 @@ class FireRuntime:
         self.cells = cells
         self.fire_seq = fire_seq
 
+    def reset(self) -> None:
+        """清空火场账本（读档=分叉时调用）。
+
+        火格是**本分支**的世界状态投影：不清零会让旧分支的火烧进新分支，
+        且 `fire_seq` 继续递增会污染新分支的 `fire_id` 命名空间。
+        """
+        self.cells = ()
+        self.fire_seq = 0
+
     def step(
         self,
         *,

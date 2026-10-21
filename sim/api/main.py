@@ -33,7 +33,7 @@ from sim.api.ws import (
     snapshot_payload,
     ws_auth_token,
 )
-from sim.core.events import world_create_event
+from sim.core.events import EventKind, tile_changed_event, world_create_event
 from sim.core.persistence.database import create_session_factory, init_database
 from sim.core.persistence.store import SqlEventStore
 from sim.core.rng import RngRegistry
@@ -100,6 +100,62 @@ async def rebuild_tile_map(branch_store: Any) -> TileMap:
                     payload.x, payload.y, walkable=payload.tile_id != 0
                 )
     return tile_map
+
+
+#: 需要补发 tile 还原事件的结构终态（起点 STARTED/CHECKPOINT 不改占格）。
+_TILE_RESTORING_KINDS = {
+    EventKind.STRUCTURE_COLLAPSED,
+    EventKind.STRUCTURE_REMOVED,
+}
+
+
+def _ground_tile_id(tile_map: TileMap, x: int, y: int) -> int:
+    """静态底图在 (x,y) 的原 tile_id。
+
+    ground/collision 挂在 **Chunk** 上（`sim/world/map.py`），不是 TileMap
+    顶层数组：全局坐标要先 chunk_of 再折成本地下标。
+    """
+    from sim.world.map import CHUNK_SIZE
+
+    chunk = tile_map.chunks[tile_map.chunk_of(x, y)]
+    lx, ly = x % CHUNK_SIZE, y % CHUNK_SIZE
+    return int(chunk.ground[ly * CHUNK_SIZE + lx])
+
+
+def _with_structure_tile_restore(
+    events: list[Any],
+    structures: Any,
+    tile_map: TileMap,
+) -> list[Any]:
+    """P-6：坍塌/拆除后补发逐格 `tile_changed(tile_id=静态原值)`。
+
+    没有这一步，建筑倒了格子却**永久为墙**（`derive_tile_events` 此前零生产
+    调用点），玩家会看到看不见的障碍。还原目标取静态底图原值，因此拆掉建筑
+    后地面恢复成它本来的样子（草地仍可行走、水面仍不可走）。
+
+    `structures` 必须是**事件应用前**的快照（调用方在 observe 之前调用）。
+    """
+    out: list[Any] = []
+    for event in events:
+        out.append(event)
+        if event.event_type not in _TILE_RESTORING_KINDS:
+            continue
+        sid = str(event.payload.get("structure_id", ""))
+        snapshot = getattr(structures, "get", lambda _k: None)(sid)
+        if snapshot is None:
+            continue
+        # 逐格还原到**该格**的静态原值（不能共用首格值）。
+        for x, y in snapshot.tiles:
+            out.append(
+                tile_changed_event(
+                    event.tick,
+                    x,
+                    y,
+                    _ground_tile_id(tile_map, x, y),
+                    branch_id=event.branch_id,
+                )
+            )
+    return out
 
 
 async def build_loop() -> tuple[TickLoop, Any]:
@@ -232,6 +288,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     async def on_flush(events: list[Any]) -> None:
         branch_id = await store.current_branch_id_or_none() or "main"
+        # P-6：结构终态（坍塌/拆除）必须补发逐格 tile_changed 恢复可走。
+        # 派生必须在 maintenance.observe **之前**——observe 会把 REMOVED 从
+        # structures pop 掉，之后拿不到 tiles；且此时快照仍是事件前的旧态，
+        # 正好是派生需要的「该结构占着哪些格」。
+        events = _with_structure_tile_restore(events, maintenance.structures, tile_map)
         await NpcStore(store, branch_id=branch_id).flush_tick(events)
         maintenance.observe(events)
         for event in events:
@@ -345,6 +406,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sim.agent.build_exec import BuildRuntime
 
     build_runtime = BuildRuntime(tile_map, seed=loop.state.world_seed)
+    # P-2：重启后在建工地不丢——从当前分支事件流恢复（`_site` 是纯内存态）。
+    _start_branch = await store.current_branch_id_or_none()
+    if _start_branch is not None:
+        build_runtime.restore_from_events(
+            await NpcStore(store, branch_id=_start_branch).read_branch_history()
+        )
     app.state.build_runtime = build_runtime
 
     # 结构瓦片以 maintenance 的事件折叠为准，on_flush 完工后投影 built。
@@ -718,7 +785,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 # 批次 E（review I2 修复）：读档=分叉 → 进程内 runtime 账本全部
                 # 清零——旧分支的 hp/余额/关系/冷却跨分支残留会造成「一刀秒杀」
                 # /「凭空余财」（账本是**本分支**的世界状态投影，分叉即失效）。
-                # 火场账本既有同款清理由 fork 编排层承担；本批账本在此收口。
+                # P-4 更正：火场账本**并不**由 fork 编排层处理（fork_orchestration
+                # 不引用 fire）——此前注释所述有误，旧火确实会跨分支继续烧。
                 demography = Demography(seed=loop.state.world_seed)
                 app.state.demography = demography
                 errands.reset()
@@ -728,6 +796,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 combat_ledger.reset()
                 coin_ledger.reset()
                 chat_ledger.reset()
+                fire_runtime.reset()  # P-4
+                build_runtime.reset()  # P-2
                 monologue_last.clear()
                 monologue_quota.clear()
                 chat_last.clear()
@@ -744,6 +814,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 tile_map = await rebuild_tile_map(branch_store)
                 app.state.tile_map = tile_map
                 build_runtime.tile_map = tile_map
+                # P-2：工地账本纯内存，清零后须从**本分支**事件流恢复在建工地
+                # （不清零则旧工地跨分支推进并发出旧 structure_id 的事件）。
+                build_runtime.restore_from_events(await branch_store.read_branch_history())
                 pathfinder.observe_map(tile_map)
                 pathfinder.cache.entries.clear()
                 maintenance._cascades.clear()

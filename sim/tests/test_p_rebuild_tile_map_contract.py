@@ -66,9 +66,45 @@ def test_tile_changed_event_carries_branch() -> None:
     assert ev.payload["tile_id"] == 0
 
 
-@pytest.mark.skip(
-    reason="待 P 单实现：rebuild_tile_map 尚未合并进 main。"
-    "codex 提交后去掉 skip 并断言三态（空分支/墙/恢复可走）。"
-)
-def test_rebuild_tile_map_is_pure_from_events() -> None:
-    """（占位）空分支 → 静态图；仅墙事件 → 不可走；恢复事件 → 可走。"""
+@pytest.mark.asyncio
+async def test_rebuild_tile_map_is_pure_from_events() -> None:
+    """空分支 → 静态图；仅墙事件 → 不可走；恢复事件 → 可走（三态）。"""
+
+    class _Store:
+        def __init__(self, events: list[dict]) -> None:
+            self._events = events
+
+        async def read_branch_history(self) -> list[dict]:
+            return self._events
+
+    from sim.api.main import rebuild_tile_map
+
+    def _tile_ev(x: int, y: int, tile_id: int) -> dict:
+        # branch_id 在事件顶层，不在 payload 内（TileChangedPayload 禁止 extra）。
+        return {
+            "event_type": "tile_changed",
+            "tick": 1,
+            "branch_id": "main",
+            "payload": {"x": x, "y": y, "tile_id": tile_id},
+        }
+
+    # 空分支：等价静态底图——找一个底图本来就可走的格子做基准。
+    empty = await rebuild_tile_map(_Store([]))
+    walkable_xy = next(
+        (x, y) for y in range(empty.height) for x in range(empty.width) if empty.is_walkable(x, y)
+    )
+    # 底图原值（恢复事件的正确目标）从这里取，不写死。
+    from sim.api.main import _ground_tile_id
+
+    ground_id = _ground_tile_id(empty, *walkable_xy)
+    assert ground_id != 0, "可走格的底图 tile_id 不应是墙体占位"
+
+    # 仅墙事件：该格不可走。
+    walled = await rebuild_tile_map(_Store([_tile_ev(*walkable_xy, 0)]))
+    assert not walled.is_walkable(*walkable_xy)
+
+    # 恢复事件（底图原值）：该格重新可走。
+    restored = await rebuild_tile_map(
+        _Store([_tile_ev(*walkable_xy, 0), _tile_ev(*walkable_xy, ground_id)])
+    )
+    assert restored.is_walkable(*walkable_xy)

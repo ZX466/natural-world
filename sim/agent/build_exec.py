@@ -63,6 +63,62 @@ class BuildRuntime:
     def build_cost(self) -> int:
         return BUILD_COST_COINS
 
+    def reset(self) -> None:
+        """丢弃内存工地账本（读档=分叉时调用）。
+
+        事件流才是真相：新分支的 `_site` 由 `restore_from_events` 从该分支
+        （含祖先前缀）的 `structure_started/checkpoint` 重建；不清零会让
+        旧分支的工地跨分支继续推进并发出旧 `structure_id` 的事件。
+        """
+        self._site = None
+
+    def restore_from_events(self, events: list[dict]) -> None:
+        """从事件流重建在建工地（读档/启动；须先 `reset()`）。
+
+        只认「started 之后没有 completed/collapsed/removed」的那一处工地——
+        E4 仍是单工地模型，遇到多处未终态工地取**最后一条 started**（与
+        运行时行为一致：新工地开始时旧工地必然已终态）。
+        """
+        site: _Site | None = None
+        for raw in events:
+            kind = raw.get("event_type")
+            payload = raw.get("payload") or {}
+            if kind == "structure.started":
+                site = _Site(
+                    progress=BuildProgress(
+                        structure_id=str(payload["structure_id"]),
+                        progress=0.0,
+                        quality=0.8,
+                        integrity=1.0,
+                        build_rule_version=str(payload["build_rule_version"]),
+                        started_tick=int(raw["tick"]),
+                        planned_duration_ticks=int(payload["planned_duration_ticks"]),
+                    ),
+                    tiles=tuple(tuple(t) for t in payload["tiles"]),
+                    owner_id=str(payload.get("owner_id", "")),
+                    kind=str(payload["kind"]),
+                    material=str(payload["material"]),
+                )
+            elif kind == "structure.checkpoint" and site is not None:
+                if payload.get("structure_id") == site.progress.structure_id:
+                    site.progress = site.progress.__class__(
+                        structure_id=site.progress.structure_id,
+                        progress=float(payload["progress"]),
+                        quality=float(payload["quality"]),
+                        integrity=float(payload["integrity"]),
+                        build_rule_version=str(payload["build_rule_version"]),
+                        started_tick=site.progress.started_tick,
+                        planned_duration_ticks=site.progress.planned_duration_ticks,
+                        last_checkpoint_tick=int(raw["tick"]),
+                    )
+            elif (
+                kind in ("structure.completed", "structure.collapsed", "structure.removed")
+                and site is not None
+                and payload.get("structure_id") == site.progress.structure_id
+            ):
+                site = None
+        self._site = site
+
     def start(self, owner_id: str, pos: tuple[int, int], *, tick: int) -> WorldEvent | None:
         """2×2 选格 → started 事件（None=格不可走/已有工地）。"""
         if self._site is not None:
