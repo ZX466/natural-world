@@ -9,9 +9,9 @@
 
 ## 0. 本会话状态
 
-- **HEAD**：`afdfeb9`（DA-03 收编 + 冷启动账本补修）
-- **已收编**：DA-03 `d5c2931`（merge `4ec5112`）；主树另补 `afdfeb9` 冷启动接线
-- **在飞**：无。下一单建议 DA-04（人物/中文货名目标）；**DA-05 待 DA-03 落定后派**（本轮已落）
+- **HEAD**：`f7720d7`（merge codex：DA-04 目标规范化）
+- **已收编**：DA-03 `d5c2931`（merge `4ec5112`，另补 `afdfeb9` 冷启动）；DA-04 `ecc9a14`（merge `f7720d7`）
+- **在飞**：无。下一单 **DA-05**（建筑表现跨分支残留），**派单须允许改 `client/src`**（见 §3 备注）
 - **未决**：是否推送双远程（按纪律不推，收编前以现测为准）
 - **协议**：1.11（真相源 `sim/api/ws.py::_PROTOCOL_VERSION`，前端 `client/src/net/ws.ts` 同源）
 - **工作树：两棵**（2026-10-21 用户重申，长期有效）
@@ -24,20 +24,22 @@
 **M0–M6 全部收官**（M6 于 2026-10-05，G1–G4 全 ✅）；**M7 渲染面**已落（地图/时钟/视角/昼夜）。
 代码侧整体完成，剩余是收口型缺口。
 
-## 2. 门禁（2026-10-21 DA-03 收编后实测）
+## 2. 门禁（2026-10-21 DA-04 收编后实测）
 
 | 项 | 结果 |
 |---|---|
-| sim 全量 pytest（`-m "not bench"`） | 2831 passed / 121 skipped / 72 deselected，0 failed（303s） |
-| ruff check / ruff format | clean / 350 文件已格式化 |
-| pyright sim/ | 0 errors |
+| sim 全量 pytest（`-m "not bench"`） | **2857 passed** / 121 skipped / 72 deselected，**0 failed**（327s） |
+| ruff check / ruff format | clean / 352 文件已格式化 |
+| pyright sim/ | 0 errors, 0 warnings |
 | client tsc --noEmit | 0 错误 |
 | client vitest | 143 passed / 26 files |
 | check_implementation_status | 未发现新缺口（未在本轮重跑） |
 
+> **全量已不再需要 `--deselect`**：此前排除的 2 条地图用例是 codex 树缺
+> `sim/content/assets/`（被 gitignore）所致，补齐后两树均可跑全量。
 > 旧读数 2982 收集 / 138 vitest 已过时；上表为合并后现测。
 
-## 3. 当前剩余缺口（codex 审计 8 组 + 主树 P0-3，已修 3 组）
+## 3. 当前剩余缺口（codex 审计 8 组 + 主树 P0-3，已修 4 组，剩 4）
 
 来源 `docs/security/gameplay-integrity-audit-2026-10-21.md`（codex `974611e`）：
 
@@ -47,15 +49,20 @@
 | P0-2 | 历史读档 head-only / 世界态未恢复 | ✅ `de3a8ae` |
 | P0-3 | **火格 `fire_id` 双语义**（主树探针新发现，不在 codex 8 组内）：`sim/world/fire.py:136` 蔓延格继承 `parent.fire_id`，`sim/npc/fire_runtime.py:73-78` 却每格自增签发新 `fire-{seq}` → 同一 ID 重复熄灭 → `FireWriteError` 整批拒写；`sim/api/ws.py:1401` 的 `await on_flush(events)` 无 try/except ⇒ **世界驱动直接死** | ✅ `d5c2931` |
 | DA-03 | 余额/火场账本清零未重建 | ✅ `d5c2931`（读档）+ `afdfeb9`（冷启动） |
-| DA-04 | 人物/中文货名目标不兼容 | ⬜ 未修 |
+| DA-04 | 人物/中文货名目标不兼容 | ✅ `ecc9a14`（merge `f7720d7`） |
 | DA-05 | 建筑表现跨分支残留 | ⬜ 未修 |
 | DA-06 | 坍塌还原未应用实时碰撞 | ⬜ 未修 |
 | DA-07 | 主角走 NPC 死亡删除 | ⬜ 未修 |
 | DA-08 | 重启后主角双控制源 | ⬜ 未修 |
 
-> **不得称「全部玩法已修」**——上述 6 组仍未修（P0-3 与 DA-03 已修，剩 6 组）。
+> **不得称「全部玩法已修」**——剩 **DA-05/06/07/08 四组**未修。
 > 另：`check_implementation_status` 是静态结构检查，不等于玩法验收。
 > **已关闭**：O 单（`9447d1b`，心声反馈 + 断线不谎报，客户端 143 passed）。
+>
+> **DA-05 派单注意**：不是纯服务端问题，必须允许改 `client/src`——① `ws.ts:170`
+> `full_snapshot` 走 `applyStructures()` 是 upsert 不清旧；② `on_flush` 只投影
+> `structure.completed`，collapsed/removed 从不入账；③ 启动路径 `_STRUCTURES`
+> 从未填充（重启后建筑凭空消失）；④ `WorldScene` 只按 size 判重绘。
 
 ### P0-3 实测证据（2026-10-21 主树探针，seed=42）— 已修 `d5c2931`
 
@@ -96,6 +103,7 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 | P0-3 火格 ID 双语义 | 每格一个生命周期 ID，蔓延格换新 ID 并替换内存格；事件与内存格同 ID | `d5c2931` |
 | DA-03 余额/火场读档重建 | `CoinLedger.restore_from_events` + `FireRuntime.restore_from_events`；`FireStore` 同源 fold 计全部历史 ID 作 `fire_seq` 上界 | `d5c2931` |
 | DA-03 冷启动账本 | `lifespan` 构造两账后按当前分支谱系恢复；空库创世跳过 | `afdfeb9` |
+| DA-04 目标规范化 | 新增 `sim/agent/targets.py` 纯函数层：`resolve_actor_target`（唯一活体名、排除自身、曼哈顿 ≤12）/ `resolve_good_target`（中文名→ID，内部 ID 直通）/ `nearby_actor_names`（最近 12 名，只出戏内名）；在 `driver.py` 的 `parse_intent` 之后、`gate.validate` 之前 `model_copy` 重写 `target_id`；未解析原文仍原样送 gate（不放宽）。`economy.name_index()` 只索引唯一货名。`gate` 新增 `unknown_good` 拒绝码（规划期+执行期），未知货名不再静默 return | `ecc9a14` |
 
 ## 5. 踩坑记录（血泪，逐条有效）
 
