@@ -9,7 +9,9 @@
 
 ## 0. 本会话状态
 
-- **HEAD**：`ca25abd`（两树记忆更正）→ 之上收编 codex 4 单（O / 审计 / DA-01 / DA-02）
+- **HEAD**：`b929406`（merge codex：O 单 + 审计 + DA-01/DA-02）
+- **在飞**：DA-03 已派 codex（含 P0-3 火焰 ID 前置缺陷），回执待收；codex 树已 fast-forward 到 `b929406`
+- **未决**：是否推送双远程（本地领先 43 提交，按纪律暂不推）
 - **协议**：1.11（真相源 `sim/api/ws.py::_PROTOCOL_VERSION`，前端 `client/src/net/ws.ts` 同源）
 - **工作树：两棵**（2026-10-21 用户重申，长期有效）
   - 主树 `E:/zxdevelop/project7` → 分支 `main`（Claude）
@@ -40,6 +42,7 @@
 |---|---|---|
 | P0-1 | 重启二次创世污染日志 | ✅ `846a052` |
 | P0-2 | 历史读档 head-only / 世界态未恢复 | ✅ `de3a8ae` |
+| P0-3 | **火格 `fire_id` 双语义**（主树探针新发现，不在 codex 8 组内）：`sim/world/fire.py:136` 蔓延格继承 `parent.fire_id`，`sim/npc/fire_runtime.py:73-78` 却每格自增签发新 `fire-{seq}` → 同一 ID 重复熄灭 → `FireWriteError` 整批拒写；`sim/api/ws.py:1401` 的 `await on_flush(events)` 无 try/except ⇒ **世界驱动直接死** | ⬜ 未修（已并入 DA-03 前置） |
 | DA-03 | 余额/火场账本清零未重建 | ⬜ 未修 |
 | DA-04 | 人物/中文货名目标不兼容 | ⬜ 未修 |
 | DA-05 | 建筑表现跨分支残留 | ⬜ 未修 |
@@ -47,9 +50,22 @@
 | DA-07 | 主角走 NPC 死亡删除 | ⬜ 未修 |
 | DA-08 | 重启后主角双控制源 | ⬜ 未修 |
 
-> **不得称「全部玩法已修」**——codex 明确边界：上述 6 组仍未修。
+> **不得称「全部玩法已修」**——codex 明确边界：上述 6 组仍未修；主树另加 P0-3，共 7 组未修。
 > 另：`check_implementation_status` 是静态结构检查，不等于玩法验收。
 > **已关闭**：O 单（`9447d1b`，心声反馈 + 断线不谎报，客户端 143 passed）。
+
+### P0-3 实测证据（2026-10-21 主树探针，seed=42）
+
+```
+IGNITED:     fire-1(10,10) fire-2(11,10) fire-3(9,10) … fire-21(12,9)
+EXTINGUISH:  fire-1@(5,10) fire-1@(4,10) fire-1@(4,10) …   ← 同一 fire_id 反复熄灭
+flush_tick → FireWriteError: fire_id='fire-1' 已于 tick=… 熄灭，重复熄灭
+```
+
+- 触发时间：该种子第一场火在 **tick 183600**（约 2.1 游戏日），60 天内 22 场 ⇒ 实况两天内必崩。
+- 漏网原因：`test_m4d5_fire_live.py::test_spread_emits_ignite_events` 只断言「有 ignited 事件」，
+  **从未**断言事件 `fire_id` 与内存格一致，也从未跑过落库。
+- 修法方向：统一 `fire_id` 语义（蔓延格与事件必须同 ID），**不要**给每个蔓延格发新 ID。
 
 ## 4. 本轮已修（P 单四项，读档族清零）
 
@@ -69,6 +85,12 @@
 - `_default_map()` 的 (3,4) 恰好是障碍——契约测试不可写死坐标
 - `maintenance.observe` 会 **pop REMOVED**，派生 tile 事件必须抢在它前面
 - 还原值要逐格取 `_ground_tile_id`，不能共用首格（水面格要仍是水）
+- **火的 ID 语义两侧必须对齐**：`FireCell.fire_id`（世界侧）与 `fire.ignited` 事件
+  （运行侧）是同一命名空间；`fold_fire` 对重复 ignite/extinguish **fail-closed**，
+  一侧漂移就是整批 flush 被拒，而不是静默降级
+- **`on_flush` 无 try/except**：`sim/api/ws.py:1401` 的 `await on_flush(events)` 任何异常
+  都会直接打死世界驱动任务（没有降级、没有重试、没有前端告知）。写落库相关代码要按
+  「异常即停服」的标准衡量风险
 
 **核查方法类**
 - **核库后再报**：小写 grep 会漏驼峰符号 → 查符号用 codegraph 或大小写不敏感
