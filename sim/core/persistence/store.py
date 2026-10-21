@@ -322,6 +322,29 @@ class SqlEventStore:
             rows = result.scalars().all()
             return [_event_to_dict(r) for r in rows]
 
+    async def read_branch_history(self, branch_id: str) -> list[dict]:
+        """祖先的分叉点前缀 + 本分支日志；绝不读取祖先分叉后的未来。"""
+        chunks: list[list[dict]] = []
+        seen: set[str] = set()
+        current: str | None = branch_id
+        upper = 2**62 - 1
+        while current is not None:
+            if current in seen:
+                raise ValueError("cyclic branch history")
+            seen.add(current)
+            async with self._session_factory() as session:
+                branch = await session.get(Branch, current)
+                if branch is None:
+                    raise ValueError("missing branch history")
+                parent = branch.forked_from_branch
+                cutoff = branch.forked_from_seq
+            chunks.append(await self.read_range(current, 0, upper))
+            if parent is not None and cutoff is None:
+                raise ValueError("missing branch cutoff")
+            current = parent
+            upper = cutoff if cutoff is not None else 0
+        return [event for chunk in reversed(chunks) for event in chunk]
+
     async def write_snapshot(self, branch_id: str, tick: int, event_seq: int, blob: bytes) -> None:
         """写入快照。seq = event_seq（快照点事件流最大 seq），与 events.seq 语义对齐。
 
