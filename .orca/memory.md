@@ -56,6 +56,18 @@
 | DA-08 | 重启后主角双控制源 | ⬜ 未修 |
 
 > **不得称「全部玩法已修」**——剩 **DA-05/06/07/08 四组**未修。
+>
+> **DA-05 拆单（2026-10-22）**：codex 查出独立前置缺陷——历史读档 fork 时
+> `fork.py:714` `_clone_bounded` **无条件** `INSERT … SELECT` 父分支全表，
+> `structures` 未像 `fires`/`relationships` 那样按包折叠，导致子分支**零 structure 事件
+> 却有结构行**（实测 `STRUCTS_IN_CHILD={'future':'active'}` + `CHILD_STRUCT_EVENTS=[]`）。
+> `_truncation_sql` 注释自述「有界表不截断：前提 P1」，历史档下 P1 不成立。
+> ⇒ 先修 DA-05P（fork 真源），DA-05 的表现层部分 codex 已完成待一并提交。
+>
+> **主树判断纠错记录**：我曾据一次 `save()` 的探针误判为「测试夹具库路径错配，
+> 别动产品代码」，并发回执让 codex 改夹具——**该判断错误**。真因是
+> `locate_anchor`（`fork_orchestration.py:110`）只认 `protected = 0`，
+> 单档情形下锚点不可读，探针因此走了失败分支。codex 的判断正确，我已撤回。
 > 另：`check_implementation_status` 是静态结构检查，不等于玩法验收。
 > **已关闭**：O 单（`9447d1b`，心声反馈 + 断线不谎报，客户端 143 passed）。
 >
