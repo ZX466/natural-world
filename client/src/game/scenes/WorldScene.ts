@@ -79,8 +79,8 @@ export class WorldScene extends Phaser.Scene {
   private bubbleTexts = new Map<string, Phaser.GameObjects.Text>();
   /** E7 建筑投影层（depth 14——旧雾层随雾机制删除退役，此层保留压暗未揭示区语义已无） */
   private structureLayer: Phaser.GameObjects.Graphics | null = null;
-  /** 建筑投影脏标记：structures.size 变化才重绘 */
-  private lastStructureCount = -1;
+  /** 建筑内容签名：同数量的相位/格位变化也须重绘。 */
+  private lastStructureSignature = '';
 
   constructor(mirror: WorldMirror) {
     super({ key: 'world' });
@@ -242,12 +242,13 @@ export class WorldScene extends Phaser.Scene {
     this.syncStructures();
   }
 
-  /** E7 建筑投影：完工结构画深棕占格（size 变化才重绘——静态层零每帧成本）。 */
+  /** E7 建筑投影：内容变化才重绘，保留相位对应的颜色与透明度。 */
   private syncStructures(): void {
     const g = this.structureLayer;
     if (g === null) return;
-    if (this.mirror.structures.size === this.lastStructureCount) return;
-    this.lastStructureCount = this.mirror.structures.size;
+    const signature = JSON.stringify([...this.mirror.structures]);
+    if (signature === this.lastStructureSignature) return;
+    this.lastStructureSignature = signature;
     g.clear();
     for (const structure of this.mirror.structures.values()) {
       for (const [x, y] of structure.tiles) {

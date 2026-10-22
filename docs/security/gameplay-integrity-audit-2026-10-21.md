@@ -210,3 +210,27 @@ uv run --project E:/zxdevelop/.orca/worktrees/project7/codex pytest sim/tests/te
 红钉：主链 **5 failed / 4 passed**，包含真实输出 `assert 0 == 1`（人名未入队）、`assert 100 < 100`（中文货名无扣款）、`assert 1 == 0`（未知货品空执行）；观察者同名另先复现 1 failed。新集 **26 passed**，驱动/gate/prompt/经济/社交/战斗相关集 **116 passed**。全量验证还发现日志代理缓存的测试隔离问题，以及扩大执行距离改动影响旧差事 E10：夹具改用真实新 logger 代理，执行 gate 的原距离策略保持兼容；曼哈顿 12 仅用于本单新增姓名解析/候选范围。日志 `.orca/da04-{red,ambiguity-red,green,focused,python-full,pyright}.log`。
 
 服务日志装配、真实历史读档、规范化与旧差事联合复验 **63 passed**。最终原始 `uv run pytest -m 'not bench' -q --tb=short` 得到 **2857 passed / 121 skipped / 72 deselected / 0 failed**（320.57s），两条地图确定性用例未排除。ruff/格式检查（352 files）、pyright（0 errors）及 diff check 通过。最终日志 `.orca/da04-python-verified.log`；首轮全量失败输出保留在 `.orca/da04-python-full.log`。
+
+## DA-05：建筑表现接线与历史真源前置缺陷（2026-10-21，基准 969e616）
+
+本轮在派单指定文件中接入启动/读档账本重建，复用 `maintenance.structures` 的同一份快照；落库后的 completed/collapsed/removed 分别更新 built/rubble/删除，并由既有增量协议发送 remove。客户端 full_snapshot 清空后替换建筑全集，state_delta 保持增量；WorldScene 用包含 token、相位、格位的内容签名判断重绘。测试复用既有 Scene 加载适配，执行真实 `syncStructures` 并断言 clear、fillStyle、fillRect 调用，没有替换绘图方法。
+
+相位映射：`active→built`，`collapsing→collapsing`，`rubble→rubble`；`planned/building` 不进入完工建筑层，施工仍由既有工地表现负责，避免改变 E7 契约。`structure.collapsed` 已是坍塌终态，必须映射 rubble。协议保持 1.11，未改 StructureDelta 或 WorldCheckpoint。
+
+初始红钉：服务端 **9 failed / 2 passed**，客户端 **5 failed / 4 passed**。接线后相关服务端 **27 passed / 3 failed**；客户端定向 **13 passed**、全量 **149 passed**，TypeScript、ruff/格式检查与 pyright 通过。**DA-05 尚未完成，未提交**：三个剩余失败暴露了边界外的历史分叉真源污染，不能称为全绿或通过删除测试结案。
+
+真实 SQLite 复现：先在 main 的 seq=59 保存，再建 future、保存后加载旧档。新子线的有界事件谱系中 **没有任何 structure 事件**，但 `NpcStore(child).materialize_structures()` 仍返回 future。原始失败为 `AssertionError: branch structure source=['future'], bounded structure events=[]`；命令 `uv run pytest sim/tests/test_structure_presentation_restore.py::test_load_clears_stale_structure_ledger -q --tb=short`，日志 `.orca/da05-source-blocker.log`。
+
+根因在 `sim/core/persistence/fork.py`：历史 anchor 路径只对 fires/relationships 等特殊处理，structures 仍通过 `_clone_bounded` 克隆父分支 head 行。该路径不能套用「分叉点就是父线头部」的 P1 前提。须先独立修复历史 structures 投影按包游标生成子线，再验收 DA-05；本轮未越界修改 fork，也未用禁用的 replay 或过滤维护账本掩盖问题。
+
+原始全量 `uv run pytest -m 'not bench' -q --tb=short`：**2865 passed / 121 skipped / 72 deselected / 3 failed**（300.50s），没有排除任何用例。失败仅为新集的旧档清理、旧档恢复、子线重启三条；原有基准用例未失败。日志 `.orca/da05-python-full.log`。门禁仍红，不提交；工作区保留实现和回归测试，等待前置修复或 talking 明确扩界。
+
+## DA-05P：按历史游标生成子线建筑真源（2026-10-22）
+
+主树复验确认前置缺陷，并在 talking 明确允许修改 `fork.py` 的 structures 克隆路径。新增历史 anchor 特判：在原分叉事务内，从包的 branch/seq 沿祖先分叉点读取有界结构事件，各层按本地 seq 排序、祖先在先；复用 `fold_structure_snapshot` 生成子线结构行。没有复制父 head 的结构投影，也没有将不同分支的 seq 混排。循环、缺分支或缺祖先截止点会拒绝并回滚；head 分叉沿用原克隆路径。
+
+写入保留格位、材料、承重、支撑关系、归属、建造者和完工时间；坍塌保留 rubble，移除不留结构行。没有更改物化包、blob/schema、WorldCheckpoint 或 `materialize_structures_replay` 接口，main 仍从维护快照重建 WS 表现，DA-05 的相位映射与客户端实现保留。
+
+先复跑指定三钉，得到 **3 failed**（`.orca/da05p-red.log`）；另补未来坍塌/拆除回退和嵌套分叉，先得到 **3 failed**（`.orca/da05p-boundaries-red.log`）。这些用例故意在同 tick 保存不同 seq，验证不能用时间或父 head 近似游标。修复后建筑/读档/物化编排相关集 **149 passed**（`.orca/da05p-focused.log`），客户端全量 **149 passed / 27 files**、TypeScript、ruff/格式检查与 pyright 通过。最终全量与提交见 talking 完成回执。
+
+最终原始 `uv run pytest -m 'not bench' -q --tb=short`：**2871 passed / 121 skipped / 72 deselected / 0 failed**（330.00s），无额外排除。ruff check、ruff format（353 files）、pyright（0 errors）、客户端 tsc 及 vitest（149 passed）均通过；`.orca/da05p-python-full.log` 保留全量输出。本单与前置缺陷已闭合；DA-06/07/08 不在本轮范围，尚未修复。
