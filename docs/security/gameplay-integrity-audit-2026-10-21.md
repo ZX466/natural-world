@@ -234,3 +234,11 @@ uv run --project E:/zxdevelop/.orca/worktrees/project7/codex pytest sim/tests/te
 先复跑指定三钉，得到 **3 failed**（`.orca/da05p-red.log`）；另补未来坍塌/拆除回退和嵌套分叉，先得到 **3 failed**（`.orca/da05p-boundaries-red.log`）。这些用例故意在同 tick 保存不同 seq，验证不能用时间或父 head 近似游标。修复后建筑/读档/物化编排相关集 **149 passed**（`.orca/da05p-focused.log`），客户端全量 **149 passed / 27 files**、TypeScript、ruff/格式检查与 pyright 通过。最终全量与提交见 talking 完成回执。
 
 最终原始 `uv run pytest -m 'not bench' -q --tb=short`：**2871 passed / 121 skipped / 72 deselected / 0 failed**（330.00s），无额外排除。ruff check、ruff format（353 files）、pyright（0 errors）、客户端 tsc 及 vitest（149 passed）均通过；`.orca/da05p-python-full.log` 保留全量输出。本单与前置缺陷已闭合；DA-06/07/08 不在本轮范围，尚未修复。
+
+## DA-06：结构终态立即更新在线碰撞（2026-10-22）
+
+`on_flush` 在事件与检查点成功落库后，才增量应用含结构终态批次里的 `tile_changed`。新地图同时交给 app、BuildRuntime 和 Pathfinder，并清空路径缓存；普通 flush 不重建或替换地图。P-6 的瓦片事件派生仍在 maintenance.observe 之前，且只派生一次。
+
+真实 lifespan 红钉先复现坍塌、拆除后在线格仍不可走：**2 failed / 1 passed**，原文 `AssertionError: persisted tile restoration must update live collision`。修复后建筑/历史加载/工地相关集 **37 passed**；测试同时验证三处引用、真实寻路、缓存清理、在线图与事件重建图的逐格一致，以及无结构终态时保持地图实例。日志 `.orca/da06-{red,focused,python-full,pyright,client}.log`；最终门禁见 talking 回执。
+
+最终原始全量 **2874 passed / 121 skipped / 72 deselected / 0 failed**（325.32s），ruff/格式检查（354 files）、pyright（0 errors）、客户端 tsc 与 vitest（149 passed）均通过；无额外排除。DA-06 已闭合，DA-07/08 继续按本波派单处理。

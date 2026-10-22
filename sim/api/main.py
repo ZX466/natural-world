@@ -37,7 +37,7 @@ from sim.api.ws import (
     snapshot_payload,
     ws_auth_token,
 )
-from sim.core.events import EventKind, tile_changed_event, world_create_event
+from sim.core.events import EventKind, TileChangedPayload, tile_changed_event, world_create_event
 from sim.core.persistence.database import create_session_factory, init_database
 from sim.core.persistence.store import SqlEventStore
 from sim.core.rng import RngRegistry
@@ -304,6 +304,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
 
     async def on_flush(events: list[Any]) -> None:
+        nonlocal tile_map
+
         from sim.core.persistence.world_restore import flush_world
 
         branch_id = await store.current_branch_id_or_none() or "main"
@@ -315,6 +317,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # 同事务），但**派生必须先做**，派生后的完整列表才是本批真相。
         events = _with_structure_tile_restore(events, maintenance.structures, tile_map)
         await flush_world(store, branch_id, loop, events)
+        if any(event.event_type in _TILE_RESTORING_KINDS for event in events):
+            # 落库成功后增量消费本批瓦片真相，不能只等下一次读档重建。
+            for event in events:
+                if event.event_type is EventKind.TILE_CHANGED:
+                    tile = TileChangedPayload.model_validate(event.payload)
+                    tile_map = tile_map.with_collision(tile.x, tile.y, walkable=tile.tile_id != 0)
+            app.state.tile_map = tile_map
+            build_runtime.tile_map = tile_map
+            pathfinder.observe_map(tile_map)
+            pathfinder.cache.entries.clear()
         maintenance.observe(events)
         for event in events:
             if event.event_type is EventKind.STRUCTURE_REMOVED:
