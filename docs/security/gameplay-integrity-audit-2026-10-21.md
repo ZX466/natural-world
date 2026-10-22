@@ -242,3 +242,11 @@ uv run --project E:/zxdevelop/.orca/worktrees/project7/codex pytest sim/tests/te
 真实 lifespan 红钉先复现坍塌、拆除后在线格仍不可走：**2 failed / 1 passed**，原文 `AssertionError: persisted tile restoration must update live collision`。修复后建筑/历史加载/工地相关集 **37 passed**；测试同时验证三处引用、真实寻路、缓存清理、在线图与事件重建图的逐格一致，以及无结构终态时保持地图实例。日志 `.orca/da06-{red,focused,python-full,pyright,client}.log`；最终门禁见 talking 回执。
 
 最终原始全量 **2874 passed / 121 skipped / 72 deselected / 0 failed**（325.32s），ruff/格式检查（354 files）、pyright（0 errors）、客户端 tsc 与 vitest（149 passed）均通过；无额外排除。DA-06 已闭合，DA-07/08 继续按本波派单处理。
+
+## DA-08：主角控制权由装配方显式声明（2026-10-22）
+
+`assemble_runtime` 接受不可变的外控实体名单，在构造效用矩阵与隐藏档之前排除这些实体；生产装配声明陈默由 `ChenmoDriver` 拥有。规则与人物档案是否已存在无关，不再依赖首启时主角尚未写库的偶然顺序。通用 NPC 装配的默认行为不变，普通村民继续走效用层；没有增加自动 LLM 故障降级或第二控制者。
+
+用同一隔离库连续启动两次真实 lifespan，覆盖首启与重启：红钉 **1 failed**，原文 `AssertionError: controller ownership must not depend on startup timing`、`Extra items in the right set: 'chenmo'`。修复后相关装配/重启/历史读取/主角驱动集 **47 passed**，测试同时检查两轮名册一致、主角无效用动作、普通 NPC 确实有动作、专用驱动存在及效用矩阵人数一致。日志 `.orca/da08-{red,focused,python-full,pyright,client}.log`；最终门禁见 talking 回执。
+
+最终原始全量 **2875 passed / 121 skipped / 72 deselected / 0 failed**（325.52s），ruff/格式检查（355 files）、pyright（0 errors）、客户端 tsc 与 vitest（149 passed）均通过，无额外排除。DA-08 已闭合；DA-07 的新失能/恢复事件与接线范围已提策略申请，依派单要求等待主树核准，尚未实现。

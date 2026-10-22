@@ -395,7 +395,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("npc.seeded", count=seeded)
     await seed_animals(store.session_factory)
     npc_store = NpcStore(store)
-    npc_runtime, _hidden_states = await assemble_runtime(npc_store)
+    # 控制权归属：陈默由 ChenmoDriver 独占，档案是否已持久化不改变装配规则。
+    npc_runtime, _hidden_states = await assemble_runtime(
+        npc_store, external_controller_ids=frozenset({CHENMO_ID})
+    )
     # 批次 D14：真实意愿面——逐人合成（性格/需求/处境 → band 全谱），
     # 替换 D2 的全队 band=1 占位（「四句循环」根因收口）。最终都执行
     # （§10）：verdict 只产独白/defers，不改效用决策。
