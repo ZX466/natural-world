@@ -28,8 +28,12 @@ from sim.api.ws import (
     frames_of,
     handle_client_message,
     map_static_payload,
+    remove_structure,
+    reset_structures,
+    restore_structures,
     run_world_driver,
     session_state_payload,
+    set_structure_phase,
     snapshot_payload,
     ws_auth_token,
 )
@@ -313,13 +317,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await flush_world(store, branch_id, loop, events)
         maintenance.observe(events)
         for event in events:
-            if event.event_type.value == "structure.completed":
-                from sim.api.ws import set_structure_phase
-
+            if event.event_type is EventKind.STRUCTURE_REMOVED:
+                # observe 已 pop 真源；按 ID 删表现账本，不能再从 structures 取。
+                remove_structure(str(event.payload["structure_id"]))
+            elif event.event_type in {
+                EventKind.STRUCTURE_COMPLETED,
+                EventKind.STRUCTURE_COLLAPSED,
+            }:
                 sid = str(event.payload["structure_id"])
                 structure = maintenance.structures.get(sid)
                 if structure is not None:
-                    set_structure_phase(sid, list(structure.tiles), "built")
+                    phase = (
+                        "rubble" if event.event_type is EventKind.STRUCTURE_COLLAPSED else "built"
+                    )
+                    set_structure_phase(sid, list(structure.tiles), phase)
         cognition.observe(events)
         branch_id = await store.current_branch_id_or_none()
         if branch_id is not None:
@@ -431,12 +442,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
     app.state.build_runtime = build_runtime
 
-    # 结构瓦片以 maintenance 的事件折叠为准，on_flush 完工后投影 built。
+    # 维护快照与 WS 表现共用当前分支真源，重启不能复用 main 或进程旧缓存。
     from sim.world.maintenance import WorldMaintenance
 
     matter_ledger = await npc_store.materialize_matter()
-    structure_snapshots = await npc_store.materialize_structures()
+    structure_snapshots = await NpcStore(
+        store, branch_id=current_branch or "main"
+    ).materialize_structures()
     maintenance = WorldMaintenance(ledger=matter_ledger, structures=structure_snapshots)
+    restore_structures(maintenance.structures)
 
     def _build_tick_hook(state: Any, tick: int) -> list[Any] | None:
         nonlocal tile_map
@@ -818,6 +832,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 coin_ledger.reset()
                 chat_ledger.reset()
                 fire_runtime.reset()  # P-4
+                reset_structures()
                 build_runtime.reset()  # P-2
                 monologue_last.clear()
                 monologue_quota.clear()
@@ -835,6 +850,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 fire_runtime.restore_from_events(branch_events)
                 maintenance.ledger = await branch_store.materialize_matter()
                 maintenance.structures = await branch_store.materialize_structures()
+                restore_structures(maintenance.structures)
                 tile_map = await rebuild_tile_map(branch_store)
                 app.state.tile_map = tile_map
                 build_runtime.tile_map = tile_map

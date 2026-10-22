@@ -41,6 +41,7 @@ import secrets
 import struct
 import time
 from collections import deque
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -56,6 +57,7 @@ from sim.core.tick import TickLoop
 from sim.llm.prompts.banned_words import scan
 from sim.world.map import TileMap
 from sim.world.pathfinding import Pathfinder
+from sim.world.structure import StructureSnapshot
 
 logger = structlog.get_logger(__name__)
 
@@ -547,11 +549,26 @@ def set_structure_phase(structure_id: str, tiles: list[tuple[int, int]], phase: 
     _STRUCTURES[structure_id] = {"tiles": sorted(tiles), "phase": phase}
 
 
+def remove_structure(structure_id: str) -> None:
+    """拆除后直接删表现账本；广播基准保留到下一帧发 remove。"""
+    _STRUCTURES.pop(structure_id, None)
+
+
 def reset_structures() -> None:
-    """测试辅助：清空账本与广播基准。"""
+    """启动/切分支时清空建筑表现账本与广播基准。"""
     global _structures_broadcast
     _STRUCTURES.clear()
     _structures_broadcast = None
+
+
+def restore_structures(structures: Mapping[str, StructureSnapshot]) -> None:
+    """用当前分支的维护快照替换表现账本；工地由施工表现负责。"""
+    reset_structures()
+    phases = {"active": "built", "collapsing": "collapsing", "rubble": "rubble"}
+    for sid, structure in structures.items():
+        phase = phases.get(structure.phase)
+        if phase is not None:
+            set_structure_phase(sid, list(structure.tiles), phase)
 
 
 def _structure_rtoken(structure_id: str) -> str:
@@ -560,10 +577,13 @@ def _structure_rtoken(structure_id: str) -> str:
 
 
 def _structures_delta_rows() -> list[dict[str, Any]]:
-    """增量行：相位有变化的格子 → StructureDelta 形（op=add upsert；排序确定）。"""
+    """相位变化发逐格 upsert，已消失结构发 remove；排序确定。"""
     global _structures_broadcast
     base = _structures_broadcast or {}
-    rows: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = [
+        {"op": "remove", "rtoken": _structure_rtoken(sid)}
+        for sid in sorted(base.keys() - _STRUCTURES.keys())
+    ]
     for sid in sorted(_STRUCTURES):
         entry = _STRUCTURES[sid]
         if base.get(sid) == entry["phase"]:

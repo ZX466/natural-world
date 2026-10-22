@@ -57,14 +57,22 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, TypedDict
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from sim.core.events import EventKind, WorldEvent
 from sim.core.persistence.anchor_package import Materialization
+from sim.core.persistence.models import Branch, Event, Structure
+from sim.core.persistence.npc_store import (
+    _STRUCTURE_KINDS,
+    _structure_event_fields,
+    fold_structure_snapshot,
+)
 from sim.core.persistence.vector import clone_branch_vectors
 
 if TYPE_CHECKING:
     from sim.core.persistence.fire_store import FireRow
+    from sim.world.structure import StructureSnapshot
 
 #: 分叉形态：``head`` = 读当前档（封存父、截断克隆）；``anchor`` = 历史点读档（父不封存、
 #: 语料取包、权力态零克隆）。**禁止靠 ``fork_seq == head_seq`` 隐式区分**——那是本模块
@@ -567,6 +575,13 @@ async def fork_from_anchor(
                     session, list(package.fires.values()), child_id
                 )
                 continue
+            if kind == "anchor" and table == "structures":
+                # 历史档不能复制父 head 的结构行；按包游标在同一事务内折叠。
+                assert package is not None
+                cloned[table] = await _clone_structures_at_cursor(
+                    session, package.branch_id, package.seq, child_id
+                )
+                continue
             if kind == "anchor" and table == "relationships":
                 continue  # 语料块按包写（累计值属锚点时刻，不是父分支当前值）
             cloned[table] = await _clone_bounded(
@@ -650,6 +665,88 @@ async def fork_from_anchor(
         agent_override="{}" if package is None else json.dumps(package.agent_override),
         warnings=tuple(collected),
     )
+
+
+async def _clone_structures_at_cursor(
+    session: AsyncSession, branch_id: str, seq: int, child_id: str
+) -> int:
+    """按本层游标和各祖先分叉点折叠结构，不从父 head 行或快照窗口近似。
+
+    WorldCheckpoint 不含结构；每层 seq 只在该层解释，祖先前缀须先于子线事件。
+    只复用既有结构折叠规则，不改物化包或 materialize_structures_replay 路径。
+    """
+    segments: list[Sequence[Event]] = []
+    seen: set[str] = set()
+    current: str | None = branch_id
+    upper = seq
+    while current is not None:
+        if current in seen:
+            raise ForkError("cyclic structure branch history")
+        seen.add(current)
+        branch = await session.get(Branch, current)
+        if branch is None:
+            raise ForkError("missing structure branch history")
+        rows = await session.scalars(
+            select(Event)
+            .where(
+                Event.branch_id == current,
+                Event.seq <= upper,
+                Event.event_type.in_(_STRUCTURE_KINDS),
+            )
+            .order_by(Event.seq)
+        )
+        segments.append(rows.all())
+        if branch.forked_from_branch is not None and branch.forked_from_seq is None:
+            raise ForkError("missing structure branch cutoff")
+        current = branch.forked_from_branch
+        upper = branch.forked_from_seq if branch.forked_from_seq is not None else 0
+
+    structures: dict[str, StructureSnapshot] = {}
+    for segment in reversed(segments):
+        for row in segment:
+            event = WorldEvent(
+                branch_id=row.branch_id,
+                tick=row.tick,
+                event_type=EventKind(row.event_type),
+                payload=json.loads(row.payload),
+            )
+            fields = _structure_event_fields(event)
+            folded = fold_structure_snapshot(
+                structures.get(fields.structure_id),
+                event_type=event.event_type,
+                structure_id=fields.structure_id,
+                tick=event.tick,
+                tiles=fields.tiles,
+                kind=fields.kind,
+                material=fields.material,
+                load_bearing=fields.load_bearing,
+                supported_by=fields.supported_by,
+                owner_id=fields.owner_id,
+                built_by=fields.built_by,
+            )
+            if folded is None:
+                structures.pop(fields.structure_id, None)
+            else:
+                structures[fields.structure_id] = folded
+
+    session.add_all(
+        Structure(
+            branch_id=child_id,
+            structure_id=snapshot.structure_id,
+            tiles=json.dumps(snapshot.tiles),
+            kind=snapshot.kind,
+            material=snapshot.material,
+            phase=snapshot.phase.value,
+            load_bearing=snapshot.load_bearing,
+            supported_by=json.dumps(snapshot.supported_by),
+            owner_id=snapshot.owner_id or None,
+            built_by=snapshot.built_by or None,
+            built_at=snapshot.built_at,
+        )
+        for snapshot in structures.values()
+    )
+    await session.flush()
+    return len(structures)
 
 
 async def _clone_fires_from_rows(

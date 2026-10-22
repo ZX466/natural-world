@@ -96,3 +96,38 @@ it('stacks overlapping bubbles and destroys texts that leave the retained set', 
   expect(scene.bubbleTexts.size).toBe(0);
   expect(texts.every((text) => text.destroyed)).toBe(true);
 });
+
+// 复用此文件已有的 Scene 加载适配；执行真实 syncStructures，钉实际绘图调用。
+function structureScene() {
+  const mirror = new WorldMirror();
+  const graphics = { clear: vi.fn(), fillStyle: vi.fn(), fillRect: vi.fn() };
+  const scene = Object.create(WorldScene.prototype) as {
+    syncStructures(): void;
+  };
+  Object.assign(scene, { mirror, structureLayer: graphics });
+  mirror.applyStructures([{ rtoken: 'st-s1', x: 3, y: 4, phase: 'built' }]);
+  scene.syncStructures();
+  expect(graphics.fillStyle).toHaveBeenLastCalledWith(0x6b4f2a, 0.92);
+  return { mirror, graphics, scene };
+}
+
+it('redraws a same-count structure phase change with rubble opacity', () => {
+  const { mirror, graphics, scene } = structureScene();
+  scene.syncStructures();
+  expect(graphics.clear).toHaveBeenCalledTimes(1);
+  mirror.applyStructures([{ rtoken: 'st-s1', x: 3, y: 4, phase: 'rubble' }]);
+  scene.syncStructures();
+  expect(graphics.clear).toHaveBeenCalledTimes(2);
+  expect(graphics.fillStyle).toHaveBeenLastCalledWith(0x6b4f2a, 0.5);
+});
+
+it('redraws replaced tiles and clears the layer on an empty snapshot', () => {
+  const { mirror, graphics, scene } = structureScene();
+  mirror.structures.set('st-s1', { tiles: [[8, 9]], phase: 'built' });
+  scene.syncStructures();
+  expect(graphics.clear).toHaveBeenCalledTimes(2);
+  expect(graphics.fillRect).toHaveBeenLastCalledWith(8 * 16, 9 * 16, 15, 15);
+  mirror.structures.clear();
+  scene.syncStructures();
+  expect(graphics.clear).toHaveBeenCalledTimes(3);
+});
