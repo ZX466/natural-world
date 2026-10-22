@@ -9,9 +9,10 @@
 
 ## 0. 本会话状态
 
-- **HEAD**：`f7720d7`（merge codex：DA-04 目标规范化）
-- **已收编**：DA-03 `d5c2931`（merge `4ec5112`，另补 `afdfeb9` 冷启动）；DA-04 `ecc9a14`（merge `f7720d7`）
-- **在飞**：无。下一单 **DA-05**（建筑表现跨分支残留），**派单须允许改 `client/src`**（见 §3 备注）
+- **HEAD**：`fe2e709`（merge codex：DA-05P + DA-05 建筑表现）
+- **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`（merge `fe2e709`）
+- **在飞**：无。下一单 **DA-06**（坍塌还原未应用实时碰撞）；DA-05 已预留 `client/src` 边界
+- **DA-05 遗留**：Phaser 真实渲染（遮挡/层级）仍未经人眼验收，只有 mock Graphics 单测
 - **未决**：是否推送双远程（按纪律不推，收编前以现测为准）
 - **协议**：1.11（真相源 `sim/api/ws.py::_PROTOCOL_VERSION`，前端 `client/src/net/ws.ts` 同源）
 - **工作树：两棵**（2026-10-21 用户重申，长期有效）
@@ -24,22 +25,22 @@
 **M0–M6 全部收官**（M6 于 2026-10-05，G1–G4 全 ✅）；**M7 渲染面**已落（地图/时钟/视角/昼夜）。
 代码侧整体完成，剩余是收口型缺口。
 
-## 2. 门禁（2026-10-21 DA-04 收编后实测）
+## 2. 门禁（2026-10-22 DA-05 收编后实测）
 
 | 项 | 结果 |
 |---|---|
-| sim 全量 pytest（`-m "not bench"`） | **2857 passed** / 121 skipped / 72 deselected，**0 failed**（327s） |
-| ruff check / ruff format | clean / 352 文件已格式化 |
+| sim 全量 pytest（`-m "not bench"`） | **2871 passed** / 121 skipped / 72 deselected，**0 failed**（317s） |
+| ruff check / ruff format | clean / 353 文件已格式化 |
 | pyright sim/ | 0 errors, 0 warnings |
 | client tsc --noEmit | 0 错误 |
-| client vitest | 143 passed / 26 files |
+| client vitest | 149 passed / 27 files |
 | check_implementation_status | 未发现新缺口（未在本轮重跑） |
 
 > **全量已不再需要 `--deselect`**：此前排除的 2 条地图用例是 codex 树缺
 > `sim/content/assets/`（被 gitignore）所致，补齐后两树均可跑全量。
 > 旧读数 2982 收集 / 138 vitest 已过时；上表为合并后现测。
 
-## 3. 当前剩余缺口（codex 审计 8 组 + 主树 P0-3，已修 4 组，剩 4）
+## 3. 当前剩余缺口（codex 审计 8 组 + 主树 P0-3，已修 5 组，剩 3）
 
 来源 `docs/security/gameplay-integrity-audit-2026-10-21.md`（codex `974611e`）：
 
@@ -50,19 +51,21 @@
 | P0-3 | **火格 `fire_id` 双语义**（主树探针新发现，不在 codex 8 组内）：`sim/world/fire.py:136` 蔓延格继承 `parent.fire_id`，`sim/npc/fire_runtime.py:73-78` 却每格自增签发新 `fire-{seq}` → 同一 ID 重复熄灭 → `FireWriteError` 整批拒写；`sim/api/ws.py:1401` 的 `await on_flush(events)` 无 try/except ⇒ **世界驱动直接死** | ✅ `d5c2931` |
 | DA-03 | 余额/火场账本清零未重建 | ✅ `d5c2931`（读档）+ `afdfeb9`（冷启动） |
 | DA-04 | 人物/中文货名目标不兼容 | ✅ `ecc9a14`（merge `f7720d7`） |
-| DA-05 | 建筑表现跨分支残留 | ⬜ 未修 |
+| DA-05 | 建筑表现跨分支残留 | ✅ `4518515`（merge `fe2e709`）：含前置 DA-05P |
 | DA-06 | 坍塌还原未应用实时碰撞 | ⬜ 未修 |
 | DA-07 | 主角走 NPC 死亡删除 | ⬜ 未修 |
 | DA-08 | 重启后主角双控制源 | ⬜ 未修 |
 
-> **不得称「全部玩法已修」**——剩 **DA-05/06/07/08 四组**未修。
+> **不得称「全部玩法已修」**——剩 **DA-06/07/08 三组**未修。
 >
-> **DA-05 拆单（2026-10-22）**：codex 查出独立前置缺陷——历史读档 fork 时
-> `fork.py:714` `_clone_bounded` **无条件** `INSERT … SELECT` 父分支全表，
-> `structures` 未像 `fires`/`relationships` 那样按包折叠，导致子分支**零 structure 事件
-> 却有结构行**（实测 `STRUCTS_IN_CHILD={'future':'active'}` + `CHILD_STRUCT_EVENTS=[]`）。
-> `_truncation_sql` 注释自述「有界表不截断：前提 P1」，历史档下 P1 不成立。
-> ⇒ 先修 DA-05P（fork 真源），DA-05 的表现层部分 codex 已完成待一并提交。
+> **DA-05 已收编（`fe2e709` = merge `4518515`），含前置单 DA-05P。**
+> 前置缺陷：历史读档 fork 时 `_clone_bounded` **无条件**克隆父分支全表，
+> `structures` 未像 `fires`/`relationships` 那样按包折叠 → 子分支**零 structure 事件却有结构行**。
+> 修法：`fork.py` 新增 `_clone_structures_at_cursor`，沿 fork 链逐段按各层游标折叠
+> （与 P-1 `read_branch_history` 同范式），复用 `fold_structure_snapshot`；head 路径不变。
+> 表现层：`restore_structures` 相位映射（active→built，collapsing/rubble 原样，
+> planned/building 不进完工层）、`remove_structure`、`on_flush` 补 collapsed/removed；
+> 客户端 `full_snapshot` 全量替换 + `WorldScene` 按内容签名重绘。
 >
 > **主树判断纠错记录**：我曾据一次 `save()` 的探针误判为「测试夹具库路径错配，
 > 别动产品代码」，并发回执让 codex 改夹具——**该判断错误**。真因是
@@ -116,6 +119,9 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 | DA-03 余额/火场读档重建 | `CoinLedger.restore_from_events` + `FireRuntime.restore_from_events`；`FireStore` 同源 fold 计全部历史 ID 作 `fire_seq` 上界 | `d5c2931` |
 | DA-03 冷启动账本 | `lifespan` 构造两账后按当前分支谱系恢复；空库创世跳过 | `afdfeb9` |
 | DA-04 目标规范化 | 新增 `sim/agent/targets.py` 纯函数层：`resolve_actor_target`（唯一活体名、排除自身、曼哈顿 ≤12）/ `resolve_good_target`（中文名→ID，内部 ID 直通）/ `nearby_actor_names`（最近 12 名，只出戏内名）；在 `driver.py` 的 `parse_intent` 之后、`gate.validate` 之前 `model_copy` 重写 `target_id`；未解析原文仍原样送 gate（不放宽）。`economy.name_index()` 只索引唯一货名。`gate` 新增 `unknown_good` 拒绝码（规划期+执行期），未知货名不再静默 return | `ecc9a14` |
+| DA-05P 历史 fork 结构真源 | `fork.py` 新增 `_clone_structures_at_cursor`：沿 fork 链逐段（各层 `seq <= 该层游标`）折叠 `structure.*` 事件再写子线；`kind="anchor"` 且 table=`structures` 时走新路径，head 克隆保持 `_clone_bounded` 不变。复用 `fold_structure_snapshot`/`_STRUCTURE_KINDS` | `4518515` |
+| DA-05 建筑表现账本 | `ws.py` 加 `remove_structure`/`restore_structures`（相位映射表）；`main.py` 读档 reset 后从 `maintenance.structures` 同一快照重建、启动按当前分支填充、`on_flush` 补 collapsed→rubble / removed→删账；`_structures_delta_rows` 发 `op:remove` | `4518515` |
+| DA-05 客户端镜像 | `ws.ts` `full_snapshot` 先 `structures.clear()` 再应用（空/省略也清）；`WorldScene.syncStructures` 判据由数量改为 `JSON.stringify` 内容签名（含 token/相位/格位） | `4518515` |
 
 ## 5. 踩坑记录（血泪，逐条有效）
 
