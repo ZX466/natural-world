@@ -11,9 +11,11 @@ from collections.abc import Callable
 from typing import Any
 
 import structlog
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
 
 from sim.core.events import (
+    AgentIncapacitatedPayload,
+    AgentRecoveredPayload,
     CombatScaleChangePayload,
     EventKind,
     MovePayload,
@@ -34,6 +36,16 @@ class EntityState(BaseModel):
     entity_id: str
     pos: tuple[int, int]
     path: tuple[tuple[int, int], ...] = ()  # 剩余路径（路径段事件粒度，m0-core §11.3）
+    # 健康时省略，保持旧 WorldState/存档哈希；失能时随内部检查点保存。
+    incapacitated_until: int | None = Field(default=None, ge=0)
+
+    @model_serializer(mode="wrap")
+    def serialize_state(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        # wrap serializer 兼容项目声明的 pydantic>=2.9；健康态不增加旧存档字段。
+        data = handler(self)
+        if self.incapacitated_until is None:
+            data.pop("incapacitated_until", None)
+        return data
 
 
 class WorldState(BaseModel):
@@ -125,6 +137,8 @@ def _apply_move(state: WorldState, event: WorldEvent, ctx: TickContext) -> Apply
     if entity is None:
         msg = f"未知实体: {p.entity_id}"
         raise ValueError(msg)
+    if entity.incapacitated_until is not None:
+        return ApplyResult(state=state)
     new_entity = entity.model_copy(update={"path": p.path})
     new_state = state.model_copy(update={"entities": {**state.entities, p.entity_id: new_entity}})
     return ApplyResult(state=new_state)
@@ -142,6 +156,32 @@ def _apply_combat_scale(state: WorldState, event: WorldEvent, ctx: TickContext) 
 def _apply_entropy_inject(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
     """熵注入在状态层 no-op：材料在事件日志里，registry 重建由重放装配层做。"""
     return ApplyResult(state=state)
+
+
+def _apply_agent_incapacitated(
+    state: WorldState, event: WorldEvent, ctx: TickContext
+) -> ApplyResult:
+    p = AgentIncapacitatedPayload.model_validate(event.payload)
+    actor = state.entities.get(p.entity_id)
+    if actor is None or p.recover_at <= event.tick:
+        raise ValueError("invalid incapacitation state")
+    if actor.incapacitated_until is not None:
+        return ApplyResult(state=state)
+    actor = actor.model_copy(update={"incapacitated_until": p.recover_at, "path": ()})
+    return ApplyResult(
+        state=state.model_copy(update={"entities": {**state.entities, p.entity_id: actor}})
+    )
+
+
+def _apply_agent_recovered(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    p = AgentRecoveredPayload.model_validate(event.payload)
+    actor = state.entities.get(p.entity_id)
+    if actor is None or actor.incapacitated_until is None or event.tick < actor.incapacitated_until:
+        raise ValueError("invalid recovery state")
+    actor = actor.model_copy(update={"incapacitated_until": None, "pos": p.pos, "path": ()})
+    return ApplyResult(
+        state=state.model_copy(update={"entities": {**state.entities, p.entity_id: actor}})
+    )
 
 
 def _apply_npc_death(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
@@ -303,6 +343,8 @@ def build_default_bus() -> EventBus:
     """M0 默认事件总线（批次 B 增 NPC_ACT no-op——决策记录面）。"""
     bus = EventBus()
     bus.register(EventKind.WORLD_CREATE, _apply_world_create)
+    bus.register(EventKind.AGENT_INCAPACITATED, _apply_agent_incapacitated)
+    bus.register(EventKind.AGENT_RECOVERED, _apply_agent_recovered)
     bus.register(EventKind.MOVE, _apply_move)
     bus.register(EventKind.COMBAT_SCALE_CHANGE, _apply_combat_scale)
     bus.register(EventKind.ENTROPY_INJECT, _apply_entropy_inject)

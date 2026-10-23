@@ -82,6 +82,9 @@ class EventKind(StrEnum):
     #: 迷雾揭示（**事件化=可重放**，fold=并集幂等——裁 40-4；chunk 坐标只载
     #: **已踏入事实**，禁邻居/候选/房间形状等未探索字段——S4 FG-1）。
     FOG_REVEAL = "fog.reveal"
+    # 主角终态：失能与恢复是内部状态事实，普通 NPC 仍走 NPC_DEATH。
+    AGENT_INCAPACITATED = "agent.incapacitated"
+    AGENT_RECOVERED = "agent.recovered"
 
 
 # ---------------------------------------------------------------------------
@@ -479,6 +482,20 @@ class NpcDeathPayload(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     entity_id: _ID
+
+
+class AgentIncapacitatedPayload(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    entity_id: _ID
+    recover_at: int = Field(ge=0, strict=True)
+
+
+class AgentRecoveredPayload(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    entity_id: _ID
+    pos: tuple[Annotated[int, Field(ge=0, strict=True)], Annotated[int, Field(ge=0, strict=True)]]
 
 
 class EcologyShiftPayload(BaseModel):
@@ -1047,6 +1064,23 @@ def fire_extinguished_event(
 
 
 # ---- M6 生命始终工厂（落点 a；schema §24「对称删除」的事件载体） ----
+
+
+def agent_incapacitated_event(tick: int, *, entity_id: str) -> WorldEvent:
+    """失能一游戏小时；恢复时刻入事件，读档/重启不重新计时。"""
+    from sim.core.calendar import TICKS_PER_GAME_HOUR
+
+    payload = AgentIncapacitatedPayload(entity_id=entity_id, recover_at=tick + TICKS_PER_GAME_HOUR)
+    return WorldEvent(
+        tick=tick, event_type=EventKind.AGENT_INCAPACITATED, payload=payload.model_dump(mode="json")
+    )
+
+
+def agent_recovered_event(tick: int, *, entity_id: str, pos: tuple[int, int]) -> WorldEvent:
+    payload = AgentRecoveredPayload(entity_id=entity_id, pos=pos)
+    return WorldEvent(
+        tick=tick, event_type=EventKind.AGENT_RECOVERED, payload=payload.model_dump(mode="json")
+    )
 
 
 def npc_death_event(

@@ -200,7 +200,9 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 
 # ④ codex 树快照（权威来源：codex 树 `.orca/memory.md`；收编时原样并入）
 
-【2026-10-22 DA-08｜完成待收编；06已提交，07策略待核准】基准ea42b13（06已提交后才改08）。assemble_runtime新增不可变external_controller_ids装配规则，先过滤外控实体再建utility/hidden；main显式声明ChenmoDriver拥有CHENMO_ID，首启与重启均不进效用名册。默认通用装配兼容，不靠时序，不新增隐式LLM降级。真实同一隔离库两次lifespan红1F（重启名册多chenmo），改后相关47P，主角无utility动作、普通NPC有动作、driver两轮存在，人数/矩阵一致。原始not-bench全量2875P/121S/72D/0F（325.52s，无额外排除）；ruff/format355/pyright0，client tsc/149P全绿；日志.orca/da08-{red,focused,python-full,pyright,client}.log。08独立提交见talking/git log，未推送。下一步仅DA07：talking明确“主树核准后再实现”，已申请agent.incapacitated/recovered新kind及tick/main/ws/driver/combat_exec必要接线扩界，尚未收到核准，不写07实现或红钉。现有HP账本仅全体reset，恢复主角需单人恢复，不能清村民血量；settle_attack签名/技能距离部位系统不动。主角应保留entities，任务红钉“不在”与要求矛盾已回执更正；失能期间停行动但念头入队，恢复与时间推进均事件化。恢复新对话先看talking新增核准，不能将06/08重复实现，也不能自行越界07。
+【2026-10-23 DA-07｜完成，本波收工待收编】用户“你核准后收工吧”及“继续”已直接授权本树核准此前策略与必要接线扩界，旧待核准状态结束。火灾/战斗主角致命结算改agent.incapacitated；普通NPC仍npc.death。新agent.incapacitated/recovered模型extra=forbid并登记总线/PAYLOAD_MODELS；EntityState绝对期限随内部检查点保存，健康态省略字段兼容旧哈希及pydantic>=2.9。失能清路径/停行动、保留最近念头，旧LLM决策由world_revision作废；世界复用快进预算推进一游戏小时后，选择最近可走无火格恢复，仅恢复主角HP，发既有full_snapshot/戏内心声。暂停沿原时钟控制；自动恢复与玩家快进按段重读时间尺，共享240预算。协议仍1.11，未改settle_attack签名/技能距离部位系统。初始红3F/1P；预算边界另红assert241<=240，修后WS相关76P；核心/死亡/重启/读档88P/2S，字段契约/人口计数14P。首轮全量2884P/1F为EntityState三字段旧白名单，显式登记期限并保留封闭检查，未删钉/跳过/排除。最终原始not-bench全量2887P/121S/72D/0F（290.58s），ruff/format356/pyright0、client tsc/149P、gen:protocol:check均绿；最终日志.orca/da07-python-verified.log，红/预算/首轮输出保留da07-*.log。DA07独立commit见talking/git log；本波06 ea42b13、08 01d8142均已完成；未再merge main、未改主树、未推送。回执后收工，不自开新单。
+
+【DA-08 完成待收编】01d8142；main以external_controller_ids明确ChenmoDriver拥有主角，assemble_runtime在构建utility/hidden之前排除外控实体，首启/重启名单一致且普通NPC效用继续。红1F→相关47P，全量2875P/121S/72D/0F，client149P与静态检查绿；.orca/da08-*.log和审计报告保留完整证据。
 
 【DA-06 完成待收编】ea42b13；on_flush落库成功后只对结构终态批次增量消费tile_changed，同步app/build_runtime/pathfinder并清缓存，保留P6派生。真实红2F/1P→相关37P，完整2874P/121S/72D/0F（325.32s），client149P与静态检查绿；.orca/da06-*.log及审计报告。全波从main@fbfdff6同步（包含指定f7add60及DA05收编fe2e709），此后未再merge main，未改主树。
 

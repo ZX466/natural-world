@@ -16,11 +16,14 @@ from typing import Any
 
 import structlog
 
+from sim.content.protagonist import CHENMO_ID
 from sim.core.events import (
     WorldEvent,
+    agent_incapacitated_event,
     fire_extinguished_event,
     fire_ignited_event,
     npc_death_event,
+    npc_monologue_event,
 )
 from sim.core.world import WorldState
 from sim.world.fire import FireCell, step_fires
@@ -125,10 +128,23 @@ class FireRuntime:
     def collect_deaths(
         self, state: WorldState, *, burning: set[tuple[int, int]]
     ) -> list[WorldEvent]:
-        """火格上的活体 → npc.death 事件（对称删除投影由落库事务做）。"""
+        """普通活体死亡；主角失能且不重复触发，以便世界推进后恢复。"""
         deaths: list[WorldEvent] = []
         for entity_id, entity in state.entities.items():
-            if entity.pos in burning:
+            if entity.pos in burning and entity.incapacitated_until is None:
+                if entity_id == CHENMO_ID:
+                    deaths.extend(
+                        [
+                            agent_incapacitated_event(state.tick, entity_id=entity_id),
+                            npc_monologue_event(
+                                tick=state.tick,
+                                npc_id=entity_id,
+                                form="thought",
+                                content="眼前一黑，身子再也撑不住了。",
+                            ),
+                        ]
+                    )
+                    continue
                 deaths.append(npc_death_event(tick=state.tick, entity_id=entity_id))
                 logger.info("fire.claimed", entity_id=entity_id, pos=str(entity.pos))
         return deaths
