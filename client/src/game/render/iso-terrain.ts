@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import type { MapStatic, WorldMirror } from '../world-mirror';
-import { ISO, depthKey, isoProject, screenBounds } from './iso';
+import { ISO, depthKey, effectiveHeight, isoProject, screenBounds } from './iso';
 
 const GROUND_KEY = 'iso-ground-composite';
 const TILESET_KEY = 'god-town-16';
@@ -67,18 +67,21 @@ function paintBlock(
   face([sx, sy - hh, sx + hw, sy, sx, sy + hh, sx - hw, sy], 1);
 }
 
-/** V1 terrain only: one low canvas, coordinate-keyed high Image pool.
- * Actors, camera, picking and the separate structure graphics stay outside it.
+/** One low canvas and one coordinate-keyed surface Image per high cell.
+ * V2 reverse-merges active structures into that same pool, so a building is
+ * never drawn again in a separate structureLayer. Rubble is a low marker on
+ * the restored static surface, in the same depthKey pool as blocks and actors.
  */
 export class IsoTerrain {
   private ground: Phaser.GameObjects.Image | null = null;
   private blocks = new Map<string, { image: Phaser.GameObjects.Image; texture: string }>();
+  private rubble = new Map<string, Phaser.GameObjects.Graphics>();
   private textureKeys = new Set<string>();
   private colors: ((gid: number) => number) | null = null;
   private lastMap: MapStatic | null = null;
   private lastGround: Uint16Array | undefined;
   private lastShape = '';
-  private lastStructures = '';
+  private lastStructureSignature = '';
 
   constructor(
     private scene: Phaser.Scene,
@@ -101,7 +104,7 @@ export class IsoTerrain {
     if (
       map === this.lastMap &&
       `${map.w},${map.h}` === this.lastShape &&
-      signature === this.lastStructures &&
+      signature === this.lastStructureSignature &&
       groundUnchanged
     )
       return;
@@ -132,7 +135,7 @@ export class IsoTerrain {
       for (let y = Math.max(0, diagonal - map.w + 1); y <= Math.min(map.h - 1, diagonal); y++) {
         const x = diagonal - y;
         const phase = overrides.get(`${x},${y}`);
-        const h = phase === undefined ? this.heightOf(x, y) : 2;
+        const h = effectiveHeight(x, y, this.heightOf, structures);
         const color = this.colors(map.ground?.[y * map.w + x] ?? 0);
         if (h >= 2) {
           high.push({ x, y, h, color, phase });
@@ -193,10 +196,68 @@ export class IsoTerrain {
       this.scene.textures.remove(key);
       this.textureKeys.delete(key);
     }
+    this.syncRubble(map, structures, overrides, bounds);
     this.lastMap = map;
     this.lastShape = `${map.w},${map.h}`;
     this.lastGround = map.ground?.slice();
-    this.lastStructures = JSON.stringify([...structures]);
+    this.lastStructureSignature = JSON.stringify([...structures]);
+  }
+
+  private syncRubble(
+    map: MapStatic,
+    structures: Structures,
+    active: ReadonlyMap<string, string>,
+    bounds: ReturnType<typeof screenBounds>,
+  ): void {
+    const retained = new Set<string>();
+    for (const structure of structures.values()) {
+      if (structure.phase !== 'rubble') continue;
+      for (const [x, y] of structure.tiles) {
+        const key = `${x},${y}`;
+        if (
+          !Number.isInteger(x) ||
+          !Number.isInteger(y) ||
+          x < 0 ||
+          y < 0 ||
+          x >= map.w ||
+          y >= map.h ||
+          active.has(key) ||
+          retained.has(key)
+        )
+          continue;
+        let marker = this.rubble.get(key);
+        if (marker === undefined) {
+          marker = this.scene.add.graphics();
+          this.rubble.set(key, marker);
+        }
+        const top = isoProject(x, y, effectiveHeight(x, y, this.heightOf, structures), bounds);
+        marker.setPosition(top.sx, top.sy).setDepth(depthKey(x, y));
+        marker.clear();
+        const face = (points: number[], color: number) => {
+          marker.fillStyle(color, 0.5);
+          marker.fillPoints(
+            Array.from({ length: points.length / 2 }, (_, i) => ({
+              x: points[i * 2]!,
+              y: points[i * 2 + 1]!,
+            })),
+            true,
+          );
+        };
+        const hw = ISO.TW / 2,
+          hh = ISO.TH / 2,
+          rise = ISO.HH / 4;
+        // A static quarter-height block; phase animation and atlases belong to V3.
+        face([-hw, -rise, 0, hh - rise, 0, hh, -hw, 0], 0x503b1f);
+        face([0, hh - rise, hw, -rise, hw, 0, 0, hh], 0x402f19);
+        face([0, -hh - rise, hw, -rise, 0, hh - rise, -hw, -rise], FALLBACK_COLOR);
+        retained.add(key);
+      }
+    }
+    for (const [key, marker] of this.rubble) {
+      if (retained.has(key)) continue;
+      marker.destroy();
+      this.rubble.delete(key);
+    }
   }
 
   private readColors(): (gid: number) => number {
@@ -225,13 +286,15 @@ export class IsoTerrain {
     this.ground = null;
     for (const view of this.blocks.values()) view.image.destroy();
     this.blocks.clear();
+    for (const marker of this.rubble.values()) marker.destroy();
+    this.rubble.clear();
     for (const key of this.textureKeys) this.scene.textures.remove(key);
     this.textureKeys.clear();
     if (this.scene.textures.exists(GROUND_KEY)) this.scene.textures.remove(GROUND_KEY);
     this.lastMap = null;
     this.lastGround = undefined;
     this.lastShape = '';
-    this.lastStructures = '';
+    this.lastStructureSignature = '';
   }
 
   destroy(): void {
