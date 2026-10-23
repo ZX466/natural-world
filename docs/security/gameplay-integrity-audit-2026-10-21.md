@@ -234,3 +234,31 @@ uv run --project E:/zxdevelop/.orca/worktrees/project7/codex pytest sim/tests/te
 先复跑指定三钉，得到 **3 failed**（`.orca/da05p-red.log`）；另补未来坍塌/拆除回退和嵌套分叉，先得到 **3 failed**（`.orca/da05p-boundaries-red.log`）。这些用例故意在同 tick 保存不同 seq，验证不能用时间或父 head 近似游标。修复后建筑/读档/物化编排相关集 **149 passed**（`.orca/da05p-focused.log`），客户端全量 **149 passed / 27 files**、TypeScript、ruff/格式检查与 pyright 通过。最终全量与提交见 talking 完成回执。
 
 最终原始 `uv run pytest -m 'not bench' -q --tb=short`：**2871 passed / 121 skipped / 72 deselected / 0 failed**（330.00s），无额外排除。ruff check、ruff format（353 files）、pyright（0 errors）、客户端 tsc 及 vitest（149 passed）均通过；`.orca/da05p-python-full.log` 保留全量输出。本单与前置缺陷已闭合；DA-06/07/08 不在本轮范围，尚未修复。
+
+## DA-06：结构终态立即更新在线碰撞（2026-10-22）
+
+`on_flush` 在事件与检查点成功落库后，才增量应用含结构终态批次里的 `tile_changed`。新地图同时交给 app、BuildRuntime 和 Pathfinder，并清空路径缓存；普通 flush 不重建或替换地图。P-6 的瓦片事件派生仍在 maintenance.observe 之前，且只派生一次。
+
+真实 lifespan 红钉先复现坍塌、拆除后在线格仍不可走：**2 failed / 1 passed**，原文 `AssertionError: persisted tile restoration must update live collision`。修复后建筑/历史加载/工地相关集 **37 passed**；测试同时验证三处引用、真实寻路、缓存清理、在线图与事件重建图的逐格一致，以及无结构终态时保持地图实例。日志 `.orca/da06-{red,focused,python-full,pyright,client}.log`；最终门禁见 talking 回执。
+
+最终原始全量 **2874 passed / 121 skipped / 72 deselected / 0 failed**（325.32s），ruff/格式检查（354 files）、pyright（0 errors）、客户端 tsc 与 vitest（149 passed）均通过；无额外排除。DA-06 已闭合，DA-07/08 继续按本波派单处理。
+
+## DA-08：主角控制权由装配方显式声明（2026-10-22）
+
+`assemble_runtime` 接受不可变的外控实体名单，在构造效用矩阵与隐藏档之前排除这些实体；生产装配声明陈默由 `ChenmoDriver` 拥有。规则与人物档案是否已存在无关，不再依赖首启时主角尚未写库的偶然顺序。通用 NPC 装配的默认行为不变，普通村民继续走效用层；没有增加自动 LLM 故障降级或第二控制者。
+
+用同一隔离库连续启动两次真实 lifespan，覆盖首启与重启：红钉 **1 failed**，原文 `AssertionError: controller ownership must not depend on startup timing`、`Extra items in the right set: 'chenmo'`。修复后相关装配/重启/历史读取/主角驱动集 **47 passed**，测试同时检查两轮名册一致、主角无效用动作、普通 NPC 确实有动作、专用驱动存在及效用矩阵人数一致。日志 `.orca/da08-{red,focused,python-full,pyright,client}.log`；最终门禁见 talking 回执。
+
+最终原始全量 **2875 passed / 121 skipped / 72 deselected / 0 failed**（325.52s），ruff/格式检查（355 files）、pyright（0 errors）、客户端 tsc 与 vitest（149 passed）均通过，无额外排除。DA-08 已闭合；DA-07 的新失能/恢复事件与接线范围已提策略申请，依派单要求等待主树核准，尚未实现。
+
+## DA-07：主角失能、跳时与恢复（2026-10-23）
+
+用户授权本树核准已提交的策略并完成收尾。生产火灾与战斗致命结算对主角产生 `agent.incapacitated`，保留实体并清空路径；普通 NPC 继续产生 `npc.death` 并删除，既有死亡事件的历史回放语义保留。失能与恢复各有独立 payload 模型，均 `extra=forbid`，并登记在 EventKind、默认总线与 PAYLOAD_MODELS 中。
+
+失能事件记录绝对恢复时刻（一游戏小时后）；期限随内部世界状态保存，重启/历史读档不会重新计时。健康态序列化省略新期限字段，旧状态指纹保持一致。移动与陈默决策/执行在失能期间受抑制，最近收到的念头保留；失能前在途的 LLM 决策由世界修订号作废，醒来后重新决策。恢复选择最近的可走、未燃烧格，仅恢复主角 HP，不清除其他 NPC 的伤势。
+
+真实世界驱动复用既有快进预算推进模拟，普通 NPC 与世界事件继续演进；暂停仍由现有时钟控制。醒来时发既有 full_snapshot 同步时钟与位置，并产生戏内心声。自动恢复与玩家快进共享预算，分段重新读取时间尺，避免退出战斗后超额推进。新内部 kind 不增加 WS 帧或出站字段，协议仍为 1.11；`gen:protocol:check` 通过。
+
+初始红钉 **3 failed / 1 passed**：火灾产生主角死亡、战斗删除主角、真实运行入口没有可恢复实体。核心扩展集 **10 passed**，火灾/战斗/死亡/重启/读档相关集 **88 passed / 2 skipped**。额外预算红钉原文 `assert 241 <= 240`；修复后包含新集的 WS 相关集 **76 passed**。首轮全量 **2884 passed / 1 failed**，唯一失败是旧 EntityState 三字段封闭白名单：现显式登记失能期限，保留字段集封闭，并补失能实体仍计入人口的断言，相关 **14 passed**。没有通过改夹具、删除或跳过测试掩盖失败。最终全量数字与提交见 talking 回执；日志 `.orca/da07-*.log`。
+
+最终原始 `uv run pytest -m 'not bench' -q --tb=short`：**2887 passed / 121 skipped / 72 deselected / 0 failed**（290.58s），无额外排除。ruff check、ruff format（356 files）、pyright（0 errors）、客户端 tsc、vitest（149 passed）与 `gen:protocol:check` 全部通过。最终日志 `.orca/da07-python-verified.log`；本波 DA-06/07/08 已分别完成并本地提交，等待主树收编。

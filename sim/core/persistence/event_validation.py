@@ -23,6 +23,8 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from sim.core.events import (
+    AgentIncapacitatedPayload,
+    AgentRecoveredPayload,
     CoinGrantPayload,
     CombatScaleChangePayload,
     DemographyPayload,
@@ -77,6 +79,8 @@ PAYLOAD_MODELS: dict[EventKind, type[BaseModel]] = {
     EventKind.FIRE_EXTINGUISHED: FireExtinguishedPayload,
     # M6 生命始终（落点 a）：死亡 = 事件（可重放），投影同步删 npc_profiles 行。
     EventKind.NPC_DEATH: NpcDeathPayload,
+    EventKind.AGENT_INCAPACITATED: AgentIncapacitatedPayload,
+    EventKind.AGENT_RECOVERED: AgentRecoveredPayload,
     # M6 内容面（K4 C1：四事件一律经事件流；payload 零归因键/零数值/零分层数值）。
     EventKind.ECOLOGY_SHIFT: EcologyShiftPayload,
     EventKind.FAUNA_TICK: FaunaTickPayload,

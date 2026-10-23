@@ -37,7 +37,7 @@ from sim.api.ws import (
     snapshot_payload,
     ws_auth_token,
 )
-from sim.core.events import EventKind, tile_changed_event, world_create_event
+from sim.core.events import EventKind, TileChangedPayload, tile_changed_event, world_create_event
 from sim.core.persistence.database import create_session_factory, init_database
 from sim.core.persistence.store import SqlEventStore
 from sim.core.rng import RngRegistry
@@ -304,6 +304,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
 
     async def on_flush(events: list[Any]) -> None:
+        nonlocal tile_map, world_revision
+
         from sim.core.persistence.world_restore import flush_world
 
         branch_id = await store.current_branch_id_or_none() or "main"
@@ -314,7 +316,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # 收编 codex DA-01/DA-02：落库改走 flush_world（事件 + 完整世界检查点
         # 同事务），但**派生必须先做**，派生后的完整列表才是本批真相。
         events = _with_structure_tile_restore(events, maintenance.structures, tile_map)
+        if any(event.event_type is EventKind.AGENT_INCAPACITATED for event in events):
+            # 失能前已在途的 LLM 结果不能在醒来后继续执行旧计划。
+            world_revision += 1
+            driver.reset_combat()
         await flush_world(store, branch_id, loop, events)
+        if any(event.event_type in _TILE_RESTORING_KINDS for event in events):
+            # 落库成功后增量消费本批瓦片真相，不能只等下一次读档重建。
+            for event in events:
+                if event.event_type is EventKind.TILE_CHANGED:
+                    tile = TileChangedPayload.model_validate(event.payload)
+                    tile_map = tile_map.with_collision(tile.x, tile.y, walkable=tile.tile_id != 0)
+            app.state.tile_map = tile_map
+            build_runtime.tile_map = tile_map
+            pathfinder.observe_map(tile_map)
+            pathfinder.cache.entries.clear()
         maintenance.observe(events)
         for event in events:
             if event.event_type is EventKind.STRUCTURE_REMOVED:
@@ -383,7 +399,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("npc.seeded", count=seeded)
     await seed_animals(store.session_factory)
     npc_store = NpcStore(store)
-    npc_runtime, _hidden_states = await assemble_runtime(npc_store)
+    # 控制权归属：陈默由 ChenmoDriver 独占，档案是否已持久化不改变装配规则。
+    npc_runtime, _hidden_states = await assemble_runtime(
+        npc_store, external_controller_ids=frozenset({CHENMO_ID})
+    )
     # 批次 D14：真实意愿面——逐人合成（性格/需求/处境 → band 全谱），
     # 替换 D2 的全队 band=1 占位（「四句循环」根因收口）。最终都执行
     # （§10）：verdict 只产独白/defers，不改效用决策。
@@ -668,6 +687,45 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     app.state.chenmo_driver = driver
     loop.attach_maintenance(lambda state, tick: driver.combat_tick(loop, pathfinder=pathfinder))
+
+    def _recover_agent(state: WorldState, tick: int):
+        from sim.core.events import agent_recovered_event, npc_monologue_event
+
+        actor = state.entities.get(CHENMO_ID)
+        if actor is None or actor.incapacitated_until is None:
+            return None
+        driver.reset_combat()
+        if loop.context.combat_active:
+            loop.issue_combat_scale(False)
+        if tick < actor.incapacitated_until:
+            return None
+        burning = {(cell.x, cell.y) for cell in fire_runtime.cells}
+        pos = min(
+            (
+                (x, y)
+                for y in range(tile_map.height)
+                for x in range(tile_map.width)
+                if tile_map.is_walkable(x, y) and (x, y) not in burning
+            ),
+            key=lambda p: (abs(p[0] - actor.pos[0]) + abs(p[1] - actor.pos[1]), p),
+            default=None,
+        )
+        if pos is None:
+            return None  # 世界继续推进，等有安全落点；不能把人放进火或墙。
+        event = agent_recovered_event(tick, entity_id=CHENMO_ID, pos=pos)
+        combat_ledger.recover(CHENMO_ID)
+        driver.request_decision()
+        return [
+            event,
+            npc_monologue_event(
+                tick=tick,
+                npc_id=CHENMO_ID,
+                form="thought",
+                content="不知过了多久，眼前终于清楚了些。先缓一缓，再想往后的事。",
+            ),
+        ]
+
+    loop.attach_maintenance(_recover_agent)
     set_impulse_trigger(driver.request_decision)
 
     world_revision = 0

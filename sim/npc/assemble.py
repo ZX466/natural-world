@@ -17,15 +17,24 @@ from sim.npc.utility import UtilityModel
 
 
 async def assemble_runtime(
-    store: NpcStore, npc_ids: list[str] | None = None
+    store: NpcStore,
+    npc_ids: list[str] | None = None,
+    *,
+    external_controller_ids: frozenset[str] = frozenset(),
 ) -> tuple[NpcRuntime, dict[str, HiddenState]]:
     """物化 50 NPC（L0→L1）+ 隐藏档 → (runtime, hidden_states)。
 
     npc_ids None = 物化本分支全部（MVP=50）。utility 按实得 NPC 数建
     （n_npc 必须与 profiles 数一致，runtime.__post_init__ 校验）。
+    专用控制器拥有的实体不参与效用装配；归属由装配方显式声明，与档案出现时序无关。
     """
     profiles = await store.materialize(npc_ids)
-    hidden_rows = await store.materialize_hidden(list(profiles) if npc_ids is not None else None)
+    profiles = {
+        nid: profile for nid, profile in profiles.items() if nid not in external_controller_ids
+    }
+    hidden_rows = await store.materialize_hidden(
+        list(profiles) if npc_ids is not None or external_controller_ids else None
+    )
     # 无隐藏档 NPC 补恒等值（零分支透传：全员有键，消费点免 KeyError 分支）
     hidden = {nid: hidden_rows.get(nid, HiddenState.empty()) for nid in profiles}
     runtime = NpcRuntime(profiles=profiles, utility=UtilityModel(n_npc=len(profiles)))

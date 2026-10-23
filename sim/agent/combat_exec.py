@@ -122,6 +122,10 @@ class CombatLedger:
         """清空 hp 账本（读档=分叉：旧分支 hp 残留会「一刀秒杀」——review I2）。"""
         self._hp.clear()
 
+    def recover(self, entity_id: str) -> None:
+        """只恢复已醒来的主体；不触碰其他人的受伤状态。"""
+        self._hp.pop(entity_id, None)
+
     def apply_damage(self, target: str, amount: int) -> bool:
         """环境伤害；归零由调用方产 npc.death 事件。"""
         if amount < 0:

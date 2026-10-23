@@ -233,7 +233,7 @@ class TickLoop:
         """
         moved: dict[str, object] = {}
         for entity_id, entity in self.state.entities.items():
-            if not entity.path:
+            if not entity.path or entity.incapacitated_until is not None:
                 continue
             if (self.state.tick + entity_move_phase(entity_id)) % _MOVE_TICKS_PER_TILE != 0:
                 continue
@@ -252,6 +252,8 @@ class TickLoop:
             raise ValueError("重放不能倒退")
         entities = dict(self.state.entities)
         for entity_id, entity in entities.items():
+            if entity.incapacitated_until is not None:
+                continue
             first = self.state.tick + (
                 -(self.state.tick + entity_move_phase(entity_id)) % _MOVE_TICKS_PER_TILE
             )
@@ -277,10 +279,13 @@ class TickLoop:
         if event.event_type in (
             EventKind.FIRE_IGNITED,
             EventKind.NPC_DEATH,
+            EventKind.AGENT_INCAPACITATED,
             EventKind.STRUCTURE_COLLAPSED,
         ):
             self.chaos = self.chaos.adverse(event.event_type.value)
         self.pending_events.append(event)
+        if event.event_type in (EventKind.AGENT_INCAPACITATED, EventKind.AGENT_RECOVERED):
+            self.pending_delta_entity_ids.add(str(event.payload["entity_id"]))
         for d in result.derived:
             self.pending_events.append(d)
 

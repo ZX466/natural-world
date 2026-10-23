@@ -136,6 +136,9 @@ class ChenmoDriver:
         无 profile / LlmError / 解析失败返回 False；正常解析的决策轮返回 True。
         闸门拒绝只记结构化日志，不入 pending、不产事件，沿既有节拍等待下一轮。
         """
+        actor = state.entities.get(self._anchor.entity_id)
+        if actor is not None and actor.incapacitated_until is not None:
+            return False  # 念头留到醒来后，不在失能时消费。
         profile = self._profile_provider()
         if profile is None:
             logger.debug("chenmo.no_profile", tick=tick)
@@ -271,6 +274,12 @@ class ChenmoDriver:
 
         返回执行条数。寻路失败/目标过期 → 丢弃该条（重规划交给下一轮决策）。
         """
+        actor = loop.state.entities.get(self._anchor.entity_id)
+        if actor is not None and actor.incapacitated_until is not None:
+            self.reset_combat()
+            if loop.context.combat_active:
+                loop.issue_combat_scale(False)
+            return 0
         executed = 0
         while self._pending:
             intent = self._pending.popleft()
@@ -351,7 +360,12 @@ class ChenmoDriver:
             return
         actor_id = self._anchor.entity_id
         target = self._combat_target
-        if actor_id not in loop.state.entities or target not in loop.state.entities:
+        if (
+            actor_id not in loop.state.entities
+            or target not in loop.state.entities
+            or loop.state.entities[actor_id].incapacitated_until is not None
+            or loop.state.entities[target].incapacitated_until is not None
+        ):
             self.reset_combat()
             loop.issue_combat_scale(False)
             return
@@ -532,7 +546,7 @@ class ChenmoDriver:
             help_line,
             needs_critical_entropy,
         )
-        from sim.core.events import npc_death_event, npc_monologue_event
+        from sim.core.events import agent_incapacitated_event, npc_death_event, npc_monologue_event
 
         if self._combat is None:  # 调用分支已保证（pyright 收窄）
             return
@@ -542,6 +556,8 @@ class ChenmoDriver:
         victim = loop.state.entities.get(target or "")
         if target is None or actor is None or victim is None:
             return  # 目标不在场（闸门 revalidate 也会拦——双保险）
+        if actor.incapacitated_until is not None or victim.incapacitated_until is not None:
+            return
         if abs(actor.pos[0] - victim.pos[0]) + abs(actor.pos[1] - victim.pos[1]) > 2:
             return  # 够不着：不扣血、不抽熵、不切战斗时间尺
         tick = loop.state.tick
@@ -573,7 +589,10 @@ class ChenmoDriver:
         target_name = self._display_name_of(target) or target
         attacker_name = self._display_name_of(actor_id) or actor_id
         if out.outcome == "kill":
-            loop.enqueue(npc_death_event(tick=tick, entity_id=target))
+            if target == self._anchor.entity_id:
+                loop.enqueue(agent_incapacitated_event(tick, entity_id=target))
+            else:
+                loop.enqueue(npc_death_event(tick=tick, entity_id=target))
             loop.enqueue(
                 npc_monologue_event(
                     tick=tick + 1,
@@ -609,7 +628,11 @@ class ChenmoDriver:
                     content=help_line(attacker_name, tick=tick),
                 )
             )
-        if target not in loop.state.entities or self._anchor.entity_id not in loop.state.entities:
+        if (
+            target not in loop.state.entities
+            or self._anchor.entity_id not in loop.state.entities
+            or loop.state.entities[self._anchor.entity_id].incapacitated_until is not None
+        ):
             self.reset_combat()
             loop.issue_combat_scale(False)
         elif self._combat_until_tick is None:

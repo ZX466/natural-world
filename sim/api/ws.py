@@ -1024,11 +1024,12 @@ def step_fast_forward(
     active = [c for c in requests if c.pending_fast_forward]
     if not active:
         return 0
-    rate = loop.clock.ticks_per_real_second()
-    if rate <= 0:
-        return 0
     advanced_total = 0
     for control in active:
+        # 前一个请求推进时可能退出战斗尺；下一段必须重新读取换算率。
+        rate = loop.clock.ticks_per_real_second()
+        if rate <= 0:
+            break
         remaining = budget - advanced_total
         if remaining <= 0:
             break
@@ -1396,6 +1397,7 @@ async def run_world_driver(
     seq = 0
     prev_day = game_time(loop.state.tick).day
     frame_lock = write_lock if write_lock is not None else asyncio.Lock()
+    recovery_control = ControlState()
     while True:
         await asyncio.sleep(FRAME_BUDGET_SECONDS)
         now = time.monotonic()
@@ -1404,17 +1406,24 @@ async def run_world_driver(
         # 与存档打包共用边界：SQL 会话闭环前不接受另一个世界写者。
         async with frame_lock:
             n = loop.advance_frame(real_dt)
-            fast_forwarding = manager.any_fast_forward_active()
+            actor = loop.state.entities.get("chenmo")
+            recover_at = actor.incapacitated_until if actor is not None else None
+            fast_forwarding = manager.any_fast_forward_active() or recover_at is not None
             if (
                 n == 0
                 and manager.count == 0
                 and not loop.pending_events
                 and not loop.pending_broadcast_events
                 and not loop.pending_combat_visuals
+                and not fast_forwarding
             ):
                 continue
             if fast_forwarding:
-                step_fast_forward(loop, manager.controls())
+                requests = manager.controls()
+                if recover_at is not None:
+                    recovery_control.request_fast_forward(max(1, recover_at - loop.state.tick))
+                    requests = [recovery_control, *requests]
+                step_fast_forward(loop, requests)
             moved = set() if fast_forwarding else loop.drain_delta()
             events = loop.drain_events()
             if events and on_flush is not None:
@@ -1437,6 +1446,14 @@ async def run_world_driver(
                 for day in range(prev_day + 1, new_day + 1):
                     on_day_switch(day)
                 prev_day = new_day
+        if any(event.event_type is EventKind.AGENT_RECOVERED for event in events):
+            seq += 1
+            payload = snapshot_payload(
+                loop, loop.pathfinder.tile_map if loop.pathfinder else tile_map
+            )
+            payload["ws_seq"] = seq
+            await manager.broadcast_json(payload)
+            loop.drain_delta()
         if moved or (
             loop.fauna_enabled and any(e.event_type is EventKind.FAUNA_TICK for e in events)
         ):
