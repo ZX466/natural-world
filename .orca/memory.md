@@ -9,10 +9,10 @@
 
 ## 0. 本会话状态
 
-- **HEAD**：`fe2e709`（merge codex：DA-05P + DA-05 建筑表现）
-- **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`（merge `fe2e709`）
-- **在飞**：**DA-06 / DA-07 / DA-08 三组同波派发**（2026-10-22，基准 `f7add60`）；06/08 可直接做，07 需先回执失能事件策略待核准
-- **DA-05 遗留**：Phaser 真实渲染（遮挡/层级）仍未经人眼验收，只有 mock Graphics 单测
+- **HEAD**：`bb57acf`（merge codex：DA-06/07/08 收口）
+- **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`／DA-06 `ea42b13`／DA-07 `fd31113`／DA-08 `01d8142`（merge `bb57acf`）
+- **在飞**：无。**codex 审计 8 组 + 主树 P0-3 全部关闭**
+- **遗留待人工验收**：① Phaser 真实渲染（遮挡/层级）只有 mock Graphics 单测；② DA-07 失能/恢复只有单测，未跑真模型长局；③ 双远程仍未推送
 - **未决**：是否推送双远程（按纪律不推，收编前以现测为准）
 - **协议**：1.11（真相源 `sim/api/ws.py::_PROTOCOL_VERSION`，前端 `client/src/net/ws.ts` 同源）
 - **工作树：两棵**（2026-10-21 用户重申，长期有效）
@@ -25,22 +25,23 @@
 **M0–M6 全部收官**（M6 于 2026-10-05，G1–G4 全 ✅）；**M7 渲染面**已落（地图/时钟/视角/昼夜）。
 代码侧整体完成，剩余是收口型缺口。
 
-## 2. 门禁（2026-10-22 DA-05 收编后实测）
+## 2. 门禁（2026-10-23 DA-06/07/08 收编后实测）
 
 | 项 | 结果 |
 |---|---|
-| sim 全量 pytest（`-m "not bench"`） | **2871 passed** / 121 skipped / 72 deselected，**0 failed**（317s） |
-| ruff check / ruff format | clean / 353 文件已格式化 |
+| sim 全量 pytest（`-m "not bench"`） | **2887 passed** / 121 skipped / 72 deselected，**0 failed**（338s） |
+| ruff check / ruff format | clean / 356 文件已格式化 |
 | pyright sim/ | 0 errors, 0 warnings |
 | client tsc --noEmit | 0 错误 |
 | client vitest | 149 passed / 27 files |
+| gen:protocol:check | EXIT 0（新增内部事件 kind 未动协议形状） |
 | check_implementation_status | 未发现新缺口（未在本轮重跑） |
 
 > **全量已不再需要 `--deselect`**：此前排除的 2 条地图用例是 codex 树缺
 > `sim/content/assets/`（被 gitignore）所致，补齐后两树均可跑全量。
 > 旧读数 2982 收集 / 138 vitest 已过时；上表为合并后现测。
 
-## 3. 当前剩余缺口（codex 审计 8 组 + 主树 P0-3，已修 5 组，剩 3）
+## 3. 缺口清单（codex 审计 8 组 + 主树 P0-3，**全部已修**）
 
 来源 `docs/security/gameplay-integrity-audit-2026-10-21.md`（codex `974611e`）：
 
@@ -52,11 +53,11 @@
 | DA-03 | 余额/火场账本清零未重建 | ✅ `d5c2931`（读档）+ `afdfeb9`（冷启动） |
 | DA-04 | 人物/中文货名目标不兼容 | ✅ `ecc9a14`（merge `f7720d7`） |
 | DA-05 | 建筑表现跨分支残留 | ✅ `4518515`（merge `fe2e709`）：含前置 DA-05P |
-| DA-06 | 坍塌还原未应用实时碰撞 | ⬜ 未修 |
-| DA-07 | 主角走 NPC 死亡删除 | ⬜ 未修 |
-| DA-08 | 重启后主角双控制源 | ⬜ 未修 |
+| DA-06 | 坍塌还原未应用实时碰撞 | ✅ `ea42b13` |
+| DA-07 | 主角走 NPC 死亡删除 | ✅ `fd31113`（新增 agent.incapacitated/recovered） |
+| DA-08 | 重启后主角双控制源 | ✅ `01d8142`（`external_controller_ids`） |
 
-> **不得称「全部玩法已修」**——剩 **DA-06/07/08 三组**未修。
+> 缺口表已全绿。**但「全绿」≠「玩法全部验收」**：见 §0 遗留待人工验收三项。
 >
 > **DA-05 已收编（`fe2e709` = merge `4518515`），含前置单 DA-05P。**
 > 前置缺陷：历史读档 fork 时 `_clone_bounded` **无条件**克隆父分支全表，
@@ -122,6 +123,9 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 | DA-05P 历史 fork 结构真源 | `fork.py` 新增 `_clone_structures_at_cursor`：沿 fork 链逐段（各层 `seq <= 该层游标`）折叠 `structure.*` 事件再写子线；`kind="anchor"` 且 table=`structures` 时走新路径，head 克隆保持 `_clone_bounded` 不变。复用 `fold_structure_snapshot`/`_STRUCTURE_KINDS` | `4518515` |
 | DA-05 建筑表现账本 | `ws.py` 加 `remove_structure`/`restore_structures`（相位映射表）；`main.py` 读档 reset 后从 `maintenance.structures` 同一快照重建、启动按当前分支填充、`on_flush` 补 collapsed→rubble / removed→删账；`_structures_delta_rows` 发 `op:remove` | `4518515` |
 | DA-05 客户端镜像 | `ws.ts` `full_snapshot` 先 `structures.clear()` 再应用（空/省略也清）；`WorldScene.syncStructures` 判据由数量改为 `JSON.stringify` 内容签名（含 token/相位/格位） | `4518515` |
+| DA-06 实时碰撞 | `on_flush` 在 `flush_world` 成功后消费本批 `tile_changed`，`tile_map.with_collision` 增量更新并同步 `app.state.tile_map`/`build_runtime.tile_map`/`pathfinder.observe_map` + 清缓存；仅结构终态那帧触发，不每 tick 全图重建 | `ea42b13` |
+| DA-07 主角失能 | 新增 `agent.incapacitated`/`agent.recovered` 内部事件；`EntityState.incapacitated_until`（wrap serializer 在 None 时省略，保旧哈希）；火灾/战斗致命结算对主角转失能（保留实体、清路径、停行动、保留念头），普通 NPC 仍 `npc.death`；按既有快进预算跳 1 游戏小时后在最近可走无火格恢复，`CombatLedger.recover` 仅恢复主角 HP | `fd31113` |
+| DA-08 控制权 | `assemble_runtime(external_controller_ids=frozenset({CHENMO_ID}))`：主角从效用装配中显式排除，归属由装配方声明、与档案落库时序无关 | `01d8142` |
 
 ## 5. 踩坑记录（血泪，逐条有效）
 
