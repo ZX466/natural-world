@@ -9,32 +9,33 @@
 
 ## 0. 本会话状态
 
-- **HEAD**：`9437cff`（merge codex：V1 等距渲染壳）；V0 收口 `eb3a260`
-- **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`／DA-06 `ea42b13`／DA-07 `fd31113`／DA-08 `01d8142`（merge `bb57acf`）；**V1**（merge `9437cff`，含 `078eb89` 纯函数/高度表 + `a97bf82` 渲染壳）
-- **在飞**：无。**V1 已收编验收通过**；V2（实体 billboard/拾取/相机/遮挡 + 结构层等距化）等用户发话再派
-- **V0 验收**：DESIGN v2.2 仅两处（§0 修订行 + §1 视觉条）；规格/方案入库 `eb3a260`；双远程已推到 `67aa31b`
+- **HEAD**：`fb09a5b`（merge codex：V2 实况接管）；V0 收口 `eb3a260`
+- **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`／DA-06 `ea42b13`／DA-07 `fd31113`／DA-08 `01d8142`（merge `bb57acf`）；**V1**（merge `9437cff`）；**V2**（merge `fb09a5b`，含 `2377108` billboard/拾取/相机 + `9213f3a` 结构层）
+- **在飞**：无。**V1/V2 均已收编验收**；V3（气泡/名牌/天气昼夜/结构步进/图集/iso 默认）等用户发话
+- **V0 验收**：DESIGN v2.2 仅两处；规格/方案入库 `eb3a260`；双远程已推到 `67aa31b`
 - **V1 验收**：高度表 `--check` 逐字节一致；主树叠图肉眼抽查通过；独立 Chromium 复跑 flat/iso 零 JS 异常（见 §2.5）
-- **遗留待人工验收**：① V2 的真实遮挡/相机（当前 iso 只有静态世界，实体/相机/拾取按规格留 V2）；② DA-07 失能/恢复真模型长局；③ V1 高块 7643 纹理待 V3 图集替换
+- **V2 验收**：真实 lifespan 33 帧/54 actors 复跑；Chromium 遮挡像素差 **behind=0 / after=2860**；结构池 4 块+1 rubble、无 structureLayer（见 §2.5）
+- **遗留待人工验收**：① **V3 必须补深度层级**（名牌 71-89、雨层 99/夜幕 100 低于 iso 高块）；② DA-07 失能/恢复真模型长局；③ 高块 7643 纹理待 V3 图集替换
 - **协议**：1.11（真相源 `sim/api/ws.py::_PROTOCOL_VERSION`，前端 `client/src/net/ws.ts` 同源）
 - **工作树：两棵**（2026-10-21 用户重申，长期有效）
   - 主树 `E:/zxdevelop/project7` → 分支 `main`（Claude）
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex` → 分支 `codex`（HEAD 随其提交推进，收编前以实际 `git log` 为准）
-- **远程**：origin/gitee 停在 `67aa31b`；V1 merge 未推（按阶段推送，不随手推）
+- **远程**：origin/gitee 停在 `67aa31b`；V1/V2 merge 未推（按阶段推送，不随手推）
 
 ## 1. 里程碑
 
 **M0–M6 全部收官**（M6 于 2026-10-05，G1–G4 全 ✅）；**M7 渲染面**已落（地图/时钟/视角/昼夜）。
 代码侧整体完成，剩余是收口型缺口。
 
-## 2. 门禁（2026-10-23 V1 收编后实测）
+## 2. 门禁（2026-10-23 V2 收编后实测）
 
 | 项 | 结果 |
 |---|---|
-| sim 全量 pytest（`-m "not bench"`） | **2887 passed** / 121 skipped / 72 deselected，**0 failed**（334s） |
+| sim 全量 pytest（`-m "not bench"`） | **2887 passed** / 121 skipped / 72 deselected，**0 failed**（333s） |
 | ruff check / ruff format | clean / 357 文件已格式化 |
 | pyright sim/ | 0 errors, 0 warnings |
 | client typecheck / lint / format | 全 0 |
-| client vitest | **168 passed / 30 files**（V1 新增 19 条） |
+| client vitest | **182 passed / 31 files**（V2 新增 14 条） |
 | 高度表 `build_height_map --check` | **byte-identical**（JSON + PNG） |
 | gen:protocol:check | EXIT 0 |
 | check_implementation_status | 未发现新缺口（未在本轮重跑） |
@@ -60,7 +61,15 @@
   **主树抽查**：把 `linhe-height.json` 叠回原图生成 `.orca/tmp/height-overlay.png`——河道连续、
   屋顶/墙体对齐、粉冠对准树冠，**止损门通过**。独立 Chromium 复跑（主树代码）：flat
   2240×1600/1 Image/有结构层；iso 3840×2040/7922 Images/无结构层/errors=[]。
-  h 分布 0/1/2/3 = 688/5391/5496/2425。V2 待派。
+  h 分布 0/1/2/3 = 688/5391/5496/2425。
+- **V2（已收编 `fb09a5b`）**：实体 billboard（脚底贴顶面、`depthKey+1`、影子压扁 16×4）、
+  `isoUnproject` 拾取（碰撞判据/move_request 零改动）、相机边界四侧 64px + 顶点中心跟随、
+  结构层并入同一深度池（`built` 0.92 / `collapsing` 0.5 / rubble 低矮标记，无 depth=14 层）。
+  主树独立复跑：真实 lifespan 33 帧、54 actors、hero+22 村民+3 动物移动；
+  Chromium flat/iso `errors=[]`；遮挡像素差 **behind=0 / after=2860**（与 codex 一致）；
+  结构 4 块+1 rubble、无 structureLayer、移除后 marker 销毁。
+  **V3 必补**：名牌/气泡深度仍 71-89、雨层 99/夜幕 100，均低于 iso 高块深度（万级）——
+  名牌会被建筑压住、夜色/雨不覆盖 iso 世界；V3 不能只改定位，必须提层级。V3 待派。
 - **主树实测锚点**：tileset 2240×1600（140 列）；地图 140×100；ground 界内
   14000 格全覆盖、**无 gid=0**；63 个 16×16 chunk，边缘 padding 的 0 在界外；
   树冠主色是**粉色桃花**（不是只有深绿）。原图缩略图 `.orca/tmp/map-overview.png`。
@@ -173,6 +182,9 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
   （基类属性类型冲突）；V1 用 `renderMode` 规避。后续渲染策略沿用此名
 - **V1 高块纹理按 (h,采样色) 缓存 → 实测 7643 个 CanvasTexture**（约 60-80MB）。V1 可接受；
   V3 图集管线必须替换，别在 V2 再加纹理维度
+- **iso 深度池与 flat 深度带不兼容**：高块/实体深度 = `depthKey`（千~24 万），而名牌 71-89、
+  雨层 99、夜幕 100 仍是 flat 带 → iso 下名牌会被建筑压住、夜色/雨不覆盖世界。
+  V3 处理名牌/气泡/天气时必须同步提层级，否则「定位对了但看不见」
 
 **核查方法类**
 - **核库后再报**：小写 grep 会漏驼峰符号 → 查符号用 codegraph 或大小写不敏感
