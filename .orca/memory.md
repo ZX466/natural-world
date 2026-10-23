@@ -9,37 +9,39 @@
 
 ## 0. 本会话状态
 
-- **HEAD**：`c500379`（测试假红修复）；V0 收口提交 `eb3a260`
-- **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`／DA-06 `ea42b13`／DA-07 `fd31113`／DA-08 `01d8142`（merge `bb57acf`）
-- **在飞**：**V1 等距渲染壳已派生 codex**（`.orca/talking.txt` 当前任务）；主树 V0 已完成
-- **V0 验收**：DESIGN v2.2 仅两处（§0 修订行 + §1 视觉条）；规格/方案入库 `eb3a260`；`origin/main` 与 `gitee/main` 已推到 `c500379`；全量门禁绿（见 §2）
-- **遗留待人工验收**：① Phaser 真实渲染（遮挡/层级）只有 mock Graphics 单测；② DA-07 失能/恢复只有单测，未跑真模型长局；③ **V1 高度表可视化抽查（codex 交付后主树肉眼）**
+- **HEAD**：`9437cff`（merge codex：V1 等距渲染壳）；V0 收口 `eb3a260`
+- **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`／DA-06 `ea42b13`／DA-07 `fd31113`／DA-08 `01d8142`（merge `bb57acf`）；**V1**（merge `9437cff`，含 `078eb89` 纯函数/高度表 + `a97bf82` 渲染壳）
+- **在飞**：无。**V1 已收编验收通过**；V2（实体 billboard/拾取/相机/遮挡 + 结构层等距化）等用户发话再派
+- **V0 验收**：DESIGN v2.2 仅两处（§0 修订行 + §1 视觉条）；规格/方案入库 `eb3a260`；双远程已推到 `67aa31b`
+- **V1 验收**：高度表 `--check` 逐字节一致；主树叠图肉眼抽查通过；独立 Chromium 复跑 flat/iso 零 JS 异常（见 §2.5）
+- **遗留待人工验收**：① V2 的真实遮挡/相机（当前 iso 只有静态世界，实体/相机/拾取按规格留 V2）；② DA-07 失能/恢复真模型长局；③ V1 高块 7643 纹理待 V3 图集替换
 - **协议**：1.11（真相源 `sim/api/ws.py::_PROTOCOL_VERSION`，前端 `client/src/net/ws.ts` 同源）
 - **工作树：两棵**（2026-10-21 用户重申，长期有效）
   - 主树 `E:/zxdevelop/project7` → 分支 `main`（Claude）
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex` → 分支 `codex`（HEAD 随其提交推进，收编前以实际 `git log` 为准）
-- **远程**：origin/gitee 均已推送；收编后只按阶段推送，不随手推
+- **远程**：origin/gitee 停在 `67aa31b`；V1 merge 未推（按阶段推送，不随手推）
 
 ## 1. 里程碑
 
 **M0–M6 全部收官**（M6 于 2026-10-05，G1–G4 全 ✅）；**M7 渲染面**已落（地图/时钟/视角/昼夜）。
 代码侧整体完成，剩余是收口型缺口。
 
-## 2. 门禁（2026-10-23 V0 收口后实测）
+## 2. 门禁（2026-10-23 V1 收编后实测）
 
 | 项 | 结果 |
 |---|---|
-| sim 全量 pytest（`-m "not bench"`） | **2887 passed** / 121 skipped / 72 deselected，**0 failed**（614s，负载下） |
-| ruff check / ruff format | clean / 356 文件已格式化 |
+| sim 全量 pytest（`-m "not bench"`） | **2887 passed** / 121 skipped / 72 deselected，**0 failed**（334s） |
+| ruff check / ruff format | clean / 357 文件已格式化 |
 | pyright sim/ | 0 errors, 0 warnings |
 | client typecheck / lint / format | 全 0 |
-| client vitest | 149 passed / 27 files |
+| client vitest | **168 passed / 30 files**（V1 新增 19 条） |
+| 高度表 `build_height_map --check` | **byte-identical**（JSON + PNG） |
 | gen:protocol:check | EXIT 0 |
 | check_implementation_status | 未发现新缺口（未在本轮重跑） |
 
 > **2026-10-23 首轮全量曾出现 2 个负载敏感假红**：`test_smell_world_step_tick_amortized`
 >（墙钟性能守卫，单跑通过）与 DA-07 恢复用例（30s 等待上限 < 负载下实需 ~40s）。
-> 后者已改 120s（`c500379`），复跑全绿。**不是产品回归**。
+> 后者已改 120s（`c500379`），V1 收编后全量 334s 全绿。**不是产品回归**。
 >
 > **全量已不再需要 `--deselect`**：此前排除的 2 条地图用例是 codex 树缺
 > `sim/content/assets/`（被 gitignore）所致，补齐后两树均可跑全量。
@@ -52,8 +54,13 @@
 - **范围**：仅 V0-V3；V3.5/V4a/V4-3D 不在本单。**sim 内核零改动**，只动
   `client/src/game/**`、`client/public/assets/tilesets/**`、`sim/content/**`。
 - **V0（主树，已完成）**：DESIGN v2.2 仅两处；两文档入库 `eb3a260`；双远程推送完成。
-- **V1（codex 在飞）**：`iso.ts` 纯函数 + `build_height_map.py`/`linhe-height.json`
-  + `?renderer=iso` 渲染壳；**高度表预览图主树肉眼抽查是进 V2 的止损门**。
+- **V1（已收编 `9437cff`）**：`iso.ts` 纯函数（14000 格可逆/菱形边界/depthKey 全序/注入式
+  高度表）+ `build_height_map.py`（固定 HSV 阈值、`--check` 逐字节一致）+
+  `?renderer=iso` 渲染壳（矮块烘 3840×2040 画布、高块 Image、iso 不建矩形 structureLayer）。
+  **主树抽查**：把 `linhe-height.json` 叠回原图生成 `.orca/tmp/height-overlay.png`——河道连续、
+  屋顶/墙体对齐、粉冠对准树冠，**止损门通过**。独立 Chromium 复跑（主树代码）：flat
+  2240×1600/1 Image/有结构层；iso 3840×2040/7922 Images/无结构层/errors=[]。
+  h 分布 0/1/2/3 = 688/5391/5496/2425。V2 待派。
 - **主树实测锚点**：tileset 2240×1600（140 列）；地图 140×100；ground 界内
   14000 格全覆盖、**无 gid=0**；63 个 16×16 chunk，边缘 padding 的 0 在界外；
   树冠主色是**粉色桃花**（不是只有深绿）。原图缩略图 `.orca/tmp/map-overview.png`。
@@ -160,6 +167,12 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 - **`on_flush` 无 try/except**：`sim/api/ws.py:1401` 的 `await on_flush(events)` 任何异常
   都会直接打死世界驱动任务（没有降级、没有重试、没有前端告知）。写落库相关代码要按
   「异常即停服」的标准衡量风险
+
+**前端/渲染类**
+- **`Phaser.Scene` 已有 `renderer` 字段**：WorldScene 把构造参数叫 `renderer` 会触发 TS2416
+  （基类属性类型冲突）；V1 用 `renderMode` 规避。后续渲染策略沿用此名
+- **V1 高块纹理按 (h,采样色) 缓存 → 实测 7643 个 CanvasTexture**（约 60-80MB）。V1 可接受；
+  V3 图集管线必须替换，别在 V2 再加纹理维度
 
 **核查方法类**
 - **核库后再报**：小写 grep 会漏驼峰符号 → 查符号用 codegraph 或大小写不敏感
