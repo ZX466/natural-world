@@ -6,9 +6,14 @@ import type { MapStatic } from '../../world-mirror';
 
 class Image {
   destroyed = false;
+  alpha = 1;
   setOrigin = vi.fn(() => this);
   setDepth = vi.fn(() => this);
-  setAlpha = vi.fn(() => this);
+  setTint = vi.fn(() => this);
+  setAlpha = vi.fn((alpha: number) => {
+    this.alpha = alpha;
+    return this;
+  });
   setPosition = vi.fn((x: number, y: number) => {
     this.x = x;
     this.y = y;
@@ -57,6 +62,8 @@ function setup(heights = [0, 1, 2, 3]) {
   const images: Image[] = [];
   const graphics: {
     destroyed: boolean;
+    alpha: number;
+    setAlpha: ReturnType<typeof vi.fn>;
     x: number;
     y: number;
     depth: number;
@@ -79,6 +86,11 @@ function setup(heights = [0, 1, 2, 3]) {
       graphics: () => {
         const marker = {
           destroyed: false,
+          alpha: 1,
+          setAlpha: vi.fn((alpha: number) => {
+            marker.alpha = alpha;
+            return marker;
+          }),
           x: 0,
           y: 0,
           depth: 0,
@@ -178,6 +190,7 @@ it('overrides built/collapsing to two and restores static height on rubble/remov
   expect(house.setDisplaySize).toHaveBeenLastCalledWith(32, 48);
   structures.get('house')!.phase = 'collapsing';
   terrain.sync(map, structures);
+  terrain.advance(240); // V3 preserves the original opacity after the deterministic transition.
   expect(images).toHaveLength(2);
   expect(house.setAlpha).toHaveBeenLastCalledWith(0.5);
   expect(house.setDisplaySize).toHaveBeenLastCalledWith(32, 48);
@@ -206,7 +219,8 @@ it('handles in-place ground edits, empty maps, and releases generated textures o
   terrain.redraw(map, structures);
   map.ground![2] = 0;
   terrain.sync(map, structures);
-  expect(textures.has('iso-block-2-6b4f2a')).toBe(true);
+  expect(textures.has('iso-block-2')).toBe(true);
+  expect(images[1]!.setTint).toHaveBeenLastCalledWith(0x6b4f2a);
   terrain.sync(null, structures);
   expect(images.every((image) => image.destroyed)).toBe(true);
   terrain.redraw(map, structures);
@@ -279,4 +293,60 @@ it('draws overlapping ruins only once and lets a newer active footprint cover th
   terrain.sync(map, structures);
   expect(graphics).toHaveLength(1);
   expect(graphics[0]!.fillPoints).toHaveBeenCalledTimes(3);
+});
+
+it('advances structure opacity by explicit deltas without changing the block height', () => {
+  const { terrain, map, structures, images, canvases } = setup([0, 1, 0, 0]);
+  structures.set('house', { tiles: [[1, 0]], phase: 'built' });
+  terrain.redraw(map, structures);
+  const house = images[1]!;
+  expect(house.alpha).toBe(0.92);
+  const canvasCount = canvases.length;
+  structures.get('house')!.phase = 'collapsing';
+  terrain.sync(map, structures);
+  expect(canvases).toHaveLength(canvasCount); // An opacity-only phase must not stall on a map bake.
+  expect(house.alpha).toBe(0.92);
+  terrain.advance(120);
+  expect(house.alpha).toBeCloseTo(0.71);
+  expect(house.setDisplaySize).toHaveBeenLastCalledWith(32, 48);
+  terrain.advance(120);
+  expect(house.alpha).toBe(0.5);
+  structures.get('house')!.phase = 'built';
+  terrain.sync(map, structures);
+  terrain.advance(60);
+  terrain.advance(60);
+  expect(house.alpha).toBeCloseTo(0.71);
+  terrain.advance(120);
+  expect(house.alpha).toBe(0.92);
+});
+
+it('drops the high block immediately on rubble and fades only the low marker', () => {
+  const { terrain, map, structures, images, graphics } = setup([0, 1, 0, 0]);
+  structures.set('house', { tiles: [[1, 0]], phase: 'collapsing' });
+  terrain.redraw(map, structures);
+  structures.get('house')!.phase = 'rubble';
+  terrain.sync(map, structures);
+  expect(images[1]!.destroyed).toBe(true);
+  expect(graphics[0]!.alpha).toBe(0);
+  terrain.advance(120);
+  expect(graphics[0]!.alpha).toBeCloseTo(0.5);
+  terrain.advance(120);
+  expect(graphics[0]!.alpha).toBe(1);
+  terrain.destroy();
+  terrain.advance(240);
+});
+
+it('shares a fixed height texture across differently colored cells and preserves their tints', () => {
+  const { terrain, map, structures, images, textures } = setup([2, 2, 2, 2]);
+  terrain.redraw(map, structures);
+  expect([...textures.keys()].filter((key) => key.startsWith('iso-block-'))).toEqual([
+    'iso-block-2',
+  ]);
+  expect(images.slice(1).every((image) => image.key === 'iso-block-2')).toBe(true);
+  expect(images[1]!.setTint).toHaveBeenLastCalledWith(0x6496c8);
+  map.ground![1] = 0;
+  terrain.sync(map, structures);
+  expect(images[2]!.setTint).toHaveBeenLastCalledWith(0x6b4f2a);
+  expect(images[1]!.setTint).toHaveBeenLastCalledWith(0x6496c8);
+  expect([...textures.keys()].filter((key) => key.startsWith('iso-block-'))).toHaveLength(1);
 });

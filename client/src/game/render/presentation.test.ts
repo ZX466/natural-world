@@ -15,6 +15,8 @@ import {
   LABEL_GAP,
   NAME_LABEL_RADIUS,
   NIGHT_OVERLAY_DEPTH,
+  ISO_DEPTH,
+  aboveSurface,
   STACK_OFFSETS,
   actorDepth,
   assignStackOffsets,
@@ -25,6 +27,7 @@ import {
   manhattan,
   shouldShowNameLabel,
 } from './presentation';
+import { depthKey } from './iso';
 
 describe('actorDepth（脚底 y 排序）', () => {
   it('靠下（y 大）的人深度更大，画在上层', () => {
@@ -51,6 +54,24 @@ describe('labelDepth / bubbleDepth', () => {
     expect(bubbleDepth(33)).toBeGreaterThan(labelDepth(33));
     expect(labelDepth(33)).toBeGreaterThan(actorDepth(1600));
     expect(bubbleDepth(1600)).toBeLessThan(NIGHT_OVERLAY_DEPTH);
+  });
+});
+
+describe('iso presentation bands', () => {
+  it('puts labels and bubbles above the world, then rain and night above all text', () => {
+    const worldTop = depthKey(139, 99) + 2;
+    expect(labelDepth(0, 'iso')).toBeGreaterThan(worldTop);
+    expect(bubbleDepth(0, 'iso')).toBeGreaterThan(labelDepth(10000, 'iso'));
+    expect(ISO_DEPTH.RAIN).toBeGreaterThan(bubbleDepth(10000, 'iso'));
+    expect(ISO_DEPTH.NIGHT).toBe(ISO_DEPTH.RAIN + 1);
+    expect(ISO_DEPTH).toEqual({ LABEL: 300000, BUBBLE: 310000, RAIN: 400000, NIGHT: 400001 });
+  });
+
+  it('lifts from the projected surface in screen pixels while retaining flat formulas', () => {
+    expect(aboveSurface(100, 32, 6, 3)).toBe(66);
+    expect(aboveSurface(100, 16, 20, 4)).toBe(79);
+    expect(labelDepth(100, 'flat')).toBe(labelDepth(100));
+    expect(bubbleDepth(100, 'flat')).toBe(bubbleDepth(100));
   });
 });
 

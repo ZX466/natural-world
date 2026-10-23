@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import type { MapStatic, WorldMirror } from '../world-mirror';
 import { ISO, depthKey, effectiveHeight, isoProject, screenBounds } from './iso';
+import { BlockAtlas } from './block-atlas';
 
 const GROUND_KEY = 'iso-ground-composite';
 const TILESET_KEY = 'god-town-16';
@@ -10,6 +11,21 @@ const TILE = 16;
 const FALLBACK_COLOR = 0x6b4f2a;
 type Structures = WorldMirror['structures'];
 type HeightLookup = (x: number, y: number) => number;
+interface BlockView {
+  image: Phaser.GameObjects.Image;
+  texture: string;
+  phase: string | undefined;
+}
+
+function surfaceSignature(structures: Structures): string {
+  return JSON.stringify(
+    [...structures].map(([id, structure]) => [
+      id,
+      structure.tiles,
+      structure.phase === 'built' || structure.phase === 'collapsing' ? 'solid' : structure.phase,
+    ]),
+  );
+}
 
 export function sampleTileColor(
   data: Uint8ClampedArray,
@@ -74,7 +90,7 @@ function paintBlock(
  */
 export class IsoTerrain {
   private ground: Phaser.GameObjects.Image | null = null;
-  private blocks = new Map<string, { image: Phaser.GameObjects.Image; texture: string }>();
+  private blocks = new Map<string, BlockView>();
   private rubble = new Map<string, Phaser.GameObjects.Graphics>();
   private textureKeys = new Set<string>();
   private colors: ((gid: number) => number) | null = null;
@@ -82,11 +98,39 @@ export class IsoTerrain {
   private lastGround: Uint16Array | undefined;
   private lastShape = '';
   private lastStructureSignature = '';
+  private lastSurfaceSignature = '';
+  private atlas: BlockAtlas | null;
+  private transitions = new Map<
+    Phaser.GameObjects.Image | Phaser.GameObjects.Graphics,
+    { from: number; to: number; elapsed: number }
+  >();
 
   constructor(
     private scene: Phaser.Scene,
     private heightOf: HeightLookup,
-  ) {}
+  ) {
+    this.atlas = BlockAtlas.fromScene(scene);
+  }
+
+  /** Phase fades use only supplied frame deltas, with no clock or random source. */
+  advance(deltaMs: number): void {
+    const dt = Number.isFinite(deltaMs) ? Math.max(0, deltaMs) : 0;
+    for (const [target, fade] of this.transitions) {
+      fade.elapsed = Math.min(240, fade.elapsed + dt);
+      const t = fade.elapsed / 240;
+      const eased = t * t * (3 - 2 * t);
+      target.setAlpha(t === 1 ? fade.to : fade.from + (fade.to - fade.from) * eased);
+      if (t === 1) this.transitions.delete(target);
+    }
+  }
+
+  private phase(view: BlockView, phase: string | undefined, initial = false): void {
+    const opacity = phase === 'collapsing' ? 0.5 : phase === 'built' ? 0.92 : 1;
+    if (initial) view.image.setAlpha(opacity);
+    else if (view.phase !== phase)
+      this.transitions.set(view.image, { from: view.image.alpha, to: opacity, elapsed: 0 });
+    view.phase = phase;
+  }
 
   /** Compare contents so same-array ground edits and empty snapshots both invalidate. */
   sync(map: MapStatic | null, structures: Structures): void {
@@ -108,6 +152,24 @@ export class IsoTerrain {
       groundUnchanged
     )
       return;
+    // built <-> collapsing changes opacity only. This keeps the fade running
+    // without a terrain bake; TILE_CHANGED and geometry still use full redraws.
+    if (
+      map === this.lastMap &&
+      `${map.w},${map.h}` === this.lastShape &&
+      groundUnchanged &&
+      surfaceSignature(structures) === this.lastSurfaceSignature
+    ) {
+      for (const structure of structures.values()) {
+        if (structure.phase !== 'built' && structure.phase !== 'collapsing') continue;
+        for (const [x, y] of structure.tiles) {
+          const view = this.blocks.get(`${x},${y}`);
+          if (view) this.phase(view, structure.phase);
+        }
+      }
+      this.lastStructureSignature = signature;
+      return;
+    }
     this.redraw(map, structures);
   }
 
@@ -120,7 +182,9 @@ export class IsoTerrain {
     const canvas = document.createElement('canvas');
     canvas.width = bounds.width;
     canvas.height = bounds.height;
-    const ctx = canvas.getContext('2d');
+    // Atlas tinting copies a tiny mutable canvas thousands of times. Keep the
+    // one-shot bake on CPU to avoid GPU synchronization for every face copy.
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (ctx === null) return;
     const overrides = new Map<string, string>();
     for (const structure of structures.values()) {
@@ -141,7 +205,8 @@ export class IsoTerrain {
           high.push({ x, y, h, color, phase });
         } else {
           const top = isoProject(x, y, h, bounds);
-          paintBlock(ctx, top.sx, top.sy, h, color);
+          if (this.atlas) this.atlas.paintBlock(ctx, top.sx, top.sy, h, color);
+          else paintBlock(ctx, top.sx, top.sy, h, color);
         }
       }
     }
@@ -156,24 +221,26 @@ export class IsoTerrain {
     const usedTextures = new Set<string>();
     for (const { x, y, h, color, phase } of high) {
       const key = `${x},${y}`;
-      const texture = `iso-block-${h}-${color.toString(16)}`;
+      const texture = `iso-block-${h}`;
       if (!this.scene.textures.exists(texture)) {
         const block = document.createElement('canvas');
         block.width = ISO.TW;
         block.height = h * ISO.HH + ISO.TH;
         const blockCtx = block.getContext('2d');
         if (blockCtx === null) continue;
-        paintBlock(blockCtx, ISO.TW / 2, ISO.TH / 2, h, color);
+        if (this.atlas) this.atlas.paintBlock(blockCtx, ISO.TW / 2, ISO.TH / 2, h);
+        else paintBlock(blockCtx, ISO.TW / 2, ISO.TH / 2, h, 0xffffff);
         this.scene.textures.addCanvas(texture, block);
         this.textureKeys.add(texture);
       }
       let view = this.blocks.get(key);
+      const isNew = view === undefined;
       if (view === undefined) {
         const base = isoProject(x, y, 0, bounds);
         const image = this.scene.add
           .image(base.sx, base.sy + ISO.TH / 2, texture)
           .setOrigin(0.5, 1);
-        view = { image, texture };
+        view = { image, texture, phase };
         this.blocks.set(key, view);
       } else if (view.texture !== texture) {
         view.image.setTexture(texture);
@@ -182,12 +249,14 @@ export class IsoTerrain {
       const base = isoProject(x, y, 0, bounds);
       view.image.setPosition(base.sx, base.sy + ISO.TH / 2);
       view.image.setDisplaySize(ISO.TW, h * ISO.HH + ISO.TH).setDepth(depthKey(x, y));
-      view.image.setAlpha(phase === 'collapsing' ? 0.5 : phase === 'built' ? 0.92 : 1);
+      view.image.setTint(color);
+      this.phase(view, phase, isNew);
       retained.add(key);
       usedTextures.add(texture);
     }
     for (const [key, view] of this.blocks) {
       if (retained.has(key)) continue;
+      this.transitions.delete(view.image);
       view.image.destroy();
       this.blocks.delete(key);
     }
@@ -201,6 +270,7 @@ export class IsoTerrain {
     this.lastShape = `${map.w},${map.h}`;
     this.lastGround = map.ground?.slice();
     this.lastStructureSignature = JSON.stringify([...structures]);
+    this.lastSurfaceSignature = surfaceSignature(structures);
   }
 
   private syncRubble(
@@ -228,6 +298,8 @@ export class IsoTerrain {
         let marker = this.rubble.get(key);
         if (marker === undefined) {
           marker = this.scene.add.graphics();
+          marker.setAlpha(0);
+          this.transitions.set(marker, { from: 0, to: 1, elapsed: 0 });
           this.rubble.set(key, marker);
         }
         const top = isoProject(x, y, effectiveHeight(x, y, this.heightOf, structures), bounds);
@@ -246,7 +318,7 @@ export class IsoTerrain {
         const hw = ISO.TW / 2,
           hh = ISO.TH / 2,
           rise = ISO.HH / 4;
-        // A static quarter-height block; phase animation and atlases belong to V3.
+        // Quarter-height rubble rests on the restored surface; its opacity uses frame deltas.
         face([-hw, -rise, 0, hh - rise, 0, hh, -hw, 0], 0x503b1f);
         face([0, hh - rise, hw, -rise, hw, 0, 0, hh], 0x402f19);
         face([0, -hh - rise, hw, -rise, 0, hh - rise, -hw, -rise], FALLBACK_COLOR);
@@ -255,6 +327,7 @@ export class IsoTerrain {
     }
     for (const [key, marker] of this.rubble) {
       if (retained.has(key)) continue;
+      this.transitions.delete(marker);
       marker.destroy();
       this.rubble.delete(key);
     }
@@ -282,6 +355,7 @@ export class IsoTerrain {
   }
 
   private clear(): void {
+    this.transitions.clear();
     this.ground?.destroy();
     this.ground = null;
     for (const view of this.blocks.values()) view.image.destroy();
@@ -295,6 +369,7 @@ export class IsoTerrain {
     this.lastGround = undefined;
     this.lastShape = '';
     this.lastStructureSignature = '';
+    this.lastSurfaceSignature = '';
   }
 
   destroy(): void {

@@ -21,8 +21,8 @@ function rendererScene(search: string) {
   return { scene, internal, mirror, graphics, iso };
 }
 
-it('defaults to the unchanged flat grid and original structure phase drawing', () => {
-  const { internal, mirror, graphics, iso } = rendererScene('');
+it('keeps the explicit flat grid and original structure phase drawing', () => {
+  const { internal, mirror, graphics, iso } = rendererScene('?renderer=flat');
   internal.redrawMap();
   expect(internal.renderMode).toBe('flat');
   expect(graphics.fillRect).toHaveBeenCalledTimes(4);
@@ -34,7 +34,7 @@ it('defaults to the unchanged flat grid and original structure phase drawing', (
   expect(iso.sync).not.toHaveBeenCalled();
 });
 
-it('selects iso only explicitly and routes terrain/structures without flat rectangles', () => {
+it('defaults to iso and routes terrain/structures without flat rectangles', () => {
   const { internal, graphics, iso, mirror } = rendererScene('?renderer=iso');
   internal.redrawMap();
   internal.syncStructures();
@@ -42,7 +42,8 @@ it('selects iso only explicitly and routes terrain/structures without flat recta
   expect(iso.redraw).toHaveBeenCalledWith(mirror.map, mirror.structures);
   expect(iso.sync).toHaveBeenCalledWith(mirror.map, mirror.structures);
   expect(graphics.fillRect).not.toHaveBeenCalled();
-  expect(rendererScene('?renderer=unknown').internal.renderMode).toBe('flat');
+  expect(rendererScene('').internal.renderMode).toBe('iso');
+  expect(rendererScene('?renderer=unknown').internal.renderMode).toBe('iso');
 });
 
 it('preloads the height table alongside the current tileset', () => {

@@ -24,16 +24,20 @@ interface BubbleBox {
 }
 
 /** x 居中、y 底对齐，与 Phaser Text 的 origin(0.5, 1) 一致。 */
-export function placeBubble(box: BubbleBox, placed: readonly BubbleBox[]): BubbleBox {
+export function placeBubble(
+  box: BubbleBox,
+  placed: readonly BubbleBox[],
+  gap = BUBBLE_GAP,
+): BubbleBox {
   const result = { ...box };
   while (true) {
     const overlaps = placed.filter(
       (other) =>
-        Math.abs(result.x - other.x) < (result.width + other.width) / 2 + BUBBLE_GAP &&
-        result.y > other.y - other.height - BUBBLE_GAP &&
-        result.y - result.height < other.y + BUBBLE_GAP,
+        Math.abs(result.x - other.x) < (result.width + other.width) / 2 + gap &&
+        result.y > other.y - other.height - gap &&
+        result.y - result.height < other.y + gap,
     );
     if (overlaps.length === 0) return result;
-    result.y = Math.min(...overlaps.map((other) => other.y - other.height)) - BUBBLE_GAP;
+    result.y = Math.min(...overlaps.map((other) => other.y - other.height)) - gap;
   }
 }

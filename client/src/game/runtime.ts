@@ -10,6 +10,7 @@ import { WsClient, setControlStateSink, type WsStatus } from '../net/ws';
 import { fetchWorldMap, assembleCollision, assembleGround } from '../net/worldApi';
 import { worldClock } from './clock';
 import { useUiStore, type Speed } from '../store/uiStore';
+import { rendererFromSearch } from './render/presentation';
 
 export const worldMirror = new WorldMirror();
 
@@ -57,6 +58,17 @@ class Runtime {
         store.setLastImpulseCue(msg.cue);
         store.setImpulseError(null);
         store.pushMonologue(msg.reaction_monologue.form, msg.reaction_monologue.content);
+        // Iso also presents the existing reaction above its actor; the world and
+        // protocol remain authoritative, and the explicit flat presentation is retained.
+        const name = worldMirror.actors.get(worldMirror.protagonist ?? '')?.name;
+        if (name && rendererFromSearch(globalThis.location?.search ?? '') === 'iso') {
+          worldMirror.setBubble(
+            name,
+            msg.reaction_monologue.content,
+            BUBBLE_DURATION_MS,
+            Date.now(),
+          );
+        }
       },
       onError: (msg) => {
         // 仅 impulse 来源的 error 入玩家可见位；其他 ref（load_anchor 等）当前无 UI 面

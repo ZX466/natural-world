@@ -13,6 +13,10 @@ import type { Facing } from './actors';
 
 export const TILE = 16;
 
+export function rendererFromSearch(search: string): 'flat' | 'iso' {
+  return new URLSearchParams(search).get('renderer') === 'flat' ? 'flat' : 'iso';
+}
+
 /**
  * 深度分层带（2026-10-20 A 档修正：此前 actorDepth=100+footY 越过夜幕层，
  * 角色不再被夜色压暗）。
@@ -36,6 +40,23 @@ export const MAP_MAX_FOOT_Y = 100 * TILE;
 export const RAIN_LAYER_DEPTH = 99;
 /** 夜幕遮罩深度（WorldScene 同源）。 */
 export const NIGHT_OVERLAY_DEPTH = 100;
+
+/** Town world depthKey tops out below 250k. Iso labels/bubbles have separate
+ * bands; rain and night cover the entire world and its text. Flat bands above stay intact.
+ */
+export const ISO_DEPTH = { LABEL: 300000, BUBBLE: 310000, RAIN: 400000, NIGHT: 400001 } as const;
+export const ISO_LABEL_GAP_PX = 6;
+export const ISO_BUBBLE_GAP_PX = 20;
+
+/** Sprite height is in world pixels; the gap stays fixed in screen pixels. */
+export function aboveSurface(
+  footY: number,
+  spriteHeight: number,
+  gapPx: number,
+  zoom: number,
+): number {
+  return footY - spriteHeight - gapPx / zoom;
+}
 
 /** 名字标签显示半径（逻辑格，曼哈顿距离；主角自身恒显示）。 */
 export const NAME_LABEL_RADIUS = 8;
@@ -63,16 +84,18 @@ export function actorDepth(footY: number): number {
 }
 
 /** 名字深度：所有名字都在所有精灵之上（[71,80]）。 */
-export function labelDepth(footY: number): number {
+export function labelDepth(footY: number, renderer: 'flat' | 'iso' = 'flat'): number {
   return (
-    LABEL_DEPTH_BASE + Math.round(normalizeFootY(footY) * (LABEL_DEPTH_TOP - LABEL_DEPTH_BASE))
+    (renderer === 'iso' ? ISO_DEPTH.LABEL : LABEL_DEPTH_BASE) +
+    Math.round(normalizeFootY(footY) * (LABEL_DEPTH_TOP - LABEL_DEPTH_BASE))
   );
 }
 
 /** 气泡深度：压过名字层（[81,89]），仍在雨/夜幕之下。 */
-export function bubbleDepth(footY: number): number {
+export function bubbleDepth(footY: number, renderer: 'flat' | 'iso' = 'flat'): number {
   return (
-    BUBBLE_DEPTH_BASE + Math.round(normalizeFootY(footY) * (BUBBLE_DEPTH_TOP - BUBBLE_DEPTH_BASE))
+    (renderer === 'iso' ? ISO_DEPTH.BUBBLE : BUBBLE_DEPTH_BASE) +
+    Math.round(normalizeFootY(footY) * (BUBBLE_DEPTH_TOP - BUBBLE_DEPTH_BASE))
   );
 }
 

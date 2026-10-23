@@ -247,7 +247,9 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 
 # ④ codex 树快照（权威来源：codex 树 `.orca/memory.md`；收编时原样并入）
 
-【2026-10-24 V3-1｜图集管线/共享遮罩交付】基准07fe95b（已含V2收编fb09a5b）。先提交content与基础模块、后提交render消费者，保证依赖齐全。build_block_atlas.py只读入库god-town-16.png/linhe-town.json，复用png_codec及height管线中心4×4采样，四高度档×三面16px，产物linhe-block-atlas.png（64×48、12面）/JSON，README登记；--check两次临时重建PNG/JSON逐字节一致，源样本688/5391/5496/2425。BlockAtlas按角色亮度归一化成共享遮罩，低画布复用单个16px染色画布，高块按高度共享纹理+逐格tint；已实现消费者及默认iso/显式flat将在下一笔交付。没有新增依赖、协议字段、sim内核或既有sim测试变更。
+【2026-10-24 V3｜收官完成，待主树验收】两笔本地原子提交：b410e32（图集管线/产物/共享遮罩）+本快照同笔feat(render)提交（完整hash见talking/git log）。默认iso，?renderer=flat保留；气泡/名牌按屏幕像素上浮且高于全部世界，雨/夜幕覆盖世界与气泡；built/collapsing的240ms delta过渡不改变高度且不重烘，rubble立即回落静态地面并淡入。高低块均接图集，逐格tint保留桃花源色差，地形纹理固定4；CPU烘焙与同源mask避免每色一份CanvasTexture。原念头反馈在iso复用为主角气泡，flat呈现不变。全门禁和真实受控API/WS浏览器闭环已过，证据见后文；没有sim内核/协议/依赖/迷雾改动，没有V3.5/V4。代码本轮收工，不自开新任务，交主树收编与最终人工验收；未推远端。
+
+【2026-10-24 V3-1｜图集管线/共享遮罩交付】基准07fe95b（已含V2收编fb09a5b）。先提交content与基础模块、后提交render消费者，保证依赖齐全。build_block_atlas.py只读入库god-town-16.png/linhe-town.json，复用png_codec及height管线中心4×4采样，四高度档×三面16px，产物linhe-block-atlas.png（64×48、12面）/JSON，README登记；--check两次临时重建PNG/JSON逐字节一致，源样本688/5391/5496/2425。BlockAtlas按角色亮度归一化成共享遮罩，低画布复用单个16px染色画布，高块按高度共享纹理+逐格tint；消费者及默认iso/显式flat已由第二笔交付。没有新增依赖、协议字段、sim内核或既有sim测试变更。
 
 【V3 验证｜全门禁通过】原始完整uv run pytest -q -m 'not bench'：2887P/121S/72D/0F，302.28s；无--deselect或额外排除。ruff check/format358、pyright0；client typecheck/lint/format/test/gen协议EXIT0，195P/33files（13新增，原182语义按V3默认值/共享缓存/动画时点适配保留）。分层/阶段红6F/26P→相关46P，图集/默认红3F/12P→17P；iso念头反馈红1F/4P→相关8P；phase-only不重烘红1F/11P→12P。证据.orca/v3-{presentation-red,presentation-green,atlas-red,atlas-green,impulse-bubble-red,impulse-bubble-green,phase-bake-red,phase-bake-green,python-full,pyright,client-*}.log，图集v3-atlas-check.log。本树已自审；未merge/推送/改主树。
 
