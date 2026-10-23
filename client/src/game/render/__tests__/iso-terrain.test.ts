@@ -55,6 +55,15 @@ function setup(heights = [0, 1, 2, 3]) {
   const textures = new Map<string, unknown>();
   textures.set('god-town-16', { width: 16, height: 16 });
   const images: Image[] = [];
+  const graphics: {
+    destroyed: boolean;
+    x: number;
+    y: number;
+    depth: number;
+    clear: ReturnType<typeof vi.fn>;
+    fillStyle: ReturnType<typeof vi.fn>;
+    fillPoints: ReturnType<typeof vi.fn>;
+  }[] = [];
   const scene = {
     textures: {
       exists: (key: string) => textures.has(key),
@@ -67,6 +76,31 @@ function setup(heights = [0, 1, 2, 3]) {
       },
     },
     add: {
+      graphics: () => {
+        const marker = {
+          destroyed: false,
+          x: 0,
+          y: 0,
+          depth: 0,
+          clear: vi.fn().mockReturnThis(),
+          fillStyle: vi.fn().mockReturnThis(),
+          fillPoints: vi.fn().mockReturnThis(),
+          setPosition(x: number, y: number) {
+            marker.x = x;
+            marker.y = y;
+            return marker;
+          },
+          setDepth(depth: number) {
+            marker.depth = depth;
+            return marker;
+          },
+          destroy() {
+            marker.destroyed = true;
+          },
+        };
+        graphics.push(marker);
+        return marker;
+      },
       image: (x: number, y: number, key: string) => {
         const image = new Image(x, y, key);
         images.push(image);
@@ -86,7 +120,7 @@ function setup(heights = [0, 1, 2, 3]) {
     scene as unknown as Phaser.Scene,
     createHeightLookup({ w: 2, h: 2, h_values: heights }),
   );
-  return { terrain, map, structures, images, textures, canvases };
+  return { terrain, map, structures, images, textures, canvases, graphics };
 }
 
 beforeEach(() => vi.restoreAllMocks());
@@ -179,4 +213,70 @@ it('handles in-place ground edits, empty maps, and releases generated textures o
   terrain.destroy();
   expect(images.every((image) => image.destroyed)).toBe(true);
   expect([...textures.keys()]).toEqual(['god-town-16']);
+});
+
+it('merges a built structure into the terrain cell once and puts rubble in the same depth pool', () => {
+  const { terrain, map, structures, images, graphics } = setup([0, 1, 0, 0]);
+  structures.set('house', { tiles: [[1, 0]], phase: 'built' });
+  terrain.redraw(map, structures);
+  const house = images[1]!;
+  expect(images.filter((image) => !image.destroyed)).toHaveLength(2);
+  expect(house.setDepth).toHaveBeenLastCalledWith(depthKey(1, 0));
+  expect(house.setAlpha).toHaveBeenLastCalledWith(0.92);
+  structures.get('house')!.phase = 'rubble';
+  terrain.sync(map, structures);
+  expect(house.destroyed).toBe(true);
+  expect(graphics).toHaveLength(1);
+  const marker = graphics[0]!;
+  const top = isoProject(1, 0, 1, screenBounds(2, 2));
+  expect(marker).toMatchObject({ x: top.sx, y: top.sy, depth: depthKey(1, 0), destroyed: false });
+  expect(marker.fillPoints).toHaveBeenCalledTimes(3);
+  expect(marker.fillStyle).toHaveBeenLastCalledWith(0x6b4f2a, 0.5);
+  terrain.sync(map, structures);
+  expect(marker.clear).toHaveBeenCalledTimes(1);
+  structures.get('house')!.phase = 'built';
+  terrain.sync(map, structures);
+  expect(marker.destroyed).toBe(true);
+  expect(images.filter((image) => !image.destroyed)).toHaveLength(2);
+});
+
+it('rebuilds moved footprints and clears rubble on removal, empty maps, and shutdown', () => {
+  const { terrain, map, structures, images, graphics, textures } = setup([0, 1, 0, 0]);
+  structures.set('house', { tiles: [[1, 0]], phase: 'built' });
+  terrain.redraw(map, structures);
+  const old = images[1]!;
+  structures.get('house')!.tiles = [[0, 1]];
+  terrain.sync(map, structures);
+  expect(old.destroyed).toBe(true);
+  expect(images.filter((image) => !image.destroyed)).toHaveLength(2);
+  structures.get('house')!.phase = 'rubble';
+  terrain.sync(map, structures);
+  expect(graphics).toHaveLength(1);
+  const ground = isoProject(0, 1, 0, screenBounds(2, 2));
+  expect(graphics[0]).toMatchObject({ x: ground.sx, y: ground.sy, depth: depthKey(0, 1) });
+  structures.clear();
+  terrain.sync(map, structures);
+  expect(graphics[0]!.destroyed).toBe(true);
+  structures.set('ruin', { tiles: [[0, 1]], phase: 'rubble' });
+  terrain.sync(map, structures);
+  terrain.sync(null, structures);
+  expect(graphics.every((marker) => marker.destroyed)).toBe(true);
+  terrain.redraw(map, structures);
+  terrain.destroy();
+  expect(graphics.every((marker) => marker.destroyed)).toBe(true);
+  expect([...textures.keys()]).toEqual(['god-town-16']);
+});
+
+it('draws overlapping ruins only once and lets a newer active footprint cover them', () => {
+  const { terrain, map, structures, images, graphics } = setup([0, 1, 0, 0]);
+  structures.set('old', { tiles: [[1, 0]], phase: 'rubble' });
+  structures.set('older', { tiles: [[1, 0]], phase: 'rubble' });
+  structures.set('new', { tiles: [[1, 0]], phase: 'collapsing' });
+  terrain.redraw(map, structures);
+  expect(images).toHaveLength(2);
+  expect(graphics).toHaveLength(0);
+  structures.delete('new');
+  terrain.sync(map, structures);
+  expect(graphics).toHaveLength(1);
+  expect(graphics[0]!.fillPoints).toHaveBeenCalledTimes(3);
 });
