@@ -9,37 +9,55 @@
 
 ## 0. 本会话状态
 
-- **HEAD**：`bb57acf`（merge codex：DA-06/07/08 收口）
+- **HEAD**：`c500379`（测试假红修复）；V0 收口提交 `eb3a260`
 - **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`／DA-06 `ea42b13`／DA-07 `fd31113`／DA-08 `01d8142`（merge `bb57acf`）
-- **在飞**：无。**codex 审计 8 组 + 主树 P0-3 全部关闭**
-- **遗留待人工验收**：① Phaser 真实渲染（遮挡/层级）只有 mock Graphics 单测；② DA-07 失能/恢复只有单测，未跑真模型长局；③ 双远程仍未推送
-- **未决**：是否推送双远程（按纪律不推，收编前以现测为准）
+- **在飞**：**V1 等距渲染壳已派生 codex**（`.orca/talking.txt` 当前任务）；主树 V0 已完成
+- **V0 验收**：DESIGN v2.2 仅两处（§0 修订行 + §1 视觉条）；规格/方案入库 `eb3a260`；`origin/main` 与 `gitee/main` 已推到 `c500379`；全量门禁绿（见 §2）
+- **遗留待人工验收**：① Phaser 真实渲染（遮挡/层级）只有 mock Graphics 单测；② DA-07 失能/恢复只有单测，未跑真模型长局；③ **V1 高度表可视化抽查（codex 交付后主树肉眼）**
 - **协议**：1.11（真相源 `sim/api/ws.py::_PROTOCOL_VERSION`，前端 `client/src/net/ws.ts` 同源）
 - **工作树：两棵**（2026-10-21 用户重申，长期有效）
   - 主树 `E:/zxdevelop/project7` → 分支 `main`（Claude）
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex` → 分支 `codex`（HEAD 随其提交推进，收编前以实际 `git log` 为准）
-- **远程**：本地领先 `gitee/main`，按纪律不推
+- **远程**：origin/gitee 均已推送；收编后只按阶段推送，不随手推
 
 ## 1. 里程碑
 
 **M0–M6 全部收官**（M6 于 2026-10-05，G1–G4 全 ✅）；**M7 渲染面**已落（地图/时钟/视角/昼夜）。
 代码侧整体完成，剩余是收口型缺口。
 
-## 2. 门禁（2026-10-23 DA-06/07/08 收编后实测）
+## 2. 门禁（2026-10-23 V0 收口后实测）
 
 | 项 | 结果 |
 |---|---|
-| sim 全量 pytest（`-m "not bench"`） | **2887 passed** / 121 skipped / 72 deselected，**0 failed**（338s） |
+| sim 全量 pytest（`-m "not bench"`） | **2887 passed** / 121 skipped / 72 deselected，**0 failed**（614s，负载下） |
 | ruff check / ruff format | clean / 356 文件已格式化 |
 | pyright sim/ | 0 errors, 0 warnings |
-| client tsc --noEmit | 0 错误 |
+| client typecheck / lint / format | 全 0 |
 | client vitest | 149 passed / 27 files |
-| gen:protocol:check | EXIT 0（新增内部事件 kind 未动协议形状） |
+| gen:protocol:check | EXIT 0 |
 | check_implementation_status | 未发现新缺口（未在本轮重跑） |
 
+> **2026-10-23 首轮全量曾出现 2 个负载敏感假红**：`test_smell_world_step_tick_amortized`
+>（墙钟性能守卫，单跑通过）与 DA-07 恢复用例（30s 等待上限 < 负载下实需 ~40s）。
+> 后者已改 120s（`c500379`），复跑全绿。**不是产品回归**。
+>
 > **全量已不再需要 `--deselect`**：此前排除的 2 条地图用例是 codex 树缺
 > `sim/content/assets/`（被 gitignore）所致，补齐后两树均可跑全量。
-> 旧读数 2982 收集 / 138 vitest 已过时；上表为合并后现测。
+> 旧读数 2982 收集 / 138 vitest 已过时；上表为 V0 收口后现测（3080 总收集）。
+
+## 2.5 等距体素转向 V0-V3（2026-10-23 开工）
+
+- **规格**：`docs/arch/voxel-execution-spec.md`（唯一权威；§0 A1-A19 为实测锚点）；
+  方案/理由 `docs/arch/voxel-transition-plan.md`（§11 终审修正）。冲突以规格为准。
+- **范围**：仅 V0-V3；V3.5/V4a/V4-3D 不在本单。**sim 内核零改动**，只动
+  `client/src/game/**`、`client/public/assets/tilesets/**`、`sim/content/**`。
+- **V0（主树，已完成）**：DESIGN v2.2 仅两处；两文档入库 `eb3a260`；双远程推送完成。
+- **V1（codex 在飞）**：`iso.ts` 纯函数 + `build_height_map.py`/`linhe-height.json`
+  + `?renderer=iso` 渲染壳；**高度表预览图主树肉眼抽查是进 V2 的止损门**。
+- **主树实测锚点**：tileset 2240×1600（140 列）；地图 140×100；ground 界内
+  14000 格全覆盖、**无 gid=0**；63 个 16×16 chunk，边缘 padding 的 0 在界外；
+  树冠主色是**粉色桃花**（不是只有深绿）。原图缩略图 `.orca/tmp/map-overview.png`。
+- **V1 派单**已写入 codex 树 `.orca/talking.txt`「当前任务」区（39 行精简版）。
 
 ## 3. 缺口清单（codex 审计 8 组 + 主树 P0-3，**全部已修**）
 
@@ -173,10 +191,10 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 
 ## 8. 技术栈速查
 
-- 后端：Python 3.12 + FastAPI + SQLite，`uv` 管理，事件溯源唯一写路径（28 类事件，`extra=forbid`）
+- 后端：Python 3.12 + FastAPI + SQLite，`uv` 管理，事件溯源唯一写路径（30 类事件，`extra=forbid`）
 - 前端：React 19 + Phaser 3 + Vite + Zustand + Vitest
-- 测试：pytest（2982 条收集）+ vitest（138 条）
-- 文档：`DESIGN.md`（v2.1 冻结）+ `docs/`（128 篇）
+- 测试：pytest（3080 条收集，`-m "not bench"` 选中 3008）+ vitest（149 条）
+- 文档：`DESIGN.md`（v2.2 冻结）+ `docs/`（含 voxel 规格与方案）
 
 ---
 
