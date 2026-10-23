@@ -204,7 +204,9 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 
 # ④ codex 树快照（权威来源：codex 树 `.orca/memory.md`；收编时原样并入）
 
-【2026-10-23 V1-1｜纯函数与高度管线交付】基准7a7bedc（较派单eb3a260仅恢复卡），iso.ts的投影/逆投影/边界/深度/注入式高度查询10条RED→GREEN；screenBounds统一原点与3840×2040画布。build_height_map.py只读入库地图/PNG，中心4×4均色、固定HSV阈值，JSON按Prettier100列排版；--check两次临时重建逐字节一致，无新增sim/tests或依赖。h0/1/2/3=688/5391/5496/2425，界内14000格无gid0；4x高度预览sim/content/linhe-height-preview.png。渲染壳已实现并验证，作为第二笔独立提交收口；收到V2派单及主树人工高度预览验收前停在V1。
+【2026-10-23 V1｜完成，待主树收编】两笔本地原子提交：纯函数/高度管线078eb89；渲染壳为本快照同笔feat(render)提交（完整hash见talking回执及git log）。WorldScene构造参数renderer支持flat/iso，默认flat，URL ?renderer=iso；Phaser.Scene已有renderer引擎字段，策略存renderMode以免TS2416冲突。独立IsoTerrain将h≤1烘进画布、h≥2用Image；gid0用同源确定性木色兜底；built/collapsing覆盖高度2、rubble/移除回静态高度，签名/地面变更触发更新且复用未变高块，重连/换尺寸地图/销毁均清理或重定位；iso不创建矩形structureLayer。19新增测试，client全量168P/30files；保留全部旧用例语义。实测Chromium静态flat/iso均errors=[]：flat1Image/原结构层，iso3840×2040/7922Images（7921高块）/无矩形结构层，截图.orca/v1-{flat,iso}-overview.png；截图夹具仅调相机取全景，生产人物/相机/拾取未改。本树自审已做；主树人工高度预览验收待定，V2/V3未做、收到新派单前停手。
+
+【V1-1 纯函数与高度管线｜078eb89】基准7a7bedc（较派单eb3a260仅恢复卡），iso.ts的投影/逆投影/边界/深度/注入式高度查询10条RED→GREEN；screenBounds统一原点与3840×2040画布。build_height_map.py只读入库地图/PNG，中心4×4均色、固定HSV阈值，JSON按Prettier100列排版；--check两次临时重建逐字节一致，无新增sim/tests或依赖。h0/1/2/3=688/5391/5496/2425，界内14000格无gid0；4x高度预览sim/content/linhe-height-preview.png。投影/渲染红绿证据.orca/v1-{iso-red,iso-green,renderer-red,renderer-green,origin-red,client-test}.log；换尺寸时复用高块的原点回归由x16≠32红钉定位后修复。
 
 【2026-10-23 V1门禁例外｜用户明确授权提交】用户本轮直接回复“记录基线失败并提交”，允许如实记录已核实的既有失败并完成两笔V1本地提交。后端完整原始门禁2885P/2F/121S/72D（622.34s）：test_smell_world_step_tick_amortized为0.507>0.500ms，停止浏览器/预览进程后聚焦已过；test_production_recovers_with_time_jump_and_accepts_impulse为30秒超时，当前树聚焦仍失败，从7a7bedc隔离归档的原版同一测试也1F（35.57s）。已核sim源码来自隔离目录且测试字节相同。日志.orca/v1-{python-full,timing-recheck,baseline-recovery}.log；不宣称后端全绿，未排除、放宽或修改后端/既有sim测试。其余既有本轮验证：client168P/30files，typecheck/lint/format/gen协议EXIT0，ruff357、pyright0。本轮用户授权覆盖本次“全绿才提交”的基线例外；不扩大V1实现边界、不merge、不推送、不改主树。
 

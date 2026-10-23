@@ -6,6 +6,8 @@
  */
 import Phaser from 'phaser';
 import { createFaunaTextures } from '../render/fauna';
+import { createHeightLookup } from '../render/iso';
+import { IsoTerrain } from '../render/iso-terrain';
 import { placeBubble, selectBubbleNames } from '../render/bubbles';
 import type { WorldMirror } from '../world-mirror';
 import {
@@ -43,6 +45,7 @@ const TILESET_KEY = 'god-town-16';
 /** GOD 图集列数（2240/16——gid→坐标换算与 png 实宽绑定，换素材必同改） */
 const TILESET_COLS = 140;
 const GROUND_KEY = 'ground-composite'; // 预拼地面 CanvasTexture 键
+type Renderer = 'flat' | 'iso';
 
 interface ActorView {
   sprite: Phaser.GameObjects.Sprite;
@@ -81,15 +84,25 @@ export class WorldScene extends Phaser.Scene {
   private structureLayer: Phaser.GameObjects.Graphics | null = null;
   /** 建筑内容签名：同数量的相位/格位变化也须重绘。 */
   private lastStructureSignature = '';
+  private renderMode: Renderer;
+  private isoTerrain: IsoTerrain | null = null;
 
-  constructor(mirror: WorldMirror) {
+  constructor(
+    mirror: WorldMirror,
+    renderer: Renderer = new URLSearchParams(globalThis.location?.search ?? '').get('renderer') ===
+    'iso'
+      ? 'iso'
+      : 'flat',
+  ) {
     super({ key: 'world' });
     this.mirror = mirror;
+    this.renderMode = renderer;
   }
 
   preload(): void {
     // M7-T6：图集与角色表（Vite public 静态服务；sim 只发 id 不发素材）。
     this.load.image(TILESET_KEY, '/assets/tilesets/god-town-16.png');
+    this.load.json('linhe-height', '/assets/tilesets/linhe-height.json');
     // 2026-10-12「有头没身」修复：ArMM1998 人物帧 16×32（此前 16×16 裁半身）。
     // 'protagonist' 是 chenmo.png 的中性出站键（后端 sprite 字段恒发它——
     // 快照文本禁含内部 id 词面 "chenmo"，W 系列出戏钉）。
@@ -117,6 +130,16 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (this.renderMode === 'iso') {
+      this.isoTerrain = new IsoTerrain(
+        this,
+        createHeightLookup(this.cache.json.get('linhe-height')),
+      );
+      this.events.once('shutdown', () => {
+        this.isoTerrain?.destroy();
+        this.isoTerrain = null;
+      });
+    }
     createFaunaTextures(this);
     this.mapLayer = this.add.graphics();
     this.nightOverlay = this.add
@@ -129,7 +152,7 @@ export class WorldScene extends Phaser.Scene {
     // 目标点标记：压在精灵与名字之间（A 档分层带内，见 presentation.ts）
     this.goalMarker = this.add.circle(0, 0, 3, 0xffd75e).setVisible(false).setDepth(70.5);
     // E7 建筑投影层：完工结构占格（depth 14）
-    this.structureLayer = this.add.graphics().setDepth(14);
+    if (this.renderMode === 'flat') this.structureLayer = this.add.graphics().setDepth(14);
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.handlePointer(pointer);
@@ -154,6 +177,10 @@ export class WorldScene extends Phaser.Scene {
     const map = this.mirror.map;
     if (g === null) return;
     g.clear();
+    if (this.renderMode === 'iso') {
+      this.isoTerrain?.redraw(map, this.mirror.structures);
+      return;
+    }
     if (map === null) {
       // 无地图：铺 32x32 默认可通行网格
       g.fillStyle(0x3a4a3f, 1);
@@ -244,6 +271,10 @@ export class WorldScene extends Phaser.Scene {
 
   /** E7 建筑投影：内容变化才重绘，保留相位对应的颜色与透明度。 */
   private syncStructures(): void {
+    if (this.renderMode === 'iso') {
+      this.isoTerrain?.sync(this.mirror.map, this.mirror.structures);
+      return;
+    }
     const g = this.structureLayer;
     if (g === null) return;
     const signature = JSON.stringify([...this.mirror.structures]);
