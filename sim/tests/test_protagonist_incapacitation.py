@@ -131,7 +131,10 @@ async def test_production_recovers_with_time_jump_and_accepts_impulse(monkeypatc
         app.state.combat_ledger.apply_damage("villager_02", 3)
         other_hp = app.state.combat_ledger.hp_of("villager_02")
         release.set()
-        await asyncio.wait_for(recovered.wait(), timeout=30)
+        # 失能恢复 = 一整个游戏小时（3600 tick）；驱动单帧最多快进 240 tick，
+        # 至少 15 帧。开发机同时跑 codegraph/另一工作树时单帧可达数秒，30s 会假红；
+        # 120s 只放宽等待上限，不改变任何行为断言。
+        await asyncio.wait_for(recovered.wait(), timeout=120)
         loop.clock.set_speed(0)
         actor = loop.state.entities["chenmo"]
         assert actor.incapacitated_until is None
