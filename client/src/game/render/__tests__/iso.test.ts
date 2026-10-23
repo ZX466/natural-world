@@ -3,6 +3,7 @@ import {
   ISO,
   createHeightLookup,
   depthKey,
+  effectiveHeight,
   heightOf,
   isoProject,
   isoUnproject,
@@ -94,6 +95,29 @@ describe('isometric ground geometry', () => {
       expect(depthKey(a.x, a.y)).toBeLessThan(depthKey(b.x, b.y));
     }
     expect(depthKey(4, 7)).toBe(11 * 1024 + 7);
+  });
+});
+
+describe('shared effective surface height', () => {
+  it('overrides static water or canopy for built and collapsing footprints only', () => {
+    const structures = new Map([
+      ['house', { tiles: [[1, 2]] as [number, number][], phase: 'built' }],
+    ]);
+    expect(effectiveHeight(1, 2, () => 0, structures)).toBe(2);
+    expect(effectiveHeight(1, 2, () => 3, structures)).toBe(2);
+    structures.get('house')!.phase = 'collapsing';
+    expect(effectiveHeight(1, 2, () => 1, structures)).toBe(2);
+    expect(effectiveHeight(0, 2, () => 0, structures)).toBe(0);
+  });
+
+  it('restores static height for rubble, removal, and empty structure snapshots', () => {
+    const structures = new Map([
+      ['house', { tiles: [[1, 2]] as [number, number][], phase: 'rubble' }],
+    ]);
+    expect(effectiveHeight(1, 2, () => 3, structures)).toBe(3);
+    expect(effectiveHeight(1, 2, () => 0, structures)).toBe(0);
+    structures.clear();
+    expect(effectiveHeight(1, 2, () => 1, structures)).toBe(1);
   });
 });
 

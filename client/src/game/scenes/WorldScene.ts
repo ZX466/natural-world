@@ -6,7 +6,15 @@
  */
 import Phaser from 'phaser';
 import { createFaunaTextures } from '../render/fauna';
-import { createHeightLookup } from '../render/iso';
+import {
+  ISO,
+  createHeightLookup,
+  depthKey,
+  effectiveHeight,
+  isoProject,
+  isoUnproject,
+  screenBounds,
+} from '../render/iso';
 import { IsoTerrain } from '../render/iso-terrain';
 import { placeBubble, selectBubbleNames } from '../render/bubbles';
 import type { WorldMirror } from '../world-mirror';
@@ -86,6 +94,9 @@ export class WorldScene extends Phaser.Scene {
   private lastStructureSignature = '';
   private renderMode: Renderer;
   private isoTerrain: IsoTerrain | null = null;
+  private heightAt = createHeightLookup(null);
+  private isoCameraTarget = { x: 0, y: 0 };
+  private isoFollowToken: string | null = null;
 
   constructor(
     mirror: WorldMirror,
@@ -131,10 +142,8 @@ export class WorldScene extends Phaser.Scene {
 
   create(): void {
     if (this.renderMode === 'iso') {
-      this.isoTerrain = new IsoTerrain(
-        this,
-        createHeightLookup(this.cache.json.get('linhe-height')),
-      );
+      this.heightAt = createHeightLookup(this.cache.json.get('linhe-height'));
+      this.isoTerrain = new IsoTerrain(this, this.heightAt);
       this.events.once('shutdown', () => {
         this.isoTerrain?.destroy();
         this.isoTerrain = null;
@@ -247,12 +256,17 @@ export class WorldScene extends Phaser.Scene {
 
   private handlePointer(pointer: Phaser.Input.Pointer): void {
     if (this.mirror.protagonist === null || this.mirror.map === null) return;
-    const wx = Math.floor(pointer.worldX / TILE);
-    const wy = Math.floor(pointer.worldY / TILE);
     const map = this.mirror.map;
+    // R6: picking intersects the ground plane; the marker then uses the shared surface.
+    const { x: wx, y: wy } =
+      this.renderMode === 'iso'
+        ? isoUnproject(pointer.worldX, pointer.worldY, screenBounds(map.w, map.h))
+        : { x: Math.floor(pointer.worldX / TILE), y: Math.floor(pointer.worldY / TILE) };
     if (wx < 0 || wy < 0 || wx >= map.w || wy >= map.h) return;
     if (map.collision[wy * map.w + wx] !== 1) return; // 目标不可通行，不请求
-    this.goalMarker?.setPosition(wx * TILE + TILE / 2, wy * TILE + TILE / 2).setVisible(true);
+    const goal = this.projectSurface(wx, wy);
+    this.goalMarker?.setPosition(goal.sx, goal.sy).setVisible(true);
+    if (this.renderMode === 'iso') this.goalMarker?.setDepth(depthKey(wx, wy) + 1.5);
     // sim 负责寻路（世界真相在 sim）；前端发的是玩家对主角的「移动请求」——
     // move_request 协议早已落地（ws.py `_handle_move_request` → `issue_move`，
     // 含 bad_target 错误帧与不可达静默两条路径）。旧注释说「用 player_impulse
@@ -272,6 +286,7 @@ export class WorldScene extends Phaser.Scene {
   /** E7 建筑投影：内容变化才重绘，保留相位对应的颜色与透明度。 */
   private syncStructures(): void {
     if (this.renderMode === 'iso') {
+      // Reverse merge: IsoTerrain's content signature gates its shared structure/block pool.
       this.isoTerrain?.sync(this.mirror.map, this.mirror.structures);
       return;
     }
@@ -344,6 +359,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private syncActorViews(delta: number, timeMs: number): void {
+    const iso = this.renderMode === 'iso';
     if (this.mirror.resetCount !== this.lastResetSeen) {
       // 镜像被重连重置：清空精灵池重建（codex 意见 9 的表现层配合）
       for (const v of this.views.values()) {
@@ -379,14 +395,25 @@ export class WorldScene extends Phaser.Scene {
               ? 'protagonist'
               : 'villager'
             : actor.sprite;
+        const top = this.projectSurface(actor.x, actor.y);
+        const initialDepth = iso
+          ? depthKey(actor.x, actor.y) + 1
+          : actorDepth((actor.y + 1) * TILE);
         // A 档：脚下阴影先建，深度按脚底 y 略低于同格精灵
         const shadow = this.add
-          .ellipse(actor.x * TILE + TILE / 2, actor.y * TILE + TILE - 1, 10, 4, 0x000000, 0.28)
-          .setDepth(actorDepth((actor.y + 1) * TILE) - 1);
+          .ellipse(
+            top.sx,
+            iso ? top.sy : actor.y * TILE + TILE - 1,
+            iso ? ISO.TW / 2 : 10,
+            iso ? ISO.TH / 4 : 4,
+            0x000000,
+            0.28,
+          )
+          .setDepth(initialDepth - (iso ? 0.5 : 1));
         const sprite = this.add
-          .sprite(actor.x * TILE + TILE / 2, actor.y * TILE + TILE, textureKey, 0)
+          .sprite(top.sx, iso ? top.sy : actor.y * TILE + TILE, textureKey, 0)
           .setOrigin(0.5, 1)
-          .setDepth(actorDepth((actor.y + 1) * TILE));
+          .setDepth(initialDepth);
         // 批次 D10：头顶戏内名（快照 actor.name 供数；canvas 内 Text——
         // DESIGN §4 硬约束：Phaser 画 canvas 世界，React 画 canvas 外 UI）。
         // A 档（2026-10-20）：Text 处于世界坐标，镜头 zoom 会把字号同比放大——
@@ -395,7 +422,7 @@ export class WorldScene extends Phaser.Scene {
         const label =
           actor.name !== undefined
             ? this.add
-                .text(actor.x * TILE + TILE / 2, actor.y * TILE - 4, actor.name, {
+                .text(top.sx, iso ? labelY(top.sy) : actor.y * TILE - 4, actor.name, {
                   fontFamily: 'sans-serif',
                   fontSize: '12px',
                   color: '#e7e0d0',
@@ -409,8 +436,8 @@ export class WorldScene extends Phaser.Scene {
             : null;
         view = {
           sprite,
-          fromX: actor.x,
-          fromY: actor.y,
+          fromX: iso ? top.sx : actor.x,
+          fromY: iso ? top.sy : actor.y,
           snapAtMs: 0,
           prevX: actor.x,
           prevY: actor.y,
@@ -420,7 +447,7 @@ export class WorldScene extends Phaser.Scene {
           shadow,
         };
         this.views.set(rtoken, view);
-        if (isProtagonist) this.cameras.main.startFollow(sprite, true, 0.12, 0.12);
+        if (isProtagonist && !iso) this.cameras.main.startFollow(sprite, true, 0.12, 0.12);
       }
       // D20 漂移修：快照对快照插值——逻辑格变化时以「此刻」为起点、
       // 从上一快照格线性走到新快照格（插值窗走完，到点即停）；
@@ -438,16 +465,17 @@ export class WorldScene extends Phaser.Scene {
       const interpMs = Math.max(1000 / 60, INTERP_MS / speed);
       const k = Math.min(1, (timeMs - view.snapAtMs) / interpMs);
       const stack = stackOffsets.get(rtoken) ?? { dx: 0, dy: 0 };
-      const targetX = actor.x * TILE + TILE / 2 + stack.dx;
-      const targetY = actor.y * TILE + TILE / 2 + stack.dy;
+      const top = this.projectSurface(actor.x, actor.y);
+      const targetX = top.sx + stack.dx;
+      const targetY = top.sy + stack.dy;
       view.sprite.x = view.fromX + (targetX - view.fromX) * k;
       view.sprite.y = view.fromY + (targetY - view.fromY) * k;
       // A 档：深度随脚底（插值后）位置更新——靠下的人自然压住靠上的人。
       // 精灵 origin(0.5,1)，sprite.y 即脚底世界像素。
-      const footDepth = actorDepth(view.sprite.y);
+      const footDepth = iso ? depthKey(actor.x, actor.y) + 1 : actorDepth(view.sprite.y);
       view.sprite.setDepth(footDepth);
-      view.shadow?.setPosition(view.sprite.x, view.sprite.y - 1);
-      view.shadow?.setDepth(footDepth - 1);
+      view.shadow?.setPosition(view.sprite.x, view.sprite.y - (iso ? 0 : 1));
+      view.shadow?.setDepth(footDepth - (iso ? 0.5 : 1));
       // A 档：名字挂头顶（帧高 32px，此前按半格 8px 挂 → 压在脸上）
       view.label?.setPosition(view.sprite.x, labelY(view.sprite.y));
       view.label?.setDepth(labelDepth(view.sprite.y));
@@ -510,8 +538,36 @@ export class WorldScene extends Phaser.Scene {
   private syncCamera(): void {
     const map = this.mirror.map;
     if (map === null) return;
+    if (this.renderMode === 'iso') {
+      const bounds = screenBounds(map.w, map.h);
+      const camera = this.cameras.main;
+      camera.setBounds(-64, -64, bounds.width + 128, bounds.height + 128);
+      camera.setZoom(PIXEL_SCALE);
+      const actor = this.mirror.actors.get(this.mirror.protagonist ?? '');
+      if (actor === undefined) {
+        if (this.isoFollowToken !== null) camera.stopFollow();
+        this.isoFollowToken = null;
+        return;
+      }
+      // A logical top-face target keeps same-cell presentation offsets out of the camera.
+      const top = this.projectSurface(actor.x, actor.y);
+      this.isoCameraTarget.x = top.sx;
+      this.isoCameraTarget.y = top.sy;
+      if (this.isoFollowToken !== this.mirror.protagonist) {
+        camera.startFollow(this.isoCameraTarget, true, 0.12, 0.12);
+        this.isoFollowToken = this.mirror.protagonist;
+      }
+      return;
+    }
     this.cameras.main.setBounds(0, 0, map.w * TILE, map.h * TILE);
     this.cameras.main.setZoom(PIXEL_SCALE);
+  }
+
+  private projectSurface(x: number, y: number): { sx: number; sy: number } {
+    if (this.renderMode === 'flat') return { sx: x * TILE + TILE / 2, sy: y * TILE + TILE / 2 };
+    const map = this.mirror.map;
+    const bounds = map === null ? undefined : screenBounds(map.w, map.h);
+    return isoProject(x, y, effectiveHeight(x, y, this.heightAt, this.mirror.structures), bounds);
   }
 
   private syncOverlay(): void {

@@ -42,6 +42,26 @@ export interface HeightTable {
   readonly h_values: readonly number[];
 }
 
+export type HeightLookup = (x: number, y: number) => number;
+type SurfaceStructure = {
+  readonly phase: string;
+  readonly tiles: readonly (readonly [number, number])[];
+};
+
+/** One surface rule for terrain, billboard feet, camera and picked goal markers. */
+export function effectiveHeight(
+  x: number,
+  y: number,
+  heightAt: HeightLookup,
+  structures: ReadonlyMap<string, SurfaceStructure>,
+): number {
+  for (const structure of structures.values()) {
+    if (structure.phase !== 'built' && structure.phase !== 'collapsing') continue;
+    if (structure.tiles.some(([sx, sy]) => sx === x && sy === y)) return 2;
+  }
+  return heightAt(x, y);
+}
+
 export function heightOf(x: number, y: number, table?: HeightTable | null): number {
   if (
     !table ||
