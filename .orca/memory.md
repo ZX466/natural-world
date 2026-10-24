@@ -262,15 +262,15 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 
 # ④ codex 树快照（权威来源：codex 树 `.orca/memory.md`；收编时原样并入）
 
-【2026-10-24 V4a-1｜sim/协议交付，前端待第二笔提交】基准3cdff1d，仅本地codex；旧HEAD71cb448已确认祖先/净树，以reset --keep快进，无merge/丢提交。新voxel.edited封闭payload/default bus登记；30tick确定性dig、可取消、≤4首尾双验、place即时、earth守恒，库存只观察成功落库事件，待提交预留防超支。TILE_CHANGED仍是唯一碰撞回放路径，无WorldCheckpoint/BLOB/schema变更。1.12新render双消息和可选voxel_edits账本；鉴权后才下发行囊，断开只取消本owner，读档/冷启从分支有界事件恢复。ws.py/ws.ts版本、shared快照/生成物及协议登记同提交；ws.ts消费面留在下一笔，旧端忽略新增帧/字段。
+【2026-10-24 V4a｜收官完成，待主树复核】两笔本地提交：6e890e6（sim/协议）+本快照同笔feat(client)（完整SHA见talking/git log）。基准3cdff1d，仅本地codex；旧HEAD71cb448已确认祖先/净树，以reset --keep快进，无merge/丢提交。新voxel.edited封闭payload/default bus登记；30tick确定性dig、可取消、≤4首尾双验、place即时、earth守恒，库存只观察成功落库事件，待提交预留防超支。TILE_CHANGED仍是唯一碰撞回放路径，无WorldCheckpoint/BLOB/schema变更。1.12新render双消息和可选voxel_edits账本；鉴权后才下发行囊，断开只取消本owner，读档/冷启从分支有界事件恢复。ws.py/ws.ts版本、shared快照/生成物及协议登记同提交；ws.ts消费面随第二笔完成，旧端忽略新增帧/字段。
 
 【V4a-1 必要接线】历史anchor材料投影曾红：子线缓存earth1而material_balances沿父head为0；现仅anchor路径按游标+祖先分叉边界折叠material.moved，复用既有非负fold；head路径不变，嵌套祖先测试已绿。放墙用既有MOVE(currentpos,)停止交叉路径并在末尾maintenance复验，不改通用MOVE语义。拒绝文案走固定中文集合，保留C3字面量守卫；README仅协议徽章同步，旧协议闭合钉只显式加1.12授权成员/字段，无删钉/skip/deselect。
 
-【V4a 全树验证｜尚未拆完提交】最终完整uv run pytest -q -m 'not bench'：2935P/121S/72D/0F，289.42s，新增48项。首轮2924P/10F（旧版本/联合体/字段白名单、hello附加帧、动态异常文案）已修，相关40P后原始完整重跑全绿。ruff check/format364、pyright0；client typecheck/lint/format/check生成EXIT0，217P/39files（新增22项）。高度表与图集--check双byte-identical，产物/管线零diff。日志.orca/v4a-{python-full,contracts-fixed,python-verified,ruff-final,ruff-format-final,pyright,client-typecheck,client-lint,client-format,client-full-stage1,protocol-check,height-check,atlas-check}.log；runtime/gateway/material/fork/client先红证据仍保留v4a-*-red.log。
+【V4a 全门禁通过】最终完整uv run pytest -q -m 'not bench'：2935P/121S/72D/0F，289.42s，新增48项。首轮2924P/10F（旧版本/联合体/字段白名单、hello附加帧、动态异常文案）已修，相关40P后原始完整重跑全绿。ruff check/format364、pyright0；client typecheck/lint/format/check生成EXIT0，217P/39files（新增22项）。高度表与图集--check双byte-identical，产物/管线零diff。日志.orca/v4a-{python-full,contracts-fixed,python-verified,ruff-final,ruff-format-final,pyright,client-typecheck,client-lint,client-format,client-full-stage1,protocol-check,height-check,atlas-check}.log；runtime/gateway/material/fork/client先红证据仍保留v4a-*-red.log。
 
 【V4a 真实链路｜完成】独立cwd/SQLite+真实API/鉴权WS/React/Phaser，profile-provider测试缝关闭付费模型；原DOM/CDP鼠标操作，不mock WS。默认iso同mirror、57actors/views、土×0；按住(99,54)挖，progress0/.2/.4/.6/.8→结束，collision0→1、earth0→1；右键place后collision1→0、earth1→0，contextmenu.defaultPrevented=true；真实断线/重连仍保留place。读“土已挖出”分叉后edit=dig、earth缓存/DB投影同为1，再次放置可成功；读“未动土”再分叉后edits空、earth0、碰撞/原色还原。显式flat仍正常。8个阶段errors=[]，证据.orca/v4a-browser-evidence.json、v4a-browser-first.log、v4a-{dug,placed,reconnected,historical-dug,historical-empty,flat}.png。自有API/Vite/Chromium已停止。
 
-【V4a 画面口径与剩余】严格遵裁决9：dig回静态高度，place2，结构优先；dig改土色，不改高度表。实测目标静态h2，挖前/后/放后均48px，所以不宣称“挖后必落到h1地板”；地图颜色近似依然是画面上限。前端已实现150ms持键/短按旧移动/右键、可见柱拾取、编辑cache和土面、只读新state的行囊、full后HTTP刷新及旧响应revision丢弃，验证通过，待第二笔提交。没有NPC挖放/分类/工具/合成/新美术/3D/管线改动，不push、不merge、不改主树；主树人工复核仍归主树。
+【V4a 画面口径与剩余】严格遵裁决9：dig回静态高度，place2，结构优先；dig改土色，不改高度表。实测目标静态h2，挖前/后/放后均48px，所以不宣称“挖后必落到h1地板”；地图颜色近似依然是画面上限。前端150ms持键/短按旧移动/右键、可见柱拾取、编辑cache和土面、只读新state的行囊、full后HTTP刷新及旧响应revision丢弃均已交付并验证。没有NPC挖放/分类/工具/合成/新美术/3D/管线改动，不push、不merge、不改主树；主树人工复核仍归主树。
 
 【2026-10-24 V3｜收官完成，待主树验收】两笔本地原子提交：b410e32（图集管线/产物/共享遮罩）+本快照同笔feat(render)提交（完整hash见talking/git log）。默认iso，?renderer=flat保留；气泡/名牌按屏幕像素上浮且高于全部世界，雨/夜幕覆盖世界与气泡；built/collapsing的240ms delta过渡不改变高度且不重烘，rubble立即回落静态地面并淡入。高低块均接图集，逐格tint保留桃花源色差，地形纹理固定4；CPU烘焙与同源mask避免每色一份CanvasTexture。原念头反馈在iso复用为主角气泡，flat呈现不变。全门禁和真实受控API/WS浏览器闭环已过，证据见后文；没有sim内核/协议/依赖/迷雾改动，没有V3.5/V4。代码本轮收工，不自开新任务，交主树收编与最终人工验收；未推远端。
 

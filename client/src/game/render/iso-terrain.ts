@@ -10,6 +10,8 @@ const TILE = 16;
 // use the same deterministic timber fallback as build_height_map.py.
 const FALLBACK_COLOR = 0x6b4f2a;
 type Structures = WorldMirror['structures'];
+type Edits = WorldMirror['voxelEdits'];
+const NO_EDITS: Edits = new Map();
 type HeightLookup = (x: number, y: number) => number;
 interface BlockView {
   image: Phaser.GameObjects.Image;
@@ -17,14 +19,15 @@ interface BlockView {
   phase: string | undefined;
 }
 
-function surfaceSignature(structures: Structures): string {
-  return JSON.stringify(
+function surfaceSignature(structures: Structures, edits: Edits): string {
+  return JSON.stringify([
     [...structures].map(([id, structure]) => [
       id,
       structure.tiles,
       structure.phase === 'built' || structure.phase === 'collapsing' ? 'solid' : structure.phase,
     ]),
-  );
+    [...edits],
+  ]);
 }
 
 export function sampleTileColor(
@@ -133,12 +136,12 @@ export class IsoTerrain {
   }
 
   /** Compare contents so same-array ground edits and empty snapshots both invalidate. */
-  sync(map: MapStatic | null, structures: Structures): void {
+  sync(map: MapStatic | null, structures: Structures, edits: Edits = NO_EDITS): void {
     if (map === null) {
       if (this.lastMap !== null) this.clear();
       return;
     }
-    const signature = JSON.stringify([...structures]);
+    const signature = JSON.stringify([[...structures], [...edits]]);
     const groundUnchanged =
       map.ground === undefined
         ? this.lastGround === undefined
@@ -158,7 +161,7 @@ export class IsoTerrain {
       map === this.lastMap &&
       `${map.w},${map.h}` === this.lastShape &&
       groundUnchanged &&
-      surfaceSignature(structures) === this.lastSurfaceSignature
+      surfaceSignature(structures, edits) === this.lastSurfaceSignature
     ) {
       for (const structure of structures.values()) {
         if (structure.phase !== 'built' && structure.phase !== 'collapsing') continue;
@@ -170,10 +173,10 @@ export class IsoTerrain {
       this.lastStructureSignature = signature;
       return;
     }
-    this.redraw(map, structures);
+    this.redraw(map, structures, edits);
   }
 
-  redraw(map: MapStatic | null, structures: Structures): void {
+  redraw(map: MapStatic | null, structures: Structures, edits: Edits = NO_EDITS): void {
     if (map === null) {
       this.clear();
       return;
@@ -199,8 +202,11 @@ export class IsoTerrain {
       for (let y = Math.max(0, diagonal - map.w + 1); y <= Math.min(map.h - 1, diagonal); y++) {
         const x = diagonal - y;
         const phase = overrides.get(`${x},${y}`);
-        const h = effectiveHeight(x, y, this.heightOf, structures);
-        const color = this.colors(map.ground?.[y * map.w + x] ?? 0);
+        const h = effectiveHeight(x, y, this.heightOf, structures, edits);
+        const color =
+          edits.has(`${x},${y}`) && phase === undefined
+            ? 0x8f8055
+            : this.colors(map.ground?.[y * map.w + x] ?? 0);
         if (h >= 2) {
           high.push({ x, y, h, color, phase });
         } else {
@@ -265,12 +271,12 @@ export class IsoTerrain {
       this.scene.textures.remove(key);
       this.textureKeys.delete(key);
     }
-    this.syncRubble(map, structures, overrides, bounds);
+    this.syncRubble(map, structures, overrides, bounds, edits);
     this.lastMap = map;
     this.lastShape = `${map.w},${map.h}`;
     this.lastGround = map.ground?.slice();
-    this.lastStructureSignature = JSON.stringify([...structures]);
-    this.lastSurfaceSignature = surfaceSignature(structures);
+    this.lastStructureSignature = JSON.stringify([[...structures], [...edits]]);
+    this.lastSurfaceSignature = surfaceSignature(structures, edits);
   }
 
   private syncRubble(
@@ -278,6 +284,7 @@ export class IsoTerrain {
     structures: Structures,
     active: ReadonlyMap<string, string>,
     bounds: ReturnType<typeof screenBounds>,
+    edits: Edits,
   ): void {
     const retained = new Set<string>();
     for (const structure of structures.values()) {
@@ -302,7 +309,12 @@ export class IsoTerrain {
           this.transitions.set(marker, { from: 0, to: 1, elapsed: 0 });
           this.rubble.set(key, marker);
         }
-        const top = isoProject(x, y, effectiveHeight(x, y, this.heightOf, structures), bounds);
+        const top = isoProject(
+          x,
+          y,
+          effectiveHeight(x, y, this.heightOf, structures, edits),
+          bounds,
+        );
         marker.setPosition(top.sx, top.sy).setDepth(depthKey(x, y));
         marker.clear();
         const face = (points: number[], color: number) => {

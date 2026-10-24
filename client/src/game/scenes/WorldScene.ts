@@ -16,6 +16,7 @@ import {
   screenBounds,
 } from '../render/iso';
 import { IsoTerrain } from '../render/iso-terrain';
+import { pickVoxel } from '../render/voxel-picking';
 import { BLOCK_ATLAS_KEY, BLOCK_ATLAS_META_KEY } from '../render/block-atlas';
 import { placeBubble, selectBubbleNames } from '../render/bubbles';
 import type { WorldMirror } from '../world-mirror';
@@ -105,6 +106,18 @@ export class WorldScene extends Phaser.Scene {
   private heightAt = createHeightLookup(null);
   private isoCameraTarget = { x: 0, y: 0 };
   private isoFollowToken: string | null = null;
+  private voxelPress: {
+    id: number;
+    at: number;
+    target: { x: number; y: number } | null;
+    digging: boolean;
+    version: number;
+  } | null = null;
+  private voxelHoldTimer: ReturnType<typeof setTimeout> | null = null;
+  private voxelProgress: Phaser.GameObjects.Graphics | null = null;
+  private lastVoxelVersion = -1;
+  private lastVoxelSignature = '';
+  private lastVoxelMap: WorldMirror['map'] = null;
 
   constructor(
     mirror: WorldMirror,
@@ -157,7 +170,10 @@ export class WorldScene extends Phaser.Scene {
       });
     }
     createFaunaTextures(this);
-    this.mapLayer = this.add.graphics();
+    this.mapLayer = this.add.graphics().setDepth(1);
+    this.voxelProgress = this.add
+      .graphics()
+      .setDepth(this.renderMode === 'iso' ? ISO_DEPTH.BUBBLE + 100 : 89.5);
     this.nightOverlay = this.add
       .rectangle(0, 0, this.scale.width, this.scale.height, 0x0a1030, 0)
       .setOrigin(0)
@@ -173,9 +189,14 @@ export class WorldScene extends Phaser.Scene {
     // E7 建筑投影层：完工结构占格（depth 14）
     if (this.renderMode === 'flat') this.structureLayer = this.add.graphics().setDepth(14);
 
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      this.handlePointer(pointer);
-    });
+    this.input.mouse?.disableContextMenu();
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) =>
+      this.handlePointerDown(pointer),
+    );
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.handlePointerUp(pointer));
+    this.input.on('pointerupoutside', () => this.cancelVoxelInput());
+    this.input.on('gameout', () => this.cancelVoxelInput());
+    this.events.once('shutdown', () => this.cancelVoxelInput());
 
     this.scale.on('resize', () => this.redrawMap());
     this.redrawMap();
@@ -197,7 +218,7 @@ export class WorldScene extends Phaser.Scene {
     if (g === null) return;
     g.clear();
     if (this.renderMode === 'iso') {
-      this.isoTerrain?.redraw(map, this.mirror.structures);
+      this.isoTerrain?.redraw(map, this.mirror.structures, this.mirror.voxelEdits);
       return;
     }
     if (map === null) {
@@ -208,6 +229,7 @@ export class WorldScene extends Phaser.Scene {
     }
     if (map.tileset !== 'grid' && map.ground && this.textures.exists(TILESET_KEY)) {
       this.renderTileset(map);
+      this.drawFlatVoxels();
       return;
     }
     for (let y = 0; y < map.h; y += 1) {
@@ -215,6 +237,20 @@ export class WorldScene extends Phaser.Scene {
         const walkable = map.collision[y * map.w + x] === 1;
         g.fillStyle(walkable ? 0x4a5d4e : 0x2a3038, 1);
         g.fillRect(x * TILE, y * TILE, TILE - 1, TILE - 1);
+      }
+    }
+    this.drawFlatVoxels();
+  }
+
+  private drawFlatVoxels(): void {
+    const g = this.mapLayer;
+    if (g === null) return;
+    for (const edit of this.mirror.voxelEdits.values()) {
+      g.fillStyle(0x8f8055, 1);
+      g.fillRect(edit.x * TILE, edit.y * TILE, TILE, TILE);
+      if (edit.action === 'place') {
+        g.fillStyle(0x6b4f2a, 1);
+        g.fillRect(edit.x * TILE + TILE - 3, edit.y * TILE, 3, TILE);
       }
     }
   }
@@ -264,6 +300,74 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  private voxelTarget(pointer: Phaser.Input.Pointer): { x: number; y: number } | null {
+    const map = this.mirror.map;
+    if (map === null) return null;
+    if (this.renderMode === 'iso')
+      return pickVoxel(pointer.worldX, pointer.worldY, map.w, map.h, (x, y) =>
+        effectiveHeight(x, y, this.heightAt, this.mirror.structures, this.mirror.voxelEdits),
+      );
+    const x = Math.floor(pointer.worldX / TILE),
+      y = Math.floor(pointer.worldY / TILE);
+    return x >= 0 && y >= 0 && x < map.w && y < map.h ? { x, y } : null;
+  }
+
+  private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+    this.cancelVoxelInput();
+    const map = this.mirror.map;
+    if (map === null || this.mirror.protagonist === null) return;
+    const target = this.voxelTarget(pointer);
+    if (pointer.button === 2) {
+      if (target && map.collision[target.y * map.w + target.x] === 1)
+        this.game.events.emit('client:voxel_request', { action: 'place', ...target });
+      return;
+    }
+    if (pointer.button !== 0) return;
+    const press = {
+      id: pointer.id,
+      at: Date.now(),
+      target,
+      digging: false,
+      version: this.mirror.voxelSnapshotVersion,
+    };
+    this.voxelPress = press;
+    this.voxelHoldTimer = setTimeout(() => {
+      this.voxelHoldTimer = null;
+      const current = this.mirror.map;
+      if (
+        this.voxelPress !== press ||
+        press.version !== this.mirror.voxelSnapshotVersion ||
+        !target ||
+        !current ||
+        current.collision[target.y * current.w + target.x] !== 0
+      )
+        return;
+      press.digging = true;
+      this.game.events.emit('client:voxel_request', { action: 'dig_start', ...target });
+    }, 150);
+  }
+
+  private handlePointerUp(pointer: Phaser.Input.Pointer): void {
+    const press = this.voxelPress;
+    if (press === null || pointer.id !== press.id) return;
+    this.cancelVoxelInput();
+    if (
+      !press.digging &&
+      press.version === this.mirror.voxelSnapshotVersion &&
+      Date.now() - press.at < 150
+    )
+      this.handlePointer(pointer);
+  }
+
+  private cancelVoxelInput(): void {
+    if (this.voxelHoldTimer !== null) clearTimeout(this.voxelHoldTimer);
+    this.voxelHoldTimer = null;
+    const press = this.voxelPress;
+    this.voxelPress = null;
+    if (press?.digging && press.target)
+      this.game.events.emit('client:voxel_request', { action: 'dig_cancel', ...press.target });
+  }
+
   private handlePointer(pointer: Phaser.Input.Pointer): void {
     if (this.mirror.protagonist === null || this.mirror.map === null) return;
     const map = this.mirror.map;
@@ -285,6 +389,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    this.syncVoxelPresentation();
     this.syncActorViews(delta, time);
     this.syncCamera();
     this.syncOverlay();
@@ -298,7 +403,7 @@ export class WorldScene extends Phaser.Scene {
   private syncStructures(): void {
     if (this.renderMode === 'iso') {
       // Reverse merge: IsoTerrain's content signature gates its shared structure/block pool.
-      this.isoTerrain?.sync(this.mirror.map, this.mirror.structures);
+      this.isoTerrain?.sync(this.mirror.map, this.mirror.structures, this.mirror.voxelEdits);
       return;
     }
     const g = this.structureLayer;
@@ -313,6 +418,31 @@ export class WorldScene extends Phaser.Scene {
         g.fillRect(x * TILE, y * TILE, TILE - 1, TILE - 1);
       }
     }
+  }
+
+  private syncVoxelPresentation(): void {
+    if (this.lastVoxelVersion !== this.mirror.voxelSnapshotVersion) {
+      this.cancelVoxelInput();
+      this.lastVoxelVersion = this.mirror.voxelSnapshotVersion;
+    }
+    if (this.renderMode === 'flat') {
+      const signature = JSON.stringify([...this.mirror.voxelEdits]);
+      if (this.lastVoxelMap !== this.mirror.map || signature !== this.lastVoxelSignature) {
+        this.redrawMap();
+        this.lastVoxelMap = this.mirror.map;
+        this.lastVoxelSignature = signature;
+      }
+    }
+    const g = this.voxelProgress;
+    if (g === null) return;
+    g.clear();
+    const dig = this.mirror.voxelDig;
+    if (dig === null) return;
+    const top = this.projectSurface(dig.x, dig.y);
+    g.fillStyle(0x211d16, 0.9);
+    g.fillRect(top.sx - 8, top.sy - 4, 16, 3);
+    g.fillStyle(0xe3cc8c, 1);
+    g.fillRect(top.sx - 8, top.sy - 4, 16 * dig.progress, 3);
   }
 
   /** D14 头顶气泡：mirror.bubbles（name→text/到期）→ Text 池增删/跟随。 */
@@ -615,7 +745,12 @@ export class WorldScene extends Phaser.Scene {
     if (this.renderMode === 'flat') return { sx: x * TILE + TILE / 2, sy: y * TILE + TILE / 2 };
     const map = this.mirror.map;
     const bounds = map === null ? undefined : screenBounds(map.w, map.h);
-    return isoProject(x, y, effectiveHeight(x, y, this.heightAt, this.mirror.structures), bounds);
+    return isoProject(
+      x,
+      y,
+      effectiveHeight(x, y, this.heightAt, this.mirror.structures, this.mirror.voxelEdits),
+      bounds,
+    );
   }
 
   private syncOverlay(): void {

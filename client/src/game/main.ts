@@ -9,6 +9,7 @@ import Phaser from 'phaser';
 import type { WorldMirror } from './world-mirror';
 import { WorldScene } from './scenes/WorldScene';
 import { runtime } from './runtime';
+import type { VoxelRequestMessage } from '../net/protocol';
 
 export function createGame(parent: HTMLElement, mirror: WorldMirror): Phaser.Game {
   const game = new Phaser.Game({
@@ -29,5 +30,11 @@ export function createGame(parent: HTMLElement, mirror: WorldMirror): Phaser.Gam
   game.events.on('client:move_request', ({ x, y }: { x: number; y: number }) => {
     runtime.requestMove(x, y);
   });
+  game.events.on(
+    'client:voxel_request',
+    ({ action, x, y }: Pick<VoxelRequestMessage, 'action' | 'x' | 'y'>) => {
+      runtime.requestVoxel(action, x, y);
+    },
+  );
   return game;
 }

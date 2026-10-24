@@ -7,6 +7,7 @@ import { useEffect, useRef } from 'react';
 import type Phaser from 'phaser';
 import { createGame } from '../game/main';
 import { worldMirror } from '../game/runtime';
+import { VoxelInventory } from './VoxelInventory';
 
 export function CanvasHost(): ReactElement {
   const ref = useRef<HTMLDivElement>(null);
@@ -21,5 +22,10 @@ export function CanvasHost(): ReactElement {
     };
   }, []);
 
-  return <div ref={ref} className="h-full w-full" />;
+  return (
+    <div className="relative h-full w-full">
+      <div ref={ref} className="h-full w-full" />
+      <VoxelInventory />
+    </div>
+  );
 }

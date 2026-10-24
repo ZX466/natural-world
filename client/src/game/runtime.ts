@@ -11,6 +11,7 @@ import { fetchWorldMap, assembleCollision, assembleGround } from '../net/worldAp
 import { worldClock } from './clock';
 import { useUiStore, type Speed } from '../store/uiStore';
 import { rendererFromSearch } from './render/presentation';
+import type { VoxelRequestMessage } from '../net/protocol';
 
 export const worldMirror = new WorldMirror();
 
@@ -23,17 +24,28 @@ export const BUBBLE_DURATION_MS = 4000;
 
 class Runtime {
   private ws: WsClient | null = null;
+  private mapRevision = 0;
 
   start(): void {
     this.ws = new WsClient(SIM_WS_URL, worldMirror, {
       onStatus: (status: WsStatus) => {
         useUiStore.getState().setWsStatus(status);
+        if (status !== 'open') {
+          worldMirror.voxelDig = null;
+          useUiStore.getState().setVoxelInventory(null);
+          this.mapRevision += 1;
+        }
         // H-1：真实链路起 clock（世界静止无 delta 时前端时钟仍平滑推进，R3）。
         if (status === 'open') {
           worldClock.start();
         }
       },
-      onSnapshot: () => useUiStore.getState().setWsStatus('open'),
+      onSnapshot: () => {
+        useUiStore.getState().setWsStatus('open');
+        // HTTP is authoritative for unedited cells after a branch switch too.
+        void this.loadWorldMap();
+      },
+      onVoxelState: (msg) => useUiStore.getState().setVoxelInventory({ ...msg.inventory }),
       onDelta: (msg) => {
         // 批次 A：计划看板（delta 即全量替换语义，sim 侧 PlanDelta[] 无增删协议）
         if (msg.plan) useUiStore.getState().setPlans([...msg.plan]);
@@ -71,6 +83,11 @@ class Runtime {
         }
       },
       onError: (msg) => {
+        if (msg.ref === 'voxel_request') {
+          useUiStore
+            .getState()
+            .setVoxelError(msg.code === 'bad_target' ? msg.message : '这会儿动不了土。');
+        }
         // 仅 impulse 来源的 error 入玩家可见位；其他 ref（load_anchor 等）当前无 UI 面
         if (msg.ref === 'player_impulse') useUiStore.getState().setImpulseError(msg.message);
       },
@@ -97,8 +114,10 @@ class Runtime {
    *  吞掉一切点击（M7 修复的第二个断链）。M7-T6 增地面层（瓦片渲染）。
    *  后端未起时镜像保持 null（诚实态），点击守卫维持。 */
   private async loadWorldMap(): Promise<void> {
+    const revision = ++this.mapRevision;
     try {
       const raw = await fetchWorldMap();
+      if (revision !== this.mapRevision) return;
       worldMirror.setMap({
         w: raw.w,
         h: raw.h,
@@ -111,7 +130,18 @@ class Runtime {
     }
   }
 
-  /** 玩家控制（TopBar 倍速按钮）——真实链路发 set_control；断线时 ws.ts 静默丢弃。 */
+  /** V4a 手势只发送编辑意图；库存和完成时刻始终由 sim 决定。 */
+  requestVoxel(action: VoxelRequestMessage['action'], x: number, y: number): void {
+    const state = useUiStore.getState();
+    state.setVoxelError(null);
+    if (state.wsStatus !== 'open') {
+      state.setVoxelError('这会儿动不了土。');
+      return;
+    }
+    this.ws?.send({ type: 'voxel_request', channel: 'render', action, x, y });
+  }
+
+  /** 玩家控制（TopBar 倍速按钮）——真实链路发 set_control。 */
   sendControl(action: 'pause' | 'resume' | 'set_speed', speed?: Speed): void {
     if (action === 'set_speed' && speed !== undefined) {
       this.ws?.send({ type: 'set_control', channel: 'control', action, speed });
