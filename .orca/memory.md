@@ -20,8 +20,8 @@
 - **遗留待人工验收**：① DA-07 失能/恢复真模型长局；② V3 画面观感（逐格 tint 与图集贴图的整体质感）人工过目
 - **协议**：1.11（真相源 `sim/api/ws.py::_PROTOCOL_VERSION`，前端 `client/src/net/ws.ts` 同源）
 - **工作树：两棵**（2026-10-21 用户重申，长期有效）
-  - 主树 `E:/zxdevelop/project7` → 分支 `main`（Claude）
-  - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex` → 分支 `codex`（HEAD 随其提交推进，收编前以实际 `git log` 为准）
+  - 主树 `E:/zxdevelop/project7` → 分支 `main`（Claude：拆单/架构/质量/收编复核/日常小改）
+  - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex` → 分支 `codex`（**复杂任务默认派此树**；安全/合规/风险域；HEAD 随其提交推进，收编前以实际 `git log` 为准）
 - **远程**：origin/gitee 停在 `67aa31b`；V1/V2/V3 merge 及后续 docs 提交均未推（按阶段推送，
   不随手推）。**不要在本卡写死领先数**——每次 docs 提交都会变，用
   `git rev-list --count gitee/main..main` 现测。
