@@ -5,7 +5,8 @@
  * onNarrativeWs（ws 分发 → store 叙事面；避免 WsClient↔uiStore 循环依赖）。
  * mock 分支：无后端也出 feedback（骨架验收不受后端阻塞）。
  */
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+afterEach(() => vi.unstubAllGlobals());
 
 function mockDeps() {
   vi.resetModules();
@@ -47,6 +48,7 @@ function installMirrorMock() {
   vi.doMock('../world-mirror', () => {
     const mirrorMethods = {
       setMap: vi.fn(),
+      setBubble: vi.fn(),
       applySnapshot: vi.fn(),
       applyActorDeltas: vi.fn(),
       applyLightDeltas: vi.fn(),
@@ -57,6 +59,7 @@ function installMirrorMock() {
     return {
       WorldMirror: class {
         setMap = mirrorMethods.setMap;
+        setBubble = mirrorMethods.setBubble;
         applySnapshot = mirrorMethods.applySnapshot;
         applyActorDeltas = mirrorMethods.applyActorDeltas;
         applyLightDeltas = mirrorMethods.applyLightDeltas;
@@ -96,6 +99,45 @@ function installWsMock(callbacks: Record<string, unknown>, sent: Record<string, 
 }
 
 describe('runtime impulse 链路（批次 A）', () => {
+  it.each(['', '?renderer=flat'])(
+    'shows the reaction as a protagonist bubble only in iso (%s)',
+    async (search) => {
+      vi.stubGlobal('location', { search });
+      const { callbacks, store, sent } = mockDeps();
+      installWsMock(callbacks, sent);
+      installMirrorMock();
+      MOCK_OTHERS();
+      vi.doMock('../../store/uiStore', () => ({ useUiStore: { getState: () => store } }));
+      const { runtime, worldMirror } = await import('../runtime');
+      runtime.start();
+      worldMirror.protagonist = 'hero';
+      worldMirror.actors.set('hero', {
+        rtoken: 'hero',
+        name: '陈默',
+        x: 1,
+        y: 1,
+        facing: 's',
+        sprite: 'protagonist',
+        anim: 'idle',
+      });
+      const feedback = callbacks.onImpulseFeedback as (msg: {
+        cue: string;
+        reaction_monologue: { form: string; content: string };
+      }) => void;
+      feedback({
+        cue: 'accepted',
+        reaction_monologue: { form: 'thought', content: '先去集市看看。' },
+      });
+      expect(store.monologues).toEqual([{ form: 'thought', content: '先去集市看看。' }]);
+      if (search === '') {
+        expect(vi.mocked(worldMirror.setBubble).mock.calls[0]?.slice(0, 3)).toEqual([
+          '陈默',
+          '先去集市看看。',
+          4000,
+        ]);
+      } else expect(worldMirror.setBubble).not.toHaveBeenCalled();
+    },
+  );
   it('sendImpulse 真实链路：player_impulse 帧形状 + 长度校验前置', async () => {
     const { callbacks, store, sent } = mockDeps();
     installWsMock(callbacks, sent);

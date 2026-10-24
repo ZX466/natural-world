@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorldMirror } from '../world-mirror';
 import { createHeightLookup, depthKey, isoProject, screenBounds } from '../render/iso';
-import { actorDepth, labelY } from '../render/presentation';
+import { actorDepth, labelY, aboveSurface } from '../render/presentation';
 import { facingRow, walkFrame } from '../render/actors';
 import { useUiStore } from '../../store/uiStore';
 
@@ -106,7 +106,7 @@ it('spawns billboard feet at the effective top with a shared depth and contact s
     h: 4,
   });
   expect(shadow.setDepth).toHaveBeenLastCalledWith(depthKey(2, 1) + 0.5);
-  expect(label.setPosition).toHaveBeenLastCalledWith(top.sx, labelY(top.sy));
+  expect(label.setPosition).toHaveBeenLastCalledWith(top.sx, aboveSurface(top.sy, 32, 6, 3.5));
 });
 
 it('uses the same built/collapsing/rubble height changes for actor feet and camera', () => {
@@ -229,4 +229,8 @@ it('preserves flat sprite, shadow, and camera formulas', () => {
   expect(camera.startFollow).toHaveBeenLastCalledWith(sprite, true, 0.12, 0.12);
   expect(camera.setBounds).toHaveBeenLastCalledWith(0, 0, 64, 64);
   expect(camera.setZoom).toHaveBeenLastCalledWith(3.5);
+  expect(internal.views.get('hero')!.label.setPosition).toHaveBeenLastCalledWith(
+    sprite.x,
+    labelY(sprite.y),
+  );
 });

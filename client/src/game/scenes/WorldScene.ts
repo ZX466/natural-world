@@ -16,6 +16,7 @@ import {
   screenBounds,
 } from '../render/iso';
 import { IsoTerrain } from '../render/iso-terrain';
+import { BLOCK_ATLAS_KEY, BLOCK_ATLAS_META_KEY } from '../render/block-atlas';
 import { placeBubble, selectBubbleNames } from '../render/bubbles';
 import type { WorldMirror } from '../world-mirror';
 import {
@@ -38,6 +39,13 @@ import {
   labelY,
   manhattan,
   shouldShowNameLabel,
+  aboveSurface,
+  ISO_DEPTH,
+  ISO_LABEL_GAP_PX,
+  ISO_BUBBLE_GAP_PX,
+  RAIN_LAYER_DEPTH,
+  NIGHT_OVERLAY_DEPTH,
+  rendererFromSearch,
 } from '../render/presentation';
 import { useUiStore } from '../../store/uiStore';
 
@@ -100,10 +108,7 @@ export class WorldScene extends Phaser.Scene {
 
   constructor(
     mirror: WorldMirror,
-    renderer: Renderer = new URLSearchParams(globalThis.location?.search ?? '').get('renderer') ===
-    'iso'
-      ? 'iso'
-      : 'flat',
+    renderer: Renderer = rendererFromSearch(globalThis.location?.search ?? ''),
   ) {
     super({ key: 'world' });
     this.mirror = mirror;
@@ -114,6 +119,8 @@ export class WorldScene extends Phaser.Scene {
     // M7-T6：图集与角色表（Vite public 静态服务；sim 只发 id 不发素材）。
     this.load.image(TILESET_KEY, '/assets/tilesets/god-town-16.png');
     this.load.json('linhe-height', '/assets/tilesets/linhe-height.json');
+    this.load.image(BLOCK_ATLAS_KEY, '/assets/tilesets/linhe-block-atlas.png');
+    this.load.json(BLOCK_ATLAS_META_KEY, '/assets/tilesets/linhe-block-atlas.json');
     // 2026-10-12「有头没身」修复：ArMM1998 人物帧 16×32（此前 16×16 裁半身）。
     // 'protagonist' 是 chenmo.png 的中性出站键（后端 sprite 字段恒发它——
     // 快照文本禁含内部 id 词面 "chenmo"，W 系列出戏钉）。
@@ -155,9 +162,12 @@ export class WorldScene extends Phaser.Scene {
       .rectangle(0, 0, this.scale.width, this.scale.height, 0x0a1030, 0)
       .setOrigin(0)
       .setScrollFactor(0)
-      .setDepth(100);
+      .setDepth(this.renderMode === 'iso' ? ISO_DEPTH.NIGHT : NIGHT_OVERLAY_DEPTH);
     // 批次 D7：雨层（短雨丝 Graphics；雨落动画在 update 里逐帧推进）
-    this.rainLayer = this.add.graphics().setScrollFactor(0).setDepth(99);
+    this.rainLayer = this.add
+      .graphics()
+      .setScrollFactor(0)
+      .setDepth(this.renderMode === 'iso' ? ISO_DEPTH.RAIN : RAIN_LAYER_DEPTH);
     // 目标点标记：压在精灵与名字之间（A 档分层带内，见 presentation.ts）
     this.goalMarker = this.add.circle(0, 0, 3, 0xffd75e).setVisible(false).setDepth(70.5);
     // E7 建筑投影层：完工结构占格（depth 14）
@@ -281,6 +291,7 @@ export class WorldScene extends Phaser.Scene {
     this.syncRain(delta);
     this.syncBubbles(Date.now()); // 与 mirror.setBubble 的到期时钟一致
     this.syncStructures();
+    this.isoTerrain?.advance(delta);
   }
 
   /** E7 建筑投影：内容变化才重绘，保留相位对应的颜色与透明度。 */
@@ -307,10 +318,16 @@ export class WorldScene extends Phaser.Scene {
   /** D14 头顶气泡：mirror.bubbles（name→text/到期）→ Text 池增删/跟随。 */
   private syncBubbles(nowMs: number): void {
     this.mirror.pruneBubbles(nowMs);
-    const anchors = new Map<string, { x: number; y: number }>();
+    const iso = this.renderMode === 'iso';
+    const anchors = new Map<string, { x: number; y: number; height: number }>();
     for (const actor of this.mirror.actors.values()) {
       const view = this.views.get(actor.rtoken);
-      if (actor.name && view) anchors.set(actor.name, view.sprite);
+      if (actor.name && view)
+        anchors.set(actor.name, {
+          x: view.sprite.x,
+          y: view.sprite.y,
+          height: view.sprite.displayHeight || 32,
+        });
     }
     const candidates = new Map([...this.mirror.bubbles].filter(([name]) => anchors.has(name)));
     const protagonistName = this.mirror.actors.get(this.mirror.protagonist ?? '')?.name;
@@ -348,12 +365,21 @@ export class WorldScene extends Phaser.Scene {
       const anchor = anchors.get(name)!;
       // H：被选中后按优先级依次避让已放置的气泡矩形（主角优先 → 不会互相压字）
       const box = placeBubble(
-        { x: anchor.x, y: anchor.y - TILE - 2, width: text.width, height: text.height },
+        {
+          x: anchor.x,
+          // Feet already interpolate between isoProject surface points.
+          y: iso
+            ? aboveSurface(anchor.y, anchor.height, ISO_BUBBLE_GAP_PX, PIXEL_SCALE)
+            : anchor.y - TILE - 2,
+          width: iso ? text.displayWidth : text.width,
+          height: iso ? text.displayHeight : text.height,
+        },
         placed,
+        iso ? 4 / PIXEL_SCALE : undefined,
       );
       text.setPosition(box.x, box.y);
       // A 档：气泡随脚底深度抬升，避免被邻格更大的脚底深度精灵压住
-      text.setDepth(bubbleDepth(anchor.y));
+      text.setDepth(bubbleDepth(anchor.y, this.renderMode));
       placed.push(box);
     }
   }
@@ -422,17 +448,29 @@ export class WorldScene extends Phaser.Scene {
         const label =
           actor.name !== undefined
             ? this.add
-                .text(top.sx, iso ? labelY(top.sy) : actor.y * TILE - 4, actor.name, {
-                  fontFamily: 'sans-serif',
-                  fontSize: '12px',
-                  color: '#e7e0d0',
-                  stroke: '#1a1f14',
-                  strokeThickness: 2,
-                  resolution: 4,
-                })
+                .text(
+                  top.sx,
+                  iso
+                    ? aboveSurface(
+                        top.sy,
+                        sprite.displayHeight || 32,
+                        ISO_LABEL_GAP_PX,
+                        PIXEL_SCALE,
+                      )
+                    : actor.y * TILE - 4,
+                  actor.name,
+                  {
+                    fontFamily: 'sans-serif',
+                    fontSize: '12px',
+                    color: '#e7e0d0',
+                    stroke: '#1a1f14',
+                    strokeThickness: 2,
+                    resolution: 4,
+                  },
+                )
                 .setOrigin(0.5, 1)
                 .setScale(1 / PIXEL_SCALE)
-                .setDepth(labelDepth((actor.y + 1) * TILE))
+                .setDepth(labelDepth((actor.y + 1) * TILE, this.renderMode))
             : null;
         view = {
           sprite,
@@ -477,8 +515,18 @@ export class WorldScene extends Phaser.Scene {
       view.shadow?.setPosition(view.sprite.x, view.sprite.y - (iso ? 0 : 1));
       view.shadow?.setDepth(footDepth - (iso ? 0.5 : 1));
       // A 档：名字挂头顶（帧高 32px，此前按半格 8px 挂 → 压在脸上）
-      view.label?.setPosition(view.sprite.x, labelY(view.sprite.y));
-      view.label?.setDepth(labelDepth(view.sprite.y));
+      view.label?.setPosition(
+        view.sprite.x,
+        iso
+          ? aboveSurface(
+              view.sprite.y,
+              view.sprite.displayHeight || 32,
+              ISO_LABEL_GAP_PX,
+              PIXEL_SCALE,
+            )
+          : labelY(view.sprite.y),
+      );
+      view.label?.setDepth(labelDepth(view.sprite.y, this.renderMode));
       // A 档：名字只在主角邻近显示（远端 50 个标签是最大噪声源）
       if (view.label) {
         const dist = protagonist ? manhattan(actor, protagonist) : 0;

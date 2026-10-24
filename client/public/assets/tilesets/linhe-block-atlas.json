@@ -1,0 +1,25 @@
+{
+  "tile_size": 16,
+  "columns": 4,
+  "rows": 3,
+  "source_tileset": "god-town-16.png",
+  "source_map": "linhe-town.json",
+  "sampling": "ground gid central 4x4 RGB mean, integer floor",
+  "base_colors": {
+    "water": 4684676,
+    "ground": 9404501,
+    "building": 6445638,
+    "canopy": 6772548
+  },
+  "sample_counts": {
+    "water": 688,
+    "ground": 5391,
+    "building": 5496,
+    "canopy": 2425
+  },
+  "faces": {
+    "top": 0,
+    "left": 1,
+    "right": 2
+  }
+}
