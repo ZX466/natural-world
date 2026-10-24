@@ -9,7 +9,7 @@
 
 ## 0. 本会话状态
 
-- **代码 HEAD**：`e7f6543`（merge codex：V3 玩法对齐与收官）；最新 `4c8e2fd`（merge codex：V4a 挖放）；
+- **代码 HEAD**：`e7f6543`（merge codex：V3 玩法对齐与收官）；最新 `6982f53`（V4a 收编验收记录）；
   V0 收口 `eb3a260`
 - **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`／DA-06 `ea42b13`／DA-07 `fd31113`／DA-08 `01d8142`（merge `bb57acf`）；**V1**（merge `9437cff`）；**V2**（merge `fb09a5b`）；**V3**（merge `e7f6543`，含 `b410e32` 图集管线 + `71cb448` 分层/玩法收官）；**V4a**（merge `4c8e2fd`，含 `6e890e6` sim/协议 + `2eed719` 前端）
 - **在飞**：无。codex 树已收工（HEAD `2eed719`），等下一单派发。
