@@ -43,6 +43,7 @@ STATE_DELTA_WHITELIST: frozenset[str] = frozenset(
         "actors",
         "lights",
         "structures",
+        "voxel_edits",  # V4a（1.12），已在 versioning §7 登记
         "plan",
         "weather",
         "time",

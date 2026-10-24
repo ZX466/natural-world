@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "临河镇 协议（mock，待 sim 起服务后由 FastAPI /api/openapi.json 取代）",
-    "version": "1.11",
+    "version": "1.12",
     "description": "接口/兼容性域（kilo TASK-002）。WS 消息 + HTTP 端点 schema 一并定义于 components/schemas，经 openapi-typescript 生成 shared/protocol.ts。出戏边界：tick/seed/seq/branch_id/内部 entity_id/source_id/raw 数值属性 一律不出现；render 通道用 rtoken 不透明替身（见 ws-protocol.md §5）。切换点见 docs/api/codegen.md。"
   },
   "paths": {
@@ -1251,6 +1251,12 @@
             "items": {
               "$ref": "#/components/schemas/MonologueMessage"
             }
+          },
+          "voxel_edits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VoxelEdit"
+            }
           }
         },
         "additionalProperties": false
@@ -1314,6 +1320,12 @@
           },
           "time": {
             "$ref": "#/components/schemas/TimeInfo"
+          },
+          "voxel_edits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VoxelEdit"
+            }
           }
         },
         "additionalProperties": false
@@ -1817,6 +1829,12 @@
           },
           {
             "$ref": "#/components/schemas/WsErrorMessage"
+          },
+          {
+            "$ref": "#/components/schemas/VoxelRequestMessage"
+          },
+          {
+            "$ref": "#/components/schemas/VoxelStateMessage"
           }
         ],
         "discriminator": {
@@ -1836,7 +1854,9 @@
             "timescale": "#/components/schemas/TimescaleMessage",
             "control_ack": "#/components/schemas/ControlAckMessage",
             "session_state": "#/components/schemas/SessionStateMessage",
-            "error": "#/components/schemas/WsErrorMessage"
+            "error": "#/components/schemas/WsErrorMessage",
+            "voxel_request": "#/components/schemas/VoxelRequestMessage",
+            "voxel_state": "#/components/schemas/VoxelStateMessage"
           }
         }
       },
@@ -2273,6 +2293,171 @@
           "token"
         ],
         "description": "本机 WS 握手凭据；只经 HTTP 返回，不写入世界或持久化。"
+      },
+      "VoxelEdit": {
+        "type": "object",
+        "required": [
+          "x",
+          "y",
+          "action",
+          "gid"
+        ],
+        "properties": {
+          "x": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "dig",
+              "place"
+            ]
+          },
+          "gid": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          }
+        },
+        "additionalProperties": false
+      },
+      "VoxelDig": {
+        "type": "object",
+        "required": [
+          "x",
+          "y",
+          "progress"
+        ],
+        "properties": {
+          "x": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "progress": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "VoxelInventory": {
+        "type": "object",
+        "required": [
+          "earth"
+        ],
+        "properties": {
+          "earth": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "VoxelRequestMessage": {
+        "type": "object",
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "action",
+          "x",
+          "y"
+        ],
+        "properties": {
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "render"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "voxel_request"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "dig_start",
+              "dig_cancel",
+              "place"
+            ]
+          },
+          "x": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "VoxelStateMessage": {
+        "type": "object",
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "dig",
+          "inventory"
+        ],
+        "properties": {
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "render"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "voxel_state"
+            ]
+          },
+          "dig": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/VoxelDig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inventory": {
+            "$ref": "#/components/schemas/VoxelInventory"
+          }
+        },
+        "additionalProperties": false
       }
     }
   }

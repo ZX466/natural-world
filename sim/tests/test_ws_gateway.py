@@ -884,7 +884,7 @@ class TestDispatchRegistration:
         allowed = ws_mod._ALLOWED_CLIENT_TYPES
         channels = ws_mod._CHANNEL_FOR
         expected = {"move_request", "set_control", "sync_request", "hello"}
-        expected |= {"player_impulse", "load_anchor"}
+        expected |= {"player_impulse", "load_anchor", "voxel_request"}
         assert allowed == expected, f"白名单缺项：{expected - allowed}"
         assert channels.keys() == expected, "channel 表与白名单必须一一对应（防 §2.2 落单）"
 
@@ -894,6 +894,7 @@ class TestDispatchRegistration:
         ch = ws_mod._CHANNEL_FOR
         assert ch["player_impulse"] == "control"
         assert ch["load_anchor"] == "session"
+        assert ch["voxel_request"] == "render"
         assert ch["move_request"] == "render"
         assert ch["set_control"] == "control"
         assert ch["sync_request"] == "session"

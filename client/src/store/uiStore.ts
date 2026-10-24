@@ -6,7 +6,7 @@
  * codex 意见 2：快照/世界真相数值禁入本 store（戏外调试层走 W2 独立通道，M0 不做）。
  */
 import { create } from 'zustand';
-import type { PlanDelta } from '../net/protocol';
+import type { PlanDelta, VoxelStateMessage } from '../net/protocol';
 import type { WsStatus } from '../net/ws';
 
 /** 独白环形缓冲上限（超过丢最旧；M4 叙事面） */
@@ -41,6 +41,10 @@ export interface InGameTime {
 export type Speed = 1 | 4 | 16;
 
 interface UiState {
+  voxelInventory: VoxelStateMessage['inventory'] | null;
+  voxelError: string | null;
+  setVoxelInventory: (inventory: VoxelStateMessage['inventory'] | null) => void;
+  setVoxelError: (message: string | null) => void;
   wsStatus: WsStatus;
   gameClock: InGameTime | null;
   speed: Speed;
@@ -74,6 +78,10 @@ interface UiState {
 }
 
 export const useUiStore = create<UiState>((set) => ({
+  voxelInventory: null,
+  voxelError: null,
+  setVoxelInventory: (voxelInventory) => set({ voxelInventory }),
+  setVoxelError: (voxelError) => set({ voxelError }),
   wsStatus: 'connecting',
   gameClock: null,
   speed: 1,

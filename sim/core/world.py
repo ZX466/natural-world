@@ -339,6 +339,13 @@ def _apply_nature_event(state: WorldState, event: WorldEvent, ctx: TickContext) 
     return ApplyResult(state=state)
 
 
+def _apply_voxel_edited(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    from sim.core.events import VoxelEditedPayload
+
+    VoxelEditedPayload.model_validate(event.payload)
+    return ApplyResult(state=state)
+
+
 def build_default_bus() -> EventBus:
     """M0 默认事件总线（批次 B 增 NPC_ACT no-op——决策记录面）。"""
     bus = EventBus()
@@ -349,6 +356,7 @@ def build_default_bus() -> EventBus:
     bus.register(EventKind.COMBAT_SCALE_CHANGE, _apply_combat_scale)
     bus.register(EventKind.ENTROPY_INJECT, _apply_entropy_inject)
     bus.register(EventKind.TILE_CHANGED, _apply_tile_changed)
+    bus.register(EventKind.VOXEL_EDITED, _apply_voxel_edited)
     bus.register(EventKind.NPC_DEATH, _apply_npc_death)
     bus.register(EventKind.NPC_LOD_CHANGE, _apply_npc_lod_change)
     bus.register(EventKind.NPC_ACT, _apply_npc_act)

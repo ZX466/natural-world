@@ -39,8 +39,8 @@ it('defaults to iso and routes terrain/structures without flat rectangles', () =
   internal.redrawMap();
   internal.syncStructures();
   expect(internal.renderMode).toBe('iso');
-  expect(iso.redraw).toHaveBeenCalledWith(mirror.map, mirror.structures);
-  expect(iso.sync).toHaveBeenCalledWith(mirror.map, mirror.structures);
+  expect(iso.redraw).toHaveBeenCalledWith(mirror.map, mirror.structures, mirror.voxelEdits);
+  expect(iso.sync).toHaveBeenCalledWith(mirror.map, mirror.structures, mirror.voxelEdits);
   expect(graphics.fillRect).not.toHaveBeenCalled();
   expect(rendererScene('').internal.renderMode).toBe('iso');
   expect(rendererScene('?renderer=unknown').internal.renderMode).toBe('iso');
@@ -53,4 +53,17 @@ it('preloads the height table alongside the current tileset', () => {
   scene.preload();
   expect(load.json).toHaveBeenCalledWith('linhe-height', '/assets/tilesets/linhe-height.json');
   expect(load.image).toHaveBeenCalledWith('god-town-16', '/assets/tilesets/god-town-16.png');
+});
+
+it('shows committed voxel walls and dug earth in flat without keeping future collision', () => {
+  const { internal, mirror, graphics } = rendererScene('?renderer=flat');
+  mirror.applyVoxelEdits([{ x: 0, y: 0, action: 'place', gid: 0 }]);
+  internal.redrawMap();
+  expect(graphics.fillStyle).toHaveBeenLastCalledWith(0x6b4f2a, 1);
+  expect(graphics.fillRect).toHaveBeenLastCalledWith(13, 0, 3, 16);
+  expect(mirror.map!.collision[0]).toBe(0);
+  mirror.applyVoxelEdits([], true);
+  internal.redrawMap();
+  expect(mirror.map!.collision[0]).toBe(1);
+  expect(graphics.fillRect).toHaveBeenLastCalledWith(16, 16, 15, 15);
 });

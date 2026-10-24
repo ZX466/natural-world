@@ -64,6 +64,9 @@ GENESIS_ENTITIES: tuple[str, ...] = (
 SPAWN_TILE: tuple[int, int] = (100, 53)
 TOWN_MAP_PATH = Path(__file__).resolve().parents[1] / "content" / "linhe-town.json"
 WORLD_DB_PATH = Path("world.db")
+VOXEL_HEIGHT_PATH = (
+    Path(__file__).resolve().parents[2] / "client/public/assets/tilesets/linhe-height.json"
+)
 
 
 def _fallback_map() -> TileMap:
@@ -258,7 +261,10 @@ def _active_profile_snapshot_provider():
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     import asyncio
+    import json
 
+    from sim.agent.voxel_exec import VoxelRuntime
+    from sim.api import ws as voxel_gateway
     from sim.core.logsetup import setup_logging
     from sim.perception.senses import run_perception_step
 
@@ -321,7 +327,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             world_revision += 1
             driver.reset_combat()
         await flush_world(store, branch_id, loop, events)
-        if any(event.event_type in _TILE_RESTORING_KINDS for event in events):
+        if any(event.event_type is EventKind.TILE_CHANGED for event in events):
             # 落库成功后增量消费本批瓦片真相，不能只等下一次读档重建。
             for event in events:
                 if event.event_type is EventKind.TILE_CHANGED:
@@ -331,6 +337,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             build_runtime.tile_map = tile_map
             pathfinder.observe_map(tile_map)
             pathfinder.cache.entries.clear()
+        voxel_runtime.observe(events)
+        voxel_gateway.apply_voxel_events(
+            events, ground_gid=lambda x, y: _ground_tile_id(tile_map, x, y)
+        )
         maintenance.observe(events)
         for event in events:
             if event.event_type is EventKind.STRUCTURE_REMOVED:
@@ -915,6 +925,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 # P-2：工地账本纯内存，清零后须从**本分支**事件流恢复在建工地
                 # （不清零则旧工地跨分支推进并发出旧 structure_id 的事件）。
                 build_runtime.restore_from_events(branch_events)
+                voxel_runtime.restore_from_events(branch_events)
+                voxel_gateway.restore_voxel_edits(
+                    branch_events,
+                    ground_gid=lambda x, y, at_cursor=tile_map: _ground_tile_id(at_cursor, x, y),
+                )
                 pathfinder.observe_map(tile_map)
                 pathfinder.cache.entries.clear()
                 maintenance._cascades.clear()
@@ -986,6 +1001,41 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         async with store.session_factory() as session:
             source_ready = await session.scalar(select(Branch.id).limit(1)) is None
     app.state.world_source_ready = source_ready
+    heights = json.loads(await asyncio.to_thread(VOXEL_HEIGHT_PATH.read_text, encoding="utf-8"))
+    height_w, height_h = heights["w"], heights["h"]
+    height_values = heights["h_values"]
+    if len(height_values) != height_w * height_h or not all(
+        type(height) is int and 0 <= height <= 3 for height in height_values
+    ):
+        raise ValueError("invalid voxel water-height table")
+
+    def voxel_height(x: int, y: int) -> int:
+        return height_values[y * height_w + x] if 0 <= x < height_w and 0 <= y < height_h else 1
+
+    def voxel_occupied(x: int, y: int) -> bool:
+        return any((x, y) in structure.tiles for structure in maintenance.structures.values()) or (
+            build_runtime._site is not None and (x, y) in build_runtime._site.tiles
+        )
+
+    voxel_runtime = VoxelRuntime(
+        tile_map=lambda: tile_map,
+        height_of=voxel_height,
+        ground_gid=lambda x, y: _ground_tile_id(tile_map, x, y),
+        occupied=voxel_occupied,
+    )
+    voxel_history = (
+        await NpcStore(store, branch_id=current_branch).read_branch_history()
+        if current_branch is not None
+        else []
+    )
+    voxel_runtime.restore_from_events(voxel_history)
+    voxel_gateway.restore_voxel_edits(
+        voxel_history, ground_gid=lambda x, y: _ground_tile_id(tile_map, x, y)
+    )
+    app.state.voxel_runtime = voxel_runtime
+    voxel_gateway.set_voxel_runtime(voxel_runtime)
+    # Maintenance receives the tick being processed; editing uses completed-tick time.
+    loop.attach_maintenance(lambda state, tick: voxel_runtime.tick(state, tick + 1))
     app.state.driver = asyncio.create_task(
         run_world_driver(
             loop,
@@ -1009,13 +1059,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         for task in tasks:
             task.cancel()
         results = await asyncio.gather(*tasks, return_exceptions=True)
+        voxel_gateway.set_voxel_runtime(None)
+        voxel_gateway.reset_voxel_edits()
         await store.session_factory.kw["bind"].dispose()
         for result in results:
             if isinstance(result, BaseException) and not isinstance(result, asyncio.CancelledError):
                 raise result
 
 
-app = FastAPI(title="临河镇 sim", version="1.11", lifespan=lifespan)
+app = FastAPI(title="临河镇 sim", version="1.12", lifespan=lifespan)
 app.include_router(settings_router)
 app.include_router(anchors_router)  # M5-K7：玩家档读路径（落库 → WS 查表集供数）
 
@@ -1142,7 +1194,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
                     "auth_error",
                     "authentication required",
                 )
-            elif msg_type in {"move_request", "set_control", "player_impulse"}:
+            elif msg_type in {"move_request", "set_control", "player_impulse", "voxel_request"}:
                 async with app.state.world_write_lock:
                     if not getattr(app.state, "world_source_ready", True):
                         reply = _error_frame(msg_type, "bad_action", "此刻动不了。")
@@ -1152,9 +1204,16 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 reply = handle_client_message(raw, app.state.loop, pf, control)
             if msg_type == "hello":
                 authed = any(frame.get("type") == "hello_ack" for frame in frames_of(reply))
+                manager.mark_authenticated(ws, authed)
             # M5-K3：读档成功回两帧（分叉告知 + 全量），其余仍单帧/无帧
             for frame in frames_of(reply):
                 await manager.send_json_to(ws, frame)
+                if authed and frame.get("type") in {"hello_ack", "full_snapshot"}:
+                    from sim.api.ws import voxel_state_payload
+
+                    voxel_state = voxel_state_payload()
+                    if voxel_state is not None:
+                        await manager.send_json_to(ws, voxel_state)
     except WebSocketDisconnect:
         pass
     finally:

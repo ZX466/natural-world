@@ -24,11 +24,14 @@ export type SetControlMessage = Schemas['SetControlMessage'];
 export type LoadAnchorMessage = Schemas['LoadAnchorMessage'];
 /** 玩家点击寻路：客户端只发目标格坐标，sim 寻路并驱动主角；无 rtoken。 */
 export type MoveRequestMessage = Schemas['MoveRequestMessage'];
+export type VoxelRequestMessage = Schemas['VoxelRequestMessage'];
 export type SyncRequestMessage = Schemas['SyncRequestMessage'];
 
 // ── sim → client ───────────────────────────────────────────────
 export type FullSnapshotMessage = Schemas['FullSnapshotMessage'];
 export type StateDeltaMessage = Schemas['StateDeltaMessage'];
+export type VoxelStateMessage = Schemas['VoxelStateMessage'];
+export type VoxelEdit = Schemas['VoxelEdit'];
 export type PerceptionMessage = Schemas['PerceptionMessage'];
 export type MonologueMessage = Schemas['MonologueMessage'];
 export type ImpulseFeedbackMessage = Schemas['ImpulseFeedbackMessage'];

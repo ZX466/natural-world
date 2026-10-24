@@ -9,19 +9,21 @@
 
 ## 0. 本会话状态
 
-- **代码 HEAD**：`e7f6543`（merge codex：V3 玩法对齐与收官）；其后仅 docs 提交，最新 `684eef9`（记忆刷新）；
+- **代码 HEAD**：`e7f6543`（merge codex：V3 玩法对齐与收官）；其后 docs 提交，最新 `6a1d6bb`（V4a 收编）；
   V0 收口 `eb3a260`
-- **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`／DA-06 `ea42b13`／DA-07 `fd31113`／DA-08 `01d8142`（merge `bb57acf`）；**V1**（merge `9437cff`）；**V2**（merge `fb09a5b`）；**V3**（merge `e7f6543`，含 `b410e32` 图集管线 + `71cb448` 分层/玩法收官）
-- **在飞**：**V4a 挖放已派 codex（2026-10-24）**，派单在其树 `.orca/talking.txt`「当前任务」节。
-  用户已拍板「**只陈默挖放**」。派单后 codex 侧**尚无动工回执**（HEAD 仍 `71cb448`、工作区干净）——
-  新对话接手先查那边 `git log` + 回执区，不要假定已开工。
+- **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`／DA-06 `ea42b13`／DA-07 `fd31113`／DA-08 `01d8142`（merge `bb57acf`）；**V1**（merge `9437cff`）；**V2**（merge `fb09a5b`）；**V3**（merge `e7f6543`，含 `b410e32` 图集管线 + `71cb448` 分层/玩法收官）；**V4a**（merge `6a1d6bb`，含 `6e890e6` sim/协议 + `2eed719` 前端）
+- **在飞**：无。codex 树已收工（HEAD `2eed719`），等下一单派发。
 - **未派**：V3.5 内容包 / V4-3D / V4b（材料分类等）
 - **V0 验收**：DESIGN v2.2 仅两处；规格/方案入库 `eb3a260`；双远程已推到 `67aa31b`
 - **V1 验收**：高度表 `--check` 逐字节一致；主树叠图肉眼抽查通过；独立 Chromium 复跑 flat/iso 零 JS 异常（见 §2.5）
 - **V2 验收**：真实 lifespan 33 帧/54 actors 复跑；Chromium 遮挡像素差 **behind=0 / after=2860**；结构池 4 块+1 rubble、无 structureLayer（见 §2.5）
 - **V3 验收**：主树独立复跑全门禁 + 真实 Chromium 闭环（默认 iso / 念头气泡 / 差事往返 / 战斗慢镜 / 昼夜雨 / 结构相位 / 显式 flat），`errors=[]`；深度层级已提到 iso 池之上（名牌 300000+/气泡 310000+/雨 400000/夜幕 400001），图集 `--check` 逐字节一致，textures 从 7643 降到地形固定 4（见 §2.5）
-- **遗留待人工验收**：① DA-07 失能/恢复真模型长局；② V3 画面观感（逐格 tint 与图集贴图的整体质感）人工过目
-- **协议**：1.11（真相源 `sim/api/ws.py::_PROTOCOL_VERSION`，前端 `client/src/net/ws.ts` 同源）
+- **V4a 验收**：主树独立复跑 **2935P/121S/72D/0F（299s，无 deselect）**、ruff 364 文件格式对齐、pyright 0、
+  client typecheck/lint/format EXIT 0、vitest **217P/39files**、`gen:protocol:check` 通过、高度表与图集 `--check`
+  双 byte-identical。十条施工裁决逐条对上（详见 §2.6）。
+- **遗留待人工验收**：① DA-07 失能/恢复真模型长局；② V3 画面观感（逐格 tint 与图集贴图的整体质感）人工过目；
+  ③ **V4a 挖放观感**——挖后回静态高度（不必然塌成平地），只靠土色标识，需人眼确认可读性
+- **协议**：**1.12**（真相源 `sim/api/ws.py::_PROTOCOL_VERSION`，前端 `client/src/net/ws.ts` 同源）
 - **工作树：两棵**（2026-10-21 用户重申，长期有效）
   - 主树 `E:/zxdevelop/project7` → 分支 `main`（Claude：拆单/架构/质量/收编复核/日常小改）
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex` → 分支 `codex`（**复杂任务默认派此树**；安全/合规/风险域；HEAD 随其提交推进，收编前以实际 `git log` 为准）
@@ -34,15 +36,15 @@
 **M0–M6 全部收官**（M6 于 2026-10-05，G1–G4 全 ✅）；**M7 渲染面**已落（地图/时钟/视角/昼夜）。
 代码侧整体完成，剩余是收口型缺口。
 
-## 2. 门禁（2026-10-24 V3 收编后实测）
+## 2. 门禁（2026-10-24 V4a 收编后主树独立实测）
 
 | 项 | 结果 |
 |---|---|
-| sim 全量 pytest（`-m "not bench"`） | **2887 passed** / 121 skipped / 72 deselected，**0 failed**（372s） |
-| ruff check / ruff format | clean（`All checks passed!`） |
+| sim 全量 pytest（`-m "not bench"`） | **2935 passed** / 121 skipped / 72 deselected，**0 failed**（299s） |
+| ruff check / ruff format | clean（`All checks passed!`；364 files already formatted） |
 | pyright sim/ | 0 errors, 0 warnings |
 | client typecheck / lint / format | 全 0（均 EXIT 0） |
-| client vitest | **195 passed / 33 files**（V3 新增 13 条） |
+| client vitest | **217 passed / 39 files**（V4a 新增 22 条） |
 | 高度表 `build_height_map --check` | **byte-identical**（JSON + PNG） |
 | 方块图集 `build_block_atlas --check` | **byte-identical**（12 帧；688/5391/5496/2425） |
 | gen:protocol:check | EXIT 0 |
@@ -88,13 +90,13 @@
 - **主树实测锚点**：tileset 2240×1600（140 列）；地图 140×100；ground 界内
   14000 格全覆盖、**无 gid=0**；63 个 16×16 chunk，边缘 padding 的 0 在界外；
   树冠主色是**粉色桃花**（不是只有深绿）。原图缩略图 `.orca/tmp/map-overview.png`。
-- **下一波**：**V4a 挖放已派 codex（2026-10-24）**，详见 §2.6；V3.5 / V4-3D / V4b 未派。
+- **下一波**：**V4a 已收编验收通过（2026-10-24）**，详见 §2.6；V3.5 / V4-3D / V4b 未派。
 
-## 2.6 V4a 挖放派单（2026-10-24，待 codex 接单）
+## 2.6 V4a 挖放（2026-10-24 派单 → 已收编验收）
 
 - **用户拍板**：V4a 做、**只陈默挖放**（NPC 不参与）；口径按 Minecraft。
-- **派单位置**：codex 树 `.orca/talking.txt`「当前任务：V4a 挖放（单）」节（主树 talking.txt 已记状态）。
-  **未启动 codex 终端**（用户明示：只走 talking.txt）。派单后 codex 无回执、未提交。
+- **状态**：codex 交付 `6e890e6`（sim/协议）+ `2eed719`（前端），主树 merge `6a1d6bb`，**独立复跑全绿**。
+  派单原文仍在 codex 树 `.orca/talking.txt`「当前任务」节，回执在该文件回执区末三行。
 - **主树核实的关键事实**（codegraph 实测，写进了派单，勿再重查）：
   - 输入链路 `handle_client_message`(ws.py:804) → `_ALLOWED_CLIENT_TYPES`:75 与 `_CHANNEL_FOR` **成对**注册
     → `_handle_move_request`:874 → `issue_move`(tick.py:292) → `move_event`(events.py:630)。
@@ -120,6 +122,21 @@
   10. 图集与高度表 `--check` 必须仍 byte-identical（本单不开美术管线）。
 - **基准偏差**：派单写 `3cdff1d`，codex 分支停在 `71cb448`（差 3 个 docs 提交，不影响代码）。
   按纪律他不 merge main ⇒ 以其 HEAD 开工，收编时主树自然合得上。
+
+### 收编复核要点（2026-10-24，主树实测）
+
+- **裁决 2 的记账时序有个必须知道的坑**：库存只在事件真正落库后由 `observe(events)` 更新
+  （`voxel_exec.py:226`），而放置的扣减要先过 `_earth - _reserved < 1` 预检，`_reserved`
+  在 `VOXEL_EDITED` 落库时才减。**这样连点右键不会超支**，但也意味着测试里必须真的跑
+  `observe`，不能只调 `request` 就断言库存。
+- **codex 主动报了三处越界修复**（均经复核合理，非擅改）：
+  1. `fork.py::_clone_materials_at_cursor`——历史 anchor 分叉时材料余额不能复制父 head，
+     改为按游标 + 祖先边界重放 `material.moved`。**这是 V4a 暴露出的旧缺陷**，不是新功能。
+  2. `_stop_paths`——放墙后用既有 `move_event(pos,pos,(pos,))` 停掉穿过该格的路径，不改 MOVE 语义。
+  3. `voxel-picking.ts`——编辑按可见柱拾取，短按仍用旧地平面拾取（保旧 vitest）。
+- **画面口径（重要，别误读为 bug）**：挖 = 回静态高度 + 土色标识，**不是**塌成 h1 平地。
+  实测目标静态 h2，挖前/挖后/放后都 48px。可走性是真的，视觉高度不变。这是派单裁决 9 的原意。
+- **C3 出站守卫**：拒绝文案走 `_voxel_bad_target` 的固定中文字面量集合，不透传异常消息。
 
 ## 3. 缺口清单（codex 审计 8 组 + 主树 P0-3，**全部已修**）
 
@@ -318,7 +335,7 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 
 ## 归档：codex 树快照（原文已移出本文件）
 
-codex 树的逐单回执（V1/V2/V3、DA-01…DA-08、P 单）不再在此重复；权威副本在三处：
+codex 树的逐单回执（V1/V2/V3、V4a、DA-01…DA-08、P 单）不再在此重复；权威副本在三处：
 
 1. codex 树 `.orca/memory.md`（其自身快照）
 2. codex 树 `.orca/archive/talking-receipts-2026-10-23.md` / `-2026-10-24.md`（逐行回执原文）

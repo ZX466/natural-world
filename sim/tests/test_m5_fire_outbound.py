@@ -55,7 +55,7 @@ SNAPSHOT = REPO_ROOT / "shared" / "openapi.json"
 GENERATED = REPO_ROOT / "shared" / "protocol.ts"
 API_DIR = REPO_ROOT / "sim" / "api"
 
-#: 现有 WS 帧 type 闭合集（快照 `WsMessage.discriminator.mapping` 的 15 项）。
+#: 现有 WS 帧 type 闭合集（原 15 项 + V4a 1.12 挖放双消息，非火灾出站面）。
 #: 抄自快照当日值——**新增帧即红**（D-10/K12 §2 论证 A：事件 kind 不是帧 type）。
 WS_FRAME_TYPES: frozenset[str] = frozenset(
     {
@@ -63,6 +63,8 @@ WS_FRAME_TYPES: frozenset[str] = frozenset(
         "set_control",
         "load_anchor",
         "move_request",
+        "voxel_request",
+        "voxel_state",
         "sync_request",
         "full_snapshot",
         "state_delta",

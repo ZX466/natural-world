@@ -350,3 +350,28 @@ it('shares a fixed height texture across differently colored cells and preserves
   expect(images[1]!.setTint).toHaveBeenLastCalledWith(0x6496c8);
   expect([...textures.keys()].filter((key) => key.startsWith('iso-block-'))).toHaveLength(1);
 });
+
+it('includes edits in the surface cache and uses earth appearance even when the original gid is unchanged', () => {
+  const { terrain, map, structures, images } = setup([0, 1, 2, 3]);
+  const edits = new Map<string, { x: number; y: number; action: 'dig' | 'place'; gid: number }>();
+  terrain.redraw(map, structures, edits);
+  const high = images[1]!;
+  edits.set('0,1', { x: 0, y: 1, action: 'dig', gid: 1 });
+  terrain.sync(map, structures, edits);
+  expect(high.setTint).toHaveBeenLastCalledWith(0x8f8055);
+  expect(high.setDisplaySize).toHaveBeenLastCalledWith(32, 48); // Original static height is retained.
+});
+
+it('creates a placed height-two block and removes it on an empty restored edit ledger', () => {
+  const { terrain, map, structures, images } = setup([0, 1, 0, 0]);
+  const edits = new Map<string, { x: number; y: number; action: 'dig' | 'place'; gid: number }>();
+  terrain.redraw(map, structures, edits);
+  edits.set('1,0', { x: 1, y: 0, action: 'place', gid: 0 });
+  terrain.sync(map, structures, edits);
+  const placed = images[1]!;
+  expect(placed.setDisplaySize).toHaveBeenLastCalledWith(32, 48);
+  expect(placed.setTint).toHaveBeenLastCalledWith(0x8f8055);
+  edits.clear();
+  terrain.sync(map, structures, edits);
+  expect(placed.destroyed).toBe(true);
+});

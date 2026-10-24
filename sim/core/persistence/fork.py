@@ -582,6 +582,13 @@ async def fork_from_anchor(
                     session, package.branch_id, package.seq, child_id
                 )
                 continue
+            if kind == "anchor" and table == "material_balances":
+                # V4a: stock at an old cursor cannot be copied from the parent's future head.
+                assert package is not None
+                cloned[table] = await _clone_materials_at_cursor(
+                    session, package.branch_id, package.seq, child_id
+                )
+                continue
             if kind == "anchor" and table == "relationships":
                 continue  # 语料块按包写（累计值属锚点时刻，不是父分支当前值）
             cloned[table] = await _clone_bounded(
@@ -665,6 +672,68 @@ async def fork_from_anchor(
         agent_override="{}" if package is None else json.dumps(package.agent_override),
         warnings=tuple(collected),
     )
+
+
+async def _clone_materials_at_cursor(
+    session: AsyncSession, branch_id: str, seq: int, child_id: str
+) -> int:
+    from sim.core.persistence.models import MaterialBalance
+    from sim.core.persistence.npc_store import fold_material_balance
+
+    segments: list[Sequence[Event]] = []
+    seen: set[str] = set()
+    current: str | None = branch_id
+    upper = seq
+    while current is not None:
+        if current in seen:
+            raise ForkError("cyclic material branch history")
+        seen.add(current)
+        branch = await session.get(Branch, current)
+        if branch is None:
+            raise ForkError("missing material branch history")
+        rows = await session.scalars(
+            select(Event)
+            .where(
+                Event.branch_id == current,
+                Event.seq <= upper,
+                Event.event_type == EventKind.MATERIAL_MOVED.value,
+            )
+            .order_by(Event.seq)
+        )
+        segments.append(rows.all())
+        if branch.forked_from_branch is not None and branch.forked_from_seq is None:
+            raise ForkError("missing material branch cutoff")
+        current = branch.forked_from_branch
+        upper = branch.forked_from_seq if branch.forked_from_seq is not None else 0
+
+    balances: dict[tuple[str, str], float] = {}
+    updated: dict[tuple[str, str], int] = {}
+    for segment in reversed(segments):
+        for row in segment:
+            payload = json.loads(row.payload)
+            material = str(payload["material_id"])
+            source, target = str(payload["from_ref"]), str(payload["to_ref"])
+            from_key, to_key = (source, material), (target, material)
+            balances[from_key], balances[to_key] = fold_material_balance(
+                balances.get(from_key, 0.0),
+                balances.get(to_key, 0.0),
+                quantity=float(payload["quantity"]),
+                from_ref=source,
+            )
+            updated[from_key] = updated[to_key] = row.tick
+    for ref, material in sorted(balances):
+        key = (ref, material)
+        session.add(
+            MaterialBalance(
+                branch_id=child_id,
+                ref=ref,
+                material_id=material,
+                quantity=balances[key],
+                updated_at_tick=updated[key],
+            )
+        )
+    await session.flush()
+    return len(balances)
 
 
 async def _clone_structures_at_cursor(

@@ -33,10 +33,13 @@ SNAPSHOT = REPO_ROOT / "shared" / "openapi.json"
 VERSIONING = REPO_ROOT / "docs" / "api" / "versioning.md"
 
 #: 当前版本（1.1=裁 34-1 甲案三个 minor；1.2=M6-K2 诊断面进快照，仍是 minor）。
-EXPECTED_VERSION = "1.11"
+EXPECTED_VERSION = "1.12"
 
 #: 登记在 §7 的 minor 变更关键词（doc 同步钉用，避免「登记与代码各说各话」）。
 REGISTERED_MINOR_KEYWORDS = (
+    "voxel_request",
+    "voxel_state",
+    "voxel_edits",
     "fast_forward",
     "/api/anchors/current",
     "PlanDelta",

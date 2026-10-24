@@ -8,7 +8,11 @@
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
-type MoveHandler = (payload: { x: number; y: number }) => void;
+type MoveHandler = (payload: {
+  x: number;
+  y: number;
+  action?: 'dig_start' | 'dig_cancel' | 'place';
+}) => void;
 
 describe('createGame move_request bridge', () => {
   const handlers = new Map<string, Set<MoveHandler>>();
@@ -50,7 +54,7 @@ describe('createGame move_request bridge', () => {
 
     // mock runtime：捕获 requestMove 调用
     vi.doMock('../runtime', () => ({
-      runtime: { requestMove: vi.fn() },
+      runtime: { requestMove: vi.fn(), requestVoxel: vi.fn() },
     }));
     // mock mirror（仅类型依赖，无行为）
     vi.doMock('../world-mirror', () => ({
@@ -75,5 +79,16 @@ describe('createGame move_request bridge', () => {
     const payload = { x: 7, y: 9 };
     for (const cb of listeners!) cb(payload);
     expect(runtime.requestMove).toHaveBeenCalledWith(7, 9);
+  });
+
+  it('forwards voxel gestures through the runtime without adding control fields', async () => {
+    const { createGame } = await import('../main');
+    createGame({} as HTMLElement, {} as Parameters<typeof createGame>[1]);
+    const listeners = handlers.get('client:voxel_request');
+    expect(listeners?.size).toBe(1);
+    for (const cb of listeners!) cb({ action: 'dig_start', x: 7, y: 9 });
+    const { runtime } = await import('../runtime');
+    expect(runtime.requestVoxel).toHaveBeenCalledWith('dig_start', 7, 9);
+    expect(runtime.requestMove).not.toHaveBeenCalled();
   });
 });

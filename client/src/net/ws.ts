@@ -13,6 +13,7 @@ import type {
   StateDeltaMessage,
   WsErrorMessage,
   WsMessage,
+  VoxelStateMessage,
 } from './protocol';
 import type { WorldMirror } from '../game/world-mirror';
 import { worldClock } from '../game/clock';
@@ -46,11 +47,12 @@ function useControlState(speed: number, paused: boolean): void {
  * `sim/tests/test_protocol_version.py` 的跨树钉锁死
  * （本文件是**第二落点**，真相源在 ws.py；改一处必改另一处）。
  */
-const PROTOCOL_VERSION = '1.11';
+const PROTOCOL_VERSION = '1.12';
 
 export type WsStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
 
 export interface WsCallbacks {
+  onVoxelState?: (msg: VoxelStateMessage) => void;
   onStatus: (status: WsStatus) => void;
   onSnapshot: (msg: FullSnapshotMessage) => void;
   onDelta: (msg: StateDeltaMessage) => void;
@@ -158,6 +160,7 @@ export class WsClient {
       }
       case 'full_snapshot':
         this.mirror.applySnapshot(msg.actors, msg.lights);
+        this.mirror.applyVoxelEdits(Array.isArray(msg.voxel_edits) ? msg.voxel_edits : [], true);
         if (msg.weather) {
           this.mirror.setWeather({
             visual: msg.weather.visual,
@@ -180,6 +183,7 @@ export class WsClient {
         break;
       case 'state_delta':
         this.mirror.applyActorDeltas(msg.actors);
+        if (Array.isArray(msg.voxel_edits)) this.mirror.applyVoxelEdits(msg.voxel_edits);
         if (msg.lights) this.mirror.applyLightDeltas(msg.lights);
         if (msg.weather) {
           this.mirror.setWeather({
@@ -190,6 +194,9 @@ export class WsClient {
         if (msg.structures) this.mirror.applyStructures(msg.structures); // E7 增量
         if (msg.time) worldClock.apply(msg.time); // M7-R3
         this.cb.onDelta(msg);
+        break;
+      case 'voxel_state':
+        if (this.mirror.applyVoxelState(msg)) this.cb.onVoxelState?.(msg);
         break;
       case 'session_state':
         // M5-K3 会话首帧（刻度/暂停态/游标）；M7：time 可选随帧同步。

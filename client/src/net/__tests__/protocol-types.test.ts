@@ -287,12 +287,14 @@ describe('ws-protocol 类型与出戏边界', () => {
     expectTypeOf<ControlAckMessage['type']>().toEqualTypeOf<'control_ack'>();
     expectTypeOf<SessionStateMessage['type']>().toEqualTypeOf<'session_state'>();
     expectTypeOf<WsErrorMessage['type']>().toEqualTypeOf<'error'>();
-    // 联合判别键：WsMessage['type'] 恰为上述 15 个枚举值（缺一即漏消息，多一即野消息）
+    // 联合判别键：既有 15 种消息 + 1.12 挖放双消息，继续封闭枚举。
     expectTypeOf<WsMessage['type']>().toEqualTypeOf<
       | 'player_impulse'
       | 'set_control'
       | 'load_anchor'
       | 'move_request'
+      | 'voxel_request'
+      | 'voxel_state'
       | 'sync_request'
       | 'full_snapshot'
       | 'state_delta'

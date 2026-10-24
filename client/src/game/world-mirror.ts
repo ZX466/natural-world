@@ -11,6 +11,8 @@ type Actor = components['schemas']['Actor'];
 type ActorDelta = components['schemas']['ActorDelta'];
 type Light = components['schemas']['Light'];
 type LightDelta = components['schemas']['LightDelta'];
+export type VoxelEdit = components['schemas']['VoxelEdit'];
+type VoxelState = components['schemas']['VoxelStateMessage'];
 export type RToken = string;
 
 export interface MirrorActor {
@@ -38,7 +40,7 @@ export interface MapStatic {
   w: number;
   h: number;
   tileset: string;
-  /** 碰撞层走 HTTP 一次性加载（codex 意见 5：静态资产≠状态流）。M0 mock 用布尔网格。 */
+  /** 碰撞层由 HTTP 快照加载，挖放增量就地更新；切分支后重新取图。 */
   collision: Uint8Array;
   /** M7-T6：地面 tile id 网格（u16，调色板值域）；mock 模式无此层（色块渲染回退）。 */
   ground?: Uint16Array;
@@ -48,6 +50,11 @@ export class WorldMirror {
   actors = new Map<RToken, MirrorActor>();
   lights = new Map<RToken, MirrorLight>();
   map: MapStatic | null = null;
+  voxelEdits = new Map<string, VoxelEdit>();
+  voxelDig: VoxelState['dig'] = null;
+  voxelSnapshotVersion = 0;
+  private baseCollision: Uint8Array | null = null;
+  private baseGround: Uint16Array | null = null;
   /** 主角 rtoken（M0 第一个 actor 即主角；M1 由协议显式指定） */
   protagonist: RToken | null = null;
   /** 重连计数（ws.ts 全量重置时递增，供 Phaser 侧清空精灵池） */
@@ -169,10 +176,76 @@ export class WorldMirror {
 
   setMap(map: MapStatic): void {
     this.map = map;
+    this.baseCollision = map.collision.slice();
+    this.baseGround = map.ground?.slice() ?? null;
+    this.reapplyVoxelEdits();
+  }
+
+  applyVoxelEdits(rows: readonly VoxelEdit[], replace = false): void {
+    if (replace) {
+      this.voxelEdits.clear();
+      this.voxelDig = null;
+      this.voxelSnapshotVersion += 1;
+      if (this.map !== null && this.baseCollision !== null)
+        this.map.collision.set(this.baseCollision);
+      if (this.map?.ground && this.baseGround) this.map.ground.set(this.baseGround);
+    }
+    for (const row of rows) {
+      if (
+        !row ||
+        !Number.isInteger(row.x) ||
+        !Number.isInteger(row.y) ||
+        row.x < 0 ||
+        row.y < 0 ||
+        (this.map !== null && (row.x >= this.map.w || row.y >= this.map.h)) ||
+        !Number.isInteger(row.gid) ||
+        row.gid < 0 ||
+        row.gid > 65535 ||
+        (row.action !== 'dig' && row.action !== 'place')
+      )
+        continue;
+      this.voxelEdits.set(`${row.x},${row.y}`, { ...row });
+    }
+    this.reapplyVoxelEdits();
+  }
+
+  reapplyVoxelEdits(): void {
+    const map = this.map;
+    if (map === null) return;
+    for (const row of this.voxelEdits.values()) {
+      if (row.x >= map.w || row.y >= map.h) continue;
+      const index = row.y * map.w + row.x;
+      // gid is the committed TILE_CHANGED truth, including structure restores.
+      map.collision[index] = row.gid === 0 ? 0 : 1;
+      if (map.ground) map.ground[index] = row.gid;
+    }
+  }
+
+  applyVoxelState(state: Pick<VoxelState, 'dig' | 'inventory'>): boolean {
+    const inventory = state.inventory,
+      dig = state.dig;
+    if (!inventory || !Number.isInteger(inventory.earth) || inventory.earth < 0) return false;
+    if (
+      dig !== null &&
+      (!dig ||
+        typeof dig !== 'object' ||
+        !Number.isInteger(dig.x) ||
+        !Number.isInteger(dig.y) ||
+        dig.x < 0 ||
+        dig.y < 0 ||
+        !Number.isFinite(dig.progress) ||
+        dig.progress < 0 ||
+        dig.progress > 1)
+    )
+      return false;
+    this.voxelDig = dig === null ? null : { ...dig };
+    this.reapplyVoxelEdits();
+    return true;
   }
 
   /** codex 意见 9：重连必须全量重置——增量漂移会把「不存在的实体」画给玩家。 */
   reset(): void {
+    this.applyVoxelEdits([], true);
     this.actors.clear();
     this.lights.clear();
     this.structures.clear(); // E7：重连重置结构投影（快照随后重灌全集）
