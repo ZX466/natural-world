@@ -216,11 +216,10 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 ## 6. 恢复序（新对话）
 
 1. **本卡**（0–6 节）
-2. `.orca/talking.txt`（当前波 + 留言板）
-3. `git log --oneline -15` + `git status`
-4. codex 树 `.orca/talking.txt` 的「回执区」
-5. **`.orca/status.md` 是 2026-10-21 的旧快照**（HEAD `076ed21`、vitest 138），只当历史看；
-   当前门禁以本卡 §2 为准
+2. `.orca/talking.txt`（当前波 + 在飞）
+3. `.orca/status.md`（质量门快照，2026-10-24 V3 收编后已刷新）
+4. `git log --oneline -15` + `git status`
+5. codex 树 `.orca/talking.txt` 的「回执区」
 
 ## 7. 项目长期分工
 
