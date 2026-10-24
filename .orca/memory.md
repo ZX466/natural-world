@@ -5,11 +5,11 @@
 > 只在本地存在**；换机器/新克隆时没有它，需要历史就查 git history（`git log -p -- .orca/memory.md`）。
 > 本文件只保留**当前有效**的部分。
 
-<!-- ===== 新对话快速恢复卡（2026-10-21 P 单收口）===== -->
+<!-- ===== 新对话快速恢复卡（2026-10-24 V3 收编验收后）===== -->
 
 ## 0. 本会话状态
 
-- **HEAD**：`e7f6543`（merge codex：V3 玩法对齐与收官）；V0 收口 `eb3a260`
+- **HEAD**：`8782a1a`（V3 收编验收，恢复卡刷新）；V3 merge `e7f6543`；V0 收口 `eb3a260`
 - **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`／DA-06 `ea42b13`／DA-07 `fd31113`／DA-08 `01d8142`（merge `bb57acf`）；**V1**（merge `9437cff`）；**V2**（merge `fb09a5b`）；**V3**（merge `e7f6543`，含 `b410e32` 图集管线 + `71cb448` 分层/玩法收官）
 - **在飞**：无。**V0–V3 全部收编验收**；V3.5/V4a/V4-3D 未派（规格 §8 明确不做，V4a 需用户拍板）
 - **V0 验收**：DESIGN v2.2 仅两处；规格/方案入库 `eb3a260`；双远程已推到 `67aa31b`
@@ -21,7 +21,7 @@
 - **工作树：两棵**（2026-10-21 用户重申，长期有效）
   - 主树 `E:/zxdevelop/project7` → 分支 `main`（Claude）
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex` → 分支 `codex`（HEAD 随其提交推进，收编前以实际 `git log` 为准）
-- **远程**：origin/gitee 停在 `67aa31b`；V1/V2/V3 merge 未推，`main` 领先 **12** 提交（按阶段推送，不随手推）
+- **远程**：origin/gitee 停在 `67aa31b`；V1/V2/V3 merge 与验收提交均未推，`main` 领先 **13** 提交（按阶段推送，不随手推）
 
 ## 1. 里程碑
 
@@ -80,7 +80,8 @@
 - **主树实测锚点**：tileset 2240×1600（140 列）；地图 140×100；ground 界内
   14000 格全覆盖、**无 gid=0**；63 个 16×16 chunk，边缘 padding 的 0 在界外；
   树冠主色是**粉色桃花**（不是只有深绿）。原图缩略图 `.orca/tmp/map-overview.png`。
-- **V1 派单**已写入 codex 树 `.orca/talking.txt`「当前任务」区（39 行精简版）。
+- **下一波**：V0–V3 已收官，**未派新单**。规格 §8 明确 V3.5/V4a/V4-3D 不在 V0-V3 范围内；
+  V4a（挖放）需用户先拍板「谁来挖」（默认建议：只陈默挖）。派单前不要动代码。
 
 ## 3. 缺口清单（codex 审计 8 组 + 主树 P0-3，**全部已修**）
 
@@ -187,11 +188,13 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 **前端/渲染类**
 - **`Phaser.Scene` 已有 `renderer` 字段**：WorldScene 把构造参数叫 `renderer` 会触发 TS2416
   （基类属性类型冲突）；V1 用 `renderMode` 规避。后续渲染策略沿用此名
-- **V1 高块纹理按 (h,采样色) 缓存 → 实测 7643 个 CanvasTexture**（约 60-80MB）。V1 可接受；
-  V3 图集管线必须替换，别在 V2 再加纹理维度
+- **V1 高块纹理按 (h,采样色) 缓存 → 实测 7643 个 CanvasTexture**（约 60-80MB）。
+  **已在 V3 修**：`BlockAtlas` 共享遮罩 + 逐格 tint，地形纹理固定 4（全页含人物/文字 96）。
+  教训：任何「按颜色 / 按高度」开 CanvasTexture 的写法都会线性膨胀，正确做法是固定小图集 + tint
 - **iso 深度池与 flat 深度带不兼容**：高块/实体深度 = `depthKey`（千~24 万），而名牌 71-89、
   雨层 99、夜幕 100 仍是 flat 带 → iso 下名牌会被建筑压住、夜色/雨不覆盖世界。
-  V3 处理名牌/气泡/天气时必须同步提层级，否则「定位对了但看不见」
+  **已在 V3 修**：`ISO_DEPTH` 常量集中定义（名牌 300000+/气泡 310000+/雨 400000/夜幕 400001），
+  flat 保留原带。**新增 iso 覆盖层时先查这个常量，别再手写 99/100 这类散落数字**
 
 **核查方法类**
 - **核库后再报**：小写 grep 会漏驼峰符号 → 查符号用 codegraph 或大小写不敏感
@@ -210,10 +213,11 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 ## 6. 恢复序（新对话）
 
 1. **本卡**（0–6 节）
-2. `.orca/talking.txt`（当前波 + 阻塞）
-3. `.orca/status.md`（质量门快照）
-4. `git log --oneline -15` + `git status`
-5. codex 树 `.orca/talking.txt` 的「回执区」
+2. `.orca/talking.txt`（当前波 + 留言板）
+3. `git log --oneline -15` + `git status`
+4. codex 树 `.orca/talking.txt` 的「回执区」
+5. **`.orca/status.md` 是 2026-10-21 的旧快照**（HEAD `076ed21`、vitest 138），只当历史看；
+   当前门禁以本卡 §2 为准
 
 ## 7. 项目长期分工
 
@@ -225,7 +229,7 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 
 - 后端：Python 3.12 + FastAPI + SQLite，`uv` 管理，事件溯源唯一写路径（30 类事件，`extra=forbid`）
 - 前端：React 19 + Phaser 3 + Vite + Zustand + Vitest
-- 测试：pytest（3080 条收集，`-m "not bench"` 选中 3008）+ vitest（149 条）
+- 测试：pytest（3080 条收集，`-m "not bench"` 选中 3008）+ vitest（195 条 / 33 文件，V3 后）
 - 文档：`DESIGN.md`（v2.2 冻结）+ `docs/`（含 voxel 规格与方案）
 
 ---
