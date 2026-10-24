@@ -22,7 +22,8 @@
 - **工作树：两棵**（2026-10-21 用户重申，长期有效）
   - 主树 `E:/zxdevelop/project7` → 分支 `main`（Claude）
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex` → 分支 `codex`（HEAD 随其提交推进，收编前以实际 `git log` 为准）
-- **远程**：origin/gitee 停在 `67aa31b`；V1/V2/V3 merge 与验收提交均未推，`main` 领先 **13** 提交（按阶段推送，不随手推）
+- **远程**：origin/gitee 停在 `67aa31b`；V1/V2/V3 merge 与后续 docs 提交均未推，
+  `main` 领先 **15** 提交（按阶段推送，不随手推；准确数以 `git rev-list --count` 现测为准）
 
 ## 1. 里程碑
 
