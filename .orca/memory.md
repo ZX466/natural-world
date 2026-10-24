@@ -9,9 +9,9 @@
 
 ## 0. 本会话状态
 
-- **代码 HEAD**：`e7f6543`（merge codex：V3 玩法对齐与收官）；其后 docs 提交，最新 `6a1d6bb`（V4a 收编）；
+- **代码 HEAD**：`e7f6543`（merge codex：V3 玩法对齐与收官）；最新 `4c8e2fd`（merge codex：V4a 挖放）；
   V0 收口 `eb3a260`
-- **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`／DA-06 `ea42b13`／DA-07 `fd31113`／DA-08 `01d8142`（merge `bb57acf`）；**V1**（merge `9437cff`）；**V2**（merge `fb09a5b`）；**V3**（merge `e7f6543`，含 `b410e32` 图集管线 + `71cb448` 分层/玩法收官）；**V4a**（merge `6a1d6bb`，含 `6e890e6` sim/协议 + `2eed719` 前端）
+- **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`／DA-06 `ea42b13`／DA-07 `fd31113`／DA-08 `01d8142`（merge `bb57acf`）；**V1**（merge `9437cff`）；**V2**（merge `fb09a5b`）；**V3**（merge `e7f6543`，含 `b410e32` 图集管线 + `71cb448` 分层/玩法收官）；**V4a**（merge `4c8e2fd`，含 `6e890e6` sim/协议 + `2eed719` 前端）
 - **在飞**：无。codex 树已收工（HEAD `2eed719`），等下一单派发。
 - **未派**：V3.5 内容包 / V4-3D / V4b（材料分类等）
 - **V0 验收**：DESIGN v2.2 仅两处；规格/方案入库 `eb3a260`；双远程已推到 `67aa31b`
@@ -95,7 +95,7 @@
 ## 2.6 V4a 挖放（2026-10-24 派单 → 已收编验收）
 
 - **用户拍板**：V4a 做、**只陈默挖放**（NPC 不参与）；口径按 Minecraft。
-- **状态**：codex 交付 `6e890e6`（sim/协议）+ `2eed719`（前端），主树 merge `6a1d6bb`，**独立复跑全绿**。
+- **状态**：codex 交付 `6e890e6`（sim/协议）+ `2eed719`（前端），主树 merge `4c8e2fd`，**独立复跑全绿**。
   派单原文仍在 codex 树 `.orca/talking.txt`「当前任务」节，回执在该文件回执区末三行。
 - **主树核实的关键事实**（codegraph 实测，写进了派单，勿再重查）：
   - 输入链路 `handle_client_message`(ws.py:804) → `_ALLOWED_CLIENT_TYPES`:75 与 `_CHANNEL_FOR` **成对**注册
