@@ -51,6 +51,7 @@ from sim.core.events import (
     StructureRemovedPayload,
     StructureStartedPayload,
     TileChangedPayload,
+    VoxelEditedPayload,
     WorldCreatePayload,
 )
 from sim.npc.actions import is_action_allowed, payload_keys_allowed
@@ -67,6 +68,7 @@ PAYLOAD_MODELS: dict[EventKind, type[BaseModel]] = {
     EventKind.COMBAT_SCALE_CHANGE: CombatScaleChangePayload,
     EventKind.ENTROPY_INJECT: EntropyInjectPayload,
     EventKind.TILE_CHANGED: TileChangedPayload,
+    EventKind.VOXEL_EDITED: VoxelEditedPayload,
     EventKind.NPC_LOD_CHANGE: NpcLodChangePayload,
     EventKind.NPC_ACT: NpcActPayload,
     EventKind.MATTER_DECAY: MatterPayload,

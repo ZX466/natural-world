@@ -269,6 +269,8 @@ class TestLoadHookBoundedReturn:
             ws.receive_json()  # session_state
             ws.send_json({"type": "hello", "channel": "session", "token": ws_mod.ws_auth_token()})
             assert ws.receive_json()["type"] == "hello_ack"
+            inventory = ws.receive_json()  # 1.12 鉴权后新增行囊帧，不是读档回执。
+            assert inventory["type"] == "voxel_state" and inventory["inventory"]["earth"] >= 0
             ws.send_json({"type": "load_anchor", "channel": "session", "anchor_id": anchor["id"]})
             reply = ws.receive_json()
         elapsed = _t.perf_counter() - t0

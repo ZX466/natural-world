@@ -508,7 +508,71 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
 }
 
 #: type 判别值（与各成员 enum 严格一致——手写表，测试锁死）。
+_VOXEL_POSITION = {"type": "integer", "minimum": 0}
+_SUB_SCHEMAS.update(
+    {
+        "VoxelEdit": {
+            "type": "object",
+            "required": ["x", "y", "action", "gid"],
+            "properties": {
+                "x": dict(_VOXEL_POSITION),
+                "y": dict(_VOXEL_POSITION),
+                "action": {"type": "string", "enum": ["dig", "place"]},
+                "gid": {"type": "integer", "minimum": 0, "maximum": 65535},
+            },
+            "additionalProperties": False,
+        },
+        "VoxelDig": {
+            "type": "object",
+            "required": ["x", "y", "progress"],
+            "properties": {
+                "x": dict(_VOXEL_POSITION),
+                "y": dict(_VOXEL_POSITION),
+                "progress": {"type": "number", "minimum": 0, "maximum": 1},
+            },
+            "additionalProperties": False,
+        },
+        "VoxelInventory": {
+            "type": "object",
+            "required": ["earth"],
+            "properties": {"earth": {"type": "integer", "minimum": 0}},
+            "additionalProperties": False,
+        },
+    }
+)
+_WS_SCHEMAS.update(
+    {
+        "VoxelRequestMessage": _envelope(
+            "render",
+            "voxel_request",
+            {
+                "action": {"type": "string", "enum": ["dig_start", "dig_cancel", "place"]},
+                "x": dict(_VOXEL_POSITION),
+                "y": dict(_VOXEL_POSITION),
+            },
+            ["action", "x", "y"],
+        ),
+        "VoxelStateMessage": _envelope(
+            "render",
+            "voxel_state",
+            {
+                "dig": _oneof_null({"$ref": "#/components/schemas/VoxelDig"}),
+                "inventory": {"$ref": "#/components/schemas/VoxelInventory"},
+            },
+            ["dig", "inventory"],
+        ),
+    }
+)
+for _snapshot_name in ("FullSnapshotMessage", "StateDeltaMessage"):
+    _WS_SCHEMAS[_snapshot_name]["properties"]["voxel_edits"] = {
+        "type": "array",
+        "items": {"$ref": "#/components/schemas/VoxelEdit"},
+    }
+
+
 _TYPE_OF: dict[str, str] = {
+    "VoxelRequestMessage": "voxel_request",
+    "VoxelStateMessage": "voxel_state",
     "PlayerImpulseMessage": "player_impulse",
     "SetControlMessage": "set_control",
     "LoadAnchorMessage": "load_anchor",

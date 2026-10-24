@@ -323,6 +323,7 @@ export type components = {
        */
       readonly type: 'full_snapshot';
       readonly v: string;
+      readonly voxel_edits?: readonly components['schemas']['VoxelEdit'][];
       readonly weather: components['schemas']['Weather'];
       readonly ws_seq: number;
     };
@@ -586,6 +587,7 @@ export type components = {
        */
       readonly type: 'state_delta';
       readonly v: string;
+      readonly voxel_edits?: readonly components['schemas']['VoxelEdit'][];
       readonly weather?: components['schemas']['Weather'];
       readonly ws_seq: number;
     };
@@ -656,6 +658,49 @@ export type components = {
       readonly v: string;
       readonly ws_seq: number;
     };
+    readonly VoxelDig: {
+      readonly progress: number;
+      readonly x: number;
+      readonly y: number;
+    };
+    readonly VoxelEdit: {
+      /** @enum {string} */
+      readonly action: 'dig' | 'place';
+      readonly gid: number;
+      readonly x: number;
+      readonly y: number;
+    };
+    readonly VoxelInventory: {
+      readonly earth: number;
+    };
+    readonly VoxelRequestMessage: {
+      /** @enum {string} */
+      readonly action: 'dig_start' | 'dig_cancel' | 'place';
+      /** @enum {string} */
+      readonly channel: 'render';
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      readonly type: 'voxel_request';
+      readonly v: string;
+      readonly ws_seq: number;
+      readonly x: number;
+      readonly y: number;
+    };
+    readonly VoxelStateMessage: {
+      /** @enum {string} */
+      readonly channel: 'render';
+      readonly dig: components['schemas']['VoxelDig'] | null;
+      readonly inventory: components['schemas']['VoxelInventory'];
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      readonly type: 'voxel_state';
+      readonly v: string;
+      readonly ws_seq: number;
+    };
     readonly Weather: {
       readonly ambient_light: number;
       readonly visual: string;
@@ -708,7 +753,9 @@ export type components = {
       | components['schemas']['TimescaleMessage']
       | components['schemas']['ControlAckMessage']
       | components['schemas']['SessionStateMessage']
-      | components['schemas']['WsErrorMessage'];
+      | components['schemas']['WsErrorMessage']
+      | components['schemas']['VoxelRequestMessage']
+      | components['schemas']['VoxelStateMessage'];
     /** @description 本机 WS 握手凭据；只经 HTTP 返回，不写入世界或持久化。 */
     readonly WsTokenResponse: {
       readonly token: string;

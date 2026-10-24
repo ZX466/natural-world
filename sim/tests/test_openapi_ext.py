@@ -15,12 +15,14 @@ import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
-#: 14 成员（type 判别值 → schema 名）；hello/hello_ack 故意不进（W6 安全裁决）。
+#: 17 成员（含 1.12 挖放双消息）；hello/hello_ack 故意不进（W6 安全裁决）。
 EXPECTED_MEMBERS: dict[str, str] = {
     "player_impulse": "PlayerImpulseMessage",
     "set_control": "SetControlMessage",
     "load_anchor": "LoadAnchorMessage",
     "move_request": "MoveRequestMessage",
+    "voxel_request": "VoxelRequestMessage",
+    "voxel_state": "VoxelStateMessage",
     "sync_request": "SyncRequestMessage",
     "full_snapshot": "FullSnapshotMessage",
     "state_delta": "StateDeltaMessage",

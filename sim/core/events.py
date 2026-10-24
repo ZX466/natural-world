@@ -85,6 +85,7 @@ class EventKind(StrEnum):
     # 主角终态：失能与恢复是内部状态事实，普通 NPC 仍走 NPC_DEATH。
     AGENT_INCAPACITATED = "agent.incapacitated"
     AGENT_RECOVERED = "agent.recovered"
+    VOXEL_EDITED = "voxel.edited"
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +151,19 @@ class TileChangedPayload(BaseModel):
     x: int
     y: int
     tile_id: int
+
+
+class VoxelEditedPayload(BaseModel):
+    """V4a completed edit; inventory UI and progress never enter the event log."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    x: int = Field(ge=0, strict=True)
+    y: int = Field(ge=0, strict=True)
+    action: Literal["dig", "place"]
+    material_id: Literal["earth"] = "earth"
+    quantity: int = Field(default=1, ge=1, le=1, strict=True)
+    by: Literal["chenmo"] = "chenmo"
 
 
 class NpcLodChangePayload(BaseModel):
@@ -310,6 +324,8 @@ MaterialMoveReason = Literal[
     "build_refunded",
     "demolish_yield",
     "burned",
+    "dig_yield",
+    "place_consumed",
 ]
 
 #: 火灾熄灭的**物理终止态**（K12 §1.3 逐字；`doused` 只表示「火灭了」，**不记谁灭的**）。
@@ -689,6 +705,19 @@ def tile_changed_event(
 
 
 # ---- M2 工厂（m2-npc-cognition §1.2/§2.1/§4.1）----
+
+
+def voxel_edited_event(
+    tick: int, *, x: int, y: int, action: Literal["dig", "place"], branch_id: str = "main"
+) -> WorldEvent:
+    payload = VoxelEditedPayload(x=x, y=y, action=action)
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.VOXEL_EDITED,
+        actor_id="chenmo",
+        payload=payload.model_dump(mode="json"),
+    )
 
 
 def npc_lod_change_event(

@@ -4,7 +4,7 @@
 > 玩家不控制他，只是他的「直觉」：偶尔让某个念头在他脑中冒出来。
 > 世界不可预测、不可控、不可预定。
 
-[![tests](https://img.shields.io/badge/tests-2752%20passed-green)]() [![ruff](https://img.shields.io/badge/ruff-clean-green)]() [![pyright](https://img.shields.io/badge/pyright-0%20new%20errors-green)]() [![protocol](https://img.shields.io/badge/protocol-1.11-blue)]()
+[![tests](https://img.shields.io/badge/tests-2752%20passed-green)]() [![ruff](https://img.shields.io/badge/ruff-clean-green)]() [![pyright](https://img.shields.io/badge/pyright-0%20new%20errors-green)]() [![protocol](https://img.shields.io/badge/protocol-1.12-blue)]()
 
 设计基线见 [DESIGN.md](DESIGN.md)（v2.1 冻结）；本 README 是**运行与开发入口**，设计细节以 DESIGN 与 `docs/` 为准。
 

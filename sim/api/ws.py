@@ -43,13 +43,34 @@ import time
 from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import structlog
 from fastapi import WebSocket
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from sim.agent.impulse_gate import impulse_gate
+from sim.agent.voxel_exec import VoxelRejected, VoxelRuntime
 from sim.api.outbound_guard import record_outbound_leak, strip_outbound_forbidden
+from sim.api.voxel_view import (
+    _VOXEL_EDITS as _VOXEL_EDITS,
+)
+from sim.api.voxel_view import (
+    apply_voxel_events as apply_voxel_events,
+)
+from sim.api.voxel_view import (
+    reset_voxel_edits as reset_voxel_edits,
+)
+from sim.api.voxel_view import (
+    restore_voxel_edits as restore_voxel_edits,
+)
+from sim.api.voxel_view import (
+    set_voxel_edit as set_voxel_edit,
+)
+from sim.api.voxel_view import (
+    voxel_delta_rows,
+    voxel_snapshot_rows,
+)
 from sim.core.calendar import TICKS_PER_GAME_HOUR, game_time
 from sim.core.clock import MAX_CATCHUP_REAL_SECONDS
 from sim.core.events import EventKind, WorldEvent
@@ -67,12 +88,34 @@ logger = structlog.get_logger(__name__)
 #: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
 #: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
 #: PlanDelta 封闭）；1.2 = 批次 E 只读诊断面进协议快照（M6-K2）——登记见 versioning.md §7。
-_PROTOCOL_VERSION = "1.11"
+_PROTOCOL_VERSION = "1.12"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
+_VOXEL_RUNTIME: VoxelRuntime | None = None
+
+
+def set_voxel_runtime(runtime: VoxelRuntime | None) -> None:
+    global _VOXEL_RUNTIME
+    _VOXEL_RUNTIME = runtime
+
+
+def voxel_state_payload(state: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    if state is None:
+        if _VOXEL_RUNTIME is None:
+            return None
+        state = _VOXEL_RUNTIME.snapshot()
+    return {
+        "type": "voxel_state",
+        "channel": "render",
+        "v": _PROTOCOL_VERSION,
+        "ws_seq": 0,
+        **state,
+    }
+
 
 # K4 提案 §2.2/§3.2：五类 C→S 消息在此与 _CHANNEL_FOR **成对**注册
 # （落单会让 ws.py 的 channel 校验回 bad_channel——§7 #18 有配对钉子）。
 _ALLOWED_CLIENT_TYPES = {
+    "voxel_request",
     "move_request",
     "set_control",
     "sync_request",
@@ -352,6 +395,7 @@ class ConnectionManager:
         self._subscribers: dict[WebSocket, str] = {}
         #: 每连接控制会话态（M5-K3 / D-3 G-4：连接级，连接断开即丢）。
         self._controls: dict[WebSocket, ControlState] = {}
+        self._authenticated: set[WebSocket] = set()
 
     def register(
         self, ws: WebSocket, subscriber_id: str | None = None, control: ControlState | None = None
@@ -370,7 +414,29 @@ class ConnectionManager:
             self._connections.remove(ws)
         self._subscribers.pop(ws, None)
         # 控制态随连接丢弃（断线重连=新连接新状态；暂停不跨连接延续）
-        self._controls.pop(ws, None)
+        owner = self._controls.pop(ws, None)
+        self._authenticated.discard(ws)
+        if owner is not None and _VOXEL_RUNTIME is not None:
+            _VOXEL_RUNTIME.cancel(owner)
+
+    def mark_authenticated(self, ws: WebSocket, authenticated: bool = True) -> None:
+        if authenticated:
+            self._authenticated.add(ws)
+        else:
+            self._authenticated.discard(ws)
+
+    async def broadcast_voxel_json(self, payload: dict[str, Any]) -> None:
+        await self._send_to([ws for ws in self._connections if ws in self._authenticated], payload)
+
+    async def send_to_control(self, owner: object, payload: dict[str, Any]) -> None:
+        await self._send_to(
+            [
+                ws
+                for ws in self._connections
+                if self._controls.get(ws) is owner and ws in self._authenticated
+            ],
+            payload,
+        )
 
     @property
     def count(self) -> int:
@@ -481,12 +547,14 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
             actor["name"] = name
         actors.append(actor)
     actors.extend(_fauna_actor_rows(loop, tile_map))
+    voxel_edits = voxel_snapshot_rows()
     return {
         "type": "full_snapshot",
         "channel": "render",
         "v": _PROTOCOL_VERSION,
         "ws_seq": 0,
         "actors": actors,
+        **({"voxel_edits": voxel_edits} if voxel_edits else {}),
         "lights": [],
         "structures": _structures_snapshot_payload(),  # E7：真实投影（空账本=空数组，同旧形）
         "map": {
@@ -676,6 +744,9 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
     structures_delta = _structures_delta_rows()
     if structures_delta:
         payload["structures"] = structures_delta
+    edits = voxel_delta_rows()
+    if edits:
+        payload["voxel_edits"] = edits
     return payload
 
 
@@ -801,6 +872,76 @@ def _tileset_name(tile_map: TileMap) -> str:
     return "zelda_like_v1" if (tile_map.width, tile_map.height) == (96, 96) else "grid"
 
 
+class VoxelRequestFields(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    action: Literal["dig_start", "dig_cancel", "place"]
+    x: int = Field(strict=True, ge=0)
+    y: int = Field(strict=True, ge=0)
+
+
+def _voxel_bad_target(reason: object) -> dict[str, Any]:
+    # Outbound text comes only from this literal set, never an arbitrary exception.
+    if reason == "离得太远，够不着那里。":
+        return _error_frame("voxel_request", _ERROR_BAD_TARGET, "离得太远，够不着那里。")
+    if reason == "行囊里没有土了。":
+        return _error_frame("voxel_request", _ERROR_BAD_TARGET, "行囊里没有土了。")
+    if reason == "水面上动不了土。":
+        return _error_frame("voxel_request", _ERROR_BAD_TARGET, "水面上动不了土。")
+    if reason == "这里已有屋舍，不能动土。":
+        return _error_frame("voxel_request", _ERROR_BAD_TARGET, "这里已有屋舍，不能动土。")
+    if reason == "此刻手上使不上劲。":
+        return _error_frame("voxel_request", _ERROR_BAD_TARGET, "此刻手上使不上劲。")
+    if reason == "这块地方不用再动了。":
+        return _error_frame("voxel_request", _ERROR_BAD_TARGET, "这块地方不用再动了。")
+    if reason == "这块地方刚动过，稍等一等。":
+        return _error_frame("voxel_request", _ERROR_BAD_TARGET, "这块地方刚动过，稍等一等。")
+    return _error_frame("voxel_request", _ERROR_BAD_TARGET, "这处地方动不了土。")
+
+
+def _handle_voxel_request(raw: dict[str, Any], loop: TickLoop, owner: ControlState) -> Any:
+    if _VOXEL_RUNTIME is None:
+        return _error_frame("voxel_request", _ERROR_BAD_TARGET, "此刻动不了土。")
+    try:
+        request = VoxelRequestFields.model_validate(
+            {
+                key: value
+                for key, value in raw.items()
+                if key not in {"v", "ws_seq", "type", "channel"}
+            }
+        )
+        events = _VOXEL_RUNTIME.request(
+            request.action, request.x, request.y, loop.state, owner=owner
+        )
+        for event in events:
+            loop.enqueue(event)
+    except (ValidationError, VoxelRejected) as exc:
+        state = voxel_state_payload()
+        return [
+            _voxel_bad_target(str(exc) if isinstance(exc, VoxelRejected) else None),
+            *([state] if state is not None else []),
+        ]
+    return None
+
+
+async def flush_voxel_updates(manager: ConnectionManager, *, ws_seq: int = 0) -> int:
+    if _VOXEL_RUNTIME is None:
+        return ws_seq
+    for owner, update in _VOXEL_RUNTIME.drain_updates():
+        if "error" in update:
+            payload = _voxel_bad_target(update["error"])
+        else:
+            payload = voxel_state_payload(update)
+        if payload is None:
+            continue
+        ws_seq += 1
+        payload["ws_seq"] = ws_seq
+        if owner is None:
+            await manager.broadcast_voxel_json(payload)
+        else:
+            await manager.send_to_control(owner, payload)
+    return ws_seq
+
+
 def handle_client_message(
     raw: dict[str, Any], loop: TickLoop, pf: Pathfinder, control: ControlState | None = None
 ) -> dict[str, Any] | list[dict[str, Any]] | None:
@@ -823,6 +964,8 @@ def handle_client_message(
         return _error_frame(str(msg_type), _ERROR_BAD_CHANNEL, "channel mismatch")
 
     ctrl = control if control is not None else _LEGACY_CONTROL
+    if msg_type == "voxel_request":
+        return _handle_voxel_request(raw, loop, ctrl)
     if msg_type == "move_request":
         return _handle_move_request(raw, loop, pf)
     if msg_type == "hello":
@@ -1335,6 +1478,7 @@ def fork_notice(anchor_name: str) -> str:
 
 
 _CHANNEL_FOR = {
+    "voxel_request": "render",
     "move_request": "render",
     "set_control": "control",
     "sync_request": "session",
@@ -1454,13 +1598,16 @@ async def run_world_driver(
             payload["ws_seq"] = seq
             await manager.broadcast_json(payload)
             loop.drain_delta()
-        if moved or (
-            loop.fauna_enabled and any(e.event_type is EventKind.FAUNA_TICK for e in events)
+        if (
+            moved
+            or (loop.fauna_enabled and any(e.event_type is EventKind.FAUNA_TICK for e in events))
+            or any(e.event_type is EventKind.TILE_CHANGED for e in events)
         ):
             seq += 1
             payload = delta_payload(loop, moved)
             payload["ws_seq"] = seq
             await manager.broadcast_json(payload)
+        seq = await flush_voxel_updates(manager, ws_seq=seq)
         for event in events:
             if event.event_type is EventKind.COMBAT_SCALE_CHANGE:
                 active = bool(event.payload["entering"])
