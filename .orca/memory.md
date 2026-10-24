@@ -5,14 +5,17 @@
 > 只在本地存在**；换机器/新克隆时没有它，需要历史就查 git history（`git log -p -- .orca/memory.md`）。
 > 本文件只保留**当前有效**的部分。
 
-<!-- ===== 新对话快速恢复卡（2026-10-24 V3 收编验收后）===== -->
+<!-- ===== 新对话快速恢复卡（2026-10-24 V4a 派单后）===== -->
 
 ## 0. 本会话状态
 
-- **代码 HEAD**：`e7f6543`（merge codex：V3 玩法对齐与收官）；其后仅 docs 提交（本卡）；
+- **代码 HEAD**：`e7f6543`（merge codex：V3 玩法对齐与收官）；其后仅 docs 提交，最新 `3cdff1d`（架构报告归档）；
   V0 收口 `eb3a260`
 - **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`／DA-06 `ea42b13`／DA-07 `fd31113`／DA-08 `01d8142`（merge `bb57acf`）；**V1**（merge `9437cff`）；**V2**（merge `fb09a5b`）；**V3**（merge `e7f6543`，含 `b410e32` 图集管线 + `71cb448` 分层/玩法收官）
-- **在飞**：无。**V0–V3 全部收编验收**；V3.5/V4a/V4-3D 未派（规格 §8 明确不做，V4a 需用户拍板）
+- **在飞**：**V4a 挖放已派 codex（2026-10-24）**，派单在其树 `.orca/talking.txt`「当前任务」节。
+  用户已拍板「**只陈默挖放**」。派单后 codex 侧**尚无动工回执**（HEAD 仍 `71cb448`、工作区干净）——
+  新对话接手先查那边 `git log` + 回执区，不要假定已开工。
+- **未派**：V3.5 内容包 / V4-3D / V4b（材料分类等）
 - **V0 验收**：DESIGN v2.2 仅两处；规格/方案入库 `eb3a260`；双远程已推到 `67aa31b`
 - **V1 验收**：高度表 `--check` 逐字节一致；主树叠图肉眼抽查通过；独立 Chromium 复跑 flat/iso 零 JS 异常（见 §2.5）
 - **V2 验收**：真实 lifespan 33 帧/54 actors 复跑；Chromium 遮挡像素差 **behind=0 / after=2860**；结构池 4 块+1 rubble、无 structureLayer（见 §2.5）
@@ -56,8 +59,10 @@
 
 - **规格**：`docs/arch/voxel-execution-spec.md`（唯一权威；§0 A1-A19 为实测锚点）；
   方案/理由 `docs/arch/voxel-transition-plan.md`（§11 终审修正）。冲突以规格为准。
-- **范围**：仅 V0-V3；V3.5/V4a/V4-3D 不在本单。**sim 内核零改动**，只动
+- **范围**：仅 V0-V3；V3.5/V4a/V4-3D 不在本单（**V4a 已于 2026-10-24 另行派单，见 §2.6**）。
+  V0-V3 **sim 内核零改动**，只动
   `client/src/game/**`、`client/public/assets/tilesets/**`、`sim/content/**`。
+  （V4a **会**动 sim 与协议——这是转向方案里「V4 才动 sim」的兑现点，属预期。）
 - **V0（主树，已完成）**：DESIGN v2.2 仅两处；两文档入库 `eb3a260`；双远程推送完成。
 - **V1（已收编 `9437cff`）**：`iso.ts` 纯函数（14000 格可逆/菱形边界/depthKey 全序/注入式
   高度表）+ `build_height_map.py`（固定 HSV 阈值、`--check` 逐字节一致）+
@@ -83,8 +88,38 @@
 - **主树实测锚点**：tileset 2240×1600（140 列）；地图 140×100；ground 界内
   14000 格全覆盖、**无 gid=0**；63 个 16×16 chunk，边缘 padding 的 0 在界外；
   树冠主色是**粉色桃花**（不是只有深绿）。原图缩略图 `.orca/tmp/map-overview.png`。
-- **下一波**：V0–V3 已收官，**未派新单**。规格 §8 明确 V3.5/V4a/V4-3D 不在 V0-V3 范围内；
-  V4a（挖放）需用户先拍板「谁来挖」（默认建议：只陈默挖）。派单前不要动代码。
+- **下一波**：**V4a 挖放已派 codex（2026-10-24）**，详见 §2.6；V3.5 / V4-3D / V4b 未派。
+
+## 2.6 V4a 挖放派单（2026-10-24，待 codex 接单）
+
+- **用户拍板**：V4a 做、**只陈默挖放**（NPC 不参与）；口径按 Minecraft。
+- **派单位置**：codex 树 `.orca/talking.txt`「当前任务：V4a 挖放（单）」节（主树 talking.txt 已记状态）。
+  **未启动 codex 终端**（用户明示：只走 talking.txt）。派单后 codex 无回执、未提交。
+- **主树核实的关键事实**（codegraph 实测，写进了派单，勿再重查）：
+  - 输入链路 `handle_client_message`(ws.py:804) → `_ALLOWED_CLIENT_TYPES`:75 与 `_CHANNEL_FOR` **成对**注册
+    → `_handle_move_request`:874 → `issue_move`(tick.py:292) → `move_event`(events.py:630)。
+  - 碰撞 **1=可走**；`with_collision`(map.py:92) 不可变替换 + 标脏；`observe_map`(pathfinding.py:119) 换图清缓存。
+  - 读档**免费**：`rebuild_tile_map`(main.py:95) 重放全部 `tile_changed`（`walkable = tile_id != 0`）；
+    `event_tile_position`(pathfinding.py:30) 已把 TILE_CHANGED 当定位事件标脏。
+  - **前端零处消费 `tile_changed`**；`delta_payload`(ws.py:629) 无瓦片字段 ⇒ 挖了看不见，这是本单第一断链。
+  - `MaterialMoveReason`(events.py:307) 恰 5 值；`material_move` 17 个调用点全在 fire.py；
+    `world:*` 允净负、**npc/structure 非负 fail-closed**。
+  - 渲染：`effectiveHeight`(iso.ts:52) 只认「结构 + 静态高度表」，`linhe-height.json` 是**颜色近似、非碰撞真相**；
+    `IsoTerrain` 按 `lastGround`/`surfaceSignature` 缓存 ⇒ **只改 collision 画面零变化**。
+  - 协议 1.11；`shared/openapi.json` 是唯一真相源；改协议须 ws.py + ws.ts + openapi.json + `gen:protocol:check` 同提交。
+- **派单核心裁决**（codex 若偏离，收编时按此复核）：
+  1. `VOXEL_EDITED` 事件承担语义/审计，**同时必须发既有 `TILE_CHANGED`**（禁开第二条还原路径）。
+  2. 本单**只有一种材料 `earth`**；`MaterialMoveReason` 增 `dig_yield`/`place_consumed`；材料分类留 V4b。
+  3. `DIG_TICKS = 30`（1x 下 0.5s），挖的进度由 **sim 持有**（确定性），客户端只发起手/松手。
+  4. 协议升 **1.12**：C→S `voxel_request`、S→C `voxel_state`、快照与增量各加可选 `voxel_edits`。
+  5. 进程内 `_VOXEL_EDITS` 账本（仿 `restore_structures`），读档/重连供全量，**不每帧查库**。
+  6. 距离曼哈顿 ≤4，起手与完成各校验一次；拒绝走 `error{code:"bad_target"}` + 戏内文案，不落库。
+  7. 左键**短按仍走 `move_request`**（现有 vitest 必须绿）；按住 ≥150ms 才挖；右键 must `preventDefault`。
+  8. `effectiveHeight` 增 edits 参、`surfaceSignature` 并入 edits（否则挖完不重绘）；平铺渲染不受影响。
+  9. 行囊 chip 只取 `voxel_state.inventory`，**不得进 prompt/世界事件**（C3）。
+  10. 图集与高度表 `--check` 必须仍 byte-identical（本单不开美术管线）。
+- **基准偏差**：派单写 `3cdff1d`，codex 分支停在 `71cb448`（差 3 个 docs 提交，不影响代码）。
+  按纪律他不 merge main ⇒ 以其 HEAD 开工，收编时主树自然合得上。
 
 ## 3. 缺口清单（codex 审计 8 组 + 主树 P0-3，**全部已修**）
 
@@ -191,6 +226,9 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 **前端/渲染类**
 - **`Phaser.Scene` 已有 `renderer` 字段**：WorldScene 把构造参数叫 `renderer` 会触发 TS2416
   （基类属性类型冲突）；V1 用 `renderMode` 规避。后续渲染策略沿用此名
+- **别把 `linhe-height.json` 当碰撞真相**：它是 `build_height_map.py` 按固定 HSV 阈值从像素
+  推出的**视觉近似**（文件头自述 "not collision or semantic truth"），h 只喂渲染抬升。
+  碰撞真相只有 `TileMap.collision`。V4a 挖放改的是后者，改高度表属于另一件事
 - **V1 高块纹理按 (h,采样色) 缓存 → 实测 7643 个 CanvasTexture**（约 60-80MB）。
   **已在 V3 修**：`BlockAtlas` 共享遮罩 + 逐格 tint，地形纹理固定 4（全页含人物/文字 96）。
   教训：任何「按颜色 / 按高度」开 CanvasTexture 的写法都会线性膨胀，正确做法是固定小图集 + tint
@@ -205,6 +243,13 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 - **探针现测**：不引用他人读数
 - **skip 分型**：逐条读原始 SKIPPED 行
 - **汇报前先核库**：git log + Test-Path，此前有过虚构汇报的教训
+- **查代码优先 `codegraph_explore`**（2026-10-24 用户指正）：一次调用返回**逐行源码 +
+  调用路径 + 影响面**，等价于 Read，不必再 grep 复核。本会话反例：查 V4a 派单背景时
+  用几十次串行 grep/sed，同一批事实读了两三遍，耗时远超必要；换 codegraph 后 6 次调用
+  覆盖全部面（输入链路/瓦片/材料/渲染/协议）。**约束：查符号、追调用链、看影响面先用它；
+  仅在它没覆盖处（配置、文档、生成物）才回退到 Read/Grep**
+- **止损点要提前定**：核实类工作先写「我要答哪 3–5 个问题」，答完立即产出，不要
+  「查一项冒两项」无限扩。派别人做的活按**最低可派标准**核实，不必按自己实现的标准勘察
 
 **协作类**
 - **两棵树是常态**：主树 `main` + codex 树 `codex`，不要再按「唯一树」记（2026-10-21 用户重申）
@@ -217,11 +262,15 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 
 ## 6. 恢复序（新对话）
 
-1. **本卡**（0–6 节）
+1. **本卡**（0–6 节）；**§2.6 是 V4a 派单的完整裁决**，接手 V4a 必读
 2. `.orca/talking.txt`（当前波 + 在飞）
 3. `.orca/status.md`（质量门快照，2026-10-24 V3 收编后已刷新）
-4. `git log --oneline -15` + `git status`
-5. codex 树 `.orca/talking.txt` 的「回执区」
+4. `git log --oneline -15` + `git status`（主树）；**codex 树同做一遍**——派单后他可能已开工
+5. codex 树 `.orca/talking.txt`：先看「当前任务」是否还是我写的那一版（他开工后可能补注），
+   再看「回执区」末尾几行
+
+> 会话交接常识：`.orca/` 被 `.gitignore:68`（`.*/`）忽略，**不会随 git 走**；
+> 换机器/新克隆需要靠 `git log -p -- .orca/memory.md` 或本机归档目录。
 
 ## 7. 项目长期分工
 
