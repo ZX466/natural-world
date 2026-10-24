@@ -9,7 +9,7 @@
 
 ## 0. 本会话状态
 
-- **代码 HEAD**：`e7f6543`（merge codex：V3 玩法对齐与收官）；其后仅 docs 提交，最新 `3cdff1d`（架构报告归档）；
+- **代码 HEAD**：`e7f6543`（merge codex：V3 玩法对齐与收官）；其后仅 docs 提交，最新 `684eef9`（记忆刷新）；
   V0 收口 `eb3a260`
 - **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`／DA-06 `ea42b13`／DA-07 `fd31113`／DA-08 `01d8142`（merge `bb57acf`）；**V1**（merge `9437cff`）；**V2**（merge `fb09a5b`）；**V3**（merge `e7f6543`，含 `b410e32` 图集管线 + `71cb448` 分层/玩法收官）
 - **在飞**：**V4a 挖放已派 codex（2026-10-24）**，派单在其树 `.orca/talking.txt`「当前任务」节。
@@ -307,47 +307,35 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 
 **无本地归档时**：`git log -p -- .orca/memory.md` 可取回任一历史版本。
 
+其他本地归档（同样 gitignored）：
+
+| 目录/文件 | 内容 |
+|---|---|
+| `.orca/archive/memory-2026-10-24-pre-trim.md` | 本次瘦身前的主树 memory 全文（含被移出的 codex 快照） |
+| `.orca/archive/auto-memory-2026-10-24/` | Claude 自动记忆 19 个旧文件全文（D10–D20 逐批、T4 首跑、dispatch 五单、五子树工作流） |
+
 ---
 
-# ④ codex 树快照（权威来源：codex 树 `.orca/memory.md`；收编时原样并入）
+## 归档：codex 树快照（原文已移出本文件）
 
-【2026-10-24 V3｜收官完成，待主树验收】两笔本地原子提交：b410e32（图集管线/产物/共享遮罩）+本快照同笔feat(render)提交（完整hash见talking/git log）。默认iso，?renderer=flat保留；气泡/名牌按屏幕像素上浮且高于全部世界，雨/夜幕覆盖世界与气泡；built/collapsing的240ms delta过渡不改变高度且不重烘，rubble立即回落静态地面并淡入。高低块均接图集，逐格tint保留桃花源色差，地形纹理固定4；CPU烘焙与同源mask避免每色一份CanvasTexture。原念头反馈在iso复用为主角气泡，flat呈现不变。全门禁和真实受控API/WS浏览器闭环已过，证据见后文；没有sim内核/协议/依赖/迷雾改动，没有V3.5/V4。代码本轮收工，不自开新任务，交主树收编与最终人工验收；未推远端。
+codex 树的逐单回执（V1/V2/V3、DA-01…DA-08、P 单）不再在此重复；权威副本在三处：
 
-【2026-10-24 V3-1｜图集管线/共享遮罩交付】基准07fe95b（已含V2收编fb09a5b）。先提交content与基础模块、后提交render消费者，保证依赖齐全。build_block_atlas.py只读入库god-town-16.png/linhe-town.json，复用png_codec及height管线中心4×4采样，四高度档×三面16px，产物linhe-block-atlas.png（64×48、12面）/JSON，README登记；--check两次临时重建PNG/JSON逐字节一致，源样本688/5391/5496/2425。BlockAtlas按角色亮度归一化成共享遮罩，低画布复用单个16px染色画布，高块按高度共享纹理+逐格tint；消费者及默认iso/显式flat已由第二笔交付。没有新增依赖、协议字段、sim内核或既有sim测试变更。
+1. codex 树 `.orca/memory.md`（其自身快照）
+2. codex 树 `.orca/archive/talking-receipts-2026-10-23.md` / `-2026-10-24.md`（逐行回执原文）
+3. 本地 `.orca/archive/memory-2026-10-24-pre-trim.md`（本次瘦身前全文，gitignored）
 
-【V3 验证｜全门禁通过】原始完整uv run pytest -q -m 'not bench'：2887P/121S/72D/0F，302.28s；无--deselect或额外排除。ruff check/format358、pyright0；client typecheck/lint/format/test/gen协议EXIT0，195P/33files（13新增，原182语义按V3默认值/共享缓存/动画时点适配保留）。分层/阶段红6F/26P→相关46P，图集/默认红3F/12P→17P；iso念头反馈红1F/4P→相关8P；phase-only不重烘红1F/11P→12P。证据.orca/v3-{presentation-red,presentation-green,atlas-red,atlas-green,impulse-bubble-red,impulse-bubble-green,phase-bake-red,phase-bake-green,python-full,pyright,client-*}.log，图集v3-atlas-check.log。本树已自审；未merge/推送/改主树。
+主树侧只保留**收编结论**：见 §0 已收编清单与 §3 缺口表。
 
-【V3 真实浏览器闭环】测试页捕获原Phaser.Game后导入原React main.tsx，运行实际API/鉴权WS/runtime/WorldScene（独立cwd与SQLite、profile-provider测试缝关闭真模型；无mock WS）。默认iso及显式flat均sameMirror=true、57actors/views、errors=[]。iso地形固定4纹理，7611逐格tint；全页面含人物/气泡文字96纹理（flat94，地形只含未使用atlas源1）；非把全部96算地形。层级名牌300000+、气泡310000+、雨400000、夜400001；flat保留71..89/99/100。念头真实表单→feedback→心声与陈默气泡；真实差事5号抵达(122,19)再返(101,52)，奖励余额5→10；真实driver攻击使combat=true、rate=1，退出后恢复。昼夜/雨用暂停世界后的合法S2C受控视觉帧：day alpha0、night+rain alpha.54/80滴；相位真实Phaser对象手动delta：.92→.71→.5，rubble回静态h1且无h2高块。截图.orca/v3-{default-iso,impulse-bubble,errand-arrived,errand-return,combat-slow,day,night-rain,structure-fade,explicit-flat}.png；原始日志v3-browser-final.log、v3-browser-weather-verified.log，JSON v3-browser{,-weather}-evidence.json。不宣称真模型、自然天气长局；所有自有服务已停止。
-
-【V3 实测坑与决定】图集每面跨可变canvas的GPU同步曾令整图烘焙约135秒（v3-browser-slow.log）；地面/复用染色canvas加willReadFrequently走CPU后同机约397/373ms，保留4纹理与逐格色差。built↔collapsing仅排240ms delta alpha过渡，不重烘地图；结构终态/地图变更仍全图重绘，未做局部TILE_CHANGED。iso文本从已插值iso顶面按屏幕像素上浮（名牌6、气泡20），避让用显示尺寸；原念头反馈只进心声面板，本单iso另复用同一reaction显示主角气泡，flat不加该气泡。Vite夹具动态导入必须取编译入口的完整Runtime/UiStore/IsoTerrain URL（含HMR参数）并核sameMirror，否则可能测到第二份空镜像造成假失败。所有日期/随机逻辑均未进入图集或相位测试。
-
-【V2已收编｜fb09a5b】2377108/9213f3a已由主树独立复录/验收；有效高度、depthKey同池、地平面拾取与相机padding64不变。历史详情见git log与talking归档。
-
-【V1已收编｜9437cff】078eb89/a97bf82已由主树验收，高度止损门通过；历史30秒恢复超时由c500379改120秒，本轮V3原始全量全绿。历史授权及探针见git log与talking归档。
-
-【2026-10-23 DA-07｜完成，本波收工待收编】用户“你核准后收工吧”及“继续”已直接授权本树核准此前策略与必要接线扩界，旧待核准状态结束。火灾/战斗主角致命结算改agent.incapacitated；普通NPC仍npc.death。新agent.incapacitated/recovered模型extra=forbid并登记总线/PAYLOAD_MODELS；EntityState绝对期限随内部检查点保存，健康态省略字段兼容旧哈希及pydantic>=2.9。失能清路径/停行动、保留最近念头，旧LLM决策由world_revision作废；世界复用快进预算推进一游戏小时后，选择最近可走无火格恢复，仅恢复主角HP，发既有full_snapshot/戏内心声。暂停沿原时钟控制；自动恢复与玩家快进按段重读时间尺，共享240预算。协议仍1.11，未改settle_attack签名/技能距离部位系统。初始红3F/1P；预算边界另红assert241<=240，修后WS相关76P；核心/死亡/重启/读档88P/2S，字段契约/人口计数14P。首轮全量2884P/1F为EntityState三字段旧白名单，显式登记期限并保留封闭检查，未删钉/跳过/排除。最终原始not-bench全量2887P/121S/72D/0F（290.58s），ruff/format356/pyright0、client tsc/149P、gen:protocol:check均绿；最终日志.orca/da07-python-verified.log，红/预算/首轮输出保留da07-*.log。DA07独立commit见talking/git log；本波06 ea42b13、08 01d8142均已完成；未再merge main、未改主树、未推送。回执后收工，不自开新单。
-
-【DA-08 完成待收编】01d8142；main以external_controller_ids明确ChenmoDriver拥有主角，assemble_runtime在构建utility/hidden之前排除外控实体，首启/重启名单一致且普通NPC效用继续。红1F→相关47P，全量2875P/121S/72D/0F，client149P与静态检查绿；.orca/da08-*.log和审计报告保留完整证据。
-
-【DA-06 完成待收编】ea42b13；on_flush落库成功后只对结构终态批次增量消费tile_changed，同步app/build_runtime/pathfinder并清缓存，保留P6派生。真实红2F/1P→相关37P，完整2874P/121S/72D/0F（325.32s），client149P与静态检查绿；.orca/da06-*.log及审计报告。全波从main@fbfdff6同步（包含指定f7add60及DA05收编fe2e709），此后未再merge main，未改主树。
-
-【2026-10-22 DA-05+DA-05P｜完成，待主树收编】基准969e616；主树复验真源污染后明确允许改fork.py，仅structures克隆路径扩界。历史anchor在同一分叉事务内，按包branch/seq及各祖先分叉点取有界结构事件，祖先在先、本层seq有序，复用fold_structure_snapshot写子线；不能复制父head，也不能只用snapshot window或把不同分支seq混排。head路径保留，不改BLOB/schema/WorldCheckpoint或materialize_structures_replay接口。启动按当前分支快照重建WS账本；读档fire.reset后清账，再复用maintenance同一快照；completed→built、collapsed→rubble、removed直接删账并发既有remove。active→built，collapsing/rubble保留；planned/building不入完工建筑层（工地另行表现）。客户端full_snapshot清空后替换（含空/省略数组），delta仍合并；真实syncStructures按token/相位/格位内容签名重绘，保留颜色/透明度。原始红后端9F/2P、客户端5F/4P；前置指定3F及额外未来坍塌/拆除回退/嵌套祖先边界3F均已绿，相关149P。最终原始not-bench全量2871P/121S/72D/0F（330.00s，无额外排除），客户端149P/27files，tsc/ruff/format353/pyright0/diff检查全绿。日志.orca/da05p-{red,boundaries-red,focused,python-full,client-full,pyright,tsc}.log，最初红证据仍在da05-*.log；先前2865P/3F是已解决历史。一次性本地提交包含本树memory，hash见talking与git log；未再merge main、未改主树、未推送。下一步等主树收编，不自开DA-06/07/08。
-
-【已收编 DA-04】ecc9a14→主树f7720d7；唯一活体戏内名/中文货名在parse与gate之间规范化，候选最近12名，原gate执行范围保留。unknown_good是唯一新增理由，未知/重名仍拒；真实logger代理隔离避免缓存污染。完整决定与2857P基线见审计报告DA-04、talking及git log --oneline -- .orca/memory.md。
-
-【已收编 DA-03】`d5c2931`→主树`4ec5112`，冷启动补修`afdfeb9`已同步；账本必须覆盖读档与lifespan构造两条路径，不能把生产级冷启动崩点当作范围问题遗漏。生命周期ID/余额/活火事件重建已接；燃料用初值12、HP事件来源仍未完整。旧缺素材两条失败口径已过时，当前原始门禁可全绿。历史证据见审计报告、talking和git log。
-
-【已收编历史】DA-02 `de3a8ae`（真实物化/当前子线与玩家游标同事务交接/成功后回帧）；DA-01 `846a052`（世界检查点原子落库/重启恢复/拒重复创世）。均已由主树 `b929406` 收编并同步本树，旧「未含076ed21」口径已过时。完整红绿证据见 talking 回执、审计报告与 `git log --oneline -- .orca/memory.md`。
-
-【审计历史】`974611e`：基准 main@3cbcd8d 确认8组缺口；报告 `docs/security/gameplay-integrity-audit-2026-10-21.md`，原始探针/JSON在 `.orca/audits/20261021-main-3cbcd8d/`。
+---
 
 ## 收编踩坑（2026-10-21 merge codex）
 
 - **`world_restore.flush_world` 与 P-6 `_with_structure_tile_restore` 必须叠加**：派生在前
   （`maintenance.observe` 会 pop REMOVED），然后整批交给 `flush_world` 写检查点。
   二选一都会丢东西——只走 `flush_world` 丢坍塌还原，只走 `flush_tick` 丢检查点。
-- **codex 树的 `.orca/memory.md` 是旧全文副本**（2797 行），主树已瘦身到 118 行；
-  合并时取主树版再人工并入 codex 新快照，不要盲目 `--theirs`。
+- **两树的 `.orca/memory.md` 形态不同**：主树是瘦身恢复卡（本文件，约 340 行），
+  codex 树是它自己的快照 + 逐单回执。合并时取主树版再人工并入 codex 新快照，
+  不要盲目 `--theirs`；收编后也别把 codex 全文再抄回主树（2026-10-24 已清理过一次）。
 - **`sim/content/assets/` 整个目录被 `.gitignore:86` 忽略**（`god-packs/`；另
   `zelda-like/pkg/`）⇒ `git worktree add` **不会带过去**，新 worktree 里该目录为空。
   症状：`test_m7_town_map.py::TestTownMap::test_deterministic_build` 与
