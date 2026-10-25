@@ -18,7 +18,6 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 from sim.world.map import CHUNK_SIZE, TileMap
@@ -37,10 +36,6 @@ def line_blocked(tile_map: TileMap, a: tuple[int, int], b: tuple[int, int]) -> b
     无缓存——调用方高频复用同一图时应持有 PerceptionEngine（其内部
     带实例级 LOS 缓存；模块级缓存会跨 TileMap 串味，此处不做）。
     """
-    return _line_blocked_uncached(tile_map, a, b)
-
-
-def _line_blocked_uncached(tile_map: TileMap, a: tuple[int, int], b: tuple[int, int]) -> bool:
     x0, y0 = a
     x1, y1 = b
     dx = abs(x1 - x0)
@@ -118,36 +113,6 @@ def line_blocked_grid(
             y0 += sy
 
 
-def walls_crossed_grid(
-    grid: bytes, width: int, height: int, a: tuple[int, int], b: tuple[int, int]
-) -> int:
-    """网格版穿墙计数（两端点不算）。语义与 walls_crossed 完全一致。"""
-    x0, y0 = a
-    x1, y1 = b
-    dx = abs(x1 - x0)
-    dy = -abs(y1 - y0)
-    sx = 1 if x0 < x1 else -1
-    sy = 1 if y0 < y1 else -1
-    err = dx + dy
-    crossed = 0
-    while True:
-        if (
-            (x0, y0) != a
-            and (x0, y0) != b
-            and not (0 <= x0 < width and 0 <= y0 < height and grid[y0 * width + x0])
-        ):
-            crossed += 1
-        if x0 == x1 and y0 == y1:
-            return crossed
-        e2 = 2 * err
-        if e2 >= dy:
-            err += dy
-            x0 += sx
-        if e2 <= dx:
-            err += dx
-            y0 += sy
-
-
 def walls_crossed(tile_map: TileMap, a: tuple[int, int], b: tuple[int, int]) -> int:
     """a→b 途经的不可通行 tile 数（听觉穿墙衰减计数，两端点不算）。"""
     x0, y0 = a
@@ -177,19 +142,6 @@ class Propagation:
     """传播结果：0.0 = 感知不到；>0 = 显著性强度（供显著性与帧装配排序）。"""
 
     strength: float
-
-
-def vision_propagate(
-    dist: float, light: float = 1.0, *, radius: float, floor: float
-) -> Propagation:
-    """视觉三要素组合：1/r 衰减 × 光照修正 × 遮挡阻断（遮挡由调用方射线判定）。
-
-    floor 是显著性 HARD floor：低于它整条观测丢弃（夜间远处草动不值得报）。
-    """
-    if dist > radius:
-        return Propagation(0.0)
-    strength = (1.0 / max(dist, 1.0)) * light
-    return Propagation(strength if strength >= floor else 0.0)
 
 
 def hearing_propagate(
@@ -225,26 +177,3 @@ def light_factor(tick: int) -> float:
     if phase == DayPhase.DAWN:
         return (1.0 + LIGHT_NIGHT) / 2.0  # 黎明折半过渡
     return 1.0
-
-
-def candidates_in_radius(
-    origin: tuple[int, int],
-    positions: dict[str, tuple[int, int]],
-    radius: float,
-    *,
-    exclude: str,
-) -> list[str]:
-    """半径内候选 id（欧氏距离预过滤）。O(N) 顺序稳定（dict 序 + 距离排序）。
-
-    顺序确定性：先按 dict 插入序过滤，再按 (dist, id) 排序 —— 同输入同输出。
-    """
-    ox, oy = origin
-    out: list[tuple[float, str]] = []
-    for eid, (x, y) in positions.items():
-        if eid == exclude:
-            continue
-        d = math.hypot(x - ox, y - oy)
-        if d <= radius:
-            out.append((d, eid))
-    out.sort()
-    return [eid for _, eid in out]

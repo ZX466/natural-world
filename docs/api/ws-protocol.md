@@ -326,3 +326,13 @@ sim/api/ws  (FastAPI WebSocket 网关)
 - HTTP 端点（settings/profile/anchor CRUD）见 `openapi.md`。
 - 类型生成管线见 `codegen.md`；版本协商见 `versioning.md`。
 - 感知叙事化管线、独白文风化属 sim 内部（§8），不在接口层定义。
+
+## 8. 火灾现行契约与历史订正
+
+**⚠ 施工订正（裁 35-1），以本段为准**：`fire.*` 只有 `fire.ignited` 和
+`fire.extinguished` 两个已登记 kind。蔓延通过既有 `matter.damage` 与 `parent_seq`
+因果谱系表达，不增加独立蔓延事件或 WS 火灾消息。
+
+历史提案顺序为 `fire.ignited → fire.spread → fire.extinguished`；其中 `fire.spread`
+已被上述两 kind 方案取代。保留这条决策链以防旧方案复活；完整预研稿可从
+`git show 3b33328:docs/api/m5-fire-api-prestudy.md` 查阅。

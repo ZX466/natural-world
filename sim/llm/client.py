@@ -25,11 +25,6 @@ logger = structlog.get_logger(__name__)
 REQUEST_TIMEOUT_SECONDS = 30.0
 MAX_ATTEMPTS = 2  # §15 成本治理：单次决策最多重试一次，避免烧钱循环
 
-_ERROR_KINDS = {
-    APITimeoutError: "timeout",
-    APIConnectionError: "connection",
-}
-
 
 class LlmCallResult(BaseModel):
     """一次成功调用的结果——只含 token 计数与延迟，不落响应全文（监控口径）。"""

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Callable
 
 from sim.llm.prompts.banned_words import REWRITE_MAP, scan
 from sim.npc.speech_register import SpeechContext, speech_register
@@ -83,6 +82,3 @@ def _reject_json_or_pass(candidate: str) -> str | None:
     else:
         return None
     return candidate
-
-
-DialogueProvider = Callable[[str, str, int], str | None]

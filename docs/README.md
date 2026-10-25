@@ -4,6 +4,7 @@
 > 预研与台账文档已删除，只保留仍在生效的活文档。删除内容可从 git 历史找回：
 > `git log --diff-filter=D --name-only -- docs/`。
 > 代码注释中的 `docs/api/m5-*`、`docs/security/m4-*` 等引用是历史出处，不再指向现存文件。
+> 协议字段以 `shared/openapi.json` 与生成类型为准；数据字段以 ORM 模型与迁移为准。
 
 ## 1. 读顺序
 

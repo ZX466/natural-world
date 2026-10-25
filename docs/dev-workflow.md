@@ -35,6 +35,8 @@ npm ci                  # 按 package-lock.json 精确安装
 | 格式（TS） | `cd client && npx prettier --check .` |
 | 测试（TS） | `cd client && npx vitest run --passWithNoTests` |
 | 协议漂移 | `cd client && npm run gen:protocol:check` |
+| 高度表 | `uv run python -m sim.content.build_height_map --check` |
+| 方块图集 | `uv run python -m sim.content.build_block_atlas --check` |
 
 一键全跑（PowerShell，失败即停）：
 

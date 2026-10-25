@@ -1,5 +1,5 @@
 # Ruff 配置（依赖/配置域 — cline TASK-001）
-# 对齐 DESIGN.md §19 禁止事项 与 docs/arch/m0-core.md §2（分流 RNG）/§4（唯一写路径）。
+# 对齐 DESIGN.md §19 禁止事项 与 DESIGN.md §2（分流 RNG）/§4（唯一写路径）。
 
 target-version = "py312"
 line-length = 100
@@ -43,5 +43,5 @@ known-first-party = ["sim"]
 # C5 / DESIGN §19：随机性只能来自 sim.core.rng 的分流 RNG，禁 stdlib random。
 # DESIGN §4 硬约束：Windows 无 uvloop，不装。
 [lint.flake8-tidy-imports.banned-api]
-"random".msg = "C5 禁止 stdlib random：随机性必须走 sim.core.rng 的分流 RNG（DESIGN §19、docs/arch/m0-core.md §2）"
+"random".msg = "C5 禁止 stdlib random：随机性必须走 sim.core.rng 的分流 RNG（DESIGN §19、DESIGN.md §2）"
 "uvloop".msg = "Windows 硬约束：不装 uvloop（DESIGN §4）"

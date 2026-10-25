@@ -98,3 +98,12 @@ NPC 完整属性 0004 迁移（opencode 域）建议为健康档隐藏标注预�
 - 词面（descriptors/triggers）变更走 CR（安全域 owner：Codex）——同 banned_words 维护纪律；
 - 感知引擎接入（把 `evaluate_triggers` 接进处境/内感受叙事）归 Claude 架构域（M2-A1 架构稿）；
 - 持久化（0004 表）归 opencode（M2-D1）。
+
+## 8. 分支证据链
+
+- 再分叉时保留祖先事件指针，不把 `evidence_branch_id` 擅自改成本层父线；事件身份是 `(branch_id, seq)`。
+- 克隆后知识可见，不等于在当前分支已有可采信的见证证据。证据校验仍走现行判定，不能为放行知识而合并未授权的祖线事件。
+- `iter_valid` 的分支/失效过滤与证据可证明性分别成立，不能互相替代。
+- 隐藏属性的浮现是当前处境的纯求值结果，不持久化为跨分支共享的 surfaced 状态。
+
+这些边界由 `sim/tests/test_m5_fork_evidence.py` 持续验证；旧预研论证从 Git 历史查阅。

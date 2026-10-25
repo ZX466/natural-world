@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorldMirror } from '../world-mirror';
 import { createHeightLookup, depthKey, isoProject, screenBounds } from '../render/iso';
 import { actorDepth, labelY, aboveSurface } from '../render/presentation';
-import { facingRow, walkFrame } from '../render/actors';
 import { useUiStore } from '../../store/uiStore';
 
 vi.mock('phaser', () => ({ default: { Scene: class {} } }));
@@ -180,6 +179,39 @@ it('cleans reset views and recreates them directly at the projected surface', ()
 });
 
 describe.each(['flat', 'iso'] as const)('%s interaction and movement', (mode) => {
+  it.each([
+    ['hero', 'protagonist', 1, 34],
+    ['god', 'god_villager_taocunzhang', 1, 6],
+    ['villager', 'villager', 0, 8],
+    ['animal', 'fauna_deer', 0, 0],
+  ] as const)(
+    'preserves visible standing and walking frames for %s',
+    (token, sprite, standCol, eastStart) => {
+      const { internal, mirror } = setup(mode);
+      const actor = { rtoken: token, x: 0, y: 1, facing: 's', sprite, anim: 'idle' };
+      mirror.actors.set(token, actor);
+      for (const pose of ['idle', 'work', 'eat', 'rest', 'chat', 'unknown']) {
+        actor.anim = pose;
+        internal.syncActorViews(16, 0);
+        const view = internal.views.get(token)!;
+        expect(view.sprite.setFrame).toHaveBeenLastCalledWith(standCol);
+        expect(view.sprite.setAlpha).toHaveBeenLastCalledWith(
+          token === 'animal' && pose === 'rest' ? 0.5 : 1,
+        );
+      }
+      actor.x = 1;
+      internal.syncActorViews(150, 150);
+      const view = internal.views.get(token)!;
+      expect(view.sprite.setFrame).toHaveBeenLastCalledWith(eastStart);
+      actor.x = 2;
+      internal.syncActorViews(150, 300);
+      expect(view.sprite.setFrame).toHaveBeenLastCalledWith(token === 'animal' ? 0 : eastStart + 1);
+      internal.syncActorViews(16, 316);
+      expect(view.lastFacing).toBe('e');
+      expect(view.sprite.setFrame).toHaveBeenLastCalledWith(eastStart + standCol);
+    },
+  );
+
   it('keeps move requests/collision guards and positions the target marker on its surface', () => {
     const { internal, mirror, marker, emit } = setup(mode);
     const hit = mode === 'iso' ? isoProject(2, 1, 0, screenBounds(4, 4)) : { sx: 40, sy: 24 };
@@ -207,7 +239,7 @@ describe.each(['flat', 'iso'] as const)('%s interaction and movement', (mode) =>
     internal.syncActorViews(0, 350);
     const view = internal.views.get('hero')!;
     expect(view.lastFacing).toBe('e');
-    expect(view.sprite.setFrame).toHaveBeenCalledWith(walkFrame(facingRow('e'), 0));
+    expect(view.sprite.setFrame).toHaveBeenCalledWith(34); // 陈默朝东走环首帧：row2 × 17列。
     const target = mode === 'iso' ? isoProject(3, 1, 1, screenBounds(4, 4)) : { sx: 56, sy: 24 };
     expect({ x: view.sprite.x, y: view.sprite.y }).toEqual({ x: target.sx, y: target.sy });
   });

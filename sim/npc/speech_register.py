@@ -27,9 +27,6 @@ REGISTER_ROUGH: Final[str] = "粗"
 REGISTER_PLAIN: Final[str] = "日常"
 REGISTER_REFINED: Final[str] = "文雅"
 
-#: 语域档全集（校验用）。
-REGISTERS: Final[frozenset[str]] = frozenset({REGISTER_ROUGH, REGISTER_PLAIN, REGISTER_REFINED})
-
 
 class SpeechRegisterError(ValueError):
     """语域派生输入非法（未知静态档/亲疏越界）。"""

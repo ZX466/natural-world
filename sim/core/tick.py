@@ -22,7 +22,6 @@ _PERCEPTION_EVERY_N_TICKS = 2  # H-1 方案 3：视觉传播降采样（听觉�
 _NPC_DECISION_INTERVAL = 10  # 批次 B：L1 决策节拍（60tps 下每秒 5 轮，防事件洪泛）
 _MOVE_TICKS_PER_TILE = 15  # 批次 D1：行走节拍（1x 下 60/15 = 4 格/秒，星露谷手感；
 # 16x 下 64 格/秒——倍速快进语义，视觉瞬移属预期）
-_MOVE_PHASE_SPAN = 15  # 相位散布跨度（0..14，与节拍同模——每 tick 都有人迈步）
 
 
 def entity_move_phase(entity_id: str) -> int:

@@ -9,7 +9,8 @@
  *
  * 本模块只做纯计算，便于单测；Phaser 对象操作留在 WorldScene。
  */
-const TILE = 16;
+
+export const TILE = 16;
 
 export function rendererFromSearch(search: string): 'flat' | 'iso' {
   return new URLSearchParams(search).get('renderer') === 'flat' ? 'flat' : 'iso';
@@ -27,13 +28,13 @@ export function rendererFromSearch(search: string): 'flat' | 'iso' {
  *   夜幕     100
  */
 export const ACTOR_DEPTH_BASE = 10;
-const ACTOR_DEPTH_TOP = 70;
-const LABEL_DEPTH_BASE = 71;
-const LABEL_DEPTH_TOP = 80;
-const BUBBLE_DEPTH_BASE = 81;
-const BUBBLE_DEPTH_TOP = 89;
+export const ACTOR_DEPTH_TOP = 70;
+export const LABEL_DEPTH_BASE = 71;
+export const LABEL_DEPTH_TOP = 80;
+export const BUBBLE_DEPTH_BASE = 81;
+export const BUBBLE_DEPTH_TOP = 89;
 /** 世界高度（100 格 @16px）——深度归一化用的最大脚底像素。 */
-const MAP_MAX_FOOT_Y = 100 * TILE;
+export const MAP_MAX_FOOT_Y = 100 * TILE;
 /** 雨层深度（WorldScene 同源）。 */
 export const RAIN_LAYER_DEPTH = 99;
 /** 夜幕遮罩深度（WorldScene 同源）。 */
@@ -111,17 +112,10 @@ export function manhattan(a: { x: number; y: number }, b: { x: number; y: number
 export const ACTOR_FRAME_HEIGHT = 32;
 /** 名字基线离头顶的间隙（世界像素）。 */
 export const LABEL_GAP = 2;
-/** 气泡底边离头顶的间隙（留出名字高度，避免气泡压字）。 */
-export const BUBBLE_GAP = 14;
 
 /** 名字头顶锚点 y（脚底 y − 帧高 − 间隙）。 */
 export function labelY(footY: number): number {
   return footY - ACTOR_FRAME_HEIGHT - LABEL_GAP;
-}
-
-/** 气泡底边锚点 y（比名字再高 BUBBLE_GAP − LABEL_GAP）。 */
-export function bubbleY(footY: number): number {
-  return footY - ACTOR_FRAME_HEIGHT - BUBBLE_GAP;
 }
 
 export interface StackCandidate {

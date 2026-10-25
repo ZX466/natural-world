@@ -1,45 +1,14 @@
-"""玩家档（anchor）HTTP API — M5-K7 最小实现（anchors-api.md §4）+ M5-K3 D-9 当前指针。
+"""玩家存档 HTTP API：列表、当前游标、创建、重命名、删除与物化诊断。
 
-**M5-CRUD（2026-09-30，裁 28-G Claude 域）**：读 + 写路径全量。
-- GET 列表/current/单查（K7 最小实现，现读 `protected` **列**——S-4 切列完成，
-  派生式退休，C1 单一真相源；`/current` 退化态回退 max(updated_at) 保底不 404，
-  D-14）；每条落库项调 `register_anchor_id()` 注进 WS 分发块查表集。
-- POST（§1.2）：仅 `name`（1..64）；同事务写新档 protected=true + 清其余
-  （A2 进程锁 + A3 同事务，§6.1）；`updated_at` 只写一次；游标 = 世界当前
-  tick + 当前活跃分支（D-16 默认 main）；无活跃 loop → 400 world-not-ready。
-- PATCH（§1.3）：只改 name；不动 updated_at/protected；刷新 WS 标签。
-- DELETE（§1.4）：409 判据**读列**；硬删；成功调 `unregister_anchor_id`
-  （D-15/S-7 调用点）；不补位。
-- F-6 注册侧 fail-closed（codex S2b §4.2）：name 过现行 `scan()`，命中 → 422
-  `/errors/anchor-name-rejected`；不扩词表，只消费既有表。
-- 404 走 ProblemDetail（`sim/api/errors.py` 全局换形，detail=机器码）。
+protected 列是保护状态的唯一来源；无受保护行时，current 按更新时间/id 回退。
+创建存档先刷新在途事件，再捕获当前游标、RNG 与物化包；无可靠世界来源时拒绝。
+同步写在线程池内运行，事务自行提交/回滚；与世界推进共用异步写入边界。
+重命名不改游标/保护状态，删除保护档返回冲突；名字必须通过出站词面检查。
+响应字段由声明的 response_model 密封，错误统一交给 ProblemDetail 处理。
 
-**M5-A11（批次 E 收官件，2026-10-03）**：
-- `create_item` **同事务写包**（A10 移交项）：玩家档一落库就把锚点时刻的世界态物化一次
-  （快照指针 + 3 张无事件源表行值 + override + state_hash；RNG 见下）。**为什么必须同事务**：
-  跨引擎就跨事务，档与包会分裂成「有档没包」的半态——而半包比没有包更坏（诊断说不可回退，
-  玩家却以为能回退）。语料行值/快照引用用**同步面**（本模块是同步 Session），SQL 与
-  `anchor_package.py` 的 async 面**同一份**（跨面一致性有钉）。
-- **RNG 捕获是已知缺口**：`sim.core.rng_state.capture_rng_state` 需要 `RngRegistry` + 抽签
-  cache + 流清单，而这三样**今天没有挂在 `app.state` 上**（app 只有 loop/store/tile_map）。
-  ⇒ 存档拿不到 RNG 状态时 `rng_state=NULL`，该档在诊断面是 `rng_unavailable`
-  （fail-closed，**禁止**用 `Branch.seed` 派生兜底）。待混沌流侧暴露 registry 后，
-  `create_item(rng_state=...)` 一个参数即可接上，零改动数据面。
-- `GET /api/anchors/{anchor_id}/materialization` 只读诊断路由（返回 `ready` + 原因码）：
-  让产品显示「该档不可回退」而不是让人撞 500。**不可物化不是 HTTP 错误**（200 + ready=false）。
-  ⚠️ 该路由**未进** `shared/openapi.json`（mock 是 gen-protocol 的唯一源，shared/ 非我域）
-  ⇒ 前端类型面要等 kilo 登记（届时走 versioning §7 minor 流程）。
-
-**上游阻塞缺陷 — S2 已收口（2026-10-20）**：历史复现为 driver 运行时连发 5 次 POST 出现
-`201 / EXC / 201 / 201 / EXC`。审计确认 store.append/fork/flush 会话均在上下文内
-提交或回滚；真实死锁链是 async 路由里同步 SQLite 等锁阻塞事件循环，令持锁 driver
-无法恢复到 commit。POST/PATCH/DELETE 的同步写事务现经线程池运行，仍在自身
-Session 内闭环；lifespan 记忆写使用 begin 上下文，关闭时先取消并回收两项驱动任务。
-帧推进/落库/读档、WS 写入、陈默执行与打包共用异步写入边界，存档期间游标不前移。
-取游标前先落 pending_events；已落事件留待下一帧广播，不重复提交。
-writer-first（语料/快照引用先在只读会话取）保持；不新增重试/锁等待时长。
-`test_anchor_live_writer` 让真实 driver 取得写锁后延迟提交，连续 5 次存档均须 201，
-退出后第三连接 BEGIN IMMEDIATE 须成功。旧诊断夹具仍可取消 driver 以隔离诊断语义。
+历史上游阻塞缺陷已由 S2 于 2026-10-20 修复：同步 SQLite 等锁曾阻塞事件循环，
+导致持锁 driver 无法提交。线程池与共用写入边界是对应修复，不以重试掩盖；
+留档见 schema.md §23.7.4，真实写者回归见 test_anchor_live_writer.py。
 """
 
 from __future__ import annotations
@@ -53,7 +22,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import create_engine, func
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
@@ -175,11 +144,6 @@ class AnchorStore:
             )
             s.expunge_all()
             return rows
-
-    def _max_updated_at(self) -> float | None:
-        """D-14 保底判据（退化态 /current 用）；非 protected 判据（C1 已切列）。"""
-        with self._session_local() as s:
-            return s.query(func.max(PlayerAnchor.updated_at)).scalar()
 
     def list_items(self) -> list[AnchorListItem]:
         """§1.1 列表：protected 直接读列（S-4 切列，C1 单一真相源）。"""

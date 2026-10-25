@@ -17,7 +17,6 @@ from dataclasses import dataclass, replace
 import numpy as np
 
 from sim.core.events import EventKind, WorldEvent, matter_event
-from sim.core.rng import RngRegistry
 
 
 @dataclass(frozen=True)
@@ -173,9 +172,3 @@ def settle_decay(ledger: MatterLedger, *, tick: int, seed: int = 0) -> list[Worl
                 )
             )
     return events
-
-
-def wind_smell_decay_hint(rng: RngRegistry) -> float:
-    """预留：嗅觉场衰减系数派生位（smell.py 接线用，本批不启用）。"""
-    _ = rng
-    return 0.99

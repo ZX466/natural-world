@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 from sim.core.calendar import DayPhase, phase_of_day
-from sim.perception.frame import Channel, Observation
 
 
 def narrate_hp(fraction: float) -> str:
@@ -90,10 +89,3 @@ def narrate_smell(concentration: float) -> str:
     if concentration >= 0.1:
         return "空气里飘着一股说不清的味道。"
     return "隐约有一丝陌生的气味。"
-
-
-def make_observation(
-    channel: Channel, subject: str, description: str, strength: float
-) -> Observation:
-    """观测构造统一入口（保持 frame.Observation 的 frozen 语义）。"""
-    return Observation(channel=channel, subject=subject, description=description, strength=strength)
