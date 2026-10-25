@@ -22,14 +22,13 @@ import { placeBubble, selectBubbleNames } from '../render/bubbles';
 import type { WorldMirror } from '../world-mirror';
 import {
   facingRow,
-  walkFrame,
-  villagerFrame,
+  walkFrameFor,
   advanceAnimClock,
   inferFacing,
   VILLAGER_SHEET,
+  CHENMO_SHEET,
   GOD_SHEET,
   GOD_SPRITE_KEYS,
-  godVillagerFrame,
   type Facing,
 } from '../render/actors';
 import {
@@ -137,10 +136,6 @@ export class WorldScene extends Phaser.Scene {
     // 2026-10-12「有头没身」修复：ArMM1998 人物帧 16×32（此前 16×16 裁半身）。
     // 'protagonist' 是 chenmo.png 的中性出站键（后端 sprite 字段恒发它——
     // 快照文本禁含内部 id 词面 "chenmo"，W 系列出戏钉）。
-    this.load.spritesheet('chenmo', '/assets/actors/chenmo.png', {
-      frameWidth: 16,
-      frameHeight: 32,
-    });
     this.load.spritesheet('protagonist', '/assets/actors/chenmo.png', {
       frameWidth: 16,
       frameHeight: 32,
@@ -668,37 +663,21 @@ export class WorldScene extends Phaser.Scene {
       const moved = view.prevX !== actor.x || view.prevY !== actor.y;
       // H-2：walk 累加/idle 归 -1（修前写反 → 循环死在第 0 帧）
       view.animClockMs = advanceAnimClock(view.animClockMs, moved, delta);
-      // H-3：零位移沿用 lastFacing（停下不转身）；frameOf 只用方向行号
+      // 零位移沿用 lastFacing（停下不转身）。
       if (moved) {
         view.lastFacing = inferFacing(actor.x - view.prevX, actor.y - view.prevY, view.lastFacing);
       }
       const row = facingRow(view.lastFacing);
-      // D14：村民姿势——静止 + work/eat/rest/chat → 劳作姿势行（R4-7）；
-      // 行走中 → 四向走环。主角仍走 chenmo 走环（素材无姿势行）。
-      // 2026-10-12 D1-D5：GOD 皮走 godVillagerFrame（3 列几何）；villager
-      // 兜底皮仍走 VILLAGER_SHEET（4 列）——几何按 texture 分派。
-      const isGod = GOD_SPRITE_KEYS.includes(view.sprite.texture.key);
+      // 当前人物素材没有独立姿势行；按图集几何统一选择走环或站立帧。
+      const sheet =
+        rtoken === this.mirror.protagonist
+          ? CHENMO_SHEET
+          : GOD_SPRITE_KEYS.includes(view.sprite.texture.key)
+            ? GOD_SHEET
+            : VILLAGER_SHEET;
       const isFauna = actor.sprite.startsWith('fauna_');
       view.sprite.setAlpha(isFauna && actor.anim === 'rest' ? 0.5 : 1);
-      view.sprite.setFrame(
-        isFauna
-          ? 0
-          : rtoken === this.mirror.protagonist
-            ? walkFrame(row, view.animClockMs)
-            : isGod
-              ? godVillagerFrame(
-                  GOD_SHEET,
-                  moved ? 'walk' : (actor.anim ?? 'idle'),
-                  view.lastFacing,
-                  view.animClockMs,
-                )
-              : villagerFrame(
-                  VILLAGER_SHEET,
-                  moved ? 'walk' : (actor.anim ?? 'idle'),
-                  view.lastFacing,
-                  view.animClockMs,
-                ),
-      );
+      view.sprite.setFrame(isFauna ? 0 : walkFrameFor(sheet, row, view.animClockMs));
       view.prevX = actor.x;
       view.prevY = actor.y;
     }

@@ -53,8 +53,3 @@ def fold_fog_reveal(prev: FogOfWar, chunk_coords: tuple[tuple[int, int], ...]) -
     for cx, cy in chunk_coords:
         fog = fog.reveal(cx, cy)
     return fog
-
-
-def chunk_neighbors(cx: int, cy: int) -> frozenset[tuple[int, int]]:
-    """四邻 chunk 坐标（M3 未用，预留给「踏入半亮邻块」扩展——不接入揭示语义）。"""
-    return frozenset({(cx - 1, cy), (cx + 1, cy), (cx, cy - 1), (cx, cy + 1)})

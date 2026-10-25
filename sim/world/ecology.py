@@ -33,9 +33,6 @@ PHASE_BLOOM: Final[str] = "繁盛"
 PHASE_PLATEAU: Final[str] = "平稳"
 PHASE_SCARCE: Final[str] = "稀少"
 
-#: 事件流名（生态抽签归混沌流同族；占用 P9 RNG/熵行额度，不叠加新行——P9 口径）。
-ECOLOGY_STREAM: Final[str] = "ecology"
-
 
 @dataclass(frozen=True)
 class EcologyPhase:

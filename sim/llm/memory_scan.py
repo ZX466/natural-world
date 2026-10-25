@@ -35,7 +35,6 @@ REWRITE_MAX_HITS = 2
 
 #: superseded_by / invalid_reason 取值（S5 治理列）。
 REASON_BANNED_WORD = "banned_word"
-REASON_MANUAL_REVIEW = "manual_review"
 #: M2-S1 自我未知：未触发隐藏属性直陈（docs/security/self-unknown.md §3/§4）。
 REASON_HIDDEN_LEAK = "hidden_attribute_leak"
 

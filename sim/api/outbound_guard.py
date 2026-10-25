@@ -168,11 +168,6 @@ def find_forbidden_paths(obj: Any) -> list[str]:
     return paths
 
 
-def find_authority_paths(obj: Any) -> list[str]:
-    """K11 接口保留（同 `find_authority_keys`：两层扫描，但函数名沿用旧称）。"""
-    return find_forbidden_paths(obj)
-
-
 def strip_outbound_forbidden(obj: Any) -> tuple[Any, list[str]]:
     """递归剥除**两层**禁键，返回 ``(净化后的体, 被剥路径)``。
 

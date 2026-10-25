@@ -24,9 +24,12 @@ client/public/assets/sprites/（入库）。
 
 from __future__ import annotations
 
-import struct
-import zlib
 from pathlib import Path
+
+if __package__:
+    from .png_codec import read_png_rgba, write_png_rgba
+else:  # 保留 python path/to/build_god_characters.py 的直接脚本入口。
+    from png_codec import read_png_rgba, write_png_rgba
 
 # --- 布局几何常量（唯一真相源；测试钉同源） ---------------------------------
 
@@ -130,7 +133,7 @@ def slice_and_scale_sheet(src: Path, dst: Path) -> Path:
     alpha 全程保留。零 Pillow 依赖（标准库解 PNG：zlib + filter 还原 +
     重编码）——管线在 uv 环境外也要能跑。
     """
-    raw = _read_png_rgba(src)
+    raw = read_png_rgba(src, allow_rgb=False)
     # 32x32 帧 → 水平缩半 16 + 垂直保高 32（D2=甲：头身比重切——
     # 32x32 帧的头身比约 1:1，垂直取中保留上半身、截掉下半身 16px 会切脚；
     # 实测素材人物脚贴帧底、头顶留白 ~4px：垂直直接保高、水平缩半，
@@ -154,7 +157,7 @@ def slice_and_scale_sheet(src: Path, dst: Path) -> Path:
                 for x in range(OUT_FRAME_W):
                     canvas[base_y + y][base_x + x] = scaled[y][x]
 
-    _write_png_rgba(dst, out_w, out_h, canvas)
+    write_png_rgba(dst, out_w, out_h, canvas)
     return dst
 
 
@@ -167,112 +170,6 @@ def _halve_width(
         row = frame[y]
         out.append([row[x * 2] for x in range(OUT_FRAME_W)])
     return out
-
-
-# --- 最小 PNG 编解码（零依赖；zlib+struct 标准库） --------------------------
-# 依据: PNG spec (ISO 15948) —— IHDR/IDAT/IEND, filter type 0-4, RGBA8
-
-
-def _read_png_rgba(path: Path) -> list[list[tuple[int, int, int, int]]]:
-    """读 PNG → RGBA 像素矩阵（仅支持 8-bit RGBA 非交错——GOD 素材实测形态）。"""
-    data = path.read_bytes()
-    if data[:8] != b"\x89PNG\r\n\x1a\n":
-        msg = f"非 PNG 文件: {path}"
-        raise ValueError(msg)
-    pos = 8
-    width = height = 0
-    idat = bytearray()
-    color_type = 6
-    bit_depth = 8
-    while pos < len(data):
-        (length,) = struct.unpack(">I", data[pos : pos + 4])
-        ctype = data[pos + 4 : pos + 8]
-        chunk = data[pos + 8 : pos + 8 + length]
-        pos += 12 + length  # 4 len + 4 type + data + 4 crc
-        if ctype == b"IHDR":
-            width, height, bit_depth, color_type = struct.unpack(">IIBB", chunk[:10])
-            if bit_depth != 8 or color_type != 6:
-                msg = f"仅支持 8-bit RGBA，得到 depth={bit_depth} color={color_type}"
-                raise ValueError(msg)
-            if chunk[10] != 0:
-                msg = "不支持交错 PNG"
-                raise ValueError(msg)
-        elif ctype == b"IDAT":
-            idat += chunk
-        elif ctype == b"IEND":
-            break
-    raw = zlib.decompress(bytes(idat))
-    stride = width * 4
-    pixels: list[list[tuple[int, int, int, int]]] = []
-    prev = [0] * stride
-    p = 0
-    for _y in range(height):
-        ftype = raw[p]
-        p += 1
-        line = list(raw[p : p + stride])
-        p += stride
-        _unfilter_line(line, prev, ftype, width)
-        prev = line
-        row = [
-            (line[x * 4], line[x * 4 + 1], line[x * 4 + 2], line[x * 4 + 3]) for x in range(width)
-        ]
-        pixels.append(row)
-    return pixels
-
-
-def _unfilter_line(line: list[int], prev: list[int], ftype: int, width: int) -> None:
-    """PNG filter 还原（type 0-4，原地修改 line）。"""
-
-    def paeth(a: int, b: int, c: int) -> int:
-        pp = a + b - c
-        pa, pb, pc = abs(pp - a), abs(pp - b), abs(pp - c)
-        if pa <= pb and pa <= pc:
-            return a
-        if pb <= pc:
-            return b
-        return c
-
-    bpp = 4
-    for i in range(len(line)):
-        x = line[i]
-        a = line[i - bpp] if i >= bpp else 0
-        b = prev[i]
-        c = prev[i - bpp] if i >= bpp else 0
-        if ftype == 1:
-            x = (x + a) & 0xFF
-        elif ftype == 2:
-            x = (x + b) & 0xFF
-        elif ftype == 3:
-            x = (x + (a + b) // 2) & 0xFF
-        elif ftype == 4:
-            x = (x + paeth(a, b, c)) & 0xFF
-        line[i] = x
-
-
-def _write_png_rgba(
-    path: Path, width: int, height: int, pixels: list[list[tuple[int, int, int, int]]]
-) -> None:
-    """RGBA 像素矩阵 → PNG（filter 0，zlib 压缩）。"""
-
-    def chunk(ctype: bytes, data: bytes) -> bytes:
-        c = ctype + data
-        return struct.pack(">I", len(data)) + c + struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
-
-    raw = bytearray()
-    for y in range(height):
-        raw.append(0)  # filter 0
-        for x in range(width):
-            r, g, b, a = pixels[y][x]
-            raw += bytes((r, g, b, a))
-    ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
-    png = (
-        b"\x89PNG\r\n\x1a\n"
-        + chunk(b"IHDR", ihdr)
-        + chunk(b"IDAT", zlib.compress(bytes(raw), 9))
-        + chunk(b"IEND", b"")
-    )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(png)
 
 
 def build_all(out_dir: Path) -> list[Path]:

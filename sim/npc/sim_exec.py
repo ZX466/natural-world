@@ -133,11 +133,6 @@ HOME_BASES: tuple[tuple[int, int], ...] = (
     (122, 19),  # 梯田（terraced_fields，东北）
 )
 
-#: 领地内散步半径（曼哈顿）：闲逛只在本人片区 ±R 内——「一部分区域乱走」
-#: 的根因收口（D14 的 wander_near(entity.pos) 锚定当前位置，随机游走逐拍
-#: 累积仍会漂出街区；定籍后目标恒落本片区，漂移不再累积）。
-_TERRITORY_RADIUS = 10
-
 
 def home_base_of(npc_id: str) -> tuple[int, int]:
     """npc_id → 定籍片区锚点（纯函数：均衡轮转 + 区内确定性，C5 同输入同输出）。
@@ -391,8 +386,6 @@ def _resolve_goal(
     return None
 
 
-#: 路径扰动半径（每段尝试的垂直偏移距离，格）。
-_JITTER_OFFSET = 1
 #: 扰动最小路径长度（≤2 格不扰——端点约束高、收益低）。
 _JITTER_MIN_LEN = 3
 

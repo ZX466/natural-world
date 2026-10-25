@@ -9,7 +9,6 @@
  *
  * 本模块只做纯计算，便于单测；Phaser 对象操作留在 WorldScene。
  */
-import type { Facing } from './actors';
 
 export const TILE = 16;
 
@@ -113,17 +112,10 @@ export function manhattan(a: { x: number; y: number }, b: { x: number; y: number
 export const ACTOR_FRAME_HEIGHT = 32;
 /** 名字基线离头顶的间隙（世界像素）。 */
 export const LABEL_GAP = 2;
-/** 气泡底边离头顶的间隙（留出名字高度，避免气泡压字）。 */
-export const BUBBLE_GAP = 14;
 
 /** 名字头顶锚点 y（脚底 y − 帧高 − 间隙）。 */
 export function labelY(footY: number): number {
   return footY - ACTOR_FRAME_HEIGHT - LABEL_GAP;
-}
-
-/** 气泡底边锚点 y（比名字再高 BUBBLE_GAP − LABEL_GAP）。 */
-export function bubbleY(footY: number): number {
-  return footY - ACTOR_FRAME_HEIGHT - BUBBLE_GAP;
 }
 
 export interface StackCandidate {
@@ -157,9 +149,4 @@ export function assignStackOffsets(
     }
   }
   return out;
-}
-
-/** 朝向 → 精灵是否水平翻转（当前素材四向行齐全，保留接缝）。 */
-export function flipForFacing(facing: Facing): boolean {
-  return facing === 'w';
 }

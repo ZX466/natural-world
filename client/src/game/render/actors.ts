@@ -1,14 +1,9 @@
 /**
- * client/src/game/render/actors.ts — R2：facing/anim 前端推断。
- *
- * sim 侧 Actor.facing/anim 现硬编码（ws.py "s"/"idle"，EntityState 只有 pos）——
- * 表现层推断是纯客户端职责；sim 真供数日，switch 到协议字段的缝已留
- * （MirrorActor 的 facing/anim 键直接读即可，本模块推断函数仍服务插值中间帧）。
+ * 位移决定朝向和动画钟；三种人物图集共用线性帧号换算。
+ * 当前 16×32 素材均只有四向走环，静止时使用各图集的站立列。
  */
-import type { MirrorActor } from '../world-mirror';
 
 export type Facing = 'n' | 'e' | 's' | 'w';
-export type Anim = 'idle' | 'walk';
 
 /** 位移方向 → 朝向（对角取主导轴，|dy|≥|dx| 时 y 优先；零位移**沿用原朝向**——
  *  H-3：停下不许转身，调用方传 lastFacing 缓存）。 */
@@ -16,11 +11,6 @@ export function inferFacing(dx: number, dy: number, lastFacing: Facing = 's'): F
   if (dx === 0 && dy === 0) return lastFacing;
   if (Math.abs(dy) >= Math.abs(dx)) return dy > 0 ? 's' : 'n';
   return dx > 0 ? 'e' : 'w';
-}
-
-/** 前后两帧位置 → 动画态（变格=walk，原格=idle）。 */
-export function inferAnim(prev: { x: number; y: number }, cur: { x: number; y: number }): Anim {
-  return prev.x === cur.x && prev.y === cur.y ? 'idle' : 'walk';
 }
 
 /** H-2：walk 动画钟推进——moved 时从站立帧起步并累加 delta，静止归 -1（站立帧）。
@@ -32,9 +22,7 @@ export function advanceAnimClock(current: number, moved: boolean, deltaMs: numbe
 
 /** facing → 图集行号（build_palette.py 布局实测：下/上/右/左 = 0/1/2/3）。 */
 export function facingRow(facing: Facing): number {
-  return { down: 0, up: 1, right: 2, left: 3 }[
-    ({ n: 'up', e: 'right', s: 'down', w: 'left' } as const)[facing]
-  ];
+  return { n: 1, e: 2, s: 0, w: 3 }[facing];
 }
 
 /** C-2：chenmo.png 272×256 = **17 列**×16 行 @16px——Phaser spritesheet 线性帧号
@@ -87,38 +75,6 @@ export const GOD_SPRITE_KEYS: readonly string[] = [
   'god_villager_zuheshishen',
 ];
 
-/** GOD 皮帧号合成：3 列几何（col1 站立 + 行内 3 帧走环）。
- *  劳作姿势与 villager 同口径——16×32 帧无独立姿势行，静止退朝向站立帧。 */
-export function godVillagerFrame(
-  sheet: SheetGeometry,
-  anim: string,
-  facing: Facing,
-  animClockMs: number,
-): number {
-  return villagerFrame(sheet, anim, facing, animClockMs);
-}
-
-/** D14：劳作姿势 → 素材行号。16×32 帧几何下 villager 无独立姿势行（原 R4-R7
- *  是 16px 帧误算的产物，实为 R0-R3 的下半身）——work/eat/rest/chat 静止统一
- *  退朝向站立帧（与 walk/idle 同帧；姿势差异化待换带姿势行的素材再启用）。 */
-const POSE_ROW: Record<string, number> = {};
-
-/** villager 帧号合成：行走中（animClock≥0）→ facing 走环；静止 → 劳作姿势行
- *  站立帧（work/eat/rest/chat），walk/idle 姿势 = facing 走环站立帧。 */
-export function villagerFrame(
-  sheet: SheetGeometry,
-  anim: string,
-  facing: Facing,
-  animClockMs: number,
-): number {
-  if (animClockMs >= 0) {
-    return walkFrameFor(sheet, facingRow(facing), animClockMs); // 行走环
-  }
-  const poseRow = POSE_ROW[anim];
-  if (poseRow !== undefined) return poseRow * sheet.cols + (sheet.standCol ?? 0);
-  return walkFrameFor(sheet, facingRow(facing), -1); // walk/idle/未知 → 站立帧
-}
-
 /** 通用线性帧号：站立帧 row*cols+standCol；walk 环行内 framesPerRow 帧循环。
  *  D10：walkFrame 的一般化（单入口防两套换算漂移——C-2 教训）。 */
 export function walkFrameFor(sheet: SheetGeometry, row: number, animClockMs: number): number {
@@ -126,20 +82,4 @@ export function walkFrameFor(sheet: SheetGeometry, row: number, animClockMs: num
   if (animClockMs < 0) return row * sheet.cols + standCol;
   const phase = Math.floor(animClockMs / 150) % sheet.framesPerRow;
   return row * sheet.cols + phase;
-}
-
-/** walk 循环帧号（线性 f = row*COLS + phase）。animClock<0 = 站立帧（col 1）。 */
-export function walkFrame(row: number, animClockMs: number): number {
-  return walkFrameFor(CHENMO_SHEET, row, animClockMs);
-}
-
-/** Actor 当前逻辑帧号（合成入口：朝向行 + 动画帧）。 */
-export function frameOf(
-  actor: MirrorActor,
-  prev: { x: number; y: number },
-  animClockMs: number,
-): number {
-  const row = facingRow(inferFacing(actor.x - prev.x, actor.y - prev.y));
-  const anim = inferAnim(prev, actor);
-  return walkFrame(row, anim === 'idle' ? -1 : animClockMs);
 }

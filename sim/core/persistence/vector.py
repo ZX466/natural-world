@@ -1,18 +1,14 @@
-"""sqlite-vec 向量索引（npc_memory_vec）— schema.md §6。
+"""sqlite-vec 记忆候选与分支向量拷贝（schema.md §6）。
 
-设计说明：
-- ``npc_memory_vec`` 是 sqlite-vec 的 **vec0 虚拟表**，维度在 M3 embedding model
-  选定后才锁定（见 schema.md §6 注：384 或 768）。docs/data/migration.md 明确
-  虚拟表 DDL 在 Alembic 范围之外（需先 ``LOAD EXTENSION``）——故本模块提供
-  显式初始化函数，由 M3 接线时调用，不放进 0002 迁移。
-- 维度通过参数/常量传入；本 M1 阶段只提供脚手架 + 建表能力与测试。
+候选在 SQL 内按分支和治理状态过滤，再按距离、rowid 稳定排序。
+vec0 虚拟表通过显式初始化函数创建，DDL 不属于 Alembic 迁移。
 """
 
 from __future__ import annotations
 
 import sqlite3
 from collections.abc import Mapping, Sequence
-from typing import Final, Protocol, runtime_checkable
+from typing import Final
 
 from sim.llm.memory_scan import MemoryEntry, make_entry
 
@@ -35,25 +31,11 @@ VEC_TABLE: Final[str] = "npc_memory_vec"
 RECALL_OVERFETCH_FACTOR: Final[int] = 4
 
 
-def load_sqlite_vec(conn: sqlite3.Connection) -> None:
-    """在同步 sqlite3 连接上加载 sqlite-vec 扩展。
-
-    需要连接允许扩展加载（``enable_load_extension(True)``）。
-    """
-    import sqlite_vec
-
-    conn.enable_load_extension(True)
-    try:
-        sqlite_vec.load(conn)
-    finally:
-        conn.enable_load_extension(False)
-
-
 def create_memory_vec_table(conn: sqlite3.Connection, dim: int = DEFAULT_EMBEDDING_DIM) -> None:
     """创建 ``npc_memory_vec`` vec0 虚拟表（幂等：IF NOT EXISTS）。
 
     Args:
-        conn: 已加载 sqlite-vec 扩展的同步连接。
+        conn: 同步 sqlite3 连接；本函数负责加载扩展。
         dim: embedding 维度（固定，sqlite-vec 要求）。
     """
     conn.enable_load_extension(True)
@@ -89,19 +71,6 @@ def memory_vec_rowid(npc_memory_id: int) -> int:
     return npc_memory_id
 
 
-# ---------------------------------------------------------------------------
-# M3-A3：VectorIndex 接口草案（裁 3 / V1：sqlite-vec 主 + numpy 余弦降级）
-# ---------------------------------------------------------------------------
-#
-# 边界（m3-plan 批次 A3 起步，A4 全量实现）：
-# - 本批只**立接口 + 两实现骨架**，治理过滤 JOIN 留给 A4（R2 钉子）。
-# - 接口返回 ``rowid``（= npc_memories.id，见 memory_vec_rowid），
-#   候选源再据此取回 ``MemoryEntry``（形状与 M2 iter_visible 一致，§18 硬边界）。
-# - 两实现同接口，M3 按 sqlite-vec 扩展可用性切换（A 主 / B 降级）。
-
-#: 一次向量检索的单条命中：(rowid, distance)。距离越小越近。
-VectorHit = tuple[int, float]
-
 #: 向量入参：float64/32 序列，或已打包的 little-endian float32 BLOB（sqlite-vec 直存形）。
 VectorInput = Sequence[float] | bytes
 
@@ -113,105 +82,6 @@ def _to_blob(vector: VectorInput) -> bytes:
     if isinstance(vector, (bytes, bytearray)):
         return bytes(vector)
     return struct.pack(f"{len(vector)}f", *vector)
-
-
-def _to_floats(vector: VectorInput, dim: int) -> list[float]:
-    """归一化为 float 列表（供 numpy 降级实现）。"""
-    import struct
-
-    if isinstance(vector, (bytes, bytearray)):
-        return list(struct.unpack(f"{len(vector) // 4}f", bytes(vector)))
-    return [float(v) for v in vector]
-
-
-@runtime_checkable
-class VectorIndex(Protocol):
-    """向量索引接口（候选生成器的后端）。
-
-    M3 候选源（`VecCandidateSource`）只依赖本协议；A(sqite-vec)/B(numpy)
-    两实现可互换（裁 3 / V1）。**纯读 + 确定性**：同距离按 rowid 稳定排序。
-    """
-
-    def upsert(self, rowid: int, vector: VectorInput) -> None:
-        """写入/覆盖一条向量（rowid = npc_memories.id）。"""
-        ...
-
-    def remove(self, rowid: int) -> None:
-        """删除一条向量（npc_memories 行删除/治理级联时）。"""
-        ...
-
-    def knn(self, query_vector: VectorInput, top_k: int) -> list[VectorHit]:
-        """返回最近邻 ``top_k`` 条 (rowid, distance)；距离升序、同距按 rowid 稳定。"""
-        ...
-
-
-class SqliteVecIndex:
-    """方案 A（主）：sqlite-vec ``vec0`` 虚拟表后端。
-
-    依赖 ``npc_memory_vec`` 已建（``create_memory_vec_table``）+ 连接已加载扩展。
-    本批为**骨架**：knn 走 vec0 ``MATCH``；治理过滤由候选源层 A4 接入。
-    """
-
-    def __init__(self, conn: sqlite3.Connection, dim: int = DEFAULT_EMBEDDING_DIM) -> None:
-        self._conn = conn
-        self._dim = dim
-
-    def upsert(self, rowid: int, vector: VectorInput) -> None:
-        conn = self._conn
-        conn.execute(f"DELETE FROM {VEC_TABLE} WHERE rowid = ?", (memory_vec_rowid(rowid),))
-        conn.execute(
-            f"INSERT INTO {VEC_TABLE}(rowid, embedding) VALUES (?, ?)",
-            (memory_vec_rowid(rowid), _to_blob(vector)),
-        )
-
-    def remove(self, rowid: int) -> None:
-        self._conn.execute(f"DELETE FROM {VEC_TABLE} WHERE rowid = ?", (memory_vec_rowid(rowid),))
-
-    def knn(self, query_vector: VectorInput, top_k: int) -> list[VectorHit]:
-        rows = self._conn.execute(
-            f"SELECT rowid, distance FROM {VEC_TABLE}"
-            " WHERE embedding MATCH ? AND k = ? ORDER BY distance",
-            (_to_blob(query_vector), top_k),
-        ).fetchall()
-        # 同距按 rowid 稳定排序（确定性 C5，与 M2 打分 tiebreak 同款）。
-        hits = [(int(r[0]), float(r[1])) for r in rows]
-        hits.sort(key=lambda h: (h[1], h[0]))
-        return hits
-
-
-class NumpyCosineIndex:
-    """方案 B（降级）：内存 numpy 余弦暴力检索（同 `VectorIndex` 接口）。
-
-    用于 sqlite-vec 扩展在 aiosqlite/async 下加载失败时的降级路径（V1）。
-    本批为**骨架**（内存 dict + 余弦 top-k）。
-    """
-
-    def __init__(self, dim: int = DEFAULT_EMBEDDING_DIM) -> None:
-        self._dim = dim
-        self._vectors: dict[int, list[float]] = {}
-
-    def upsert(self, rowid: int, vector: VectorInput) -> None:
-        self._vectors[memory_vec_rowid(rowid)] = _to_floats(vector, self._dim)
-
-    def remove(self, rowid: int) -> None:
-        self._vectors.pop(memory_vec_rowid(rowid), None)
-
-    def knn(self, query_vector: VectorInput, top_k: int) -> list[VectorHit]:
-        import numpy as np
-
-        q = np.asarray(_to_floats(query_vector, self._dim), dtype=np.float64)
-        qn = float(np.linalg.norm(q))
-        if qn == 0.0 or not self._vectors:
-            return []
-        sims: list[tuple[int, float]] = []
-        for rowid, vec in self._vectors.items():
-            v = np.asarray(vec, dtype=np.float64)
-            vn = float(np.linalg.norm(v))
-            cos = 0.0 if vn == 0.0 else float(np.dot(q, v) / (qn * vn))
-            sims.append((rowid, 1.0 - cos))  # 距离 = 1 - 余弦相似度（越小越近）
-        # 距离升序、同距按 rowid 稳定（确定性 C5）。
-        sims.sort(key=lambda h: (h[1], h[0]))
-        return sims[:top_k]
 
 
 def clone_branch_vectors(

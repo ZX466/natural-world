@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
-from sim.agent.will import WillingnessVerdict, synthesize_verdict, willingness_expression
+from sim.agent.will import WillingnessVerdict, willingness_expression
 from sim.core.events import (
     WorldEvent,
     hidden_emerge_event,
@@ -41,11 +41,6 @@ def _defer_label(action: str) -> str:
         "rest": "歇口气",
         "request_chat": "找人说话",
     }.get(action, action)
-
-
-#: D14 默认逐人意愿合成器（(profile, action, tick) → verdict）。
-#: 模块级常量供测试 monkeypatch（test_m4d14_defers 用）。
-_VERDICT_OF_DEFAULT = synthesize_verdict
 
 
 @dataclass

@@ -11,7 +11,8 @@ import { describe, expect, it } from 'vitest';
 import {
   ACTOR_DEPTH_BASE,
   ACTOR_FRAME_HEIGHT,
-  BUBBLE_GAP,
+  ISO_BUBBLE_GAP_PX,
+  ISO_LABEL_GAP_PX,
   LABEL_GAP,
   NAME_LABEL_RADIUS,
   NIGHT_OVERLAY_DEPTH,
@@ -21,7 +22,6 @@ import {
   actorDepth,
   assignStackOffsets,
   bubbleDepth,
-  bubbleY,
   labelDepth,
   labelY,
   manhattan,
@@ -95,7 +95,7 @@ describe('manhattan', () => {
   });
 });
 
-describe('labelY / bubbleY（头顶锚点）', () => {
+describe('当前名字和气泡头顶锚点', () => {
   it('名字在精灵头顶之上（精灵 32px 高，脚底为原点）', () => {
     // 脚底 y=100 → 头顶 68 → 名字基线 66
     expect(labelY(100)).toBe(100 - ACTOR_FRAME_HEIGHT - LABEL_GAP);
@@ -103,13 +103,15 @@ describe('labelY / bubbleY（头顶锚点）', () => {
   });
 
   it('气泡在名字之上（y 更小）', () => {
-    expect(bubbleY(100)).toBeLessThan(labelY(100));
-    expect(bubbleY(100)).toBe(100 - ACTOR_FRAME_HEIGHT - BUBBLE_GAP);
+    const bubble = aboveSurface(100, ACTOR_FRAME_HEIGHT, ISO_BUBBLE_GAP_PX, 3.5);
+    const label = aboveSurface(100, ACTOR_FRAME_HEIGHT, ISO_LABEL_GAP_PX, 3.5);
+    expect(bubble).toBeLessThan(label);
+    expect(bubble).toBe(100 - ACTOR_FRAME_HEIGHT - ISO_BUBBLE_GAP_PX / 3.5);
   });
 
   it('锚点随脚底平移（相对偏移恒定）', () => {
     expect(labelY(300) - labelY(100)).toBe(200);
-    expect(bubbleY(300) - bubbleY(100)).toBe(200);
+    expect(aboveSurface(300, 32, 20, 3.5) - aboveSurface(100, 32, 20, 3.5)).toBeCloseTo(200);
   });
 });
 

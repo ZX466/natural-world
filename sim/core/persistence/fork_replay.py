@@ -69,7 +69,6 @@ COMPARABLE_KNOWLEDGE_FIELDS: Final[frozenset[str]] = frozenset(
 
 #: `knowledge.source_knowledge_id` 是**自增 int 链指针**，克隆后必变 → 不可比；
 #: 但它「非空/为空」的形态要靠 R-2 的悬空断言保证，故不进可比集（名字在此登记）。
-_SOURCE_CHAIN_NOTE: Final[str] = "knowledge.source_knowledge_id（自增链指针，克隆后必变）"
 
 
 def comparable_memory(row: NpcMemory) -> dict[str, object]:

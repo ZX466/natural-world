@@ -1,50 +1,10 @@
-"""读档 = 分叉：事务与克隆（M5-D3-b，DESIGN §12；裁 6 (c) / 裁 10 (i) / R-1 / R-2）
+"""读档通过新建分支恢复世界；保留原事件、熵日志和检查点（DESIGN §12/C6）。
 
-读档流程（§12）：定位 anchor 的 `(branch_id, seq)` → **建新分支** → 旧分支标
-`abandoned` → 世界继续。**不删除、不回退原世界线**（§19 禁止事项，C6）——本模块
-只 INSERT 子分支行 + 改父分支 `status`；`events` / `entropy_log` / `snapshots` 一律不碰。
-
-形态（`m5-fork-archive-preplan.md` §3.5，裁 6 (c) = async 引擎直写）：**一次事务**内
-
-1. ``preflush()`` —— **P1 前置条件做成动作**：数据层看不到 driver 的 in-flight 批次，
-   「投影追平到分叉点」只能由调用方以**必填**钩子声明并执行（漏传即不可分叉）；
-2. 建子分支行（`forked_from_branch` / `forked_from_seq`）；
-3. 六张有界表 ``INSERT … SELECT`` 换 ``branch_id`` 值（零 id 重映射）；
-4. 两张语料表按分叉点**截断**克隆：自增 id **显式分配** + ``entry_id`` 重映射
-   （裁 10 (i)）→ 治理指针（``superseded_by`` / ``source_knowledge_id`` /
-   ``source_memory``）全部走临时映射表重写；
-5. 证据引用改写：``evidence_branch_id`` 由 NULL（在本分支）→ 父分支（事件不克隆；
-   0008-d 裁 4 封 C4 跨分支悬空）；
-6. 父分支标 ``abandoned``（仅当仍 active；已弃分支可再分叉，不重复盖时间戳）。
-
-**批次 C 权力态**（0013 / M5-A7）走有界表克隆（``npc_power`` 在 ``_BOUNDED_TABLES`` 内）：
-子分支拿父分支**当前**权势值，逐字节。该表无事件源 ⇒ 它的值只能来自克隆/快照，
-历史点读档（anchor 物化）拿不到——A3「不可重建」族第 4 张，由批次 E 物化单收口。
-
-提交后（跨引擎，独立一步）：给了 ``vec_conn`` 就按**字节**重键拷贝 ``npc_memory_vec``
-行（V4：vec 表为准 → **零 LLM 调用**；重新 embed 是红线禁）。
-
-**分叉点只支持父分支头部**（fail-closed）：投影表的当前值 == 分叉点状态，**仅当父分支
-在分叉点之后没有再推进**。历史点分叉（回昨天的存档）时 ``npc_memories`` /
-``knowledge`` 的**治理列**与 ``relationships`` 的**累计值**已被父分支的「未来」改写，
-而这三张表**没有事件源**（F2）⇒ 历史状态不可重建。修法需裁 7 的 ``*.written`` 事件或
-anchor 世界态物化/快照展开（M5 均未落）——**不用「近似重置治理列」糊过去**。
-
-**批次 E 物化单（M5-A10）：``kind`` 参数化 + 语料克隆源切包**（A3 §3.2）
-
-``kind="head"``（现行，默认，行为**逐字不变**）= 读**当前档**：父分支已封存、语料按分叉点
-截断克隆、权力态随有界表克隆。``kind="anchor"``（**历史点读档**）= 回退旧档：
-
-- 分叉点**允许** ``fork_seq < head_seq``（历史点正是为此解锁的）；
-- **必须**带 ``package``（物化器产物，缺包 ⇒ :class:`ForkError`，不静默近似）；
-- 语料（``npc_memories`` / ``knowledge`` / ``relationships``）行值**以包为权威**，
-  **无截断判据**（包是锚点时刻的全量行集）；id 仍显式分配 + ``entry_id`` 仍走确定性
-  重映射 + R-2 指针重写照旧（治理完整性不因切包而放松）；
-- 火场（``fires``，可重放族）行值取**包里的重放结果**，不是父分支当前行；
-- 权力态**零克隆**（第 4 张无事件源表按 S10 §2.3 裁决**不进包** ⇒ 子分支该表零行 =
-  「未表态兜底 0」，读档**不报错**）；
-- 父分支**不封存**（保持 active，子线只是又一条并存线）——回退旧档不得封存玩家正在跑的
-  世界线；当前行的移交归 R-4 施工单（0012 头注 + 双态钉已就位）。
+preflush 先使投影追平游标；子分支、投影、语料重键与当前分支切换在同一事务内完成。
+head 分叉复制当前投影并封存活跃父线；anchor 分叉保留父线，语料必须来自物化包。
+历史材料/结构按各祖先分叉边界重放，火场取包中重放结果，权力态按既定口径不克隆。
+语料主键、entry_id 和治理指针一起重映射；证据仍指向原事件所属分支。
+提交后可通过独立 vec 连接按字节拷贝向量，缺失向量只标记待补齐，不调用模型重算。
 """
 
 from __future__ import annotations
@@ -674,53 +634,70 @@ async def fork_from_anchor(
     )
 
 
-async def _clone_materials_at_cursor(
-    session: AsyncSession, branch_id: str, seq: int, child_id: str
-) -> int:
-    from sim.core.persistence.models import MaterialBalance
-    from sim.core.persistence.npc_store import fold_material_balance
-
+async def _projection_events_at_cursor(
+    session: AsyncSession,
+    branch_id: str,
+    seq: int,
+    *,
+    event_kinds: tuple[str, ...],
+    projection: str,
+) -> list[Event]:
+    """在调用方事务内读取有界谱系；各段按 seq 排序，祖先段先于子线。"""
     segments: list[Sequence[Event]] = []
     seen: set[str] = set()
     current: str | None = branch_id
     upper = seq
     while current is not None:
         if current in seen:
-            raise ForkError("cyclic material branch history")
+            raise ForkError(f"cyclic {projection} branch history")
         seen.add(current)
         branch = await session.get(Branch, current)
         if branch is None:
-            raise ForkError("missing material branch history")
+            raise ForkError(f"missing {projection} branch history")
         rows = await session.scalars(
             select(Event)
             .where(
                 Event.branch_id == current,
                 Event.seq <= upper,
-                Event.event_type == EventKind.MATERIAL_MOVED.value,
+                Event.event_type.in_(event_kinds),
             )
             .order_by(Event.seq)
         )
         segments.append(rows.all())
         if branch.forked_from_branch is not None and branch.forked_from_seq is None:
-            raise ForkError("missing material branch cutoff")
+            raise ForkError(f"missing {projection} branch cutoff")
         current = branch.forked_from_branch
         upper = branch.forked_from_seq if branch.forked_from_seq is not None else 0
+    return [row for segment in reversed(segments) for row in segment]
 
+
+async def _clone_materials_at_cursor(
+    session: AsyncSession, branch_id: str, seq: int, child_id: str
+) -> int:
+    from sim.core.persistence.models import MaterialBalance
+    from sim.core.persistence.npc_store import fold_material_balance
+
+    rows = await _projection_events_at_cursor(
+        session,
+        branch_id,
+        seq,
+        event_kinds=(EventKind.MATERIAL_MOVED.value,),
+        projection="material",
+    )
     balances: dict[tuple[str, str], float] = {}
     updated: dict[tuple[str, str], int] = {}
-    for segment in reversed(segments):
-        for row in segment:
-            payload = json.loads(row.payload)
-            material = str(payload["material_id"])
-            source, target = str(payload["from_ref"]), str(payload["to_ref"])
-            from_key, to_key = (source, material), (target, material)
-            balances[from_key], balances[to_key] = fold_material_balance(
-                balances.get(from_key, 0.0),
-                balances.get(to_key, 0.0),
-                quantity=float(payload["quantity"]),
-                from_ref=source,
-            )
-            updated[from_key] = updated[to_key] = row.tick
+    for row in rows:
+        payload = json.loads(row.payload)
+        material = str(payload["material_id"])
+        source, target = str(payload["from_ref"]), str(payload["to_ref"])
+        from_key, to_key = (source, material), (target, material)
+        balances[from_key], balances[to_key] = fold_material_balance(
+            balances.get(from_key, 0.0),
+            balances.get(to_key, 0.0),
+            quantity=float(payload["quantity"]),
+            from_ref=source,
+        )
+        updated[from_key] = updated[to_key] = row.tick
     for ref, material in sorted(balances):
         key = (ref, material)
         session.add(
@@ -744,59 +721,39 @@ async def _clone_structures_at_cursor(
     WorldCheckpoint 不含结构；每层 seq 只在该层解释，祖先前缀须先于子线事件。
     只复用既有结构折叠规则，不改物化包或 materialize_structures_replay 路径。
     """
-    segments: list[Sequence[Event]] = []
-    seen: set[str] = set()
-    current: str | None = branch_id
-    upper = seq
-    while current is not None:
-        if current in seen:
-            raise ForkError("cyclic structure branch history")
-        seen.add(current)
-        branch = await session.get(Branch, current)
-        if branch is None:
-            raise ForkError("missing structure branch history")
-        rows = await session.scalars(
-            select(Event)
-            .where(
-                Event.branch_id == current,
-                Event.seq <= upper,
-                Event.event_type.in_(_STRUCTURE_KINDS),
-            )
-            .order_by(Event.seq)
-        )
-        segments.append(rows.all())
-        if branch.forked_from_branch is not None and branch.forked_from_seq is None:
-            raise ForkError("missing structure branch cutoff")
-        current = branch.forked_from_branch
-        upper = branch.forked_from_seq if branch.forked_from_seq is not None else 0
-
+    rows = await _projection_events_at_cursor(
+        session,
+        branch_id,
+        seq,
+        event_kinds=tuple(_STRUCTURE_KINDS),
+        projection="structure",
+    )
     structures: dict[str, StructureSnapshot] = {}
-    for segment in reversed(segments):
-        for row in segment:
-            event = WorldEvent(
-                branch_id=row.branch_id,
-                tick=row.tick,
-                event_type=EventKind(row.event_type),
-                payload=json.loads(row.payload),
-            )
-            fields = _structure_event_fields(event)
-            folded = fold_structure_snapshot(
-                structures.get(fields.structure_id),
-                event_type=event.event_type,
-                structure_id=fields.structure_id,
-                tick=event.tick,
-                tiles=fields.tiles,
-                kind=fields.kind,
-                material=fields.material,
-                load_bearing=fields.load_bearing,
-                supported_by=fields.supported_by,
-                owner_id=fields.owner_id,
-                built_by=fields.built_by,
-            )
-            if folded is None:
-                structures.pop(fields.structure_id, None)
-            else:
-                structures[fields.structure_id] = folded
+    for row in rows:
+        event = WorldEvent(
+            branch_id=row.branch_id,
+            tick=row.tick,
+            event_type=EventKind(row.event_type),
+            payload=json.loads(row.payload),
+        )
+        fields = _structure_event_fields(event)
+        folded = fold_structure_snapshot(
+            structures.get(fields.structure_id),
+            event_type=event.event_type,
+            structure_id=fields.structure_id,
+            tick=event.tick,
+            tiles=fields.tiles,
+            kind=fields.kind,
+            material=fields.material,
+            load_bearing=fields.load_bearing,
+            supported_by=fields.supported_by,
+            owner_id=fields.owner_id,
+            built_by=fields.built_by,
+        )
+        if folded is None:
+            structures.pop(fields.structure_id, None)
+        else:
+            structures[fields.structure_id] = folded
 
     session.add_all(
         Structure(

@@ -62,16 +62,6 @@ class GateVerdict:
         return not self.accepted
 
 
-def _target_visible(intent: Intent, state: WorldState, actor_id: str) -> bool:
-    """目标在本 tick 状态里是否存在/可见（M1：目标实体存在即视为可见）。"""
-    if intent.target_id is not None:
-        return intent.target_id in state.entities
-    if intent.target_pos is not None:
-        x, y = intent.target_pos
-        return x >= 0 and y >= 0  # M1 简化：坐标非负即合法（地图校验在寻路层）
-    return False
-
-
 class IntentGate:
     """无状态闸门（纯读）。所有裁决可重放、可测试。"""
 

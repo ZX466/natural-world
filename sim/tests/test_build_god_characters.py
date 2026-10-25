@@ -139,3 +139,57 @@ def test_four_directions_preserved(tmp_path):
     s = a[0:32, 16:32, 3]  # out row0 col1（下站立）
     n = a[96:128, 16:32, 3]  # out row3 col1（上站立）
     assert not np.array_equal(s, n), "下/上站立帧被抹平——行映射或写位错误"
+
+
+def test_shared_decoder_can_preserve_character_rgba_boundary(tmp_path):
+    from PIL import Image
+
+    from sim.content.png_codec import read_png_rgba
+
+    source = tmp_path / "rgb.png"
+    Image.new("RGB", (1, 1), (23, 45, 67)).save(source)
+    assert read_png_rgba(source) == [[(23, 45, 67, 255)]]
+    with pytest.raises(ValueError, match="RGBA"):
+        read_png_rgba(source, allow_rgb=False)
+
+
+def test_character_pipeline_keeps_rgba_input_contract(tmp_path):
+    from PIL import Image
+
+    source = tmp_path / "rgb-sheet.png"
+    Image.new("RGB", (96, 128), (23, 45, 67)).save(source)
+    with pytest.raises(ValueError, match="RGBA"):
+        slice_and_scale_sheet(source, tmp_path / "out.png")
+
+
+def test_character_scaling_preserves_pixels_without_source_pack(tmp_path):
+    from sim.content.png_codec import read_png_rgba, write_png_rgba
+
+    source = tmp_path / "rgba-sheet.png"
+    pixels = [[(x, y, (3 * x + y) % 256, (x + y) % 256) for x in range(96)] for y in range(128)]
+    write_png_rgba(source, 96, 128, pixels)
+    output = read_png_rgba(slice_and_scale_sheet(source, tmp_path / "out.png"))
+    source_row_starts = (0, 96, 64, 32)  # down/up/right/left
+    assert len(output) == 128
+    for y, row in enumerate(output):
+        assert len(row) == 48
+        source_y = source_row_starts[y // 32] + y % 32
+        assert row == [pixels[source_y][2 * x] for x in range(48)]
+
+
+def test_character_builder_remains_directly_executable(tmp_path):
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[1] / "content" / "build_god_characters.py"
+    result = subprocess.run(
+        [sys.executable, str(script)],
+        cwd=tmp_path,
+        env={key: value for key, value in os.environ.items() if key != "PYTHONPATH"},
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr

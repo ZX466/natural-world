@@ -1,7 +1,6 @@
 """png_codec.py — 最小 PNG 编解码（零依赖；zlib+struct 标准库）。
 
-依据: PNG spec (ISO 15948) —— IHDR/IDAT/IEND, filter type 0-4, RGBA8。
-build_god_characters.py 的同款手法规整化（单一真相源，两管线共用）。
+角色、城镇、高度表和方块图集共用；支持 PNG filter 0-4。
 """
 
 from __future__ import annotations
@@ -11,8 +10,8 @@ import zlib
 from pathlib import Path
 
 
-def read_png_rgba(path: Path) -> list[list[tuple[int, int, int, int]]]:
-    """读 PNG → RGBA 像素矩阵（8-bit RGBA 或 RGB 非交错；RGB 补 alpha=255）。"""
+def read_png_rgba(path: Path, *, allow_rgb: bool = True) -> list[list[tuple[int, int, int, int]]]:
+    """读 8-bit 非交错 PNG；RGB 默认补不透明 alpha，角色管线可限制为 RGBA。"""
     data = path.read_bytes()
     if data[:8] != b"\x89PNG\r\n\x1a\n":
         msg = f"非 PNG 文件: {path}"
@@ -22,6 +21,7 @@ def read_png_rgba(path: Path) -> list[list[tuple[int, int, int, int]]]:
     idat = bytearray()
     bit_depth = 8
     color_type = 6
+    allowed_types = (2, 6) if allow_rgb else (6,)
     while pos < len(data):
         (length,) = struct.unpack(">I", data[pos : pos + 4])
         ctype = data[pos + 4 : pos + 8]
@@ -29,8 +29,9 @@ def read_png_rgba(path: Path) -> list[list[tuple[int, int, int, int]]]:
         pos += 12 + length  # 4 len + 4 type + data + 4 crc
         if ctype == b"IHDR":
             width, height, bit_depth, color_type = struct.unpack(">IIBB", chunk[:10])
-            if bit_depth != 8 or color_type not in (2, 6):
-                msg = f"仅支持 8-bit RGB/RGBA，得到 depth={bit_depth} color={color_type}"
+            if bit_depth != 8 or color_type not in allowed_types:
+                formats = "RGB/RGBA" if allow_rgb else "RGBA"
+                msg = f"仅支持 8-bit {formats}，得到 depth={bit_depth} color={color_type}"
                 raise ValueError(msg)
             if chunk[10] != 0:
                 msg = "不支持交错 PNG"
