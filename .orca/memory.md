@@ -262,6 +262,8 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 
 # ④ codex 树快照（权威来源：codex 树 `.orca/memory.md`；收编时原样并入）
 
+【2026-10-25 CodeGraph｜本树索引可用】用户直接授权“索引”，已用CodeGraph 1.6.2在本树运行init --yes；.codegraph是本机忽略产物，不入库。status：442条文件记录、11000节点、35357关系，state=complete、pendingRefs=0、pendingChanges全0、worktreeMismatch=null。已通过MCP codegraph_explore查询“_handle_voxel_request VoxelRuntime.request”，返回两个真实源文件及调用方/受影响测试，验证可用。后续定位/理解代码优先CodeGraph，MCP须显式projectPath=E:/zxdevelop/.orca/worktrees/project7/codex；代码变动后按需codegraph sync本树。此次仅建索引、更新本章节和本地回执，未改业务代码/主树。V4a已由主树在talking回执验收（merge 4c8e2fd），不重开该单。
+
 【2026-10-24 V4a｜收官完成，待主树复核】两笔本地提交：6e890e6（sim/协议）+本快照同笔feat(client)（完整SHA见talking/git log）。基准3cdff1d，仅本地codex；旧HEAD71cb448已确认祖先/净树，以reset --keep快进，无merge/丢提交。新voxel.edited封闭payload/default bus登记；30tick确定性dig、可取消、≤4首尾双验、place即时、earth守恒，库存只观察成功落库事件，待提交预留防超支。TILE_CHANGED仍是唯一碰撞回放路径，无WorldCheckpoint/BLOB/schema变更。1.12新render双消息和可选voxel_edits账本；鉴权后才下发行囊，断开只取消本owner，读档/冷启从分支有界事件恢复。ws.py/ws.ts版本、shared快照/生成物及协议登记同提交；ws.ts消费面随第二笔完成，旧端忽略新增帧/字段。
 
 【V4a-1 必要接线】历史anchor材料投影曾红：子线缓存earth1而material_balances沿父head为0；现仅anchor路径按游标+祖先分叉边界折叠material.moved，复用既有非负fold；head路径不变，嵌套祖先测试已绿。放墙用既有MOVE(currentpos,)停止交叉路径并在末尾maintenance复验，不改通用MOVE语义。拒绝文案走固定中文集合，保留C3字面量守卫；README仅协议徽章同步，旧协议闭合钉只显式加1.12授权成员/字段，无删钉/skip/deselect。
