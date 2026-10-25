@@ -251,6 +251,10 @@ export class WorldScene extends Phaser.Scene {
       if (edit.action === 'place') {
         g.fillStyle(0x6b4f2a, 1);
         g.fillRect(edit.x * TILE + TILE - 3, edit.y * TILE, 3, TILE);
+      } else {
+        // V4a：挖后仍是静态高度，只靠整格土色几乎认不出——加一道深色内框。
+        g.fillStyle(0x3f3020, 0.55);
+        g.fillRect(edit.x * TILE + 3, edit.y * TILE + 3, TILE - 6, TILE - 6);
       }
     }
   }

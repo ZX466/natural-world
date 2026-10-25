@@ -481,6 +481,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     maintenance = WorldMaintenance(ledger=matter_ledger, structures=structure_snapshots)
     restore_structures(maintenance.structures)
 
+    # 批次 E6：战斗账本（hp 进程内；死亡走 npc.death 事件——C4 零新增 kind）。
+    # 维护钩子的坍塌致伤也用它，故先于钩子创建。
+    from sim.agent.combat_exec import CombatLedger
+
+    combat_ledger = CombatLedger()
+    app.state.combat_ledger = combat_ledger
+
     def _build_tick_hook(state: Any, tick: int) -> list[Any] | None:
         nonlocal tile_map
         events = build_runtime.on_tick(tick)
@@ -495,7 +502,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     loop.attach_npc_runtime(_build_tick_hook)
 
     def _maintenance_tick_hook(state: Any, tick: int) -> list[Any] | None:
-        return maintenance.tick(tick=tick, seed=state.world_seed) or None
+        # DA-07：坍塌与致伤同批——损伤用坍塌前结构快照判邻近；
+        # 主角致死不删实体（只失能），普通活体仍走 npc.death。
+        from sim.world.maintenance import tick_with_injuries
+
+        return (
+            tick_with_injuries(state, maintenance, combat_ledger, tick=tick, seed=state.world_seed)
+            or None
+        )
 
     loop.attach_maintenance(_maintenance_tick_hook)
 
@@ -664,12 +678,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     npc_runtime.on_downgrade = _writeback_downgrade
     _ = CHENMO_ID  # 反思 npc_ids 用（见补线③）
-    # 批次 E6：战斗账本（hp 进程内；死亡走 npc.death 事件——C4 零新增 kind）。
-    from sim.agent.combat_exec import CombatLedger
     from sim.core.entropy import EntropyMixer
 
-    combat_ledger = CombatLedger()
-    app.state.combat_ledger = combat_ledger
     entropy_mixer = EntropyMixer(rng=RngRegistry(world_seed=loop.state.world_seed))
 
     def _combat_entropy(stream: str, tick: int):

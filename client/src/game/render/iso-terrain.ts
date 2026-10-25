@@ -95,6 +95,7 @@ export class IsoTerrain {
   private ground: Phaser.GameObjects.Image | null = null;
   private blocks = new Map<string, BlockView>();
   private rubble = new Map<string, Phaser.GameObjects.Graphics>();
+  private scars = new Map<string, Phaser.GameObjects.Graphics>();
   private textureKeys = new Set<string>();
   private colors: ((gid: number) => number) | null = null;
   private lastMap: MapStatic | null = null;
@@ -272,6 +273,7 @@ export class IsoTerrain {
       this.textureKeys.delete(key);
     }
     this.syncRubble(map, structures, overrides, bounds, edits);
+    this.syncScars(map, structures, bounds, edits);
     this.lastMap = map;
     this.lastShape = `${map.w},${map.h}`;
     this.lastGround = map.ground?.slice();
@@ -345,6 +347,57 @@ export class IsoTerrain {
     }
   }
 
+  /** Dug cells keep their static height (decision 9), so a tinted block alone
+   * reads as ordinary ground. A dark inset diamond marks the disturbed surface
+   * without moving the tile; placed cells are their own marker (raised block).
+   */
+  private syncScars(
+    map: MapStatic,
+    structures: Structures,
+    bounds: ReturnType<typeof screenBounds>,
+    edits: Edits,
+  ): void {
+    const retained = new Set<string>();
+    const active = new Set<string>();
+    for (const structure of structures.values()) {
+      if (structure.phase !== 'built' && structure.phase !== 'collapsing') continue;
+      for (const [x, y] of structure.tiles) active.add(`${x},${y}`);
+    }
+    for (const [key, edit] of edits) {
+      if (edit.action !== 'dig') continue;
+      const { x, y } = edit;
+      if (x < 0 || y < 0 || x >= map.w || y >= map.h) continue;
+      if (active.has(key) || retained.has(key)) continue;
+      let marker = this.scars.get(key);
+      if (marker === undefined) {
+        marker = this.scene.add.graphics();
+        this.scars.set(key, marker);
+      }
+      const top = isoProject(x, y, effectiveHeight(x, y, this.heightOf, structures, edits), bounds);
+      // Above its own block, below the actor standing on it (depthKey + 1).
+      marker.setPosition(top.sx, top.sy).setDepth(depthKey(x, y) + 0.5);
+      marker.clear();
+      const hw = ISO.TW / 2,
+        hh = ISO.TH / 2;
+      marker.fillStyle(0x3f3020, 0.55);
+      marker.fillPoints(
+        [
+          { x: 0, y: -hh / 2 },
+          { x: hw / 2, y: 0 },
+          { x: 0, y: hh / 2 },
+          { x: -hw / 2, y: 0 },
+        ],
+        true,
+      );
+      retained.add(key);
+    }
+    for (const [key, marker] of this.scars) {
+      if (retained.has(key)) continue;
+      marker.destroy();
+      this.scars.delete(key);
+    }
+  }
+
   private readColors(): (gid: number) => number {
     if (!this.scene.textures.exists(TILESET_KEY)) return () => FALLBACK_COLOR;
     const source = this.scene.textures.get(TILESET_KEY).getSourceImage() as HTMLImageElement;
@@ -374,6 +427,8 @@ export class IsoTerrain {
     this.blocks.clear();
     for (const marker of this.rubble.values()) marker.destroy();
     this.rubble.clear();
+    for (const marker of this.scars.values()) marker.destroy();
+    this.scars.clear();
     for (const key of this.textureKeys) this.scene.textures.remove(key);
     this.textureKeys.clear();
     if (this.scene.textures.exists(GROUND_KEY)) this.scene.textures.remove(GROUND_KEY);

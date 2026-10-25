@@ -5,14 +5,16 @@
 > 只在本地存在**；换机器/新克隆时没有它，需要历史就查 git history（`git log -p -- .orca/memory.md`）。
 > 本文件只保留**当前有效**的部分。
 
-<!-- ===== 新对话快速恢复卡（2026-10-24 V4a 派单后）===== -->
+<!-- ===== 新对话快速恢复卡（2026-10-25 DA-07 坍塌接线 + V4a 疤痕，未提交）===== -->
 
 ## 0. 本会话状态
 
-- **代码 HEAD**：`e7f6543`（merge codex：V3 玩法对齐与收官）；最新 `6982f53`（V4a 收编验收记录）；
-  V0 收口 `eb3a260`
+- **代码 HEAD**：`aed609e`（docs：记忆卡指针同步）；前序 `6982f53`（V4a 收编验收记录）、
+  `4c8e2fd`（merge codex V4a）、`e7f6543`（merge codex V3）
+- **⚠️ 工作区有未提交改动（2026-10-25，主树）**：代码 7 改 + 1 新文件，外加本记忆卡；见 §2.7。
+  **尚未 commit、尚未跑 `/security-scan`**。新对话第一件事是决定「提交」还是「回滚」，不要当成已在库状态。
 - **已收编**：DA-03 `d5c2931`／DA-04 `ecc9a14`／DA-05 `4518515`／DA-06 `ea42b13`／DA-07 `fd31113`／DA-08 `01d8142`（merge `bb57acf`）；**V1**（merge `9437cff`）；**V2**（merge `fb09a5b`）；**V3**（merge `e7f6543`，含 `b410e32` 图集管线 + `71cb448` 分层/玩法收官）；**V4a**（merge `4c8e2fd`，含 `6e890e6` sim/协议 + `2eed719` 前端）
-- **在飞**：无。codex 树已收工（HEAD `2eed719`），等下一单派发。
+- **在飞**：无。codex 树已收工（HEAD `2eed719`），等下一单派发。主树有一批**未提交**的自留修补（§2.7）。
 - **未派**：V3.5 内容包 / V4-3D / V4b（材料分类等）
 - **V0 验收**：DESIGN v2.2 仅两处；规格/方案入库 `eb3a260`；双远程已推到 `67aa31b`
 - **V1 验收**：高度表 `--check` 逐字节一致；主树叠图肉眼抽查通过；独立 Chromium 复跑 flat/iso 零 JS 异常（见 §2.5）
@@ -22,7 +24,8 @@
   client typecheck/lint/format EXIT 0、vitest **217P/39files**、`gen:protocol:check` 通过、高度表与图集 `--check`
   双 byte-identical。十条施工裁决逐条对上（详见 §2.6）。
 - **遗留待人工验收**：① DA-07 失能/恢复真模型长局；② V3 画面观感（逐格 tint 与图集贴图的整体质感）人工过目；
-  ③ **V4a 挖放观感**——挖后回静态高度（不必然塌成平地），只靠土色标识，需人眼确认可读性
+  ③ **V4a 挖放观感**——挖后回静态高度（不必然塌成平地），只靠土色/疤痕标识，需人眼确认可读性。
+  **三项都留到本轮收口后一次性过目**（用户 2026-10-25 口径）
 - **协议**：**1.12**（真相源 `sim/api/ws.py::_PROTOCOL_VERSION`，前端 `client/src/net/ws.ts` 同源）
 - **工作树：两棵**（2026-10-21 用户重申，长期有效）
   - 主树 `E:/zxdevelop/project7` → 分支 `main`（Claude：拆单/架构/质量/收编复核/日常小改）
@@ -37,6 +40,9 @@
 代码侧整体完成，剩余是收口型缺口。
 
 ## 2. 门禁（2026-10-24 V4a 收编后主树独立实测）
+
+> **更新的读数（2026-10-25，含未提交修补）见 §2.7**：pytest **2941P**、vitest **221P/39files**、
+> ruff 365 文件。下表是 V4a 收编时的历史读数，留作对照。
 
 | 项 | 结果 |
 |---|---|
@@ -137,6 +143,63 @@
 - **画面口径（重要，别误读为 bug）**：挖 = 回静态高度 + 土色标识，**不是**塌成 h1 平地。
   实测目标静态 h2，挖前/挖后/放后都 48px。可走性是真的，视觉高度不变。这是派单裁决 9 的原意。
 - **C3 出站守卫**：拒绝文案走 `_voxel_bad_target` 的固定中文字面量集合，不透传异常消息。
+
+## 2.7 未提交修补（2026-10-25，主树；**工作区脏**）
+
+用户口径：「先不演示，把代码侧能补的缺口全部补掉，三项人工观感验收留到最后一次性看」。本轮只做
+**已发现的实现缺口**，不开新功能。
+
+### 改动清单（`git status --porcelain -uall` 实测，9 行）
+
+| 文件 | 追踪状态 | 内容 |
+|---|---|---|
+| `sim/world/maintenance.py` | M | 新增 `collapse_injuries()` + `tick_with_injuries()` |
+| `sim/api/main.py` | M | `combat_ledger` 提到维护钩子之前；钩子改调 `tick_with_injuries` |
+| `sim/tests/test_world_maintenance.py` | M | +4 条（共 8） |
+| `sim/tests/test_collapse_wiring.py` | **?? 新文件** | 2 条反射式装配检查 |
+| `client/src/game/render/iso-terrain.ts` | M | `syncScars()`：挖格画深色内嵌菱形疤（+55 行） |
+| `client/src/game/scenes/WorldScene.ts` | M | flat 渲染挖格加深色内框（+4 行） |
+| `client/src/game/render/__tests__/iso-terrain.test.ts` | M | +2 条 |
+| `client/src/game/__tests__/renderer.test.ts` | M | +2 条 |
+| `.orca/memory.md` | M | **本文件是 tracked 的**（`.orca/` 整体被 ignore，但 memory/workflow/agent-registry 是例外） |
+
+> `.orca/talking.txt`、`.orca/status.md` 被 `.gitignore:68`（`.*/`）忽略，**不会出现在 git status**——
+> 改它们不需要提交，但也不会随 git 走。
+
+### 两个缺口的实质
+
+1. **DA-07 坍塌致伤是死代码**：`collapse_injuries` 早就写好但**没有任何生产调用者** ⇒ 结构塌了不伤人。
+   接线同时统一终态口径：主角致死 → `agent.incapacitated`（实体保留可恢复），普通 NPC → `npc.death`。
+   加了两道防护：**同批多次坍塌同一实体只产一条伤害事件**（重复 `npc.death` 会 fail-closed 崩帧）、
+   已失能者不再重复触发。
+2. **V4a 挖后不可读**：裁决 9 定「挖 = 回静态高度」，只靠整格土色标识，肉眼几乎认不出。
+   加疤痕**不改高度、不改碰撞**，纯视觉层；放置格不加疤（本身是抬高方块）。
+
+### 已验证（2026-10-25 本机实测）
+
+| 项 | 结果 | 何时测 |
+|---|---|---|
+| sim 全量 pytest（`-m "not bench"`） | **2941 passed** / 121 skipped / 72 deselected / **0 failed**（621s） | 改动完成后 |
+| ruff check + format | clean（365 files） | 改动完成后 |
+| pyright `sim/` | 0 errors, 0 warnings | 记忆收口前复测 |
+| client `tsc --noEmit` / `eslint` / `prettier --check` | 全 EXIT 0 | 记忆收口前复测 |
+| client vitest | **221 passed / 39 files** | 记忆收口前复测 |
+| DA-07 定向 | `test_collapse_wiring.py` + `test_world_maintenance.py` = **10 passed** | 改动完成后 |
+| `gen:protocol:check` / 高度表 / 图集 `--check` | **本轮未动这些面，未复测**（上次 V4a 收编时 byte-identical） | — |
+
+### 待办
+
+- **没跑 `/security-scan`，所以没 commit**（CLAUDE.md 要求提交前必跑）。
+- 提交建议拆两条：`fix(sim): 坍塌致伤接入生产维护钩子并统一主角失能口径` /
+  `feat(client): 挖掘格疤痕标识`。
+- **TDD 瑕疵**：`test_collapse_wiring.py` 是**实现之后**才写的。已用「临时回退钩子 → 看它失败 → 恢复」
+  补证，但严格说不是 test-first。
+
+### 明确排除（不是缺口）
+
+- **NPC 主动攻打主角**：生产里陈默出手后对手会在交换边界反击（`driver.py:422`），战斗入口是通的；
+  NPC 独立发起战斗是内容设计（V4b 之后），不当缺口补。
+- **V3.5 内容包 / V4-3D / V4b**：未派单，本轮不碰。
 
 ## 3. 缺口清单（codex 审计 8 组 + 主树 P0-3，**全部已修**）
 
@@ -269,6 +332,9 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
   「查一项冒两项」无限扩。派别人做的活按**最低可派标准**核实，不必按自己实现的标准勘察
 
 **协作类**
+- **`.orca/` 只有 3 个文件是 tracked**：`memory.md` / `workflow.txt` / `agent-registry.md`；
+  其余（`talking.txt`、`status.md`、`tmp/`、`archive/`）被 `.gitignore:68`（`.*/`）忽略。
+  所以改记忆卡**会**进 `git status`、需要提交；改 talking/status **不会**。曾误以为整个 `.orca/` 都忽略
 - **两棵树是常态**：主树 `main` + codex 树 `codex`，不要再按「唯一树」记（2026-10-21 用户重申）
 - agent 间**只走 talking.txt**：**不直接向 codex 发消息**、不查终端、不用 orca-cli 通知；
   派单/回执一律写对方工作树的 `.orca/talking.txt`（2026-10-21 用户明示）
@@ -279,7 +345,8 @@ DA-03 只接 `_drain_loads`（读档），两本账构造点在 `lifespan`，`bu
 
 ## 6. 恢复序（新对话）
 
-1. **本卡**（0–6 节）；**§2.6 是 V4a 派单的完整裁决**，接手 V4a 必读
+1. **本卡**（0–6 节）；**§2.7 是本轮未提交改动**（先决定提交还是回滚）；
+   **§2.6 是 V4a 派单的完整裁决**，接手 V4a 必读
 2. `.orca/talking.txt`（当前波 + 在飞）
 3. `.orca/status.md`（质量门快照，2026-10-24 V3 收编后已刷新）
 4. `git log --oneline -15` + `git status`（主树）；**codex 树同做一遍**——派单后他可能已开工

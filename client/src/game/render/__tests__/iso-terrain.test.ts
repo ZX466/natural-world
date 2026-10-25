@@ -362,6 +362,30 @@ it('includes edits in the surface cache and uses earth appearance even when the 
   expect(high.setDisplaySize).toHaveBeenLastCalledWith(32, 48); // Original static height is retained.
 });
 
+it('marks a dug cell with a dark scar and clears it when the edit goes away', () => {
+  const { terrain, map, structures, graphics } = setup([0, 1, 2, 3]);
+  const edits = new Map<string, { x: number; y: number; action: 'dig' | 'place'; gid: number }>();
+  terrain.redraw(map, structures, edits);
+  expect(graphics).toHaveLength(0);
+  edits.set('0,1', { x: 0, y: 1, action: 'dig', gid: 1 });
+  terrain.sync(map, structures, edits);
+  expect(graphics).toHaveLength(1);
+  const top = isoProject(0, 1, 2, screenBounds(2, 2));
+  expect(graphics[0]).toMatchObject({ x: top.sx, y: top.sy, depth: depthKey(0, 1) + 0.5 });
+  expect(graphics[0]!.fillStyle).toHaveBeenCalledWith(0x3f3020, expect.any(Number));
+  edits.clear();
+  terrain.sync(map, structures, edits);
+  expect(graphics[0]!.destroyed).toBe(true);
+});
+
+it('does not scar a placed cell, whose raised block is its own marker', () => {
+  const { terrain, map, structures, graphics } = setup([0, 1, 0, 0]);
+  const edits = new Map<string, { x: number; y: number; action: 'dig' | 'place'; gid: number }>();
+  edits.set('1,0', { x: 1, y: 0, action: 'place', gid: 0 });
+  terrain.redraw(map, structures, edits);
+  expect(graphics).toHaveLength(0);
+});
+
 it('creates a placed height-two block and removes it on an empty restored edit ledger', () => {
   const { terrain, map, structures, images } = setup([0, 1, 0, 0]);
   const edits = new Map<string, { x: number; y: number; action: 'dig' | 'place'; gid: number }>();

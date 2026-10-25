@@ -72,6 +72,93 @@ def test_runtime_tracks_new_structures_and_cascade_does_not_repeat():
     ]
 
 
+def test_collapse_incapacitates_protagonist_instead_of_killing() -> None:
+    """DA-07：坍塌致死对主角只失能，普通 NPC 仍死亡。"""
+    from sim.agent.combat_exec import CombatLedger
+    from sim.core.events import structure_collapsed_event
+    from sim.core.world import EntityState, WorldState
+    from sim.world.maintenance import collapse_injuries
+
+    ledger = CombatLedger()
+    state = WorldState(
+        entities={
+            "chenmo": EntityState(entity_id="chenmo", pos=(4, 0)),
+            "near": EntityState(entity_id="near", pos=(4, 0)),
+        }
+    )
+    events = [structure_collapsed_event(5, structure_id="base", cause="support_lost")]
+    injuries = collapse_injuries(state, events, {"base": _structure("base")}, ledger)
+
+    by_entity = {str(e.payload["entity_id"]): e for e in injuries}
+    assert by_entity["chenmo"].event_type is EventKind.AGENT_INCAPACITATED
+    assert by_entity["near"].event_type is EventKind.NPC_DEATH
+    assert ledger.hp_of("chenmo") == 0 and ledger.hp_of("near") == 0
+
+
+def test_collapse_does_not_reincapacitate_protagonist() -> None:
+    """已经失能的主角不再重复产失能事件（否则每拍刷一条）。"""
+    from sim.agent.combat_exec import CombatLedger
+    from sim.core.events import structure_collapsed_event
+    from sim.core.world import EntityState, WorldState
+    from sim.world.maintenance import collapse_injuries
+
+    ledger = CombatLedger()
+    ledger.apply_damage("chenmo", 10)
+    state = WorldState(
+        entities={
+            "chenmo": EntityState(entity_id="chenmo", pos=(4, 0), incapacitated_until=100),
+        }
+    )
+    events = [structure_collapsed_event(5, structure_id="base", cause="support_lost")]
+    injuries = collapse_injuries(state, events, {"base": _structure("base")}, ledger)
+
+    assert injuries == []
+
+
+def test_one_entity_is_injured_once_per_collapse_batch() -> None:
+    """同批多次坍塌：同一实体只产一条伤害事件（重复 npc.death 会 fail-closed 崩帧）。"""
+    from sim.agent.combat_exec import CombatLedger
+    from sim.core.events import structure_collapsed_event
+    from sim.core.world import EntityState, WorldState
+    from sim.world.maintenance import collapse_injuries
+
+    state = WorldState(
+        entities={
+            "chenmo": EntityState(entity_id="chenmo", pos=(4, 0)),
+            "near": EntityState(entity_id="near", pos=(4, 0)),
+        }
+    )
+    structures = {"base": _structure("base"), "shed": _structure("shed")}
+    events = [
+        structure_collapsed_event(5, structure_id="base", cause="support_lost"),
+        structure_collapsed_event(5, structure_id="shed", cause="support_lost"),
+    ]
+    injuries = collapse_injuries(state, events, structures, CombatLedger())
+
+    assert [str(e.payload["entity_id"]) for e in injuries].count("chenmo") == 1
+    assert [str(e.payload["entity_id"]) for e in injuries].count("near") == 1
+
+
+def test_ticks_with_injuries_report_collapse_and_incapacitation() -> None:
+    """生产维护入口：衰减致塌 → 同批事件带坍塌致伤（不是只塌不伤人）。"""
+    from sim.agent.combat_exec import CombatLedger
+    from sim.core.world import EntityState, WorldState
+    from sim.world.maintenance import tick_with_injuries
+
+    ledger = MatterLedger()
+    ledger.register("base", integrity=0.0, decay_rate=0.0)
+    runtime = WorldMaintenance(ledger=ledger, structures={"base": _structure("base")})
+    state = WorldState(
+        entities={"chenmo": EntityState(entity_id="chenmo", pos=(4, 0))},
+    )
+
+    events = tick_with_injuries(state, runtime, CombatLedger(), tick=1, seed=42)
+
+    kinds = [event.event_type for event in events]
+    assert EventKind.STRUCTURE_COLLAPSED in kinds
+    assert EventKind.AGENT_INCAPACITATED in kinds
+
+
 def test_collapse_hurts_only_nearby_living_entities():
     from sim.agent.combat_exec import CombatLedger
     from sim.core.events import structure_collapsed_event

@@ -1,6 +1,10 @@
 """Production maintenance loop for matter decay and support cascades."""
 
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from sim.core.events import EventKind, WorldEvent
 from sim.core.persistence.npc_store import _structure_event_fields, fold_structure_snapshot
@@ -12,6 +16,10 @@ from sim.world.support_graph import (
     build_support_graph,
     start_cascade,
 )
+
+if TYPE_CHECKING:
+    from sim.agent.combat_exec import CombatLedger
+    from sim.core.world import WorldState
 
 
 @dataclass
@@ -83,11 +91,22 @@ class WorldMaintenance:
         return events
 
 
-def collapse_injuries(state, events, structures, combat_ledger):
-    """坍塌结构瓦片附近实体受伤；死亡仍只经 npc.death 事件。"""
-    from sim.core.events import EventKind, npc_death_event
+def collapse_injuries(
+    state: WorldState,
+    events: Sequence[WorldEvent],
+    structures: Mapping[str, StructureSnapshot],
+    combat_ledger: CombatLedger,
+) -> list[WorldEvent]:
+    """坍塌结构瓦片附近实体受伤；主角只失能，普通活体仍经 npc.death。"""
+    from sim.content.protagonist import CHENMO_ID
+    from sim.core.events import (
+        EventKind,
+        agent_incapacitated_event,
+        npc_death_event,
+    )
 
-    deaths = []
+    injuries: list[WorldEvent] = []
+    hit: set[str] = set()  # 同批多次坍塌 = 一次伤情（重复死亡事件会崩帧）
     for event in events:
         if event.event_type is not EventKind.STRUCTURE_COLLAPSED:
             continue
@@ -95,10 +114,31 @@ def collapse_injuries(state, events, structures, combat_ledger):
         if snapshot is None:
             continue
         for entity_id, entity in sorted(state.entities.items()):
+            if entity_id in hit or entity.incapacitated_until is not None:
+                continue  # 已经倒下/本批已伤的人不再重复受伤、不刷事件
             near = any(
                 abs(entity.pos[0] - tile[0]) + abs(entity.pos[1] - tile[1]) <= 3
                 for tile in snapshot.tiles
             )
+            if near:
+                hit.add(entity_id)
             if near and combat_ledger.apply_damage(entity_id, 10):
-                deaths.append(npc_death_event(tick=event.tick, entity_id=entity_id))
-    return deaths
+                if entity_id == CHENMO_ID:
+                    # DA-07：Agent 永不死——致死只落失能，实体保留可恢复。
+                    injuries.append(agent_incapacitated_event(event.tick, entity_id=entity_id))
+                else:
+                    injuries.append(npc_death_event(tick=event.tick, entity_id=entity_id))
+    return injuries
+
+
+def tick_with_injuries(
+    state: WorldState,
+    runtime: WorldMaintenance,
+    combat_ledger: CombatLedger,
+    *,
+    tick: int,
+    seed: int,
+) -> list[WorldEvent]:
+    """生产维护入口：结构衰减/支撑级联 → 同批坍塌致伤（派生用坍塌前快照）。"""
+    events = runtime.tick(tick=tick, seed=seed)
+    return [*events, *collapse_injuries(state, events, runtime.structures, combat_ledger)]
