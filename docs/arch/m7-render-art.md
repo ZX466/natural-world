@@ -1,8 +1,7 @@
 # m7-render-art — 渲染美术面（星露谷调性落地）
 
-> 状态：**已实施**（2026-10-05/06，T1-T8 提交链 `851aef7..f69de0f`，台账见
-> `.superpowers/sdd/2026-10-05-m7-render-art/progress.md`）。设计稿 v1（2026-10-05，
-> 用户已核方案 A/docs.arch 落点/交付范围）。
+> 状态：**已实施**（2026-10-05/06，T1-T8 提交链 `851aef7..f69de0f`；过程台账已于
+> 2026-10-25 大整理清理）。设计稿 v1（2026-10-05，用户已核方案 A/docs.arch 落点/交付范围）。
 > **素材源裁定变更**：Sprout Lands（需人工购买页+仅非商用）→ ArMM1998
 > Zelda-like（OpenGameArt **CC0** 零限制、直链可脚本化）——R4 的「许可不符则换包」
 > 兜底条款实际触发，调色板/帧布局实测记录在 `sim/content/build_palette.py`。

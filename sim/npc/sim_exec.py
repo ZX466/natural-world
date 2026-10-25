@@ -531,14 +531,6 @@ def plan_npc_move(
             path=path,
         )
     return None
-    path = _jitter_path(path, npc_id, tick=tick, pathfinder=pathfinder)  # D20 轨迹扰动
-    return move_event(
-        tick=0,
-        actor_id=npc_id,
-        start=start,
-        goal=path[-1],
-        path=path,
-    )
 
 
 def npc_events_for_tick(

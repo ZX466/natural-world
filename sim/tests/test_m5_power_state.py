@@ -1,7 +1,7 @@
 """M5-A7 T1 钉子 — 批次 C 权力机制数据面（0013 `npc_power` + `PowerStore`）
 
-设计稿 `docs/data/m5-power-data-preplan.md`（裁 31-1：预研稿推荐案 = 施工案）；判据
-`docs/security/m5-authority-criteria-preplan.md`（D-10 不可见 / 红线 A / 红线 B）。
+设计契约见 `docs/data/schema.md` §21（原 `m5-power-data-preplan.md` 已于 2026-10-25 清理）；
+判据：D-10 不可见 / 红线 A / 红线 B（原 `m5-authority-criteria-preplan.md`，同批清理）。
 
 本文件钉住四组不变量：
 
@@ -580,19 +580,16 @@ class TestForbiddenSurface:
         )
 
     def test_registered_as_fourth_unrebuildable_table(self) -> None:
-        """登记钉：加了不可重建表却没登记 ⇒ A3 §3.2 的「语料一致」条件会说谎。"""
-        a3 = (
-            Path(__file__).resolve().parents[2]
-            / "docs"
-            / "data"
-            / "m5-anchor-materialization-preplan.md"
-        ).read_text(encoding="utf-8")
-        assert "npc_power" in a3, "A3 地基分类未登记 npc_power（第 4 张不可重建表）"
+        """登记钉：schema 文档必须把 npc_power 记为第 4 张不可重建表。"""
+        schema = (Path(__file__).resolve().parents[2] / "docs" / "data" / "schema.md").read_text(
+            encoding="utf-8"
+        )
+        assert "npc_power" in schema, "schema 未登记 npc_power（第 4 张不可重建表）"
+        assert "第 4 张" in schema, "schema 未把 npc_power 标为第 4 张不可重建表"
 
-    def test_preplan_and_schema_doc_exist(self) -> None:
-        """设计稿与 schema 登记同在（数据面契约不许只活在代码里）。"""
+    def test_schema_doc_registers_npc_power(self) -> None:
+        """schema 登记必须存在（数据面契约不许只活在代码里）。"""
         root = Path(__file__).resolve().parents[2] / "docs" / "data"
-        assert (root / "m5-power-data-preplan.md").exists()
         assert "npc_power" in (root / "schema.md").read_text(encoding="utf-8")
 
 

@@ -180,7 +180,6 @@ def make_l1_feeder(
     grid_h: int = 64,
     path_len: int = 4,
     branch_id: str = "main",
-    translate: Callable[[str], bool] | None = None,
 ) -> Callable[[TickLoop], int]:
     """L1 决策喂给器（M2-P3）：`NpcRuntime.tick` 输出 → 内核事件。
 

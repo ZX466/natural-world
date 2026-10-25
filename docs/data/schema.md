@@ -2,6 +2,7 @@
 
 > 对齐 DESIGN.md §6 核心数据契约 + §12 双轨存档 + §19 禁止事项（`apply(event)` 为唯一写路径）。
 > 技术栈：SQLAlchemy 2.0 async + aiosqlite + sqlite-vec。
+> **2026-10-25 大整理**：文中提及的 `m5-*` 预研稿已删除，引用仅作历史出处（git 历史可查）。
 
 ---
 

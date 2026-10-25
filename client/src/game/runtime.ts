@@ -20,7 +20,7 @@ const SIM_WS_URL = 'ws://127.0.0.1:8000/ws';
 export const IMPULSE_MAX_LEN = 64;
 const IMPULSE_TOO_LONG_MSG = '话说得太长了，说不清。';
 /** D14 头顶气泡停留时长（ms；阅读 15 字约 4s，取整档） */
-export const BUBBLE_DURATION_MS = 4000;
+const BUBBLE_DURATION_MS = 4000;
 
 class Runtime {
   private ws: WsClient | null = null;

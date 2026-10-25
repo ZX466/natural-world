@@ -5,8 +5,6 @@
  * 表现层推断是纯客户端职责；sim 真供数日，switch 到协议字段的缝已留
  * （MirrorActor 的 facing/anim 键直接读即可，本模块推断函数仍服务插值中间帧）。
  */
-import type { MirrorActor } from '../world-mirror';
-
 export type Facing = 'n' | 'e' | 's' | 'w';
 export type Anim = 'idle' | 'walk';
 
@@ -53,7 +51,7 @@ export interface SheetGeometry {
 }
 
 /** chenmo 几何（17 列 × 步-站-步） */
-export const CHENMO_SHEET: SheetGeometry = { cols: 17, framesPerRow: 3, standCol: 1 };
+const CHENMO_SHEET: SheetGeometry = { cols: 17, framesPerRow: 3, standCol: 1 };
 /** villager 几何（NPC_test.png 64×128；帧 16×32——2026-10-12「有头没身」修正：
  *  此前按 16px 帧算 4×8 行是错的，实为 **4 列 × 4 行 @16×32**。每行 4 帧全参与
  *  行走环，行序 下/上/右/左（R0-R3）。16×32 素材无独立劳作姿势行（D14 的
@@ -131,15 +129,4 @@ export function walkFrameFor(sheet: SheetGeometry, row: number, animClockMs: num
 /** walk 循环帧号（线性 f = row*COLS + phase）。animClock<0 = 站立帧（col 1）。 */
 export function walkFrame(row: number, animClockMs: number): number {
   return walkFrameFor(CHENMO_SHEET, row, animClockMs);
-}
-
-/** Actor 当前逻辑帧号（合成入口：朝向行 + 动画帧）。 */
-export function frameOf(
-  actor: MirrorActor,
-  prev: { x: number; y: number },
-  animClockMs: number,
-): number {
-  const row = facingRow(inferFacing(actor.x - prev.x, actor.y - prev.y));
-  const anim = inferAnim(prev, actor);
-  return walkFrame(row, anim === 'idle' ? -1 : animClockMs);
 }

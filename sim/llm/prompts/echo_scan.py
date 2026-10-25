@@ -82,7 +82,7 @@ def _inside_quotes(text: str, start: int, end: int) -> bool:
     return False
 
 
-def _is_leading_echo(text: str, hit_start: int, hit_end: int) -> bool:
+def _is_leading_echo(text: str, hit_start: int, _hit_end: int) -> bool:
     if hit_start == 0:
         return True
     prefix = text[max(0, hit_start - 4) : hit_start]

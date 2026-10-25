@@ -9,9 +9,7 @@
  *
  * 本模块只做纯计算，便于单测；Phaser 对象操作留在 WorldScene。
  */
-import type { Facing } from './actors';
-
-export const TILE = 16;
+const TILE = 16;
 
 export function rendererFromSearch(search: string): 'flat' | 'iso' {
   return new URLSearchParams(search).get('renderer') === 'flat' ? 'flat' : 'iso';
@@ -29,13 +27,13 @@ export function rendererFromSearch(search: string): 'flat' | 'iso' {
  *   夜幕     100
  */
 export const ACTOR_DEPTH_BASE = 10;
-export const ACTOR_DEPTH_TOP = 70;
-export const LABEL_DEPTH_BASE = 71;
-export const LABEL_DEPTH_TOP = 80;
-export const BUBBLE_DEPTH_BASE = 81;
-export const BUBBLE_DEPTH_TOP = 89;
+const ACTOR_DEPTH_TOP = 70;
+const LABEL_DEPTH_BASE = 71;
+const LABEL_DEPTH_TOP = 80;
+const BUBBLE_DEPTH_BASE = 81;
+const BUBBLE_DEPTH_TOP = 89;
 /** 世界高度（100 格 @16px）——深度归一化用的最大脚底像素。 */
-export const MAP_MAX_FOOT_Y = 100 * TILE;
+const MAP_MAX_FOOT_Y = 100 * TILE;
 /** 雨层深度（WorldScene 同源）。 */
 export const RAIN_LAYER_DEPTH = 99;
 /** 夜幕遮罩深度（WorldScene 同源）。 */
@@ -157,9 +155,4 @@ export function assignStackOffsets(
     }
   }
   return out;
-}
-
-/** 朝向 → 精灵是否水平翻转（当前素材四向行齐全，保留接缝）。 */
-export function flipForFacing(facing: Facing): boolean {
-  return facing === 'w';
 }

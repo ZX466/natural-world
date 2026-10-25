@@ -1,222 +1,117 @@
-# 开发流程（docs/dev-workflow.md）
+# 开发流程
 
-> 能力域：依赖 / 配置 / 文档（cline）。本文只讲「怎么跑」，讲「为什么」看 `DESIGN.md`。
-> 环境硬约束：Python 一律用 **uv** 建虚拟环境；playwright 调浏览器只用 `D:\develop\hermes\chrome`；
+> 本文只讲「怎么跑」；「为什么」看 `DESIGN.md`。
+>
+> 环境硬约束：Python 一律用 **uv** 建虚拟环境；Playwright 只用 `D:\develop\hermes\chrome`；
 > **删除 npm 包或 venv 前必须先问用户**；agent 配置目录（`.agent/.agents/.claude/.codex/.kiro/.opencode/.codegraph`）
-> **不入 git 也不推送，但本地须存在**（用户规则 #4：所有工作树都要有 `.codegraph`+`.agents`，
-> `.claude/.opencode/.codex` 只在对应工作树，主树全有）；`.orca` 例外——`workflow.txt`/`agent-registry.md`/
-> `memory.md` 入库（main `3e320b9` 裁决），仅 `talking.txt` 本地保存。
+> 不入 git 也不推送，但本地须存在。`.orca` 例外：`workflow.txt` / `agent-registry.md` / `memory.md` 入库，
+> `talking.txt` 与 `archive/` 本地保存。
 
-## 1. 环境与一次初始化
+## 1. 环境与初始化
 
 ```bash
-uv sync                 # 建 .venv 并按 uv.lock 安装（首次 / 依赖变更后）
-uv sync --frozen        # CI 式：严格按锁文件，不解析新版本
+uv sync                 # 建 .venv 并按 uv.lock 安装
+uv sync --frozen        # CI 式：严格按锁文件
 uv lock --check         # 校验 uv.lock 与 pyproject.toml 一致
-```
 
-- Python 版本由 `.python-version` 固定（3.12）；解释器由 uv 管理，不依赖系统 Python。
-- 前端（Node ≥ 20，本地实测 v24）：
-
-```bash
 cd client
-npm ci                  # 按 package-lock.json 精确安装（首次或 lock 变更后）
-npm install <pkg>       # 新增依赖后请提交 package-lock.json
+npm ci                  # 按 package-lock.json 精确安装
 ```
 
-- 前端依赖锁定：`client/package-lock.json` 入库；`node_modules/` 与 `.venv/` 均被 .gitignore 排除。
+- Python 版本由 `.python-version` 固定（3.12）；解释器由 uv 管理。
+- 前端 Node ≥24；`node_modules/` 与 `.venv/` 均不入库。
 
 ## 2. 每提交必跑（本地 = CI 同款）
 
-| 检查 | 本地命令 | CI 步骤 |
-|---|---|---|
-| 锁文件 | `uv lock --check` | Python job |
-| Lint | `uv run ruff check` | Python job |
-| 格式 | `uv run ruff format --check` | Python job |
-| 类型（Python） | `uv run pyright` | Python job |
-| 测试 | `uv run pytest -m "not bench"` | Python job |
-| 类型（TS） | `cd client && npx tsc --noEmit` | Frontend job |
-| Lint（TS） | `cd client && npx eslint .` | Frontend job |
-| 格式（TS） | `cd client && npx prettier --check .` | Frontend job |
-| 测试（TS） | `cd client && npx vitest run --passWithNoTests` | Frontend job |
+| 检查 | 本地命令 |
+|---|---|
+| 锁文件 | `uv lock --check` |
+| Lint | `uv run ruff check` |
+| 格式 | `uv run ruff format --check` |
+| 类型（Python） | `uv run pyright` |
+| 测试 | `uv run pytest -m "not bench"` |
+| 类型（TS） | `cd client && npx tsc --noEmit` |
+| Lint（TS） | `cd client && npx eslint .` |
+| 格式（TS） | `cd client && npx prettier --check .` |
+| 测试（TS） | `cd client && npx vitest run --passWithNoTests` |
+| 协议漂移 | `cd client && npm run gen:protocol:check` |
 
-一键本地全跑（PowerShell，失败即停）：
+一键全跑（PowerShell，失败即停）：
 
 ```powershell
 uv lock --check; uv run ruff check; uv run ruff format --check; uv run pyright; uv run pytest -q -m "not bench"
-Push-Location client; npx tsc --noEmit; npx eslint .; npx prettier --check .; npx vitest run --passWithNoTests; Pop-Location
+Push-Location client; npx tsc --noEmit; npx eslint .; npx prettier --check .; npx vitest run --passWithNoTests; npm run gen:protocol:check; Pop-Location
 ```
 
-## 3. 测试分级怎么跑（DESIGN §16）
+## 3. 测试分级（DESIGN §16）
 
 | 级 | 跑什么 | 命令 | 频率 |
 |---|---|---|---|
-| T1 | 六类不变量断言（无 LLM，秒级） | `uv run pytest -m t1` | 每次提交（CI 含） |
-| T2 | 回放确定性（无 LLM） | `uv run pytest -m t2` | 每次提交（CI 含） |
-| T3 | 闸门对抗样本（录制 fixture，codex S03-3；**无 marker，按文件选**） | `uv run pytest sim/tests/test_t3_gate.py` | 每次提交（随 `-m "not bench"` 全量跑；ci.yml 另有命名独立门禁步骤，已实跑 45 passed） |
-| T4 | 出戏探针（真模型，烧钱） | **本地一轮**（见下方小节） | 本地手动一轮＝等效验收；不进每提交 CI |
+| T1 | 不变量断言（无 LLM，秒级） | `uv run pytest -m t1` | 每次提交 |
+| T2 | 回放确定性（无 LLM） | `uv run pytest -m t2` | 每次提交 |
+| T3 | 闸门对抗样本（录制 fixture，无 marker，按文件选） | `uv run pytest sim/tests/test_t3_gate.py` | 每次提交 |
+| T4 | 出戏探针（真模型，烧钱） | 见下节 | 本地手动一轮 |
 | T5 | golden 场景（10 种子 × 10 游戏日） | `uv run pytest -m t5` | 每日 |
-| bench | 性能基准 | `uv run pytest -m bench` | **nightly，不进每提交 CI** |
+| bench | 性能基准 | `uv run pytest -m bench` | nightly |
 
-- CI 里 pytest 一律带 `-m "not bench"`：性能基准抖动大，放进来只会把 CI 变成红灯制造机（`docs/perf/bench-plan.md` §0）。
-- marker 在 `pytest.ini` 注册，`--strict-markers` 生效：写测试必须带正确 marker，拼错会直接失败。
-- **M1 指标跑分**（`sim/tests/test_m1_metrics.py`：差事完成率 / 链路 P95 / 单决策 tok / T3 出戏，假 LLM 零网络，纯 T1 秒级）：本已随 `-m "not bench"` 全量跑，ci.yml 另有命名步骤「pytest M1 指标跑分」——两个命名门禁步骤（T3 对抗、M1 指标）都按**文件路径**选择，不用 marker，以免 marker/addopts 变化把门禁静默排除成假绿灯。实测数字见 `docs/README.md` §4。
-- **M2 验收测试（命名门禁，M2-C2 起已实跑）**：ci.yml 命名步骤「pytest M2 验收测试」按**文件路径** glob `sim/tests/test_m2_*.py` 选择（纪律与 T3/M1 同源，不用 marker）。**命名约定即契约**：新 M2 验收测试落 `sim/tests/test_m2_*.py` 即自动纳入门禁。
-  - 量纲要求：**无 LLM、秒级~分钟级**；步骤内显式 `-m "not bench"`（性能红线是抖动域，属 nightly）。
-  - ⚠ **不要**把完整验收「50 NPC × 7 游戏日自转无崩溃」做成该前缀下的普通测试：DESIGN §10「1 tick = 1 游戏秒」⇒ 7 游戏日 = **604,800 tick**，它会被 `-m "not bench"` 全量 CI 收集，把每提交 CI 拖成小时级（ci.yml 该步骤的 `timeout-minutes: 15` 就是这道护栏）。完整跑接 `nightly-bench.yml`（接法待 Claude 裁）。
-  - 现役文件（6 件）：`test_m2_npc_base.py` / `test_m2_utility.py` / `test_m2_matter.py` / `test_m2_smell.py`（架构域）+ `test_m2_weather.py`（配置域风场）+ `test_m2_runtime_store.py`（opencode 数据层）；M2 交付盘点见 `docs/README.md` §5。
+- CI 一律 `-m "not bench"`；`--strict-markers` 生效，marker 拼错直接失败。
+- `t3-corpus.md`、`t4-corpus.md` 是测试运行时读取的真相源，改语料先改文档。
+- 命名门禁按文件路径选择（T3、M1 指标、M2 验收），不靠 marker，避免被 addopts 静默排除。
 
-### T4 本地探针一轮（真模型 · 锁版本）
+### T4 本地探针一轮（真模型，锁版本）
 
-> **2026-09-27 用户改约存照**：T4 **不建 GitHub secret**，`t4-nightly.yml` 的 `schedule` 已注释
-> （只留 `workflow_dispatch` 供未来恢复）。**「T4 全绿」＝本地跑一轮真模型探针**＝等效验收
-> （§16 频率列的本地等价形态；仍然**不进每提交 CI**——「烧钱且抖动」的理由不变）。
-> 模型端点走 **OpenAI 兼容国内直连**，因此**不需要 `127.0.0.1:7897` 代理**（该代理只对 github.com 域生效）。
-
-三件套 env **只在本会话有效**（新开 PowerShell 即失效，天然不落盘）：
+三件套 env 只在本会话有效，不落盘：
 
 ```powershell
-# 锁版本：模型 id 写死在本机命令里，不进代码、不进仓库（§16 锁版本防静默回归）
 $env:T4_MODEL='Deepseek-v4-flash'
 $env:T4_MODEL_BASE_URL='https://chatapi.weixin.qq.com/openai/v1'
-$env:T4_MODEL_API_KEY='<临时填：控制台粘贴，不入库不入日志>'
-$env:T4_RUN='1'   # 第二把锁：显式选择真跑（M4-S7 三把锁；缺此必 skip，见 codex 树 S7 回执）
+$env:T4_MODEL_API_KEY='<控制台粘贴，不入库不入日志>'
+$env:T4_RUN='1'
 
 uv run pytest -m t4 --junitxml=t4-results/t4.xml
 ```
 
-- `T4_RUN=1` **必填**：探针集三把锁的第二把（key 存在 + T4_RUN=1 + ≤60 预算闸）。
-  只设 key 不设 `T4_RUN` → 全部 skip（防每提交 CI 误选中 t4 用例真烧钱——cline C6 实测
-  `-m "not bench"` 会收集到 t4 marker 用例）。
-- **key 纪律**（与 §5 一致）：只经环境变量，**绝不**写进 `t4-nightly.yml`、`.env`、`docs/` 或任何提交；
-  跑完可 `Remove-Item Env:T4_MODEL_API_KEY` 清掉本会话值。
-- 探针集本体归 **codex**（`sim/tests/test_t4_probes.py`，M4-S7）；本文只管**怎么跑**。
-  文件未落盘时 `-m t4` 会**收集 0 用例并返回退出码 5**——那不是「全绿」，是「探针还没接线」。
+- `T4_RUN=1` 必填：key 存在 + `T4_RUN=1` + 预算闸，三把锁缺一即 skip。
+- key 只走环境变量；跑完 `Remove-Item Env:T4_MODEL_API_KEY`。
+- 全 skip / 退出码 5 = 没跑成，**不是绿灯**。
+- 判读：硬红 = 真回归，不放宽断言；inconclusive = 留人工复核；全 pass = 本轮等效验收。
 
-**结果判读**（`t4-results/t4.xml` + 终端汇总）：
-
-| 判读 | 含义 | 该做什么 |
-|---|---|---|
-| **硬红**（failed） | **出戏词面命中**（§16 T4：「谁指使你」「是不是AI」「重来一次」…）或闸门拒收 | 真回归。查命中的是哪条探针的哪句断言，**不放宽断言**；按 §20 三层防御（锚定/过滤/重生成）定位 |
-| **inconclusive** | 软判定不足以定性（模型给了模糊措辞，既没硬命中词面、也不足以证明合规） | **留人工复核**：记下用例 id + 原始输出，别当绿也别当红；同一措辞反复 inconclusive 再找 codex 议词表 |
-| 全 pass | 锁版本下本轮零硬命中 | 满足 M4 的「T4 全绿」验收（本地形态） |
-| 全 skip / 退出码 5 | 没设 key、或探针文件未落盘 | **不是绿灯**，按上表最后两行处理 |
-
-> `timeout-minutes` 护栏在 workflow 侧是 30；本地一轮若明显超 10 分钟，先看是不是 prompt 装配退化，
-> 而不是直接放宽超时（口径同 codex 裁 15-3：只加 `timeout-minutes`，不另设成本红线）。
-
-### bench 跑法（性能域）
+### bench（性能域）
 
 ```bash
-uv run pytest -m bench                                   # 跑基准（pytest-benchmark）
-uv run pytest -m bench --benchmark-json=perf/bench.json   # 出基线文件
+uv run pytest -m bench
+uv run pytest -m bench --benchmark-json=perf/bench.json
 uv run pytest -m bench --benchmark-compare=docs/perf/baseline-epyc7763.json --benchmark-compare-fail=median:25%
 ```
 
-> 基线**按机型分文件**（`baseline-<machine_key>.json`，当前只有 `baseline-epyc7763.json`）——GitHub `ubuntu-latest`
-> 池跨厂商且会漂；runner 机型与基线不一致时 nightly 只打 **warning 不判红**，但本轮漂移数值**不可直接比较**。
-> 上面的对照容差与 workflow 一致＝`median:25%`（**不要在这里抄 thresholds.py 的红线数值**，那是定标机绝对口径）。
+- 基线按机型分文件（`baseline-<machine_key>.json`）；runner 与基线机型不一致时 nightly 只告警不判红。
+- 红线常量只在 `sim/tests/bench/thresholds.py`；不要在文档或 yml 抄数值。
+- bench 必须固定 seed（C5：禁 `random.*`）。
 
-- GitHub 上由 `.github/workflows/nightly-bench.yml` 每天 02:00（北京）自动跑并归档机器档位 + 结果 JSON。
-- M2 新增 bench（pi M2-P1）：`sim/tests/bench/test_bench_l1_utility.py` / `test_bench_smell.py`，随 `-m bench` 自动纳入 nightly，**无需改 yml**；红线常量集中在 `sim/tests/bench/thresholds.py`（单一真相源，别在 yml 或文档里抄数值）。
-- 阈值与机器档位口径见 `docs/perf/budget.md` §1 与 `docs/perf/bench-plan.md` §3；跨机器不要直接比绝对值。
-- 所有 bench 必须固定 seed（C5：禁 `random.*`，ruff banned-api 会拦）。
-
-## 4. 协议类型生成（接口域）
+## 4. 协议类型生成
 
 ```bash
+cd client
 npm run gen:protocol         # 生成 shared/protocol.ts（banner + prettier 已含）
-npm run gen:protocol:check   # 漂移检测：生成到临时文件比对，不一致则非零退出（已接进 ci.yml）
+npm run gen:protocol:check   # 漂移检测，不一致非零退出（ci.yml 已接）
 ```
 
-- 真相源是 sim 端 pydantic 模型；`shared/protocol.ts` **只读、不手写**（DESIGN §19）。
-- 脚本本体 `tools/gen-protocol.ts` 由接口域（kilo）维护；M0 阶段源为手写 mock `shared/openapi.json`，sim 起服务后切真实导出（切换点见 `docs/api/codegen.md`）。
-- **要求 Node ≥ 24**：脚本以 `node` 直接运行 `.ts`（无旗标类型剥离；`engines` 与 CI 的 setup-node 均已对齐）。
-- 前端引用一律走 `@shared/protocol`（ESLint 已禁相对路径引 `shared/`）。
+- 真相源是 sim 端 pydantic 模型；`shared/protocol.ts` 只读、不手写。
+- 协议版本真相源：`sim/api/ws.py::_PROTOCOL_VERSION`；`client/src/net/ws.ts` 与 `sim/tests/test_protocol_version.py` 同步。
+- README 徽章必须与代码版本一致（`tools/check_implementation_status.py` 会查）。
 
-## 5. 密钥与本地配置
+## 5. Git 与远程
 
-- 复制 `.env.example` → `.env` 后填写；`.env` 不入 git，`.env.example` 只含键名（安全清单 G4）。
-- `LZ_MASTER_KEY`（Fernet 主密钥）缺失时后端必须拒绝启动（安全清单 K2），禁止静默生成落盘。
-- 任何情况下不要把 key、token、日志文件、数据库文件提交进仓库（`.gitignore` 已排除 `*.log` / `*.db` / `*.sqlite`）。
+- 提交身份（仓库实测）：`ZX666X <223049848+ZX466@users.noreply.github.com>`。
+- 远程：
+  - `origin` = `https://github.com/ZX466/natural-world.git`
+  - `gitee` = `https://gitee.com/ZX666X/natural-world.git`
+- 推送：`git push origin main; git push gitee main`。GitHub 走代理 `127.0.0.1:7897`（仅 github.com 域）。
+- 除 `.orca` 外，点号目录一律不入 git、不推送。
 
-## 6. 提交与协作
+## 6. 排障
 
-- Conventional Commits：`feat|fix|refactor|docs|test|chore|perf|ci`。
-- 每个 agent 只在自己的工作树改自己能力域的东西；跨域需求走 `.orca/talking.txt` 间接留言。
-- **新增文件落点注意（M2-C1 实测，2026-09-21）**：`.gitignore` 的 catch-all `.*/`（用户规则 #4）会把 `.github/`、`.orca/` 目录一起标为 ignored —— **已跟踪文件不受影响**（改 ci.yml / memory.md 正常），但在这两个目录下**新增**文件时 `git add` 会失败并提示 ignored，需 `git add -f`（例：`git add -f .github/workflows/<新 yml>`）。**未决**：是否补 `!.github/` `!.orca/` 例外，交用户裁；裁定前按 `-f` 走。
-- 提交身份：`ZX666X <zx19836980213@outlook.com>`（全局已配）；推送双远程 `git push origin <branch>` + `git push gitee <branch>`（GitHub 走 `127.0.0.1:7897`）。
-
-## 7. 本机检查陷阱：Windows 行尾（CRLF）假红
-
-> 2026-09-20（cline P05）实测记录。**Windows 上跑本机检查前先读本节**——否则会把假红当真红去改代码，或反过来放过真红。
-
-- **成因**：仓库 `core.autocrlf=true` 且**无 `.gitattributes`** → 检出后工作副本是 CRLF，而 git 索引与 CI（ubuntu）是 LF。
-- **典型假红（LF 内容下实际全过，不要改代码）**：
-  - `cd client && npx prettier --check .` —— 一次报了 17 个文件「code style issues found」；
-  - `node tools/gen-protocol.ts --check` —— 报「生成物与提交不一致」（生成器写 LF、工作副本 CRLF，逐字节比对必然不等）。
-- **典型真红（LF 内容下同样失败，必须修）**：`uv run ruff format --check` —— ruff 给的是**内容级**建议（拆行 / 合并行 / 去 BOM），与行尾无关。P05 实测：opencode D03 的 3 个文件就是这样漏过门禁的真红。
-
-**自证办法**（导出 git 索引的 LF 内容再跑检查，一步定性，不必猜）：
-
-```bash
-git -c core.autocrlf=false checkout-index -a -f --prefix=.tmp-lf/   # 整仓 LF 副本
-uv run ruff format --check .tmp-lf                                   # Python 侧
-cd client && npx prettier --check ../.tmp-lf/client                  # TS 侧（配置按文件路径解析，仍读 client/.prettierrc）
-rm -rf .tmp-lf                                                       # 用完即删（否则显示为未跟踪）
-```
-
-- LF 副本下**仍失败** ⇒ 真红，改代码；LF 副本下**通过** ⇒ 本机行尾假阳性，**不要改代码**。
-- `gen:protocol --check` 的假阳性也可用 `node tools/gen-protocol.ts` 重生成消除——内容与提交一致时 `git diff` 为空，**不会产生提交**。
-- 同理：`git status` 偶尔把内容未变的文件显示为 ` M`（mtime/stat 缓存假象）。用 `git hash-object <f>` 与 `git rev-parse :<f>` 对比，相同即无实际改动。
-
-### 已落地：`.gitattributes`（`* text=auto eol=lf`）—— 裁决采纳方案 A（2026-09-21，M2-A1 `3ab8c71`）
-
-> 决议来源：M2-C1 正式提议（下表即当时实测证据）。本文件此后以「操作手册」为准；上面 §7 正文的
-> 假红成因与 `.tmp-lf/` 自证流程转为**历史记录** —— 新机器/新克隆若发现工作副本又是 CRLF，
-> 说明该树没做重签出，按第 2 步处理即可。
-
-**1. 现状自检**（一条命令定性）：
-
-```bash
-git ls-files --eol | grep -c 'w/crlf'   # 期望 0；>0 = 本树尚未重签出（本地格式检查仍可能假红）
-```
-
-PowerShell 等价：`(git ls-files --eol | Select-String 'w/crlf' | Measure-Object).Count`
-
-**2. 每工作树重签出一次**（六树 + 主树各做一次，实测秒级）：
-
-```bash
-git merge origin/main          # 先带上 .gitattributes（落在 main 3ab8c71）
-git status --porcelain         # 必须为空 —— 重签出会丢弃未提交改动（先 commit 或 stash）
-git rm -r --cached . && git reset --hard
-git ls-files --eol | grep -c 'w/crlf'   # 复查：0
-```
-
-- 重签出**只改行尾**：索引内容零变化（`git add --renormalize .` 实测 0 文件），故不产生内容 diff、
-  不影响任何 hash/逐字节断言（现有 sha256 用途全是内存字符串）。
-- 未跟踪文件（`.venv/`、`node_modules/`、`world.db`、`.orca/talking.txt`）**不受影响**：既不删也不改。
-- ❌ `git checkout-index -f -a` **无效**（实测仍 `w/crlf`）——别再试这个。
-- 重签出后本机 `npx prettier --check .` / `node tools/gen-protocol.ts --check` 与 ubuntu CI 逐字节一致；
-  `uv run ruff format --check` 仍是**内容级真红**判据，行为不变。
-
-**3. 附带裁决：`.gitignore` 补例外**：`.*/` 兜底会挡住 `.github/` 下**新增**文件（新增 workflow 需 `-f`），
-故补 `!.github/` + `!.github/**`。**`.orca/` 仍走兜底**：在 `.orca/` 下**新增**文件要 `git add -f`
-（改已跟踪的 `memory.md` / `workflow.txt` 不受影响）。
-
-### 附：M2-C1 提议时的实测影响面（历史证据）
-
-| 项 | 实测值 | 说明 |
-|---|---|---|
-| 跟踪文件总数 | 163（161 `i/lf` + 2 空 `__init__.py` 为 `i/none`） | 索引**本来就是 LF**；无 `-text`（二进制）条目 ⇒ 不需要 `binary` 规则 |
-| 工作副本现状（前） | 161 个 `w/crlf` | 假红根因确证（`core.autocrlf=true` + 无属性文件） |
-| **索引重写量** | **0 文件**（`git add --renormalize .` 后暂存区为空） | ⇒ 不需要 renormalize 提交、不产生大 diff、不动任何被 hash/逐字节断言的产物 |
-| 加属性后 `git status` | 干净 | clean 过滤器把 CRLF 归一化后再比对 ⇒ **假红不会自动消失**，必须一次性重签出（最关键的一条） |
-| 重签出（方案 A，已采纳） | 161 文件 `w/crlf` → `w/lf`，`git status` 干净 ✅ | 各树一次、秒级；先提交/暂存；未跟踪文件不受影响 |
-| 重签出（`git checkout-index -f -a`） | **无效**（仍 `w/crlf`） | 实测否掉，别再试 |
-
-被否掉的备选：**B** 各树本地 `git config core.autocrlf false`（不入库、新克隆复现假红）；
-**C** 维持现状 + 自证流程（每次格式检查多一步手工，新 agent 必踩）。
-
-
-
+- `pytest -m t4` 收集 0 用例、退出码 5：没设 key 或探针文件缺失，不是绿。
+- 前端连不上：先看 `/api/health`，再看顶栏状态；客户端断线时不做假数据。
+- `gen:protocol:check` 失败：先跑 `gen:protocol`，检查 `shared/protocol.ts` 是否被手改。
+- 构建卡住：Python 侧先 `uv sync --frozen`；前端删 `node_modules` 前先问用户。
