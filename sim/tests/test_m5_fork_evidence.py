@@ -1,4 +1,4 @@
-"""M5-S2b T1 钉子 — 跨分支证据链断言面（R-E2/E3/E5/E6；m5-fork-evidence-preplan.md §2/§3）
+"""M5-S2b T1 钉子 — 跨分支证据链断言面（R-E2/E3/E5/E6；self-unknown.md §2/§3）
 
 RED 先行（codex 安全域 M5-S2b）：四条钉子锁的是 S2 预研实证过的**现状正确行为**——
 「恰好对」的实现没有断言 = 未受保护状态，任何放宽（跨分支事件合并查询、浮现状态
@@ -20,7 +20,7 @@ RED 先行（codex 安全域 M5-S2b）：四条钉子锁的是 S2 预研实证�
 
 复用 D3-b/D3-c fixtures 体例（`test_m5_fork_clone.py` / `test_t1_m5_history_preserved.py`）：
 内存 SQLite + `init_database` + 真实 `SqlEventStore.append`（事件走生产校验，不合成）。
-本文件不改生产语义、不扩 BANNED_WORDS（m5-fork-evidence-preplan.md §7 变更纪律）。
+本文件不改生产语义、不扩 BANNED_WORDS（self-unknown.md §7 变更纪律）。
 """
 
 from __future__ import annotations
@@ -180,7 +180,7 @@ class TestVisibilityVsVerifiabilitySeparated:
           （事件不克隆）→ `witnessed_no_matching_emerge` deny（fail-closed）。
 
         两半分开钉：未来任何「跨分支事件合并查询」或「iter_valid 口径变更」都必须
-        先让本钉显式红，再走 CR（m5-fork-evidence-preplan.md §2 R-E3/E5）。
+        先让本钉显式红，再走 CR（self-unknown.md §2 R-E3/E5）。
         """
         async with session_factory() as session:
             await store.append(PARENT, [_emerge_event(1, subject="npc-b", attr="x", witness="w")])
@@ -287,7 +287,7 @@ class TestSurfacedStateNotPersisted:
             "发现「浮现状态持久化」载体（违反 R-E6）：\n"
             + "\n".join(carriers)
             + "\n若为有意引入：载体必须带 branch_id 列并按分支隔离，"
-            "且本钉须随 CR 同步更新（m5-fork-evidence-preplan.md §2 R-E6）"
+            "且本钉须随 CR 同步更新（self-unknown.md §2 R-E6）"
         )
 
     def test_evaluation_is_pure_function(self) -> None:

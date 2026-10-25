@@ -16,7 +16,7 @@ uv lock --check         # 校验 uv.lock 与 pyproject.toml 一致
 ```
 
 - Python 版本由 `.python-version` 固定（3.12）；解释器由 uv 管理，不依赖系统 Python。
-- 前端（Node ≥ 20，本地实测 v24）：
+- 前端（Node ≥ 24，与 package.json 和 CI 对齐）：
 
 ```bash
 cd client

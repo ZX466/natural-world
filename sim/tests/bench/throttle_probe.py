@@ -1,6 +1,6 @@
 """本机降频自检探针（性能域，pi）— M5-P6 风险①收口 / M5-P7。
 
-背景（m5-p6-soak-arbitration.md §2.2）：soak 判据 `SOAK_STEADY_MEAN_LIMIT_MS` 是
+背景（bench-plan.md 长跑执行与机器状态）：soak 判据 `SOAK_STEADY_MEAN_LIMIT_MS` 是
 **绝对值**（6.2ms），而 soak 是分钟~十分钟级持续 CPU 负载。若本机处于**持续负载
 降频**状态（热/功耗），绝对值必然假红——M5-P6 实测同一份代码在本机 7.04ms（应为
 ~2.8ms），且**漂移比判据（比值）免疫降频**（本机 drift 1.017 ≤ 1.5）。
@@ -128,7 +128,7 @@ def assert_not_throttled(*, label: str = "本机降频自检", seconds: float | 
             f"{result['ratio_limit']}；短冲程 {result['burst_base_ms']}ms → "
             f"持续段最坏 {result['sustained_worst_ms']}ms，{result['samples']} 样本）。"
             "soak 绝对阈值（SOAK_STEADY_MEAN_LIMIT_MS）在本机不可信，漂移比判据不受影响。"
-            "处置：稍候重跑，或直看 CI（docs/perf/m5-p6-soak-arbitration.md §2.2）。"
+            "处置：稍候重跑，或直看 CI（docs/perf/bench-plan.md 长跑执行与机器状态）。"
         )
         raise _SkipSoak(msg)
     return

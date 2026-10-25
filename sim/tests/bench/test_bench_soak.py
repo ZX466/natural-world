@@ -5,10 +5,10 @@
 的确定性错峰 MOVE 喂给，等价 npc.actions 的 `move`）。
 
 量纲：DESIGN §10「1 tick = 1 游戏秒」⇒ 7 游戏日 = 604,800 tick（`M2_ACCEPTANCE_TICKS`）。
-分级（对齐 docs/perf/m2-acceptance.md §3 降采样断言策略）：
+分级（对齐 docs/perf/bench-plan.md 长跑执行与机器状态 降采样断言策略）：
 - **每提交 CI**（未标 `bench` 的用例）：1,200 tick 缩样冒烟 + 探针/量纲契约。
 - **nightly**（标 `@pytest.mark.bench`）：30,000 tick 长跑稳定性 + 稳态 p99 + 缓存有界 + 确定性。
-- **里程碑/手动**：604,800 tick 完整跑（nightly 新 job，接法提案见 docs/perf/m2-acceptance.md §4）。
+- **里程碑/手动**：604,800 tick 完整跑，见 docs/perf/bench-plan.md「长跑执行与机器状态」。
 
 红线来自 thresholds.py（SOAK_*）。口径：**分窗稳定性**而非单轮 p99——
 长跑单窗口离群（GC/OS 抖动）不误红，只看末窗相对首稳态窗的漂移与内存/句柄/缓存增长。
@@ -158,7 +158,7 @@ def _assert_no_runaway(result, *, label: str, profile_ids: set[str] | None = Non
 
     **降频自检**（M5-P7 / M5-P6 风险①收口）：`SOAK_STEADY_MEAN_LIMIT_MS` 是绝对值
     判据，而 soak 是分钟级持续 CPU 负载——本机若处于持续降频（实测 6.6x，
-    m5-p6-soak-arbitration.md §2.2）必然假红。先跑 `throttle_probe.probe()`；比值越
+    bench-plan.md 长跑执行与机器状态）必然假红。先跑 `throttle_probe.probe()`；比值越
     阈值即 `pytest.skip`（不是 fail：降频是环境事实，非代码回归；漂移比判据天然免疫）。
     """
     _assert_entity_stable(result, label=label, profile_ids=profile_ids)
@@ -345,7 +345,7 @@ def nightly_soak_result():
 
     降频自检在**这里**跑（不是测试体里）：30k soak 是分钟级持续负载，若本机已降频
     （M5-P7 探针，见 `throttle_probe.py`），先 skip 再付 7 分钟墙钟纯属浪费
-    （m5-p6-soak-arbitration.md §2.2 的教训）。
+    （bench-plan.md 长跑执行与机器状态 的教训）。
     """
     _skip_if_throttled()
     loop = _build_loop_with_perception()
@@ -403,14 +403,14 @@ def test_soak_nightly_caches_bounded(nightly_soak_result) -> None:
     os.environ.get("PI_M2_FULL_SOAK") != "1",
     reason=(
         "完整 7 日跑（604,800 tick，~min 级）默认跳过；置 PI_M2_FULL_SOAK=1 触发"
-        "（见 docs/perf/m2-acceptance.md §4）"
+        "（见 docs/perf/bench-plan.md 长跑执行与机器状态）"
     ),
 )
 def test_m2_full_7day_acceptance() -> None:
     """里程碑：604,800 tick（50 NPC × 7 游戏日）完整跑无崩溃 + 资源有界。
 
     不经每提交 CI（超 timeout-minutes: 15 护栏）；nightly 接法由 cline 裁决
-    （docs/perf/m2-acceptance.md §4）。环境门避免 nightly 默认就烧分钟级。
+    （docs/perf/bench-plan.md 长跑执行与机器状态）。环境门避免 nightly 默认就烧分钟级。
     """
     # 30 分钟量级的持续负载：**先**判本机降频再付墙钟（M5-P7，探针见
     # `throttle_probe.py`）。降频时绝对阈值不可信，但漂移比/资源判据仍可信，
@@ -451,7 +451,7 @@ def _build_l1_runtime() -> NpcRuntime:
 def test_soak_nightly_l1_feeder_stability() -> None:
     """nightly：50 NPC × 真实 L1 feeder 长跑无 O(n) 累积/泄漏。
 
-    与 mock feeder 的分工见 docs/perf/m2-acceptance.md §3.1：
+    与 mock feeder 的分工见 docs/perf/bench-plan.md 长跑执行与机器状态：
     mock = 内核负载上界（50 全走）；l1 = 真实 L1 计算 + 当前内容常量下的动作分布。
     """
     _skip_if_throttled()  # 分钟级持续负载：先判降频，别白烧 7 分钟（M5-P7）

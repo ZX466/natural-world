@@ -581,19 +581,19 @@ class TestForbiddenSurface:
 
     def test_registered_as_fourth_unrebuildable_table(self) -> None:
         """登记钉：加了不可重建表却没登记 ⇒ A3 §3.2 的「语料一致」条件会说谎。"""
-        a3 = (
-            Path(__file__).resolve().parents[2]
-            / "docs"
-            / "data"
-            / "m5-anchor-materialization-preplan.md"
-        ).read_text(encoding="utf-8")
+        a3 = (Path(__file__).resolve().parents[2] / "docs" / "data" / "schema.md").read_text(
+            encoding="utf-8"
+        )
         assert "npc_power" in a3, "A3 地基分类未登记 npc_power（第 4 张不可重建表）"
+        assert "不可重建" in a3 and "第 4 张" in a3
 
     def test_preplan_and_schema_doc_exist(self) -> None:
-        """设计稿与 schema 登记同在（数据面契约不许只活在代码里）。"""
+        """合并后的现行 schema 必须保留表身份、分支键和衰减游标契约。"""
         root = Path(__file__).resolve().parents[2] / "docs" / "data"
-        assert (root / "m5-power-data-preplan.md").exists()
-        assert "npc_power" in (root / "schema.md").read_text(encoding="utf-8")
+        assert (root / "schema.md").exists()
+        schema = (root / "schema.md").read_text(encoding="utf-8")
+        for field in ("npc_power", "branch_id", "npc_id", "updated_at_tick"):
+            assert field in schema
 
 
 def test_clamp_bounds_are_finite() -> None:

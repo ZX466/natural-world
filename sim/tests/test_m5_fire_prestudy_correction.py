@@ -1,15 +1,7 @@
-"""K12 预研稿订正的**同步钉**（M5-K15 / 裁 35-1：3-kind 案 → opencode 2-kind 案）
+"""火灾现行契约与历史订正守卫（裁 35-1）。
 
-**为什么需要钉**：K12 稿是**预研案**（当时据 W-D1 字面推出「新增 `fire.spread`」），
-而施工按 opencode 数据面论证改成 **2 kind**（蔓延走既有 `matter.damage` + `parent_seq` 谱系）。
-订正以「保留原文 + 加 ⚠ 订正块」的方式落在稿子里——**原文必须保留**（决策链的一部分），
-但**冲突处必须有一句「以本段为准」**。人一懒就会只读原文表，于是需要一个机器门禁：
-
-- **本文件锁三件事**：①稿内有「⚠ 施工订正」块；②块内点名 2 kind 与 `parent_seq` 谱系；
-  ③代码事实与订正一致（`EventKind` 现恰为 `FIRE_IGNITED` / `FIRE_EXTINGUISHED` 两项，
-  且蔓延确实**没有**独立 kind）。
-- ③ 是关键：**若将来 opencode 又加回 `fire.spread`**，本钉立即红，强制更新口径文本
-  （免得文档与实现悄悄分叉）。
+现行 WS 文档集中记录两 kind、matter.damage/parent_seq 蔓延机制及旧三 kind 顺序；
+完整预研稿留在 Git。保留原有订正优先级、决策链和代码事实断言，防止旧方案复活。
 """
 
 from __future__ import annotations
@@ -20,7 +12,7 @@ from pathlib import Path
 from sim.core.events import EventKind
 from sim.core.persistence.event_validation import PAYLOAD_MODELS
 
-PRESTUDY = Path(__file__).resolve().parents[2] / "docs" / "api" / "m5-fire-api-prestudy.md"
+CONTRACT_DOC = Path(__file__).resolve().parents[2] / "docs" / "api" / "ws-protocol.md"
 
 #: 施工采信的 2 kind（opencode 数据面裁定 + 裁 35-1 采认）。
 SETTLED_KINDS = ("fire.ignited", "fire.extinguished")
@@ -30,7 +22,7 @@ SETTLED_SPREAD_MECHANISM = ("matter.damage", "parent_seq")
 
 
 def _text() -> str:
-    return PRESTUDY.read_text(encoding="utf-8")
+    return CONTRACT_DOC.read_text(encoding="utf-8")
 
 
 def _fire_kinds() -> list[str]:
@@ -40,7 +32,7 @@ def _fire_kinds() -> list[str]:
 
 
 def test_prestudy_has_correction_block() -> None:
-    """稿内必须有「⚠ 施工订正」块，且明写「以本段为准」——否则后人会只读原文 3-kind 表。"""
+    """现行契约的订正必须声明优先级，避免与历史三 kind 顺序混淆。"""
     text = _text()
     assert "⚠ 施工订正" in text, "K12 稿缺「⚠ 施工订正」块"
     assert "以本段为准" in text or "本段优先于下方原文" in text, (
@@ -70,7 +62,7 @@ def test_code_facts_match_correction() -> None:
 
 
 def test_prestudy_keeps_original_decision_chain() -> None:
-    """原文 3-kind 表述**必须仍在**（决策链的一部分；将来复核「为何 spread 不独立」要用）。"""
+    """现行记录仍保留历史三 kind 顺序，完整过程可从 Git 回查。"""
     text = _text()
     assert re.search(r"fire\.ignited.*fire\.spread.*fire\.extinguished", text), (
         "3-kind 期表述被删掉了——订正要「保留原文 + 加订正块」，不是抹掉历史"
