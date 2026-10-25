@@ -6,9 +6,9 @@
 
 ## 0. 当前状态
 
-- **HEAD**：`264b8b8` fix(sim,client)：DA-07 坍塌致伤接线 + V4a 挖格疤痕（安全点提交）。
-- **进行中**：主树大整理（文档 / 记忆 / 死物 / 本地垃圾）。整理提交前工作区是脏的，
-  新对话先看 `git status`；不要假设文档已提交。
+- **HEAD**：`436040a` chore(repo)：大整理（文档 / 记忆 / 死物 / 本地垃圾）。
+  前序 `264b8b8` fix(sim,client)：DA-07 坍塌致伤接线 + V4a 挖格疤痕。
+- **工作区**：干净。文档入口 `docs/README.md`（133 → 28 篇活文档）。
 - **协议**：`1.12`（真相源 `sim/api/ws.py::_PROTOCOL_VERSION`；`client/src/net/ws.ts` 同源；
   `sim/tests/test_protocol_version.py` 钉住；README 徽章由 `tools/check_implementation_status.py` 校验）。
 - **两棵树**：
