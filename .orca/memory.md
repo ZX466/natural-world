@@ -5,8 +5,9 @@
 
 ## 0. 当前状态
 
-- **main HEAD**：`e2e1250` merge codex 体素挖土降层与等距增量渲染（本卡所在提交；
-  前序 `bb871f2` 走路飘+计划看板退役、`7b9c7b3`、`16489c3` 为 codex 被收编点）。
+- **main HEAD**：`729921a` 第五轮收编快照（本卡所在提交；代码收编点是 `e2e1250`
+  merge codex 体素挖土降层与等距增量渲染；前序 `bb871f2` 走路飘+计划看板退役、
+  `7b9c7b3`、`16489c3` 为 codex 被收编点）。
 - **codex HEAD**：`16489c3` A+B 完成，**已被主树收编**（收编后 codex 落后 main，下次派单
   须写明基线，勿再让 codex 自己 `git apply` 补基线）。
 - **协议**：`1.12`（`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts`）。**本轮未改协议**。
