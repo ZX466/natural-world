@@ -157,6 +157,48 @@ it('follows the logical top without crowd offsets and pads the diamond bounds by
   expect(camera.stopFollow).toHaveBeenCalledTimes(1);
 });
 
+it('keeps the walk cycle running for the whole glide, not just the frame a cell changes', () => {
+  const { internal, mirror } = setup();
+  internal.syncActorViews(16, 0);
+  const view = internal.views.get('hero')!;
+  // 一格走 250ms；delta 只在换格那一帧到达，其余 14 帧都在插值途中。
+  mirror.actors.get('hero')!.y = 2;
+  internal.syncActorViews(16, 16); // 换格帧：开始滑行
+  const atSnap = view.animClockMs;
+  internal.syncActorViews(16, 48);
+  internal.syncActorViews(16, 80);
+  // 修前：moved 只看「本帧换格」，其余帧归 -1 → 站立帧滑行 = 飘。
+  expect(view.animClockMs).toBeGreaterThan(atSnap);
+  // 滑行途中必须是走环帧 0（row0south × 17 列），不是站立帧 1。
+  expect(view.sprite.setFrame).toHaveBeenLastCalledWith(0);
+});
+
+it('returns to the standing frame once the glide lands', () => {
+  const { internal, mirror } = setup();
+  internal.syncActorViews(16, 0);
+  const view = internal.views.get('hero')!;
+  mirror.actors.get('hero')!.y = 2;
+  internal.syncActorViews(16, 16);
+  internal.syncActorViews(16, 300); // k 早已到 1
+  expect(view.animClockMs).toBe(-1);
+  expect(view.sprite.setFrame).toHaveBeenLastCalledWith(1);
+});
+
+it('moves the iso camera with the glide instead of snapping a cell ahead', () => {
+  const { internal, mirror, camera } = setup();
+  internal.syncActorViews(16, 0);
+  internal.syncCamera();
+  const target = camera.startFollow.mock.calls.at(-1)?.[0] as { x: number; y: number };
+  const before = { x: target.x, y: target.y };
+  mirror.actors.get('hero')!.y = 2;
+  internal.syncActorViews(16, 48); // 换格帧：滑行开始
+  internal.syncActorViews(16, 96); // 滑行到 ~19%
+  internal.syncCamera();
+  const dest = isoProject(2, 2, 1, screenBounds(4, 4));
+  expect(target.y).toBeGreaterThan(before.y);
+  expect(target.y).toBeLessThan(dest.sy); // 跟着人物滑，不提前跳到新格
+});
+
 it('cleans reset views and recreates them directly at the projected surface', () => {
   const { internal, mirror } = setup();
   internal.syncActorViews(0, 0);
@@ -208,6 +250,11 @@ describe.each(['flat', 'iso'] as const)('%s interaction and movement', (mode) =>
       expect(view.sprite.setFrame).toHaveBeenLastCalledWith(token === 'animal' ? 0 : eastStart + 1);
       internal.syncActorViews(16, 316);
       expect(view.lastFacing).toBe('e');
+      // 仍在滑行（k<1）→ 必须继续播走环，不许落回站立帧（站着滑 = 飘）。
+      expect(view.animClockMs).toBeGreaterThanOrEqual(0);
+      // 滑行到点后回到站立帧。
+      internal.syncActorViews(16, 700);
+      expect(view.animClockMs).toBe(-1);
       expect(view.sprite.setFrame).toHaveBeenLastCalledWith(eastStart + standCol);
     },
   );

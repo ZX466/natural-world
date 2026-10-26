@@ -33,11 +33,11 @@ describe('PanelHost 街谈巷议（批次 D10）', () => {
     storeState.plans = [];
   });
 
-  it('空态：三块面板骨架可见', () => {
+  it('空态：心之声与街谈巷议两块面板可见（计划看板已退役）', () => {
     const html = renderPanel();
     expect(html).toContain('心之声');
     expect(html).toContain('街谈巷议');
-    expect(html).toContain('计划');
+    expect(html).not.toContain('od-panel--plan');
   });
 
   it('chatter 条目渲染在街谈巷议节（署名 + 内容）', () => {

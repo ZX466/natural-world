@@ -71,6 +71,16 @@ interface ActorView {
   fromX: number;
   fromY: number;
   snapAtMs: number;
+  /** 是否正在滑行（换格那一帧置真，插值走完置假）。
+   *  出生帧不算滑行——否则初始 fromX 与投影目标不等会被误判成走路。 */
+  gliding: boolean;
+  /** 本帧插值后的**逻辑顶面**屏幕坐标（不含同格错位偏移），供镜头跟随。
+   *  镜头跟逻辑格会让镜头先走一格、人再追上来（观感=被拽着飘）。 */
+  logicX: number;
+  logicY: number;
+  /** 滑行起点的逻辑顶面（换格帧记录；与 fromX/fromY 同批） */
+  fromLogicX: number;
+  fromLogicY: number;
   /** 上一帧逻辑格（anim/facing 推断输入，R2） */
   prevX: number;
   prevY: number;
@@ -606,6 +616,11 @@ export class WorldScene extends Phaser.Scene {
           fromX: iso ? top.sx : actor.x,
           fromY: iso ? top.sy : actor.y,
           snapAtMs: 0,
+          gliding: false,
+          logicX: iso ? top.sx : actor.x * TILE + TILE / 2,
+          logicY: iso ? top.sy : actor.y * TILE + TILE / 2,
+          fromLogicX: iso ? top.sx : actor.x * TILE + TILE / 2,
+          fromLogicY: iso ? top.sy : actor.y * TILE + TILE / 2,
           prevX: actor.x,
           prevY: actor.y,
           animClockMs: -1,
@@ -626,7 +641,10 @@ export class WorldScene extends Phaser.Scene {
       if (view.prevX !== actor.x || view.prevY !== actor.y) {
         view.fromX = view.sprite.x;
         view.fromY = view.sprite.y;
+        view.fromLogicX = view.logicX;
+        view.fromLogicY = view.logicY;
         view.snapAtMs = timeMs;
+        view.gliding = true;
       }
       const speed = useUiStore.getState().speed;
       const interpMs = Math.max(1000 / 60, INTERP_MS / speed);
@@ -637,6 +655,10 @@ export class WorldScene extends Phaser.Scene {
       const targetY = top.sy + stack.dy;
       view.sprite.x = view.fromX + (targetX - view.fromX) * k;
       view.sprite.y = view.fromY + (targetY - view.fromY) * k;
+      // 逻辑顶面插值（无同格错位）：镜头跟这个，跟人物同步而不是跟着逻辑格跳。
+      view.logicX = view.fromLogicX + (top.sx - view.fromLogicX) * k;
+      view.logicY = view.fromLogicY + (top.sy - view.fromLogicY) * k;
+      if (k >= 1) view.gliding = false;
       // A 档：深度随脚底（插值后）位置更新——靠下的人自然压住靠上的人。
       // 精灵 origin(0.5,1)，sprite.y 即脚底世界像素。
       const footDepth = iso ? depthKey(actor.x, actor.y) + 1 : actorDepth(view.sprite.y);
@@ -664,9 +686,12 @@ export class WorldScene extends Phaser.Scene {
       }
       // R2：位移推断 anim/facing → 帧号（D10：villager 4 列帧表启用行走环；
       // 修前恒帧 0——素材有 4×8 走环/劳作表却只画迈步中间帧，人群看着呆滞）
+      // 位移只在换格那一帧为真；插值途中（k<1）人物其实在滑动，
+      // 若只按换格帧判走环，其余帧全是站立帧 = 站着滑过去的「飘」。
+      // 走环条件改为「本帧位置真的变了」：换格帧或滑行未到点。
       const moved = view.prevX !== actor.x || view.prevY !== actor.y;
       // H-2：walk 累加/idle 归 -1（修前写反 → 循环死在第 0 帧）
-      view.animClockMs = advanceAnimClock(view.animClockMs, moved, delta);
+      view.animClockMs = advanceAnimClock(view.animClockMs, moved || view.gliding, delta);
       // 零位移沿用 lastFacing（停下不转身）。
       if (moved) {
         view.lastFacing = inferFacing(actor.x - view.prevX, actor.y - view.prevY, view.lastFacing);
@@ -711,11 +736,22 @@ export class WorldScene extends Phaser.Scene {
         return;
       }
       // A logical top-face target keeps same-cell presentation offsets out of the camera.
-      const top = this.projectSurface(actor.x, actor.y);
-      this.isoCameraTarget.x = top.sx;
-      this.isoCameraTarget.y = top.sy;
+      // 但换格瞬间逻辑格已跳到下一格，而人物还在滑行——直接把逻辑格喂给相机
+      // 会让镜头先走一格、人再追上来（观感=人被镜头拽着飘）。改用插值后的
+      // 逻辑顶面：镜头与人物同一帧同一点（且不含同格错位偏移）。
+      const token = this.mirror.protagonist;
+      const view = token === null ? undefined : this.views.get(token);
+      if (view) {
+        this.isoCameraTarget.x = view.logicX;
+        this.isoCameraTarget.y = view.logicY;
+      } else {
+        const top = this.projectSurface(actor.x, actor.y);
+        this.isoCameraTarget.x = top.sx;
+        this.isoCameraTarget.y = top.sy;
+      }
       if (this.isoFollowToken !== this.mirror.protagonist) {
-        camera.startFollow(this.isoCameraTarget, true, 0.12, 0.12);
+        // 目标本身已是逐帧插值，再叠 0.12 缓动 = 双重滞后（人物粘滞/漂移感）。
+        camera.startFollow(this.isoCameraTarget, true, 1, 1);
         this.isoFollowToken = this.mirror.protagonist;
       }
       return;

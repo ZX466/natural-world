@@ -1,9 +1,14 @@
 /**
  * client/src/ui/PanelHost.tsx — 右侧竖栏面板（批次 A UI；D10 分流）。
  *
- * 三块面板：心之声（陈默独白流：thought/plan 入流，环形缓冲
+ * 两块面板：心之声（陈默独白流：thought/plan 入流，环形缓冲
  * 最近 MONOLOGUE_CAP 条）+ 街谈巷议（批次 D10：村民 bubble 公开嘟囔，
- * CHATTER_CAP 条）+ 计划看板（state_delta.plan，有则展开无则收起）。
+ * CHATTER_CAP 条）。
+ *
+ * 「计划看板」已退役（2026-10-26 用户裁定删废话面板）：state_delta.plan
+ * 的条目全部来自 NPC 的 defers 决定（sim/npc/runtime.py），内容恒为
+ * 「先去别处，等会儿再回来」——行为本身已可见，单独一块板纯属噪音，
+ * 且塞进心之声会把它误挂成陈默的内心。协议与 store 数据面保留不动。
  * 出戏纪律：只渲染叙事文本，零数值零工程词。
  * 版式：宣纸竖栏，墨字 + 朱印（见 ui.css）。
  */
@@ -19,7 +24,6 @@ const FORM_LABEL: Record<MonologueEntry['form'], string> = {
 export function PanelHost(): ReactElement {
   const monologues = useUiStore((s) => s.monologues);
   const chatter = useUiStore((s) => s.chatter);
-  const plans = useUiStore((s) => s.plans);
 
   return (
     <aside id="panel-host" className="od-panelhost">
@@ -50,21 +54,6 @@ export function PanelHost(): ReactElement {
               <li key={`${i}-${c.content}`} className="chatter-item od-chatter">
                 {c.name !== null && <span className="od-chatter__name">{c.name}：</span>}
                 {c.content}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      <section aria-label="计划" className="od-panel od-panel--plan">
-        <span className="od-panel__pin" aria-hidden="true" />
-        <h2 className="od-panel__title">计划</h2>
-        {plans.length === 0 ? (
-          <p className="od-panel__empty">还没有什么打算。</p>
-        ) : (
-          <ul className="od-plan-list">
-            {plans.map((p) => (
-              <li key={p.rtoken} className="plan-item od-plan">
-                {p.text}
               </li>
             ))}
           </ul>

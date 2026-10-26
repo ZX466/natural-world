@@ -55,7 +55,7 @@ sim/api/ws  (FastAPI WebSocket 网关)
 | `full_snapshot` | render | 连接/重连/载档后的全量渲染态 | M0 |
 | `state_delta` | render | 每 tick 增量渲染态（M0 渲染闭环主载波） | M0 |
 | `perception` | narrative | 第一人称感官流叙事（React 侧独白/思维面板来源） | M1 |
-| `monologue` | narrative | 独白三形态呈现（气泡 / 思维面板 / 计划看板） | M1 |
+| `monologue` | narrative | 独白两形态呈现（气泡 / 思维面板；计划看板 2026-10-26 退役） | M1 |
 | `impulse_feedback` | control | 念头注入即时反馈（意愿冲突表现，M4） | M4 |
 | `combat_event` | render | 战斗交换单元结算表现（弹幕/翻滚/受击） | M4 |
 | `timescale` | control | 战斗时间尺自动切换通知（§9，sim 驱动） | M4 |
@@ -106,7 +106,8 @@ sim/api/ws  (FastAPI WebSocket 网关)
 
 - 增量以 `rtoken` 为键；`op` 缺省视为 update。
 - 客户端按 `ws_seq` 顺序应用；发现缺口超过阈值即发 `sync_request`。
-- **`plan` 键**（§8 计划看板数据面；M4 裁 14-3 / M5-K10 落地）：**顶层可选数组**
+- **`plan` 键**（M4 裁 14-3 / M5-K10 落地；**2026-10-26 起前端不渲染面板**，
+  协议与数据面保留）：**顶层可选数组**
   （与 `actors`/`lights` 并列），每项＝`PlanDelta {rtoken, text}`
   （`additionalProperties:false`，二者均 required）。**不塞进 `ActorDelta`**：
   改计划不必伴随移动，塞 ActorDelta 会被 driver 的 moved 增量过滤漏掉
@@ -153,7 +154,7 @@ sim/api/ws  (FastAPI WebSocket 网关)
 
 ```jsonc
 {
-  "form": "thought",              // bubble（头顶气泡）| thought（思维面板）| plan（计划看板）
+  "form": "thought",              // bubble（头顶气泡）| thought（思维面板）| plan（保留枚举，UI 无面板）
   "content": "我干嘛要干这个……算了，先走着。"   // 第一人称叙事化，无数值无系统词
 }
 ```

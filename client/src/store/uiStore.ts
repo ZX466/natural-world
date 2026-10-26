@@ -60,7 +60,8 @@ interface UiState {
    *  是镇上的公开声音，不是陈默的内心活动；与 monologues 分流防刷屏。
    *  D12：条目带署名） */
   chatter: ChatterEntry[];
-  /** 计划看板（state_delta.plan 整组替换；空 = 收起） */
+  /** state_delta.plan 数据面（整组替换）。计划看板 UI 已于 2026-10-26 退役，
+   *  字段保留供其他消费者；不要再接回面板。 */
   plans: PlanDelta[];
   /** impulse 入站 error 帧玩家可见文案（仅 ref=player_impulse 置位） */
   impulseError: string | null;

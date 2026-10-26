@@ -274,16 +274,12 @@
   flex: 1;
   overflow-y: auto;
 }
-/* 三面板等权：心声不再 flex-shrink:0（20 条撑满就压扁街谈巷议/计划——
-   2026-10-11 实况反馈）；改内部滚动，各面板独立滚动互不挤压。 */
+/* 两面板等权：心声不再 flex-shrink:0（20 条撑满就压扁街谈巷议——
+   2026-10-11 实况反馈）；改内部滚动，各面板独立滚动互不挤压。
+   计划看板已于 2026-10-26 退役，原三面板口径作废。 */
 .od-panel--voice {
   flex: 1;
   min-height: 6rem;
-  overflow-y: auto;
-}
-.od-panel--plan {
-  flex-shrink: 0;
-  max-height: 9rem;
   overflow-y: auto;
 }
 /* 铜钉：把纸钉在木墙上 */
@@ -329,8 +325,7 @@
 }
 
 .od-voice-list,
-.od-chatter-list,
-.od-plan-list {
+.od-chatter-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -340,8 +335,7 @@
 }
 
 .od-voice,
-.od-chatter,
-.od-plan {
+.od-chatter {
   padding: 0.42rem 0.55rem;
   font-size: 0.82rem;
   line-height: 1.72;
@@ -360,14 +354,6 @@
   background: transparent;
   border: 1px solid rgba(181, 138, 78, 0.4);
   box-shadow: inset 3px 0 0 var(--od-jade);
-}
-.od-plan {
-  color: var(--od-ink);
-  background: rgba(255, 250, 236, 0.6);
-  border: 1px solid rgba(181, 138, 78, 0.55);
-  box-shadow:
-    inset 3px 0 0 var(--od-cinnabar),
-    0 1px 2px rgba(120, 80, 30, 0.18);
 }
 
 .od-voice__tag {
