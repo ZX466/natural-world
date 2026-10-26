@@ -68,3 +68,12 @@
 - 主树：架构/质量/测试/前端/发布/收编；codex：复杂实现、安全合规。
 - Python 3.12 + FastAPI + SQLite + uv；React 19 + Phaser 3 + Vite + Zustand + Vitest。
 - 文档真相源：`shared/openapi.json`、ORM/迁移、`docs/` 活文档。
+
+## 6. ④ codex｜新对话恢复快照
+
+【2026-10-26 用户要求保存记忆｜无在途任务】代码清理 `3b33328`、文档清理 `cc47cf3` 已完成并被主树收编；本树恢复卡同步提交 `f8f59ca`。下一步先读本树 talking.txt 的最新任务，再读本卡、workflow.txt；无新任务时等待用户或主树派单，不自行启动 V3.5 / V4-3D / V4b。
+
+- 主树 10-26 留言：旧 Zelda 图管线、闭环审计台账已在主树退役；voxel-transition-plan 已合并到 voxel-execution-spec §10，后续以执行规格为准。本树尚未同步这些代码变化，不自行 merge/rebase，不重复清理，不恢复主树已删除的旧资源。
+- 本树上一轮亲测：Python 2945 passed / 121 skipped / 72 deselected；代码清理时 client 221 passed；代码与文档证据分别在 `.orca/audits/cleanup-2026-10-25/`、`.orca/audits/docs-cleanup-2026-10-25/`。本卡 §1 是主树收编后读数，不能冒充本次或本树新实测；本次只保存记忆。
+- 用户偏好：中文简洁、行动和结果优先；i-have-adhd 技能持续启用；合理调用技能，查代码先 CodeGraph（显式 projectPath 指向本树），然后用文件证据复核。旧详细实现与踩坑通过 `git show cc47cf3:.orca/memory.md` 查询，不扩写重复文档。
+- 边界仍为只在 codex 本地提交、不推远程、不动主树；只走本树 talking.txt 留回执。Python 用 uv；浏览器只用 `D:/develop/hermes/chrome`；删除 npm/venv 先问用户。修改本卡仅限本节，写入即本地提交。
