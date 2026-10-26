@@ -40,7 +40,7 @@
 - 退役旧 Zelda 图管线：删 `sim/content/build_town.py`、`build_palette.py` 与
   `sprout-palette.json` / `sprout-tileset.png`（运行时已换桃花源整图；产物无引用）。
 - 删已闭环审计台账 `docs/security/gameplay-integrity-audit-2026-10-21.md`（DA-01..08 全修完）。
-- 合并 `docs/arch/voxel-transition-plan.md` → `voxel-execution-spec.md` §10（决策链/边界/风险）。
+- 合并 `docs/arch/voxel-transition-plan.md` → `voxel-execution-spec.md` §10（决策链/边界/风险），原文件已删。
 - 全树清掉失效文档路径引用与 `build_town`/`build_palette`/`sprout-palette` 过期注释；
   协议描述同步 `shared/openapi.json` + 重生成 `shared/protocol.ts`。
 - 文档 **26 篇**（本轮 -2：审计稿、转向方案）。
