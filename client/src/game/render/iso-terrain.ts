@@ -18,17 +18,16 @@ interface BlockView {
   texture: string;
   phase: string | undefined;
 }
-
-function surfaceSignature(structures: Structures, edits: Edits): string {
-  return JSON.stringify([
-    [...structures].map(([id, structure]) => [
-      id,
-      structure.tiles,
-      structure.phase === 'built' || structure.phase === 'collapsing' ? 'solid' : structure.phase,
-    ]),
-    [...edits],
-  ]);
+interface SurfaceCell {
+  x: number;
+  y: number;
+  h: number;
+  color: number;
+  phase: string | undefined;
+  rubble: boolean;
+  scar: boolean;
 }
+type Rect = { left: number; top: number; right: number; bottom: number };
 
 export function sampleTileColor(
   data: Uint8ClampedArray,
@@ -99,10 +98,13 @@ export class IsoTerrain {
   private textureKeys = new Set<string>();
   private colors: ((gid: number) => number) | null = null;
   private lastMap: MapStatic | null = null;
-  private lastGround: Uint16Array | undefined;
-  private lastShape = '';
-  private lastStructureSignature = '';
-  private lastSurfaceSignature = '';
+  private lastWidth = 0;
+  private lastHeight = 0;
+  private lastVersion: number | undefined;
+  private cells: SurfaceCell[] = [];
+  private groundCanvas: HTMLCanvasElement | null = null;
+  private groundContext: CanvasRenderingContext2D | null = null;
+  private groundTexture: Phaser.Textures.CanvasTexture | null = null;
   private atlas: BlockAtlas | null;
   private transitions = new Map<
     Phaser.GameObjects.Image | Phaser.GameObjects.Graphics,
@@ -136,48 +138,45 @@ export class IsoTerrain {
     view.phase = phase;
   }
 
-  /** Compare contents so same-array ground edits and empty snapshots both invalidate. */
-  sync(map: MapStatic | null, structures: Structures, edits: Edits = NO_EDITS): void {
+  /** WorldScene supplies a mutation version: unchanged frames touch no terrain collections.
+   * Unversioned callers can still explicitly sync mutable standalone maps.
+   */
+  sync(
+    map: MapStatic | null,
+    structures: Structures,
+    edits: Edits = NO_EDITS,
+    version?: number,
+  ): void {
     if (map === null) {
       if (this.lastMap !== null) this.clear();
       return;
     }
-    const signature = JSON.stringify([[...structures], [...edits]]);
-    const groundUnchanged =
-      map.ground === undefined
-        ? this.lastGround === undefined
-        : this.lastGround !== undefined &&
-          map.ground.length === this.lastGround.length &&
-          map.ground.every((gid, i) => gid === this.lastGround![i]);
     if (
       map === this.lastMap &&
-      `${map.w},${map.h}` === this.lastShape &&
-      signature === this.lastStructureSignature &&
-      groundUnchanged
+      map.w === this.lastWidth &&
+      map.h === this.lastHeight &&
+      version !== undefined &&
+      version === this.lastVersion
     )
       return;
-    // built <-> collapsing changes opacity only. This keeps the fade running
-    // without a terrain bake; TILE_CHANGED and geometry still use full redraws.
     if (
-      map === this.lastMap &&
-      `${map.w},${map.h}` === this.lastShape &&
-      groundUnchanged &&
-      surfaceSignature(structures, edits) === this.lastSurfaceSignature
+      map !== this.lastMap ||
+      map.w !== this.lastWidth ||
+      map.h !== this.lastHeight ||
+      this.groundContext === null
     ) {
-      for (const structure of structures.values()) {
-        if (structure.phase !== 'built' && structure.phase !== 'collapsing') continue;
-        for (const [x, y] of structure.tiles) {
-          const view = this.blocks.get(`${x},${y}`);
-          if (view) this.phase(view, structure.phase);
-        }
-      }
-      this.lastStructureSignature = signature;
+      this.redraw(map, structures, edits, version);
       return;
     }
-    this.redraw(map, structures, edits);
+    this.updateSurface(map, structures, edits, version, false);
   }
 
-  redraw(map: MapStatic | null, structures: Structures, edits: Edits = NO_EDITS): void {
+  redraw(
+    map: MapStatic | null,
+    structures: Structures,
+    edits: Edits = NO_EDITS,
+    version?: number,
+  ): void {
     if (map === null) {
       this.clear();
       return;
@@ -190,76 +189,94 @@ export class IsoTerrain {
     // one-shot bake on CPU to avoid GPU synchronization for every face copy.
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (ctx === null) return;
+    this.groundCanvas = canvas;
+    this.groundContext = ctx;
+    this.updateSurface(map, structures, edits, version, true);
+  }
+
+  private updateSurface(
+    map: MapStatic,
+    structures: Structures,
+    edits: Edits,
+    version: number | undefined,
+    full: boolean,
+  ): void {
+    const bounds = screenBounds(map.w, map.h);
     const overrides = new Map<string, string>();
+    const ruins = new Set<string>();
     for (const structure of structures.values()) {
+      if (structure.phase === 'rubble') {
+        for (const [x, y] of structure.tiles) ruins.add(`${x},${y}`);
+      }
       if (structure.phase !== 'built' && structure.phase !== 'collapsing') continue;
       for (const [x, y] of structure.tiles) overrides.set(`${x},${y}`, structure.phase);
     }
     this.colors ??= this.readColors();
-    const high: { x: number; y: number; h: number; color: number; phase: string | undefined }[] =
-      [];
-    // Diagonal order matches depthKey; later low faces cannot paint over nearer tiles.
-    for (let diagonal = 0; diagonal < map.w + map.h - 1; diagonal++) {
-      for (let y = Math.max(0, diagonal - map.w + 1); y <= Math.min(map.h - 1, diagonal); y++) {
-        const x = diagonal - y;
-        const phase = overrides.get(`${x},${y}`);
+    const previous = this.cells;
+    const cells: SurfaceCell[] = [];
+    let dirty: Rect | null = null;
+    let changed = full;
+    const includeLow = (cell: SurfaceCell) => {
+      if (cell.h >= 2) return;
+      const top = isoProject(cell.x, cell.y, cell.h, bounds);
+      const bottom = top.sy + cell.h * ISO.HH + ISO.TH / 2;
+      dirty = {
+        left: Math.min(dirty?.left ?? Infinity, top.sx - ISO.TW / 2 - 1),
+        top: Math.min(dirty?.top ?? Infinity, top.sy - ISO.TH / 2 - 1),
+        right: Math.max(dirty?.right ?? -Infinity, top.sx + ISO.TW / 2 + 1),
+        bottom: Math.max(dirty?.bottom ?? -Infinity, bottom + 1),
+      };
+    };
+    for (let y = 0; y < map.h; y++) {
+      for (let x = 0; x < map.w; x++) {
+        const key = `${x},${y}`;
+        const phase = overrides.get(key);
         const h = effectiveHeight(x, y, this.heightOf, structures, edits);
         const color =
-          edits.has(`${x},${y}`) && phase === undefined
+          edits.has(key) && phase === undefined
             ? 0x8f8055
             : this.colors(map.ground?.[y * map.w + x] ?? 0);
-        if (h >= 2) {
-          high.push({ x, y, h, color, phase });
-        } else {
-          const top = isoProject(x, y, h, bounds);
-          if (this.atlas) this.atlas.paintBlock(ctx, top.sx, top.sy, h, color);
-          else paintBlock(ctx, top.sx, top.sy, h, color);
+        const cell = {
+          x,
+          y,
+          h,
+          color,
+          phase,
+          rubble: phase === undefined && ruins.has(key),
+          scar: phase === undefined && h > 0 && edits.get(key)?.action === 'dig',
+        };
+        cells.push(cell);
+        const prior = full ? undefined : previous[y * map.w + x];
+        if (prior?.h !== h || prior.color !== color) {
+          if (prior) includeLow(prior);
+          includeLow(cell);
+          changed = true;
         }
+        if (prior?.phase !== phase || prior?.rubble !== cell.rubble || prior?.scar !== cell.scar)
+          changed = true;
       }
     }
-    if (this.scene.textures.exists(GROUND_KEY)) this.scene.textures.remove(GROUND_KEY);
-    this.scene.textures.addCanvas(GROUND_KEY, canvas);
-    if (this.ground === null) {
-      this.ground = this.scene.add.image(0, 0, GROUND_KEY).setOrigin(0).setDepth(0);
-    } else {
-      this.ground.setTexture(GROUND_KEY);
+    this.lastVersion = version;
+    if (!changed) return;
+    this.cells = cells;
+    if (full || dirty !== null) this.paintGround(map, bounds, full ? null : dirty);
+    if (full) {
+      if (this.scene.textures.exists(GROUND_KEY)) this.scene.textures.remove(GROUND_KEY);
+      this.groundTexture = this.scene.textures.addCanvas(GROUND_KEY, this.groundCanvas!);
+      if (this.ground === null) {
+        this.ground = this.scene.add.image(0, 0, GROUND_KEY).setOrigin(0).setDepth(0);
+      } else {
+        this.ground.setTexture(GROUND_KEY);
+      }
     }
     const retained = new Set<string>();
-    const usedTextures = new Set<string>();
-    for (const { x, y, h, color, phase } of high) {
-      const key = `${x},${y}`;
-      const texture = `iso-block-${h}`;
-      if (!this.scene.textures.exists(texture)) {
-        const block = document.createElement('canvas');
-        block.width = ISO.TW;
-        block.height = h * ISO.HH + ISO.TH;
-        const blockCtx = block.getContext('2d');
-        if (blockCtx === null) continue;
-        if (this.atlas) this.atlas.paintBlock(blockCtx, ISO.TW / 2, ISO.TH / 2, h);
-        else paintBlock(blockCtx, ISO.TW / 2, ISO.TH / 2, h, 0xffffff);
-        this.scene.textures.addCanvas(texture, block);
-        this.textureKeys.add(texture);
+    for (const cell of cells) {
+      if (cell.h < 2) continue;
+      retained.add(`${cell.x},${cell.y}`);
+      const prior = full ? undefined : previous[cell.y * map.w + cell.x];
+      if (prior?.h !== cell.h || prior.color !== cell.color || prior.phase !== cell.phase) {
+        this.syncBlock(cell, bounds);
       }
-      let view = this.blocks.get(key);
-      const isNew = view === undefined;
-      if (view === undefined) {
-        const base = isoProject(x, y, 0, bounds);
-        const image = this.scene.add
-          .image(base.sx, base.sy + ISO.TH / 2, texture)
-          .setOrigin(0.5, 1);
-        view = { image, texture, phase };
-        this.blocks.set(key, view);
-      } else if (view.texture !== texture) {
-        view.image.setTexture(texture);
-        view.texture = texture;
-      }
-      const base = isoProject(x, y, 0, bounds);
-      view.image.setPosition(base.sx, base.sy + ISO.TH / 2);
-      view.image.setDisplaySize(ISO.TW, h * ISO.HH + ISO.TH).setDepth(depthKey(x, y));
-      view.image.setTint(color);
-      this.phase(view, phase, isNew);
-      retained.add(key);
-      usedTextures.add(texture);
     }
     for (const [key, view] of this.blocks) {
       if (retained.has(key)) continue;
@@ -267,18 +284,90 @@ export class IsoTerrain {
       view.image.destroy();
       this.blocks.delete(key);
     }
-    for (const key of this.textureKeys) {
-      if (usedTextures.has(key)) continue;
-      this.scene.textures.remove(key);
-      this.textureKeys.delete(key);
-    }
     this.syncRubble(map, structures, overrides, bounds, edits);
     this.syncScars(map, structures, bounds, edits);
     this.lastMap = map;
-    this.lastShape = `${map.w},${map.h}`;
-    this.lastGround = map.ground?.slice();
-    this.lastStructureSignature = JSON.stringify([[...structures], [...edits]]);
-    this.lastSurfaceSignature = surfaceSignature(structures, edits);
+    this.lastWidth = map.w;
+    this.lastHeight = map.h;
+  }
+
+  private syncBlock(
+    { x, y, h, color, phase }: SurfaceCell,
+    bounds: ReturnType<typeof screenBounds>,
+  ) {
+    const key = `${x},${y}`;
+    const texture = `iso-block-${h}`;
+    if (!this.scene.textures.exists(texture)) {
+      const block = document.createElement('canvas');
+      block.width = ISO.TW;
+      block.height = h * ISO.HH + ISO.TH;
+      const ctx = block.getContext('2d');
+      if (ctx === null) return;
+      if (this.atlas) this.atlas.paintBlock(ctx, ISO.TW / 2, ISO.TH / 2, h);
+      else paintBlock(ctx, ISO.TW / 2, ISO.TH / 2, h, 0xffffff);
+      this.scene.textures.addCanvas(texture, block);
+      this.textureKeys.add(texture);
+    }
+    let view = this.blocks.get(key);
+    const isNew = view === undefined;
+    const base = isoProject(x, y, 0, bounds);
+    if (view === undefined) {
+      const image = this.scene.add.image(base.sx, base.sy + ISO.TH / 2, texture).setOrigin(0.5, 1);
+      view = { image, texture, phase };
+      this.blocks.set(key, view);
+    } else if (view.texture !== texture) {
+      view.image.setTexture(texture);
+      view.texture = texture;
+    }
+    view.image.setPosition(base.sx, base.sy + ISO.TH / 2);
+    view.image.setDisplaySize(ISO.TW, h * ISO.HH + ISO.TH).setDepth(depthKey(x, y));
+    view.image.setTint(color);
+    this.phase(view, phase, isNew);
+  }
+
+  /** Repaint every overlapping low block, clipped to the old/new footprint union.
+   * The inverse bounds limit enumeration to nearby diagonals and columns, while
+   * the original diagonal/row order preserves both background and foreground.
+   */
+  private paintGround(map: MapStatic, bounds: ReturnType<typeof screenBounds>, dirty: Rect | null) {
+    const ctx = this.groundContext!;
+    if (dirty) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(dirty.left, dirty.top, dirty.right - dirty.left, dirty.bottom - dirty.top);
+      ctx.clip();
+      ctx.clearRect(dirty.left, dirty.top, dirty.right - dirty.left, dirty.bottom - dirty.top);
+    }
+    const hw = ISO.TW / 2,
+      hh = ISO.TH / 2;
+    const first = dirty ? Math.max(0, Math.ceil((dirty.top - bounds.originY - hh) / hh)) : 0;
+    const last = dirty
+      ? Math.min(map.w + map.h - 2, Math.floor((dirty.bottom - bounds.originY + ISO.HH + hh) / hh))
+      : map.w + map.h - 2;
+    for (let diagonal = first; diagonal <= last; diagonal++) {
+      const minY = Math.max(
+        0,
+        diagonal - map.w + 1,
+        dirty ? Math.ceil((bounds.originX + diagonal * hw - dirty.right - hw) / ISO.TW) : 0,
+      );
+      const maxY = Math.min(
+        map.h - 1,
+        diagonal,
+        dirty ? Math.floor((bounds.originX + diagonal * hw - dirty.left + hw) / ISO.TW) : map.h - 1,
+      );
+      for (let y = minY; y <= maxY; y++) {
+        const x = diagonal - y;
+        const cell = this.cells[y * map.w + x]!;
+        if (cell.h >= 2) continue;
+        const top = isoProject(x, y, cell.h, bounds);
+        if (this.atlas) this.atlas.paintBlock(ctx, top.sx, top.sy, cell.h, cell.color);
+        else paintBlock(ctx, top.sx, top.sy, cell.h, cell.color);
+      }
+    }
+    if (dirty) {
+      ctx.restore();
+      this.groundTexture?.refresh();
+    }
   }
 
   private syncRubble(
@@ -347,9 +436,9 @@ export class IsoTerrain {
     }
   }
 
-  /** Dug cells keep their static height (decision 9), so a tinted block alone
-   * reads as ordinary ground. A dark inset diamond marks the disturbed surface
-   * without moving the tile; placed cells are their own marker (raised block).
+  /** Dug cells now drop one height level, so the lowered block itself reads as
+   * disturbed ground and the dark inset diamond is a highlight, not the only cue.
+   * A cell lowered to zero has no floating scar; placed cells are their own marker.
    */
   private syncScars(
     map: MapStatic,
@@ -368,12 +457,14 @@ export class IsoTerrain {
       const { x, y } = edit;
       if (x < 0 || y < 0 || x >= map.w || y >= map.h) continue;
       if (active.has(key) || retained.has(key)) continue;
+      const height = effectiveHeight(x, y, this.heightOf, structures, edits);
+      if (height === 0) continue;
       let marker = this.scars.get(key);
       if (marker === undefined) {
         marker = this.scene.add.graphics();
         this.scars.set(key, marker);
       }
-      const top = isoProject(x, y, effectiveHeight(x, y, this.heightOf, structures, edits), bounds);
+      const top = isoProject(x, y, height, bounds);
       // Above its own block, below the actor standing on it (depthKey + 1).
       marker.setPosition(top.sx, top.sy).setDepth(depthKey(x, y) + 0.5);
       marker.clear();
@@ -433,10 +524,13 @@ export class IsoTerrain {
     this.textureKeys.clear();
     if (this.scene.textures.exists(GROUND_KEY)) this.scene.textures.remove(GROUND_KEY);
     this.lastMap = null;
-    this.lastGround = undefined;
-    this.lastShape = '';
-    this.lastStructureSignature = '';
-    this.lastSurfaceSignature = '';
+    this.lastWidth = 0;
+    this.lastHeight = 0;
+    this.lastVersion = undefined;
+    this.cells = [];
+    this.groundCanvas = null;
+    this.groundContext = null;
+    this.groundTexture = null;
   }
 
   destroy(): void {

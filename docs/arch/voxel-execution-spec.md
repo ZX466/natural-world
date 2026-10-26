@@ -108,10 +108,14 @@ depthKey(x, y): number          // (x+y)*1024 + y（R4 行序）
   高度 h 的方块：顶面菱形中心 `project(x,y,h)`，地面侧的下沿点
   `S = project(x,y,0) + (0, TH/2)`，左右侧面从顶面下沿画到 S（侧面像素高 = h·HH）。
   实体脚底 = `isoProject(x, y, effectiveHeight(x,y))`（顶面中心）。
-- **有效高度（结构覆盖静态高度表）**：
-  `effectiveHeight(x,y) = 该格属于 phase ∈ {built, collapsing} 的 structure ? 2 : heightOf(x,y)`。
+- **有效高度（2026-10-26 用户裁决：挖一次降一层，放一次升一层）**：
+  建筑 footprint 的 `phase ∈ {built, collapsing}` 优先返回 2；其余格从静态
+  `heightOf(x,y)` 计算：`dig → max(0, h-1)`、`place → min(3, h+1)`，无编辑保留 h。
+  挖到 0 不留悬空菱形疤痕；碰撞与 gid 仍由 `TileMap.collision` / 服务端编辑决定。
+  同格连续重复同一动作会被服务端拒绝；当前协议只记录最后动作，故先 place 再 dig 会从
+  视觉 h+1 变为 h-1（边界截断除外）。这是本轮明确接受的近似，精确深度须另改协议。
   **客户端只有 `built | collapsing | rubble` 三态**（world-mirror.ts:70；planned/building
-  不进客户端投影）。rubble 已补发静态原值恢复地面（P-6），按 heightOf 回落。
+  不进客户端投影）。rubble 已补发静态原值恢复地面（P-6），按上述地面编辑规则回落，无编辑时为 heightOf。
   依据 A15/A17：建筑完工后地面 gid 变 0（画布留空）+ 碰撞不可走，建筑由
   `structureLayer` 表现；等距下必须按 h=2 的方块绘制，否则会出现「地面空洞」。
   坍塌成 rubble 后 structure 仍在表中但按地面高度绘制（低矮瓦砾），不能继续按 h=2。
@@ -133,9 +137,12 @@ depthKey(x, y): number          // (x+y)*1024 + y（R4 行序）
   `depth = depthKey(x,y)`。
   高块清单 = 全图 `effectiveHeight(x,y) ≥ 2` 的格子（静态高度表 + 结构覆盖；
   V1 构建时枚举一次，结构新增/移除时增量更新）。
-- **结构与 TILE_CHANGED**：V1 全图重绘（矮块）+ 高块对象重建；V2 起按变更格
-  `(x,y)` 局部重建。`built ↔ collapsing` 只改不透明度/纹理不改高度；
-  **`collapsing → rubble` 要重建该格高块**（高度 2 → heightOf，地面已恢复）。
+- **结构与 TILE_CHANGED**：WorldMirror 在地图、编辑和结构变更时递增 `terrainVersion`；
+  WorldScene 将版本传给 IsoTerrain，未变帧 O(1) 返回，不序列化集合、不扫描地面。
+  变更帧比较一次表面缓存；矮块只清除并重绘变更前后包围盒，按原对角线顺序补绘
+  所有相交邻格，包围盒外像素保留，复用画布贴图。未传版本的独立调用仍支持显式同步。
+  高块保留坐标对象池；`built ↔ collapsing` 只改不透明度，不重烘或上传地面；
+  **`collapsing → rubble` 要重建该格高块**（高度 2 → 地面编辑后的高度，地面已恢复）。
 - **结构图层的等距化（必须做，A15）**：`syncStructures()` 的 `fillRect` 改为等距方块：
   `built/collapsing` 按 h=2 实心/半透明方块，`rubble` 画低矮瓦砾标记。
   **必须与高块/实体同深度池（`depthKey(x,y)`）**，不得保留原 depth=14 独立层——

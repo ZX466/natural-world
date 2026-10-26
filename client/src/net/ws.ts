@@ -170,8 +170,7 @@ export class WsClient {
         if (msg.map) {
           // collision/ground 静态层走 HTTP（worldApi.ts），这里只消费 time
         }
-        this.mirror.structures.clear();
-        this.mirror.applyStructures(msg.structures ?? []); // 全量替换，包括空快照
+        this.mirror.applyStructures(msg.structures ?? [], true); // 全量替换，包括空快照
         if (msg.time) worldClock.apply(msg.time); // M7-R3：时钟权威帧
         // 2026-10-11 心声历史：重启/重连面板不空（后端带最近 20 条，逐条回放）
         if (msg.monologue_history) {

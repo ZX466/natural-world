@@ -63,7 +63,11 @@ export function effectiveHeight(
     if (structure.tiles.some(([sx, sy]) => sx === x && sy === y)) return 2;
   }
   // Structures take precedence over an older dig beneath their footprint.
-  return edits.get(`${x},${y}`)?.action === 'place' ? 2 : heightAt(x, y);
+  const height = heightAt(x, y);
+  const action = edits.get(`${x},${y}`)?.action;
+  if (action === 'dig') return Math.max(0, height - 1);
+  if (action === 'place') return Math.min(3, height + 1);
+  return height;
 }
 
 export function heightOf(x: number, y: number, table?: HeightTable | null): number {

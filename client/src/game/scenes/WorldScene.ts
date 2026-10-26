@@ -223,7 +223,12 @@ export class WorldScene extends Phaser.Scene {
     if (g === null) return;
     g.clear();
     if (this.renderMode === 'iso') {
-      this.isoTerrain?.redraw(map, this.mirror.structures, this.mirror.voxelEdits);
+      this.isoTerrain?.redraw(
+        map,
+        this.mirror.structures,
+        this.mirror.voxelEdits,
+        this.mirror.terrainVersion,
+      );
       return;
     }
     if (map === null) {
@@ -411,8 +416,12 @@ export class WorldScene extends Phaser.Scene {
   /** E7 建筑投影：内容变化才重绘，保留相位对应的颜色与透明度。 */
   private syncStructures(): void {
     if (this.renderMode === 'iso') {
-      // Reverse merge: IsoTerrain's content signature gates its shared structure/block pool.
-      this.isoTerrain?.sync(this.mirror.map, this.mirror.structures, this.mirror.voxelEdits);
+      this.isoTerrain?.sync(
+        this.mirror.map,
+        this.mirror.structures,
+        this.mirror.voxelEdits,
+        this.mirror.terrainVersion,
+      );
       return;
     }
     const g = this.structureLayer;

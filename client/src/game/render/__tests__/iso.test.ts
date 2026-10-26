@@ -99,6 +99,28 @@ describe('isometric ground geometry', () => {
 });
 
 describe('shared effective surface height', () => {
+  it.each([
+    [0, 0, 1],
+    [1, 0, 2],
+    [2, 1, 3],
+    [3, 2, 3],
+  ])('lowers dig and raises place by one from height %i within 0..3', (height, dug, placed) => {
+    const structures = new Map();
+    expect(
+      effectiveHeight(1, 2, () => height!, structures, new Map([['1,2', { action: 'dig' }]])),
+    ).toBe(dug);
+    expect(
+      effectiveHeight(1, 2, () => height!, structures, new Map([['1,2', { action: 'place' }]])),
+    ).toBe(placed);
+  });
+
+  it.each(['built', 'collapsing'])('keeps a %s footprint above both edit actions', (phase) => {
+    const structures = new Map([['house', { tiles: [[1, 2]] as [number, number][], phase }]]);
+    for (const action of ['dig', 'place'] as const) {
+      expect(effectiveHeight(1, 2, () => 0, structures, new Map([['1,2', { action }]]))).toBe(2);
+    }
+  });
+
   it('overrides static water or canopy for built and collapsing footprints only', () => {
     const structures = new Map([
       ['house', { tiles: [[1, 2]] as [number, number][], phase: 'built' }],

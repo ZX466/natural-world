@@ -56,8 +56,18 @@ it('defaults to iso and routes terrain/structures without flat rectangles', () =
   internal.redrawMap();
   internal.syncStructures();
   expect(internal.renderMode).toBe('iso');
-  expect(iso.redraw).toHaveBeenCalledWith(mirror.map, mirror.structures, mirror.voxelEdits);
-  expect(iso.sync).toHaveBeenCalledWith(mirror.map, mirror.structures, mirror.voxelEdits);
+  expect(iso.redraw).toHaveBeenCalledWith(
+    mirror.map,
+    mirror.structures,
+    mirror.voxelEdits,
+    mirror.terrainVersion,
+  );
+  expect(iso.sync).toHaveBeenCalledWith(
+    mirror.map,
+    mirror.structures,
+    mirror.voxelEdits,
+    mirror.terrainVersion,
+  );
   expect(graphics.fillRect).not.toHaveBeenCalled();
   expect(rendererScene('').internal.renderMode).toBe('iso');
   expect(rendererScene('?renderer=unknown').internal.renderMode).toBe('iso');
