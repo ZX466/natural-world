@@ -10,6 +10,7 @@ Project-local instructions for Claude Code. Place this file and the `.claude/` f
 4. **Security first** — before any commit, run `/security-scan`; no hardcoded secrets, validate all inputs.
 5. **Verify before done** — `/verify` runs build, types, lint, tests, security, diff review.
 6. **Context discipline** — reserve 20% headroom on large tasks (`strategic-compact`).
+7. **CodeGraph first, never re-read** — call `codegraph_explore` (with `projectPath` pointed at the tree) before `Read`/`Grep`; its output is byte-identical to `Read`, so treat it as already read and never re-read the same file or region. Batch related symbols into one call instead of re-exploring the same area.
 
 ## Rules to Follow
 
