@@ -5,8 +5,8 @@
 
 ## 0. 当前状态
 
-- **main HEAD**：`1a0546f` 第三轮清理（前序 `036cfaf` memory、`5981417` 文档二轮、`c2156f8` 图管线退役）。
-- **codex HEAD**：`cc47cf3` 文档清理收编点（前序 `3b33328` 代码去重；docs sync 之后以 `git log` 为准）。
+- **main HEAD**：`6789c5e` 第四轮规则对齐（前序 `1a0546f` 第三轮清理、`036cfaf` memory）。
+- **codex HEAD**：`621fd38` 双树规则对齐（前序 `145d5be` 记忆快照、`cc47cf3` 文档清理收编点）。
 - **协议**：`1.12`（`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts`）。
 - **两棵树**：
   - 主树 `E:/zxdevelop/project7`（`main`）：拆单/架构/质量/收编复核/日常小改。
@@ -95,3 +95,15 @@
 - 主树：架构/质量/测试/前端/发布/收编；codex：复杂实现、安全合规。
 - Python 3.12 + FastAPI + SQLite + uv；React 19 + Phaser 3 + Vite + Zustand + Vitest。
 - 文档真相源：`shared/openapi.json`、ORM/迁移、`docs/` 活文档。
+
+## 6. ① Claude｜新对话恢复快照
+
+【2026-10-26 第四轮｜规则对齐，无在途任务】用户裁定四项：①点号配置目录**维持 gitignore**
+（本地保留、不入库、不推送）——workflow/dev-workflow 措辞已从「入 git 不推远程」改为「不进 git」；
+②codex 树补齐 `.agents`+`.codex`（各 20/27 文件，从主树复制）；③主树**不建 `.pi`**（无 pi agent）；
+④全局 git 邮箱改回 `zx19836980213@outlook.com`（原为 GitHub noreply，偏离规则 #2）。
+
+- 同时把主树 `docs/dev-workflow.md` 与 `.orca/workflow.txt` 的 Playwright 路径从 `D:\develop\hermes\chrome`
+  更新为 `C:\Users\zx198\AppData\Local\ms-playwright`，并补「仅用户明确要求时用浏览器」。
+- 两树状态：均干净；main 领先 origin/gitee **5** 个提交未推；codex 领先主树收编点 3 个提交（纯文档）。
+- 主树工作区无改动前刷新过门禁（`1a0546f` 实测：pytest 2948P/121S/72D/0F）。本轮**只改文档与本地配置**，未重跑代码门禁。

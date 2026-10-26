@@ -2,10 +2,12 @@
 
 > 本文只讲「怎么跑」；「为什么」看 `DESIGN.md`。
 >
-> 环境硬约束：Python 一律用 **uv** 建虚拟环境；Playwright 只用 `D:\develop\hermes\chrome`；
+> 环境硬约束：Python 一律用 **uv** 建虚拟环境；**只有用户明确要求时才用浏览器自动化/渲染验证**，
+> Playwright 只用 `C:\Users\zx198\AppData\Local\ms-playwright` 内的浏览器，不干扰用户自己的浏览器；
 > **删除 npm 包或 venv 前必须先问用户**；agent 配置目录（`.agent/.agents/.claude/.codex/.kiro/.opencode/.codegraph`）
-> 不入 git 也不推送，但本地须存在。`.orca` 例外：`workflow.txt` / `agent-registry.md` / `memory.md` 入库，
-> `talking.txt` 与 `archive/` 本地保存。
+> 不入 git 也不推送，但本地须存在（`.codegraph`、`.agents` 所有工作树都有；`.claude/.opencode/.codex`
+> 只在对应 agent 树；`.pi` 当前不创建，按需再补）。`.orca` 例外：`workflow.txt` / `agent-registry.md` /
+> `memory.md` 入库，`talking.txt` 与 `archive/` 本地保存。
 
 ## 1. 环境与初始化
 
