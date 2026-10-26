@@ -1,0 +1,59 @@
+# talking.txt — Claude 主树（主导/组织）
+
+> 本文件只留**当前波**；历史回执已清理。
+> codex 派单板：`E:/zxdevelop/.orca/worktrees/project7/codex/.orca/talking.txt`。
+
+## 当前状态（2026-10-26 第六轮 · 第五轮收编完成）
+
+| 项 | 值 |
+|---|---|
+| main HEAD | `e2e1250` merge codex A+B（前序 `bb871f2` C+D） |
+| codex HEAD | `16489c3`（已被主树收编） |
+| 协议 | **1.12**（本轮未改） |
+| 门禁 | pytest **2948P/121S/72D/0F**（`e2e1250` 主树实测 289s）；ruff clean；pyright 0；client **250P/39F** + tsc/lint/prettier 全 0 |
+| 工作区 | main 干净；codex 干净 |
+| 远程 | origin/gitee 停在 `2d7c4cf`；main 领先未推（推送由用户决定） |
+
+## 派单状态：**无在飞单**
+
+- 未派：V3.5 内容包 / V4-3D / V4b（材料分类）。
+- 待人工验收：① DA-07 失能/恢复长局；② V3 画面观感；③ **V4a 挖放观感（本轮改了挖后高度）**；
+  ④ **走路是否还飘**（`bb871f2` 只有单测覆盖，未实机看）。
+
+## 第五轮交付（已收编）
+
+| # | 任务 | 归属 | 提交 |
+|---|---|---|---|
+| A | 挖土可见：dig 降一层、place 升一层 | codex | `16489c3` |
+| B | 等距渲染增量（脏区裁剪） | codex | `16489c3` |
+| C | 计划看板退役 | main | `bb871f2` |
+| D | 走路不飘（走环 + 镜头插值） | main | `bb871f2` |
+| — | 收编 merge | main | `e2e1250` |
+
+### 收编时处理的三件事
+
+1. **`iso-terrain.ts` 冲突**：codex 新增「h=0 不留悬空疤」与主树旧注释冲突，
+   取 codex 逻辑（绝无悬空疤），疤贴降后顶面。
+2. **`docs/dev-workflow.md` / `.orca/workflow.txt` 冲突**：codex 写「点号目录本地入 git」，
+   与用户 10-26 裁定「维持 gitignore」相反 → **按用户裁定取主树侧**，并保留 codex 的
+   Playwright 路径修正。
+3. **测试断言过时**：主树 `iso-terrain.test.ts` 断言疤在 height=2，属旧契约 → 改断言 height=1。
+
+## 遗留（下轮才谈）
+
+- **A 的近似**：`VoxelEdit` 无编辑深度字段，先 `place` 再 `dig` 可能掉两层。
+  精确解 = 给 `VoxelEdit` 加深度字段 = **协议变更**，需用户裁定。
+- **B 未验证**：浏览器实际 FPS 未测；变更帧仍比一次全表面缓存。
+- **两树基线**：codex 已被收编，下次派单前需主树先把 main 合过去或在同步基线开分支
+  （本轮 codex 曾因 `git diff | git apply` 缺 `--binary` 阻塞）。
+
+## 接收方须知
+
+- 两树不 merge 对方分支；主树收编 codex，codex 不 merge main。
+- 下一单写在本文件与 codex 树 `.orca/talking.txt` 的「当前任务」区。
+
+## 回执区
+
+- 2026-10-26 main：第五轮收编完成 `e2e1250`。三处冲突已解（见上），门禁主树独立复跑全绿：
+  pytest 2948P/121S/72D/0F (289s)、ruff clean、pyright 0、client 250P + tsc/lint/prettier 0。
+  未推远程、未改 codex 工作区、未跑浏览器。

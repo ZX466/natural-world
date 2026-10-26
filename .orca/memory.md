@@ -1,62 +1,62 @@
 # memory.md — 两树最小恢复卡
 
-> 2026-10-25/26 两轮大整理：历史正文已删除，考古用 git history。
+> 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
 ## 0. 当前状态
 
-- **main HEAD**：本卡所在提交（以 `git log -1 --oneline` 为准）；规则改动 `41427ec`，前序 `6789c5e`/`1a0546f`。
-- **codex HEAD**：`621fd38` 双树规则对齐（前序 `145d5be` 记忆快照、`cc47cf3` 文档清理收编点）。
-- **协议**：`1.12`（`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts`）。
+- **main HEAD**：`e2e1250` merge codex 体素挖土降层与等距增量渲染（本卡所在提交；
+  前序 `bb871f2` 走路飘+计划看板退役、`7b9c7b3`、`16489c3` 为 codex 被收编点）。
+- **codex HEAD**：`16489c3` A+B 完成，**已被主树收编**（收编后 codex 落后 main，下次派单
+  须写明基线，勿再让 codex 自己 `git apply` 补基线）。
+- **协议**：`1.12`（`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts`）。**本轮未改协议**。
 - **两棵树**：
   - 主树 `E:/zxdevelop/project7`（`main`）：拆单/架构/质量/收编复核/日常小改。
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex`（`codex`）：复杂/跨层实现、安全合规。
   - 只走各树 `.orca/talking.txt`；不直接对话。
 - **在飞**：无。**未派**：V3.5 内容包 / V4-3D / V4b（材料分类）。
-- **待人工验收**：① DA-07 失能/恢复真模型长局；② V3 画面观感；③ V4a 挖放观感。
+- **待人工验收**：① DA-07 失能/恢复真模型长局；② V3 画面观感；③ **V4a 挖放观感
+  （本轮改了挖后高度，必须重看）**；④ 走路是否还飘（`bb871f2` 只被单测覆盖）。
 
-## 1. 门禁（2026-10-26 第三轮整理后实测）
+## 1. 门禁（2026-10-26 第五轮 merge 后主树实测）
 
 | 项 | 结果 |
 |---|---|
-| pytest `-m "not bench"` | **2948 passed** / 121 skipped / 72 deselected / 0 failed（319s） |
+| pytest `-m "not bench"` | **2948 passed** / 121 skipped / 72 deselected / 0 failed（289s） |
 | ruff check / format | clean（363 files） |
 | pyright | 0 errors, 0 warnings |
 | client typecheck / lint / prettier | EXIT 0 |
-| client vitest | **225 passed / 39 files** |
-| gen:protocol / height map / block atlas | 全通过（byte-identical） |
-| security-scan | C（62/100），0 critical；4 high 在本地 `.claude/mcp.json` |
+| client vitest | **250 passed / 39 files** |
+| gen:protocol / height map / block atlas | 本单未动协议与素材，未跑 |
 
-## 2. 清理结果（三轮累计）
+> codex 自报 246 passed；主树收编后独立复跑得 250（多出主树自己的用例）——数字不同正常，
+> 收编只采信主树读数。
 
-**第一轮（2026-10-25）**
-- 文档 **133 → 28**：删除 M0–M6 规划/审计/预研/台账 105 篇、`GIT-SETUP.md`、
-  `linhe-architecture-report/`、6 个前端 README。
-- 契约合并：火灾订正 → `docs/api/ws-protocol.md`；权力态存档分类 → `schema.md`；
-  长跑执行 → `bench-plan.md`；分支证据链 → `self-unknown.md`。
-- 代码：删除未用/重复实现 **-541 行**（fork/vector/anchors/actors 等共享实现合并）。
+## 2. 第五轮成果（2026-10-26）
 
-**第二轮（2026-10-26，主树）**
-- 退役旧 Zelda 图管线：删 `sim/content/build_town.py`、`build_palette.py` 与
-  `sprout-palette.json` / `sprout-tileset.png`（运行时已换桃花源整图；产物无引用）。
-- 删已闭环审计台账 `docs/security/gameplay-integrity-audit-2026-10-21.md`（DA-01..08 全修完）。
-- 合并 `docs/arch/voxel-transition-plan.md` → `voxel-execution-spec.md` §10（决策链/边界/风险），原文件已删。
-- 全树清掉失效文档路径引用与 `build_town`/`build_palette`/`sprout-palette` 过期注释；
-  协议描述同步 `shared/openapi.json` + 重生成 `shared/protocol.ts`。
-- 文档 **26 → 24 篇**（本轮 -2：审计稿、转向方案）。
-- 本地垃圾：cdp profiles / tmp / 截图 / `.playwright-mcp` / `_god_map_preview` 等，
-  两树合计约 800 MB；保留 `world.db`、依赖与机器基线。
+**A｜挖土看得见（推翻决策 9）** —— codex
+- `client/src/game/render/iso.ts::effectiveHeight`：`dig → max(0, h-1)`、`place → min(3, h+1)`，
+  built/collapsing footprint 仍优先返回 2。
+- 挖到 0 时**不再留悬空深色菱形疤**（主树收编解冲突时落地：`height === 0 → continue`，
+  疤贴在**降后**顶面）。
+- **碰撞真相不变**：仍是 `TileMap.collision`；dig 后仍可走、place 后仍不可走。sim 与协议 0 改动。
+- **已知近似**：`VoxelEdit` 无编辑深度字段，先 `place` 再 `dig` 可能掉两层。精确解需改协议，未做。
 
-**第三轮（2026-10-26，主树 · `1a0546f`）**
-- 删 `sim/world/fog.py`（`FogOfWar`/`fold_fog_reveal` 零消费）+ `fog_reveal_event`、
-  `TestFogFold` 三例、`TickLoop.fog_seen` 空字段、`PerceptionEngineLike` 空协议。
-  **`FogRevealPayload` 保留**：`event_validation` 的事件重放映射仍在用。
-- 夹具去重：`engine`/`store`/`session` 上移 `sim/tests/conftest.py`，
-  14 个测试文件逐字副本消除（有差异的变体仍本地覆盖）。
-- 文档失真：`m7-render-art.md` §3–§5 标退役（BootScene/tilemap.ts 未实现、
-  48×48→140×100、1.3→1.12、mock 分支已删）；`voxel-execution-spec.md` A16 改「全仓已删」；
-  `anchors-api.md` 测试路径 4 处；`bench/README` 三处死链；`god-reuse-final.md` 两处改归档。
-- 净删 532 行（39 files, +116/−648）。
+**B｜等距渲染增量** —— codex
+- `WorldMirror.terrainVersion` 失效标记 → `WorldScene` → `IsoTerrain`，静止帧零遍历。
+- 脏区裁剪重绘，画布贴图保留；40×40 地图单格 dig 的 CPU fill **4800 → 67（-98.6%）**（codex 自测）。
+- **未测的**：浏览器实际 FPS；变更帧仍比较一次全部表面缓存，Phaser refresh 仍可能全画布上传。
+
+**C｜计划看板退役** —— main `bb871f2`
+- `state_delta.plan` 条目**全部**来自 NPC 的 defers（`sim/npc/runtime.py` → `set_plan_from_expression`），
+  文本恒为「先去别处，等会儿再回来」，不是陈默的计划。
+- 面板**直接删除**，未并入心之声（并入会把 NPC 打算误挂成陈默内心）。
+- 协议 `PlanDelta` 与 `uiStore.plans` **保留**，只撤 UI。`DESIGN.md` 三形态 → 两形态。
+
+**D｜移动不飘** —— main `bb871f2`
+- 走环原来只在「换格那一帧」推进，其余帧归站立帧 → 人物站着滑。加 `gliding` 标志修掉。
+- 镜头原来被喂新逻辑格，人物还在滑 → 镜头先跳一格。改喂**插值后的逻辑顶面**
+  （不含同格错位偏移），并去掉 0.12 跟随缓动（双重滞后）。
 
 ## 3. 踩坑（逐条有效）
 
@@ -65,24 +65,30 @@
 - `maintenance.observe` 会 pop REMOVED；派生 tile 事件要抢在它前面。
 - 火的 ID 两侧对齐：`FireCell.fire_id` 与 `fire.ignited` 同一命名空间；`fold_fire` fail-closed。
 - `on_flush` 无 try/except：落库异常会打死世界驱动任务。
+- **挖放高度纯属视觉**：`linhe-height.json` 只是近似，碰撞真相只有 `TileMap.collision`。
+- **`state_delta.plan` 不是主角计划**：全部来自 NPC defers。别再把它接到「心之声」。
 
 **前端**
 - `Phaser.Scene` 已有 `renderer` 字段，构造参数用 `renderMode`。
-- `linhe-height.json` 只是视觉近似；碰撞真相只有 `TileMap.collision`。
 - CanvasTexture 不要按颜色/高度开；用固定图集 + tint。
 - iso 覆盖层深度集中在 `ISO_DEPTH`（名牌 30 万+/气泡 31 万+/雨 40 万/夜幕 400001）。
+- **走环判据要按「是否在动」而不是「是否换格」**：插值期间不换格，但人在动。
+- **镜头目标必须与人物同一插值进度**：喂逻辑格 + 再叠缓动 = 双重滞后 = 飘。
 
 **方法**
-- 查符号/调用链/影响面先用 `codegraph_explore`。**它的返回就是逐字源码 = 已经 Read 过**：
-  同一文件/区域禁止再用 Read/Grep 复盘；相关符号一次批量查完，不来回试探。
-- 门禁数字同场实测，不引用旧读数。
-- 收编后 main 独立复跑证据，不采信对方读数。
+- 查符号/调用链/影响面先用 `codegraph_explore`（显式 `projectPath`）。
+- 门禁数字同场实测，不引用旧读数；**收编后主树必须独立复跑**。
 - **删文件/依赖前先查 `DESIGN.md`**：它写死了承诺（`tests/invariants`、`tests/replay`、
-  Hypothesis/tenacity），零 grep 命中≠可删。第三轮差点删掉两个 DESIGN §5 声明的测试包。
-- 删/移文档后全树扫旧路径（本仓文档交叉引用密）；用脚本抽反引号路径比对存在性最省事。
+  Hypothesis/tenacity），零 grep 命中≠可删。
+- 删/移文档后全树扫旧路径；用脚本抽反引号路径比对存在性最省事。
 - 测试夹具共享在 `sim/tests/conftest.py`；只在与共享版真有差异时才本地覆盖。
 - 协议版本双落点必须同改：`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts`。
-- Windows 提交时 CRLF 警告是正常的（`.gitattributes` 为 `* text=auto eol=lf`），忽略。
+- **两树派单必须写明基线**：codex 曾因 `git diff ... | git apply` 撞二进制删除而阻塞
+  （补丁缺 `--binary`）。正确做法是主树先 merge，或让 codex 从同步后的基线开分支。
+- **收编的文档冲突按用户最新裁定解**，不按「谁后写谁赢」：本轮 codex 的
+  「点号目录本地入 git」与用户 10-26 裁定「维持 gitignore」冲突，取主树侧。
+- `.orca/` 在 `.gitignore` 里，但已跟踪文件仍需 `git add -f`。
+- Windows 提交时 CRLF 警告正常（`.gitattributes` 为 `* text=auto eol=lf`），忽略。
 
 ## 4. 恢复序
 
@@ -99,14 +105,13 @@
 
 ## 6. ① Claude｜新对话恢复快照
 
-【2026-10-26 第四轮｜规则对齐，无在途任务】用户裁定四项：①点号配置目录**维持 gitignore**
-（本地保留、不入库、不推送）——workflow/dev-workflow 措辞已从「入 git 不推远程」改为「不进 git」；
-②codex 树补齐 `.agents`+`.codex`（各 20/27 文件，从主树复制）；③主树**不建 `.pi`**（无 pi agent）；
-④全局 git 邮箱改回 `zx19836980213@outlook.com`（原为 GitHub noreply，偏离规则 #2）。
+【2026-10-26 第五轮收编完成｜无在途任务】codex 交付 A（挖土降层）+B（等距增量渲染），
+主树完成 C（计划看板退役）+D（走路不飘），已 merge 收编为 `e2e1250`，门禁全绿。
 
-- 同时把主树 `docs/dev-workflow.md` 与 `.orca/workflow.txt` 的 Playwright 路径从 `D:\develop\hermes\chrome`
-  更新为 `C:\Users\zx198\AppData\Local\ms-playwright`，并补「仅用户明确要求时用浏览器」。
-- 两树状态：均干净；main 领先 origin/gitee 未推（现测 `git rev-list --count origin/main..main`）；
-  codex 领先主树收编点 3 个提交（纯文档）。
-  codex 只余两处文档自纠（workflow §4 措辞、dev-workflow 旧 Playwright 路径），已写入其 talking.txt。
-- 主树工作区无改动前刷新过门禁（`1a0546f` 实测：pytest 2948P/121S/72D/0F）。本轮**只改文档与本地配置**，未重跑代码门禁。
+- **开新对话只需知道**：① 代码全绿、两树无在飞任务；② 有三项待**肉眼**验收
+  （挖放观感、走路是否还飘、V3 画面）；③ 协议仍 1.12，未推远程。
+- **未推送**：origin/gitee 停在 `2d7c4cf`；main 领先若干提交未推。推送是用户决定，不自动推。
+- **配置目录**：维持用户 10-26 裁定「不进 git、不推远程、本地须存在」；主树不建 `.pi`。
+- **浏览器**：仅用户明确要求时用，路径 `C:\Users\zx198\AppData\Local\ms-playwright`。
+- **全局 git 邮箱**：`zx19836980213@outlook.com`。
+- 本轮教训已进 §3：两树派单必须写明基线；收编冲突按用户最新裁定解，不按写入先后。
