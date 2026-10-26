@@ -5,7 +5,7 @@
 
 ## 0. 当前状态
 
-- **main HEAD**：`6789c5e` 第四轮规则对齐（前序 `1a0546f` 第三轮清理、`036cfaf` memory）。
+- **main HEAD**：本卡所在提交（以 `git log -1 --oneline` 为准）；规则改动 `41427ec`，前序 `6789c5e`/`1a0546f`。
 - **codex HEAD**：`621fd38` 双树规则对齐（前序 `145d5be` 记忆快照、`cc47cf3` 文档清理收编点）。
 - **协议**：`1.12`（`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts`）。
 - **两棵树**：
@@ -105,5 +105,7 @@
 
 - 同时把主树 `docs/dev-workflow.md` 与 `.orca/workflow.txt` 的 Playwright 路径从 `D:\develop\hermes\chrome`
   更新为 `C:\Users\zx198\AppData\Local\ms-playwright`，并补「仅用户明确要求时用浏览器」。
-- 两树状态：均干净；main 领先 origin/gitee **5** 个提交未推；codex 领先主树收编点 3 个提交（纯文档）。
+- 两树状态：均干净；main 领先 origin/gitee 未推（现测 `git rev-list --count origin/main..main`）；
+  codex 领先主树收编点 3 个提交（纯文档）。
+  codex 只余两处文档自纠（workflow §4 措辞、dev-workflow 旧 Playwright 路径），已写入其 talking.txt。
 - 主树工作区无改动前刷新过门禁（`1a0546f` 实测：pytest 2948P/121S/72D/0F）。本轮**只改文档与本地配置**，未重跑代码门禁。
