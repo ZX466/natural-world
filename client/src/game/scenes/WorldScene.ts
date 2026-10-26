@@ -213,7 +213,12 @@ export class WorldScene extends Phaser.Scene {
     if (g === null) return;
     g.clear();
     if (this.renderMode === 'iso') {
-      this.isoTerrain?.redraw(map, this.mirror.structures, this.mirror.voxelEdits);
+      this.isoTerrain?.redraw(
+        map,
+        this.mirror.structures,
+        this.mirror.voxelEdits,
+        this.mirror.terrainVersion,
+      );
       return;
     }
     if (map === null) {
@@ -246,6 +251,10 @@ export class WorldScene extends Phaser.Scene {
       if (edit.action === 'place') {
         g.fillStyle(0x6b4f2a, 1);
         g.fillRect(edit.x * TILE + TILE - 3, edit.y * TILE, 3, TILE);
+      } else {
+        // V4a：挖后仍是静态高度，只靠整格土色几乎认不出——加一道深色内框。
+        g.fillStyle(0x3f3020, 0.55);
+        g.fillRect(edit.x * TILE + 3, edit.y * TILE + 3, TILE - 6, TILE - 6);
       }
     }
   }
@@ -397,8 +406,12 @@ export class WorldScene extends Phaser.Scene {
   /** E7 建筑投影：内容变化才重绘，保留相位对应的颜色与透明度。 */
   private syncStructures(): void {
     if (this.renderMode === 'iso') {
-      // Reverse merge: IsoTerrain's content signature gates its shared structure/block pool.
-      this.isoTerrain?.sync(this.mirror.map, this.mirror.structures, this.mirror.voxelEdits);
+      this.isoTerrain?.sync(
+        this.mirror.map,
+        this.mirror.structures,
+        this.mirror.voxelEdits,
+        this.mirror.terrainVersion,
+      );
       return;
     }
     const g = this.structureLayer;

@@ -53,6 +53,8 @@ export class WorldMirror {
   voxelEdits = new Map<string, VoxelEdit>();
   voxelDig: VoxelState['dig'] = null;
   voxelSnapshotVersion = 0;
+  /** Presentation changes only; idle frames and dig progress need no terrain comparison. */
+  terrainVersion = 0;
   private baseCollision: Uint8Array | null = null;
   private baseGround: Uint16Array | null = null;
   /** 主角 rtoken（M0 第一个 actor 即主角；M1 由协议显式指定） */
@@ -76,10 +78,13 @@ export class WorldMirror {
       readonly y?: number;
       readonly phase?: 'built' | 'collapsing' | 'rubble';
     }[],
+    replace = false,
   ): void {
+    let changed = replace;
+    if (replace) this.structures.clear();
     for (const s of list) {
       if (s.op === 'remove') {
-        this.structures.delete(s.rtoken);
+        if (this.structures.delete(s.rtoken)) changed = true;
         continue;
       }
       const x = s.x ?? 0;
@@ -89,12 +94,16 @@ export class WorldMirror {
       if (cur) {
         if (!cur.tiles.some(([tx, ty]) => tx === x && ty === y)) {
           cur.tiles.push([x, y]);
+          changed = true;
         }
+        if (cur.phase !== phase) changed = true;
         cur.phase = phase;
       } else {
         this.structures.set(s.rtoken, { tiles: [[x, y]], phase });
+        changed = true;
       }
     }
+    if (changed) this.terrainVersion += 1;
   }
 
   /** 记一条头顶气泡（D14；durationMs 由调用方给，WorldScene 逐帧清理过期） */
@@ -179,9 +188,11 @@ export class WorldMirror {
     this.baseCollision = map.collision.slice();
     this.baseGround = map.ground?.slice() ?? null;
     this.reapplyVoxelEdits();
+    this.terrainVersion += 1;
   }
 
   applyVoxelEdits(rows: readonly VoxelEdit[], replace = false): void {
+    let changed = replace;
     if (replace) {
       this.voxelEdits.clear();
       this.voxelDig = null;
@@ -204,9 +215,14 @@ export class WorldMirror {
         (row.action !== 'dig' && row.action !== 'place')
       )
         continue;
-      this.voxelEdits.set(`${row.x},${row.y}`, { ...row });
+      const key = `${row.x},${row.y}`;
+      const prior = this.voxelEdits.get(key);
+      if (prior?.action === row.action && prior.gid === row.gid) continue;
+      this.voxelEdits.set(key, { ...row });
+      changed = true;
     }
     this.reapplyVoxelEdits();
+    if (changed) this.terrainVersion += 1;
   }
 
   reapplyVoxelEdits(): void {
@@ -248,7 +264,7 @@ export class WorldMirror {
     this.applyVoxelEdits([], true);
     this.actors.clear();
     this.lights.clear();
-    this.structures.clear(); // E7：重连重置结构投影（快照随后重灌全集）
+    this.applyStructures([], true); // E7：重连重置结构投影（快照随后重灌全集）
     this.protagonist = null;
     this.resetCount += 1;
   }

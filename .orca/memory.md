@@ -71,12 +71,14 @@
 
 ## 6. ④ codex｜新对话恢复快照
 
-【2026-10-26 第五轮 A/B｜第 0 步阻塞，未开始实现】已接单体素挖土降一层与等距渲染增量更新；按派单执行 `git diff 621fd38 7b9c7b3 -- client/ | git apply` 退出 128，补丁第 49 行是 `client/public/assets/tilesets/sprout-tileset.png` 的二进制删除摘要（原命令没有 `--binary`）。git status 确认未应用任何 client 改动。遵守 talking.txt 的失败即停要求，没有手改补丁、重试应用或运行代码测试；下一步由主树修正基线命令，再继续 A/B。恢复先读 workflow.txt、talking.txt、本节，历史快照见 git log。
+【2026-10-26 第五轮 A/B｜实现与门禁完成，待主树收编】体素挖一次降一层、放一次升一层；建筑覆盖优先，挖到 0 无悬空疤。WorldMirror 版本号使 IsoTerrain 未变帧 O(1) 返回；变更帧局部裁剪重绘并复用贴图。Python 2945 passed、client 246 passed，静态检查与生产构建通过。恢复先读 workflow.txt、talking.txt、本节；本次提交与历史快照见 git log，不自行 merge/rebase/push。
 
-- 主树 10-26 留言：旧 Zelda 图管线、闭环审计台账已在主树退役；voxel-transition-plan 已合并到 voxel-execution-spec §10，后续以执行规格为准。本树尚未同步这些代码变化，不自行 merge/rebase，不重复清理，不恢复主树已删除的旧资源。
-- 本树上一轮亲测：Python 2945 passed / 121 skipped / 72 deselected；代码清理时 client 221 passed；代码与文档证据分别在 `.orca/audits/cleanup-2026-10-25/`、`.orca/audits/docs-cleanup-2026-10-25/`。本卡 §1 是主树收编后读数，不能冒充本次或本树新实测；本次只保存记忆。
-- 用户偏好：中文简洁、行动和结果优先；i-have-adhd 技能持续启用；合理调用技能，查代码先 CodeGraph（显式 projectPath 指向本树），然后用文件证据复核。旧详细实现与踩坑通过 `git show cc47cf3:.orca/memory.md` 查询，不扩写重复文档。
+- 主树 10-26 留言：旧 Zelda 图管线、闭环审计台账已在主树退役；voxel-transition-plan 已合并到 voxel-execution-spec §10，后续以执行规格为准。本次只补齐 621fd38..7b9c7b3 的 client 基线（包含旧贴图删除），其余清理未同步，不自行 merge/rebase，不恢复主树已删除的旧资源。
+- 本轮亲测：Python 2945 passed / 121 skipped / 72 deselected / 4 warnings（334.89s）；ruff check/format clean（365 files），pyright 0 errors/warnings；client 246 passed / 39 files，typecheck/lint/format/build 通过。构建仍有 >500kB chunk 提示。本卡 §1 是旧主树读数；本轮证据、计划与复核记录在 `.orca/audits/voxel-render-2026-10-26/`。
+- 用户偏好：中文简洁、行动和结果优先；i-have-adhd 技能持续启用；查代码先 CodeGraph（显式 projectPath 指向本树），返回源码视为已读，只有缺失片段或明确过期时才补读。用户明确要求「做你的任务」后，例行命令格式问题自行修正并继续，不重复索要确认。
 - 边界仍为只在 codex 本地提交、不推远程、不动主树；只走 talking.txt 留回执，不查终端或发 orca-cli 消息。远程代码分支仅限 main、develop/*、feature/* 等非 agent 分支；Python 用 uv；删除 npm/venv 先问用户。修改本卡仅限本节，写入即本地提交。
 - 仅用户明确要求时使用浏览器自动化/渲染验证；Playwright 浏览器只用 `C:/Users/zx198/AppData/Local/ms-playwright`，不干扰用户浏览器。旧记录中的 `D:/develop/hermes/chrome` 路径已被本次指令替代。
 - 除 `.orca` 外，点号开头的 agent 配置目录本地入 git，但不推远程；`.codegraph`、`.agents` 所有树都有；`.claude`、`.opencode`、`.codex`、`.pi` 只需在对应树，主树全部保留。注册表不擅改；talking.txt 的跨树精简同步由主导 Claude 定期处理；上下文达到 50% 提醒切换新对话。
-- 本单补丁实际是 9 文件 / +104/-42（含旧贴图删除），不是派单描述的 5 文件 / +101。可供主树修正的方案：`git diff --binary --output=.orca/client-baseline.patch 621fd38 7b9c7b3 -- client/` 后用 `git apply .orca/client-baseline.patch`，同时避开当前 Windows PowerShell 5.1 的 ASCII 管道。此替代方案本轮未执行。派单顺带要求 agent 配置目录不进 Git，与用户在本会话明确规则冲突，仍保留用户的本地入 Git 规则。
+- 基线命令已恢复：用户要求继续后，使用 `git diff --binary --output=.orca/client-baseline.patch 621fd38 7b9c7b3 -- client/` 与 `git apply FILE` 成功，避开 binary 摘要及 PowerShell 5.1 ASCII 管道；基线 client 225 passed。派单的「配置目录不进 Git」与用户明确规则冲突，保留本地入 Git 要求；dev-workflow 浏览器路径与触发条件已同步。
+- 渲染证据：40×40 全 h=1 地图，单格 dig 的 CPU 绘制 4800→67（-98.6%）；连续 120 静止帧零 ground/集合遍历。RGB 像素中心对照完整重绘，覆盖边角、细长地图、高低块切换、结构/空快照/reset。`applyStructures(list, replace=false)` 现在拥有快照清理与版本失效，避免依赖 voxel 快照顺带触发。
+- 已知边界：协议 1.12 仅记录最后编辑动作，先 place 再 dig 可能视觉下降两层，本轮接受近似，未改 sim/协议。变更帧仍一次比较全部缓存表面；Phaser refresh 仍可能上传整张画布，本轮量化只证明 CPU 调用与贴图复用，未测浏览器 FPS/实际观感。已做本地复核，独立收编复核仍由 Claude 完成。

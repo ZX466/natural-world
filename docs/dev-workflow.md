@@ -1,9 +1,10 @@
 # 开发流程（docs/dev-workflow.md）
 
 > 能力域：依赖 / 配置 / 文档（cline）。本文只讲「怎么跑」，讲「为什么」看 `DESIGN.md`。
-> 环境硬约束：Python 一律用 **uv** 建虚拟环境；playwright 调浏览器只用 `D:\develop\hermes\chrome`；
+> 环境硬约束：Python 一律用 **uv** 建虚拟环境；仅用户明确要求时才使用浏览器自动化或渲染验证，
+> Playwright 调浏览器只用 `C:\Users\zx198\AppData\Local\ms-playwright`；
 > **删除 npm 包或 venv 前必须先问用户**；agent 配置目录（`.agent/.agents/.claude/.codex/.kiro/.opencode/.codegraph`）
-> **不入 git 也不推送，但本地须存在**（用户规则 #4：所有工作树都要有 `.codegraph`+`.agents`，
+> **本地入 git，但不推送到远程仓库**（用户规则 #4：所有工作树都要有 `.codegraph`+`.agents`，
 > `.claude/.opencode/.codex` 只在对应工作树，主树全有）；`.orca` 例外——`workflow.txt`/`agent-registry.md`/
 > `memory.md` 入库（main `3e320b9` 裁决），仅 `talking.txt` 本地保存。
 

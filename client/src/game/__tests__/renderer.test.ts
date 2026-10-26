@@ -34,13 +34,40 @@ it('keeps the explicit flat grid and original structure phase drawing', () => {
   expect(iso.sync).not.toHaveBeenCalled();
 });
 
+it('marks a dug cell on the flat renderer with a dark inset', () => {
+  const { internal, mirror, graphics } = rendererScene('?renderer=flat');
+  mirror.applyVoxelEdits([{ x: 0, y: 0, action: 'dig', gid: 1 }]);
+  internal.redrawMap();
+  // 4 grid cells + earth fill + dark inset for the dug cell.
+  expect(graphics.fillRect).toHaveBeenCalledTimes(6);
+  expect(graphics.fillStyle).toHaveBeenCalledWith(0x3f3020, expect.any(Number));
+});
+
+it('keeps the placed strip on the flat renderer instead of a dig scar', () => {
+  const { internal, mirror, graphics } = rendererScene('?renderer=flat');
+  mirror.applyVoxelEdits([{ x: 0, y: 0, action: 'place', gid: 0 }]);
+  internal.redrawMap();
+  expect(graphics.fillStyle).toHaveBeenCalledWith(0x6b4f2a, 1);
+  expect(graphics.fillStyle.mock.calls.filter((call) => call[0] === 0x3f3020)).toHaveLength(0);
+});
+
 it('defaults to iso and routes terrain/structures without flat rectangles', () => {
   const { internal, graphics, iso, mirror } = rendererScene('?renderer=iso');
   internal.redrawMap();
   internal.syncStructures();
   expect(internal.renderMode).toBe('iso');
-  expect(iso.redraw).toHaveBeenCalledWith(mirror.map, mirror.structures, mirror.voxelEdits);
-  expect(iso.sync).toHaveBeenCalledWith(mirror.map, mirror.structures, mirror.voxelEdits);
+  expect(iso.redraw).toHaveBeenCalledWith(
+    mirror.map,
+    mirror.structures,
+    mirror.voxelEdits,
+    mirror.terrainVersion,
+  );
+  expect(iso.sync).toHaveBeenCalledWith(
+    mirror.map,
+    mirror.structures,
+    mirror.voxelEdits,
+    mirror.terrainVersion,
+  );
   expect(graphics.fillRect).not.toHaveBeenCalled();
   expect(rendererScene('').internal.renderMode).toBe('iso');
   expect(rendererScene('?renderer=unknown').internal.renderMode).toBe('iso');
