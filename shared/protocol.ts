@@ -386,7 +386,7 @@ export type components = {
       readonly collision_b64: string;
       readonly cx: number;
       readonly cy: number;
-      /** @description base64 编码的地面 tile id（u16 小端、行主序；调色板值域见前端 sprout-palette.json） */
+      /** @description base64 编码的地面 tile id（u16 小端、行主序；取值见 sim/content/linhe-town.json 与 god-town-16.png 图集） */
       readonly ground_b64: string;
     };
     readonly MapInfo: {

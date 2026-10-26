@@ -2,7 +2,7 @@
 
 > M2-P3 第 1 项：把 `sim/tests/bench/test_bench_l1_utility.py` 原型的算法规格落盘，
 > 与 M2-A2 第二批落地（main `59ffd86`）的真实实现**逐项对账**，并回填红线实测。
-> 依据：`DESIGN.md` §5（NPC）/ §13（LOD、NPC 完整属性）、`docs/arch/m2-npc-cognition.md` §2、
+> 依据：`DESIGN.md` §5（NPC）/ §13（LOD、NPC 完整属性）、认知层设计（已归档至 git 历史）、
 > `docs/perf/budget.md` §2.4（L1 预算）、`sim/tests/bench/thresholds.py`（红线唯一真相源）。
 > 边界：本文只描述**算法与量纲**，不改 `sim/npc/` 代码（架构域）。
 
@@ -16,7 +16,7 @@
 |---|---|---|---|
 | S1 | **原型规格**（`test_bench_l1_utility._L1Load`） | M2-P1 按 DESIGN §13「NPC 完整属性」造的**代表性满属性载荷**，纯 numpy 同构数组 | 定预算**上界**（红线 6.0ms） |
 | S2 | **实现规格**（`sim/npc/utility.py`） | M2-A2 第二批落地的真实 M2 实现，**精简形** | 复测回填实测值 |
-| S3 | **验收口径**（`docs/perf/m2-acceptance.md`） | 长跑分层断言 | 7 日自转无崩溃 |
+| S3 | **验收口径**（bench-plan §4） | 长跑分层断言 | 7 日自转无崩溃 |
 
 **红线归属 S1**：6.0ms/单 NPC 0.12ms 是「M2 满属性 + 未向量化写法」的**回归天花板**，
 不是「当前实现的期望值」。实现比原型简单 ⇒ 实测远低于红线 ⇒ **红线不放宽**（放窄 = 自缩防线，
@@ -207,7 +207,7 @@ S1 是裸 numpy 同构数组，S2 要建 `NpcProfileData` 矩阵 + 出 `WorldEve
 | 记忆显著性×情绪 | 未实现 | 含每 tick 0.999 衰减，注意衰减要就地/向量化 |
 | 候选集注入 utility | runtime 未传（日程档+阈值补救+计划队列） | 候选集会**缩小** argmax 范围（提速），不增负担 |
 | `scores` 审计 params | `ACTION_PAYLOAD_KEYS[action]` 与 scores 的动作名键不相交 ⇒ params 恒空 | 若后续要审计进 payload，需把 scores 键映射到白名单键（架构与 codex 白名单域定） |
-| `NPC_ACT` handler | `build_default_bus()` 未注册（架构第三批接 tick 固定序） | 决定 soak 长跑 L1 feeder 的阶段 2 接线，见 `m2-acceptance.md` §3.1 |
+| `NPC_ACT` handler | `build_default_bus()` 未注册（架构第三批接 tick 固定序） | 决定 soak 长跑 L1 feeder 的阶段 2 接线，见 M2 长跑验收稿 §3.1（已归档至 git 历史） |
 | 单 NPC 计的坑 | pytest-benchmark 计**调用墙钟**，不吃返回值 | 单 NPC 用例必须用 1-NPC 批次，别除以 n（M2-P3 踩过，已修） |
 
 ---

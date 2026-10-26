@@ -46,7 +46,7 @@
 |---|---|---|
 | 微基准 | `pytest-benchmark` | clock/rng/entropy/pathfinding 这类纯函数、可独立调用的单元 |
 | 中/大基准 | 真实 tick loop 计时 harness | 直接驱动 `sim.core.tick()` 完整循环，`asyncio` 下测稳态吞吐与 p99；**不要**把微基准数字外推到系统级 |
-| 长跑/自转验收 | 窗口化长跑 harness（`sim/tests/bench/soak.py`） | 不再用 pytest-benchmark（min_time 校准与 7 日量纲冲突）；按窗口统计耗时 + 进程探针（RSS/句柄/GC）+ 分窗漂移判定，见 `docs/perf/m2-acceptance.md` |
+| 长跑/自转验收 | 窗口化长跑 harness（`sim/tests/bench/soak.py`） | 不再用 pytest-benchmark（min_time 校准与 7 日量纲冲突）；按窗口统计耗时 + 进程探针（RSS/句柄/GC）+ 分窗漂移判定，见 `sim/tests/bench/soak.py` 与 §4 |
 | 统计与假随机 | `Hypothesis`（§4 已有） | 属性测试配固定 seed，保证 bench 输入分布稳定 |
 | 报告 | pytest-benchmark `rounds`/`warmup` 参数 | 每次至少 3 轮取中位，防首轮 JIT/缓存热涨 |
 
@@ -73,22 +73,22 @@
 | LLM 决策延迟 P95 | < 8000 ms（墙钟，独立看板） | 日汇总 | 见 docs/perf/llm-monitoring.md |
 | LLM 单决策 tokens | < 2000 tok（sum 口径） | 日汇总 | 见 docs/perf/llm-monitoring.md |
 | 4x / 16x | 各自 p99 ≤ 对应预算的一半（2.08ms / 0.52ms，L1 降采后口径） | nightly | 降采策略失效检查 |
-| M2 7 日自转长跑（604,800 tick） | 无崩溃 + 分窗均值漂移 ≤1.5x + RSS ≤+128MB + 句柄 ≤+64 + GC 对象 ≤+20000 + 缓存有界 | nightly（缩样 30k）/ 里程碑（完整跑） | 见 docs/perf/m2-acceptance.md §2/§3 |
+| M2 7 日自转长跑（604,800 tick） | 无崩溃 + 分窗均值漂移 ≤1.5x + RSS ≤+128MB + 句柄 ≤+64 + GC 对象 ≤+20000 + 缓存有界 | nightly（缩样 30k）/ 里程碑（完整跑） | 判据见 `sim/tests/bench/soak.py`；接法见 §4 |
 
 **口径固定**：所有阈值绑定「机器档位」——记录 CPU 型号/核数/内存 + Python/uv 版本进基线头，跨机器对比按基线线性缩放，避免拿笔记本数据当服务器红线。
 
 ## 4. 执行节奏
 
 - **每次提交附近**：仅 T1/T2/T3 + 单测（bench 关）；含 M2 长跑**缩样冒烟**（`test_bench_soak.py::test_soak_ci_smoke_stability`，未标 bench，秒级）。
-- **每日 nightly**：全量 bench，出 `perf/<date>.json` 基线 + 对比昨日前瞻；含 M2 长跑**缩样采样段**（30,000 tick，标 `bench`；`docs/perf/m2-acceptance.md` §3）。
-- **里程碑（M0/M1/M2）**：跑一次**正式基线**，黄金数字写进里程碑评审（对齐 §17 量化验收：决策延迟 P95<8s、单决策 <2k tok 属 LLM 侧，与 tick 侧分开呈现）；M2 另跑 **604,800 tick 完整自转**（环境门 `PI_M2_FULL_SOAK=1`，接法由 cline，见 m2-acceptance §4）。
+- **每日 nightly**：全量 bench，出 `perf/<date>.json` 基线 + 对比昨日前瞻；含 M2 长跑**缩样采样段**（30,000 tick，标 `bench`；长跑验收口径见本文件 §0/§4）。
+- **里程碑（M0/M1/M2）**：跑一次**正式基线**，黄金数字写进里程碑评审（对齐 §17 量化验收：决策延迟 P95<8s、单决策 <2k tok 属 LLM 侧，与 tick 侧分开呈现）；M2 另跑 **604,800 tick 完整自转**（环境门 `PI_M2_FULL_SOAK=1`，接法由 cline，见本文件 §0/§4）。
 - **回归处置**：谁改谁负责回退或证明阈值失效合理（性能域评审 + Claude（架构）复核）。
 
 ## 4.1 baseline.json 建立流程（裁 4 执行件；M3-P1 落地 2026-09-23）
 > **状态：已执行（2026-09-23，pi M3-P2②）**——首绿 run `35918283944`（main `372153a`，EPYC 7763/nproc4/py3.12.3）
 > 产物已建 `docs/perf/baseline-epyc7763.json`（21 benchmarks + `machine_info.baseline_meta`），
 > nightly「基线对比」step 已切 `--benchmark-compare=docs/perf/baseline-epyc7763.json --benchmark-compare-fail=median:25%`。
-> 目的：CI 档位（EPYC 9V74 / 4 核，档位比见 `docs/perf/ci-calibration-m2p6.md`）的回归检出
+> 目的：CI 档位（EPYC 9V74 / 4 核，档位比见 CI 档位标定稿（已归档至 git 历史））的回归检出
 > 走**相对基线漂移**，不动 thresholds 定标机口径。
 >
 > **2026-09-28 增量补行（M5-C3，CI 域 cline）**：产物补入 **38 条 M3–M5 段 bench 行**（retrieval / structure /
@@ -123,7 +123,7 @@
 >   该「预期非零」的措辞已与实跑不符，**留给性能域（pi）订正**，我未改他人文档正文。
 >   （**2026-09-30 M5-P6 已订正**：step 5 正文改为「EXIT=0 与非 0 都可能是正常结果，判据是越线项集合」。）
 > - **仍未决（pi 域）**：机型口径矛盾——runner.txt 与 `machine_info` 均为 **EPYC 7763**，而本节 step 3 与
->   `ci-calibration-m2p6.md` §0 表写 **EPYC 9V74**；两者不可能同时为真，需性能域订正其一。
+>   CI 档位标定稿 §0 表写 **EPYC 9V74**；两者不可能同时为真，需性能域订正其一。
 >   （**2026-09-30 M5-P6 已订正**：9V74 → 7763，本节 §4.1 末 M5-P6 注。）
 >
 > **2026-09-30 M5-C5（main-ref 交叉核对 → 结论：不采用，但发现 runner 池跨厂商）**：复跑 **`36670751263`**
@@ -139,7 +139,7 @@
 > 基线按机型分文件。**本轮未擅自改门禁语义**，已登记为 `open_items`②。
 >
 > **2026-09-30 M5-P6（性能域订正，两项，均为文档口径）**：①**机型笔误已订正**：本节 step 3 与
-> `ci-calibration-m2p6.md` §0 表的「EPYC **9V74**」→ **EPYC 7763**（runner.txt 实录与基线
+> CI 档位标定稿 §0 表的「EPYC **9V74**」→ **EPYC 7763**（runner.txt 实录与基线
 > `machine_info.cpu.brand_raw` 双证；9V74 在仓内无任何实测出处，判为 M2-P6 期笔误）。
 > ②**step 5 措辞已订正**：「定标机跑 CI 基线必然越线，预期非零退出」与实跑 **EXIT=0** 相反
 > （`36580639759` sanity：69 passed / 1 skipped / 168s）——已改为「EXIT=0 与非 0 都可能是正常结果，
@@ -168,7 +168,7 @@
 **操作序（8 步）**：
 1. `gh run list --workflow nightly-bench.yml` 找首个绿色 run 的 run id（例：`<RUN_ID>`）；
 2. `gh run download <RUN_ID> -n bench-result -D <tmp>`（artifact 含 `perf/bench.json` + `docs/perf/runner.txt`）；
-3. 核对 runner.txt 五字段（date / runner / nproc / cpu / python / uv）与 `ci-calibration-m2p6.md` §0 表一致
+3. 核对 runner.txt 五字段（date / runner / nproc / cpu / python / uv）与 CI 档位标定稿 §0 表一致
    （**AMD EPYC 7763** / 4 核 / py3.12.3；原写 9V74 系笔误，M5-P6 订正）——**不一致就跑第二步重新取**，不同档位不能混基线；
 4. 把 bench.json 复制为 `docs/perf/baseline-epyc7763.json`（**M5-C6 起按机型分文件**），并在文件头补 `runner` 注释块（五字段 +
    `source_run: <RUN_ID>` + `note: "CI 档位基线；定标机阈值见 sim/tests/bench/thresholds.py"`）；

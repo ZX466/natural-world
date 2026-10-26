@@ -3,7 +3,7 @@
 FastAPI 只为 HTTP 路由生成 schema：WS 消息与设置页响应模型的缺口由
 本模块补——custom_openapi 在自动 schema 之上追加 WS 消息 schemas。
 
-**M2-K3 返工（docs/api/ws-message-diff.md 验收清单，真相源 shared/openapi.json）**：
+**M2-K3 返工（协议差异设计稿已归档，真相源 shared/openapi.json）**：
 - 14 个公共子 schema 以精确 dict 注入（Actor/ActorDelta/Light/LightDelta/
   Structure/StructureDelta/Weather/MapInfo/RToken/Facing/CombatInfo/
   Projectile/Hit/MonologueReaction）——它们是 WS 成员 $ref 化的落点；

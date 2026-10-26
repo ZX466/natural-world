@@ -1,6 +1,6 @@
 """M2-A2 第三批第 3 项：cognition 六偏差骨架（DESIGN §非理性框架表）。
 
-契约（docs/arch/m2-npc-cognition.md §3.1 挂载缝 + DESIGN §251 表）：
+契约（认知层设计 §3.1 挂载缝，已归档；+ DESIGN §251 表）：
 - 纯函数层：偏差只作用于检索打分与效用计算，不进 prompt（§3.1）；
 - 检索缝两偏差（memory.py Scorer 钩子形）：
   - confirmation_bias：与既有信念一致的条目 mul 系数上浮（belief_hits 命中面）；

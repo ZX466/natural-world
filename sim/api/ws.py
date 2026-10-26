@@ -4,7 +4,7 @@
 增量广播。客户端消息一律视为不可信输入：type 白名单 + channel 校验
 （codex C04 抽查意见，服务端是边界）。
 
-六类 C→S 消息各有 `_handle_*` 纯分发块（契约见 docs/api/ws-dispatch-proposal.md）：
+六类 C→S 消息各有 `_handle_*` 纯分发块（契约见 WS 分发表提案，已归档至 git 历史）：
 move_request / hello / sync_request / set_control / player_impulse / load_anchor。
 `handle_client_message` 同步、无 IO、可单测——异步面（落库、驱动、LLM）全在网关外层。
 
@@ -851,8 +851,7 @@ def map_static_payload(tile_map: TileMap) -> dict[str, Any]:
         "w": tile_map.width,
         "h": tile_map.height,
         # C-1 修复：tileset 名随真实图携带（fail-safe 占位图='grid' → 前端色块回退；
-        # 真实图='zelda_like_v1' → 前端图集渲染）。名值与 sim/content/build_palette.py
-        # 的 palette["tileset"] 同源——经 TOWN_MAP_PATH 加载时从文件名约定取，占位恒 grid。
+        # 真实图带图集名 → 前端图集渲染）。经 TOWN_MAP_PATH 加载时按尺寸判定，占位恒 grid。
         "tileset": _tileset_name(tile_map),
         "chunks": chunks,
     }
@@ -864,7 +863,7 @@ def _tileset_name(tile_map: TileMap) -> str:
     判据用尺寸而非引用传递（map_static_payload 无 app 上下文）：
     - 140×100 = 桃花源整图（2026-10-12 D6-D8 换图，build_god_town.py 产物）
       → 'god_town_v1'；
-    - 96×96 = 旧 Zelda 图（D10 退休出运行时，名值留档兼容历史产物）；
+    - 96×96 = 旧 Zelda 图（D10 退休出运行时；名值仅为兼容历史存档产物）；
     - 其余/占位 32×32 → 'grid'（前端色块回退）。
     """
     if (tile_map.width, tile_map.height) == (140, 100):
@@ -948,7 +947,7 @@ def handle_client_message(
     """不可信输入处理：type 白名单 + channel 校验。返回要回给该客户端的帧（或帧列表/None）。
 
     分发块：move_request / hello / sync_request / set_control / player_impulse / load_anchor
-    （各 _handle_* 是纯函数，可单测；契约见 docs/api/ws-dispatch-proposal.md §1-§3）。
+    （各 _handle_* 是纯函数，可单测；契约见 WS 分发表提案 §1-§3，已归档）。
 
     **M5-K3 增补两点**（K4 §0.1「单回复通道」的窄化）：
     1. `control` 第四参可选——D-3 的会话态是**连接级**（G-4），生产 `ws_endpoint`

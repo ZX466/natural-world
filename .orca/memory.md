@@ -1,6 +1,6 @@
 # memory.md — 两树最小恢复卡
 
-> 2026-10-25 大整理：主树清理 + codex 代码/文档清理收编。历史正文已删除，需要考古用 git history。
+> 2026-10-25/26 两轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
 ## 0. 当前状态
@@ -15,25 +15,35 @@
 - **在飞**：无。**未派**：V3.5 内容包 / V4-3D / V4b（材料分类）。
 - **待人工验收**：① DA-07 失能/恢复真模型长局；② V3 画面观感；③ V4a 挖放观感。
 
-## 1. 门禁（2026-10-25 merge 后实测）
+## 1. 门禁（2026-10-26 第二轮整理后实测）
 
 | 项 | 结果 |
 |---|---|
-| pytest `-m "not bench"` | **2951 passed** / 121 skipped / 72 deselected / 0 failed（298s） |
-| ruff check / format | clean（366 files） |
+| pytest `-m "not bench"` | **2951 passed** / 121 skipped / 72 deselected / 0 failed（315s） |
+| ruff check / format | clean（364 files） |
 | pyright | 0 errors, 0 warnings |
-| client typecheck / lint / format | EXIT 0 |
+| client typecheck / lint / prettier | EXIT 0 |
 | client vitest | **225 passed / 39 files** |
 | gen:protocol / height map / block atlas | 全通过（byte-identical） |
 | security-scan | C（62/100），0 critical；4 high 在本地 `.claude/mcp.json` |
 
-## 2. 本轮清理结果
+## 2. 清理结果（两轮累计）
 
+**第一轮（2026-10-25）**
 - 文档 **133 → 28**：删除 M0–M6 规划/审计/预研/台账 105 篇、`GIT-SETUP.md`、
   `linhe-architecture-report/`、6 个前端 README。
 - 契约合并：火灾订正 → `docs/api/ws-protocol.md`；权力态存档分类 → `schema.md`；
   长跑执行 → `bench-plan.md`；分支证据链 → `self-unknown.md`。
 - 代码：删除未用/重复实现 **-541 行**（fork/vector/anchors/actors 等共享实现合并）。
+
+**第二轮（2026-10-26，主树）**
+- 退役旧 Zelda 图管线：删 `sim/content/build_town.py`、`build_palette.py` 与
+  `sprout-palette.json` / `sprout-tileset.png`（运行时已换桃花源整图；产物无引用）。
+- 删已闭环审计台账 `docs/security/gameplay-integrity-audit-2026-10-21.md`（DA-01..08 全修完）。
+- 合并 `docs/arch/voxel-transition-plan.md` → `voxel-execution-spec.md` §10（决策链/边界/风险）。
+- 全树清掉失效文档路径引用与 `build_town`/`build_palette`/`sprout-palette` 过期注释；
+  协议描述同步 `shared/openapi.json` + 重生成 `shared/protocol.ts`。
+- 文档 **26 篇**（本轮 -2：审计稿、转向方案）。
 - 本地垃圾：cdp profiles / tmp / 截图 / `.playwright-mcp` / `_god_map_preview` 等，
   两树合计约 800 MB；保留 `world.db`、依赖与机器基线。
 

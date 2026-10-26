@@ -218,7 +218,7 @@ async def load_anchor(
 > `sim/core/persistence/fork.py::fork_from_anchor`（一次事务：开线校验 → 建子分支 →
 > 六张有界表换 `branch_id` 克隆 → 两张语料表按分叉点截断克隆 + `entry_id` 重映射 +
 > 治理指针重写 → 父分支封存），**分叉点只支持父分支头部**（历史点 fail-closed，
-> 原因见 `docs/data/m5-fork-archive-preplan.md` §3.9）。读档**编排**（何时读、
+> 原因见 git 历史中的分叉归档预研稿）。读档**编排**（何时读、
 > store 实例 rebind、WS 回流）属架构域。
 
 ---

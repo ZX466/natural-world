@@ -156,7 +156,7 @@ name: str = Field(min_length=1, max_length=64)
 ### 1.5 切列与 CRUD v2 增补条款（**正式契约**，2026-09-29 合入）
 
 > **裁决依据**：裁 21-C④（`protected` 无写入方暂不切列）→ 裁 26-C④（同上，派单记为「CRUD 落地单再切」）→ **裁 27-C**（D-14 `/current` 保底、**D-15** DELETE 同步摘除，全采 kilo 契约）→ **裁 28-C**（**GAP-A＝0010**、**GAP-B 回填强制**、S-7 归属 kilo 先落函数）。
-> 提案原件：`docs/api/m5-batch-c-prestudy-authority.md` §3（K4）+ 审计稿 `docs/api/m5-batch-a-c-compat-audit.md` §3（K5）。本节是**合入后的正典**，施工单以本节为准（不再回看提案稿）。
+> 提案原件（K4/K5）已随 2026-10-25 文档大整理删除，可从 git 历史找回；本节是**合入后的正典**，施工单以本节为准。
 > **落地现状**：`0008_m5_fork_identity.py` 第 9 项已落 `player_anchors.protected`（`NOT NULL, server_default=0`）；读路径目前**仍是派生**（`anchors.py::_max_updated_at()`）；POST/rename/DELETE **未施工**。
 
 **I. 切列三步（顺序不可颠倒）**
@@ -205,7 +205,7 @@ name: str = Field(min_length=1, max_length=64)
 
 ### 1.6 「当前活跃分支」真源与游标取值条款（**正式契约**，R-4 增补，2026-10-01 合入）
 
-> **依据链**：缺陷 R-4（K7 复验发现 `anchors.py` 游标分支硬编码 `'main'`）→ opencode M5-A4 出条款原件 `docs/data/m5-r4-active-branch-contract.md` → **裁 30-D 全采** → 联合单 = A4 条款 + **kilo 契约面（本节）** + Claude 取值施工。
+> **依据链**：缺陷 R-4（K7 复验发现 `anchors.py` 游标分支硬编码 `'main'`）→ opencode M5-A4 出条款原件（已归档至 git 历史）→ **裁 30-D 全采** → 联合单 = A4 条款 + **kilo 契约面（本节）** + Claude 取值施工。
 > **与 §1.5 的体例一致**：条款 R-4.1~R-4.7 的**编号与措辞同 A4 原件、逐字可对**（本节只补接口侧判据、状态码归属与施工钉子，不改原件语义）。**施工单以本节为准**，A4 原件仅作依据核对。
 > **配套前置**：opencode M5-A5 迁移 **0012**（`branches.is_current` + 部分唯一索引）落地**前**，真源按 **R-4.3 过渡期**判据（唯一的 `status='active'` 行）。
 > **与 §1.2 的关系**：§1.2「服务端游标来源」写的是**目标口径**（「`branch_id` = 当前活跃分支 id」）；本节给出该「当前活跃分支」的**唯一定义与取值纪律**。
@@ -465,7 +465,7 @@ components.setdefault("responses", {})["Problem"] = {
 | `player_impulse` | ✅ | ✅ control | ✅ | **M5-K6 已修**：注册两处（白名单 + channel）成对。入站校验 `bad_impulse`（缺失/非串/全空白）与 `impulse_too_long`（>64 字，戏内 message「话说得太长了，说不清。」）；通过即回**乐观** `impulse_feedback{injected:true,cue,reaction_monologue}`（§2.4「入网即回」，不 await LLM、不改世界态）。`preset` 非串容忍忽略。**`cue` 规则是占位**——冲突度规则表归 LLM 域（8.3），M4 前定稿 |
 | `load_anchor` | ✅ | ✅ session | ✅ | **M5-K6 已修**：注册两处。`anchor_id` 缺失/空/非串 → `bad_anchor`；**不透明串纪律**（§6.5）：`anc_01` 等不被前缀特征拒绝，走正常查表 → 找不到即 `load_failed`；**失败不断线**（§3.3），载入异常降级 `load_failed` 不炸 handler。成功走**短期同步路径**：`snapshot_payload` 回 `full_snapshot`（8.4 定案），长期 driver 化 TODO 见提案 §3.4 |
 
-> **M5-K4 交付**：上表四类待修项的分发块契约已出（`docs/api/ws-dispatch-proposal.md`），含验收对表 20 项 + 待裁清单 8 项。本节表格从「现状描述」转为「施工进度跟踪」。
+> **M5-K4 交付**：上表四类待修项的分发块契约已出（提案稿已归档至 git 历史），含验收对表 20 项 + 待裁清单 8 项。本节表格从「现状描述」转为「施工进度跟踪」。
 >
 > **M5-K5 进度**：8.7（sync_request 回错型）已首修，表中该行由 ⚠️ 转 ✅。K4 §8.4/8.5（load_anchor 发 `full_snapshot` 的时机 + `tile_map` 传递）也已顺便确证走 `pf.tile_map`——`Pathfinder` 已暴露该 property（`pathfinding.py:96-98`），**签名无需变更**（K4 §8.5 备选案成立）。
 >

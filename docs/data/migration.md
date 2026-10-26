@@ -1,7 +1,9 @@
-# Alembic 迁移策略
+# Alembic 迁移策略（docs/data/migration.md）
 
-> 技术栈：Alembic + SQLAlchemy 2.0 async + aiosqlite。
-> 对齐 DESIGN.md §4（技术栈锁定）+ docs/data/schema.md（完整表设计）。
+> 技术栈：Alembic + SQLAlchemy 2.0 async + aiosqlite（DESIGN.md §4）。
+> **真源声明**：表结构以 `sim/core/persistence/models.py` 与
+> `sim/core/persistence/alembic/versions/` 为准，本文不复制任何模型或迁移代码。
+> 表语义与列约束见 [`schema.md`](schema.md)。
 
 ---
 
@@ -14,680 +16,81 @@
 
 ---
 
-## 2. 项目结构
+## 2. 目录结构（现状）
 
 ```
-sim/
-├─ core/
-│  └─ persistence/
-│     ├─ __init__.py
-│     ├─ models.py          # SQLAlchemy ORM 模型
-│     ├─ database.py        # async engine + session factory
-│     └─ migrations/
-│        ├─ alembic.ini
-│        ├─ env.py           # Alembic env（async 配置）
-│        └─ versions/
-│           ├─ 001_initial_schema.py
-│           ├─ 002_add_npc_memories.py
-│           └─ ...
+alembic.ini                              # 仓库根，script_location 指向下方
+sim/core/persistence/
+├─ models.py                             # ORM 模型（唯一表结构真源）
+├─ database.py                           # async engine + session factory
+└─ alembic/
+   ├─ env.py                             # 异步 env（WORLD_DB_URL，默认 sqlite+aiosqlite:///world.db）
+   └─ versions/
+      ├─ 0001_m0_initial.py
+      ├─ 0002_m3_reserved.py
+      ├─ 0003_memory_write.py
+      ├─ 0004_m2_npc_attributes.py
+      ├─ 0005_m3_knowledge_governance.py
+      ├─ 0006_m4_structures.py
+      ├─ 0007_m4_material_balances.py
+      ├─ 0008_m5_fork_identity.py
+      ├─ 0009_branches_rng_state.py
+      ├─ 0010_protected_backfill.py
+      ├─ 0011_anchor_packages.py
+      ├─ 0012_branches_current.py
+      ├─ 0013_power_state.py
+      └─ 0014_fires.py
 ```
+
+新增迁移时在 `versions/` 追加编号文件，并在下节登记一行；不要回头改已合入的迁移。
 
 ---
 
-## 3. Alembic 异步配置
+## 3. 迁移登记表
 
-### 3.1 env.py 核心配置
-
-```python
-# sim/core/persistence/migrations/env.py
-import asyncio
-from logging.config import fileConfig
-
-from alembic import context
-from sqlalchemy import pool
-from sqlalchemy.ext.asyncio import async_engine_from_config
-
-from sim.core.persistence.models import Base
-
-config = context.config
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
-
-target_metadata = Base.metadata
-
-
-def run_migrations_offline() -> None:
-    """离线模式：生成 SQL 脚本"""
-    url = config.get_main_option("sqlalchemy.url")
-    context.configure(
-        url=url,
-        target_metadata=target_metadata,
-        literal_binds=True,
-        dialect_opts={"paramstyle": "named"},
-    )
-    with context.begin_transaction():
-        context.run_migrations()
-
-
-def do_run_migrations(connection):
-    context.configure(connection=connection, target_metadata=target_metadata)
-    with context.begin_transaction():
-        context.run_migrations()
-
-
-async def run_async_migrations() -> None:
-    """异步在线模式"""
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-    await connectable.dispose()
-
-
-def run_migrations_online() -> None:
-    asyncio.run(run_async_migrations())
-
-
-if context.is_offline_mode():
-    run_migrations_offline()
-else:
-    run_migrations_online()
-```
-
-### 3.2 alembic.ini
-
-```ini
-[alembic]
-script_location = sim/core/persistence/migrations
-sqlalchemy.url = sqlite+aiosqlite:///world.db
-
-[loggers]
-keys = root,sqlalchemy,alembic
-
-[handlers]
-keys = console
-
-[formatters]
-keys = generic
-
-[logger_root]
-level = WARN
-handlers = console
-
-[logger_sqlalchemy]
-level = WARN
-handlers =
-qualname = sqlalchemy.engine
-
-[logger_alembic]
-level = INFO
-handlers =
-qualname = alembic
-
-[handler_console]
-class = StreamHandler
-args = (sys.stderr,)
-level = NOTSET
-formatter = generic
-
-[formatter_generic]
-format = %(levelname)-5.5s [%(name)s] %(message)s
-```
+| revision | 文件 | 内容 |
+|---|---|---|
+| 0001 | `0001_m0_initial.py` | events / branches / snapshots / player_anchors / llm_profiles / entropy_log |
+| 0002 | `0002_m3_reserved.py` | M3 预留空表：npc_memories / relationships / knowledge |
+| 0003 | `0003_memory_write.py` | 记忆写入路径所需列 |
+| 0004 | `0004_m2_npc_attributes.py` | npc_profiles / npc_health 属性宽表 |
+| 0005 | `0005_m3_knowledge_governance.py` | knowledge 治理列 |
+| 0006 | `0006_m4_structures.py` | structures（建筑/结构物） |
+| 0007 | `0007_m4_material_balances.py` | matter_state 材料/耐久列 |
+| 0008 | `0008_m5_fork_identity.py` | 分支身份（fork identity） |
+| 0009 | `0009_branches_rng_state.py` | `branches.rng_state` |
+| 0010 | `0010_protected_backfill.py` | `player_anchors.protected` 回填 |
+| 0011 | `0011_anchor_packages.py` | anchor_packages（存档包物化） |
+| 0012 | `0012_branches_current.py` | `branches.is_current` 当前线指针 |
+| 0013 | `0013_power_state.py` | npc_power（第 4 张不可重建表） |
+| 0014 | `0014_fires.py` | fires（火场生命周期） |
 
 ---
 
-## 4. SQLAlchemy ORM 模型
+## 4. 常用命令
 
-### 4.1 基础模型
+在仓库根目录执行：
 
-```python
-# sim/core/persistence/models.py
-from datetime import datetime
-from sqlalchemy import (
-    Column, Integer, String, Float, Text, Boolean, LargeBinary,
-    ForeignKey, Index, CheckConstraint, UniqueConstraint
-)
-from sqlalchemy.orm import DeclarativeBase, relationship
-
-
-class Base(DeclarativeBase):
-    pass
-
-
-class TimestampMixin:
-    created_at = Column(Float, nullable=False, default=lambda: datetime.utcnow().timestamp())
+```powershell
+uv run alembic upgrade head        # 升到最新
+uv run alembic current             # 当前版本
+uv run alembic downgrade -1        # 回滚一步
+uv run alembic history             # 迁移历史
+uv run alembic revision --autogenerate -m "msg"   # 自动检测模型变更
+uv run alembic upgrade head --sql                 # 生成离线 SQL
 ```
 
-### 4.2 events 表
-
-```python
-class Event(TimestampMixin, Base):
-    __tablename__ = "events"
-
-    branch_id = Column(String, nullable=False, primary_key=True)
-    seq = Column(Integer, nullable=False, primary_key=True)
-    tick = Column(Integer, nullable=False)
-    event_type = Column(String, nullable=False)
-    actor_id = Column(String, nullable=False)
-    target_id = Column(String, nullable=True)
-    parent_seq = Column(Integer, nullable=True)
-    payload = Column(Text, nullable=False)  # JSON
-    witnesses = Column(Text, nullable=False)  # JSON array
-    entropy_ref = Column(String, nullable=True)
-
-    __table_args__ = (
-        Index("idx_events_branch_tick", "branch_id", "tick"),
-        Index("idx_events_actor", "branch_id", "actor_id"),
-        Index("idx_events_type", "branch_id", "event_type"),
-    )
-```
-
-### 4.3 branches 表
-
-```python
-class Branch(TimestampMixin, Base):
-    __tablename__ = "branches"
-
-    id = Column(String, primary_key=True)
-    forked_from_branch = Column(String, nullable=True)
-    forked_from_seq = Column(Integer, nullable=True)
-    status = Column(String, nullable=False, default="active")
-    abandoned_at = Column(Float, nullable=True)
-
-    __table_args__ = (
-        Index("idx_branches_status", "status"),
-    )
-```
-
-### 4.4 snapshots 表
-
-```python
-class Snapshot(TimestampMixin, Base):
-    __tablename__ = "snapshots"
-
-    branch_id = Column(String, nullable=False, primary_key=True)
-    seq = Column(Integer, nullable=False, primary_key=True)
-    tick = Column(Integer, nullable=False)
-    snapshot_data = Column(LargeBinary, nullable=False)  # gzip compressed
-    is_cold = Column(Boolean, nullable=False, default=False)
-
-    __table_args__ = (
-        Index("idx_snapshots_branch_tick", "branch_id", "tick"),
-        Index("idx_snapshots_cold", "is_cold"),
-    )
-```
-
-### 4.5 player_anchors 表
-
-```python
-class PlayerAnchor(TimestampMixin, Base):
-    __tablename__ = "player_anchors"
-
-    id = Column(String, primary_key=True)
-    name = Column(String, nullable=False)
-    branch_id = Column(String, nullable=False)
-    tick = Column(Integer, nullable=False)
-    seq = Column(Integer, nullable=False)
-    agent_override = Column(Text, nullable=False, default="{}")
-    updated_at = Column(Float, nullable=False, default=lambda: datetime.utcnow().timestamp())
-
-    __table_args__ = (
-        Index("idx_anchors_branch", "branch_id"),
-    )
-```
-
-### 4.6 npc_memories 表
-
-```python
-class NPCMemory(TimestampMixin, Base):
-    __tablename__ = "npc_memories"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    npc_id = Column(String, nullable=False)
-    event_seq = Column(Integer, nullable=True)
-    branch_id = Column(String, nullable=False)
-    content = Column(Text, nullable=False)
-    importance = Column(Float, nullable=False)
-    emotion_tag = Column(String, nullable=True)
-    distortion = Column(Float, nullable=False, default=0.0)
-    embedding = Column(LargeBinary, nullable=True)
-    created_at_tick = Column(Integer, nullable=False)
-    last_accessed_tick = Column(Integer, nullable=True)
-
-    __table_args__ = (
-        Index("idx_memories_npc", "npc_id", "branch_id"),
-        Index("idx_memories_importance", "npc_id", importance DESC),
-        Index("idx_memories_event", "branch_id", "event_seq"),
-        CheckConstraint("importance >= 0.0 AND importance <= 1.0"),
-        CheckConstraint("distortion >= 0.0 AND distortion <= 1.0"),
-    )
-```
-
-### 4.7 relationships 表
-
-```python
-class Relationship(Base):
-    __tablename__ = "relationships"
-
-    branch_id = Column(String, nullable=False, primary_key=True)
-    owner_id = Column(String, nullable=False, primary_key=True)
-    other_id = Column(String, nullable=False, primary_key=True)
-    trust = Column(Float, nullable=False, default=0.0)
-    affection = Column(Float, nullable=False, default=0.0)
-    fear = Column(Float, nullable=False, default=0.0)
-    debt = Column(Float, nullable=False, default=0.0)
-    face = Column(Float, nullable=False, default=0.0)
-    last_interaction = Column(Integer, nullable=False, default=0)
-
-    __table_args__ = (
-        Index("idx_rel_owner", "branch_id", "owner_id"),
-        Index("idx_rel_other", "branch_id", "other_id"),
-    )
-```
-
-### 4.8 knowledge 表
-
-```python
-class Knowledge(TimestampMixin, Base):
-    __tablename__ = "knowledge"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    holder_id = Column(String, nullable=False)
-    fact = Column(Text, nullable=False)
-    confidence = Column(Float, nullable=False)
-    source = Column(String, nullable=False)
-    learned_at = Column(Integer, nullable=False)
-    branch_id = Column(String, nullable=False)
-
-    __table_args__ = (
-        Index("idx_knowledge_holder", "branch_id", "holder_id"),
-        Index("idx_knowledge_source", "branch_id", "source"),
-        CheckConstraint("source IN ('witnessed', 'told', 'inferred')"),
-        CheckConstraint("confidence >= 0.0 AND confidence <= 1.0"),
-    )
-```
-
-### 4.9 structures 表（0006 已落地）
-
-```python
-class Structure(TimestampMixin, Base):
-    __tablename__ = "structures"
-
-    branch_id = Column(String, nullable=False)
-    structure_id = Column(String, nullable=False)
-    tiles = Column(Text, nullable=False)
-    kind = Column(String, nullable=False)
-    material = Column(String, nullable=False)
-    phase = Column(String, nullable=False, default="building")
-    load_bearing = Column(Boolean, nullable=False, default=False)
-    supported_by = Column(Text, nullable=False, default="[]")
-    owner_id = Column(String, nullable=True)
-    built_by = Column(String, nullable=True)
-    built_at = Column(Integer, nullable=True)
-
-    __table_args__ = (
-        PrimaryKeyConstraint("branch_id", "structure_id"),
-        Index("idx_struct_branch", "branch_id"),
-        Index("idx_struct_owner", "branch_id", "owner_id"),
-        Index("idx_struct_phase", "branch_id", "phase"),
-    )
-```
-
-熵态列 `integrity/quality/decay_rate/is_rubble` 留在 `matter_state`，本表不复制。
-
-### 4.10 llm_profiles 表
-
-```python
-class LLMProfile(TimestampMixin, Base):
-    __tablename__ = "llm_profiles"
-
-    id = Column(String, primary_key=True)
-    name = Column(String, nullable=False)
-    base_url = Column(String, nullable=False)
-    api_key_enc = Column(LargeBinary, nullable=False)  # Fernet encrypted
-    model = Column(String, nullable=False)
-    temperature = Column(Float, nullable=False, default=0.7)
-    max_tokens = Column(Integer, nullable=False, default=2048)
-    is_active = Column(Boolean, nullable=False, default=False)
-```
-
-### 4.11 entropy_log 表
-
-```python
-class EntropyLog(TimestampMixin, Base):
-    __tablename__ = "entropy_log"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    stream = Column(String, nullable=False)
-    reason = Column(Text, nullable=False)
-    tick = Column(Integer, nullable=False)
-    value = Column(String, nullable=False)  # hex
-    branch_id = Column(String, nullable=False)
-
-    __table_args__ = (
-        Index("idx_entropy_branch_tick", "branch_id", "tick"),
-    )
-```
+`env.py` 读 `WORLD_DB_URL`；未设时用 `sqlite+aiosqlite:///world.db`。
 
 ---
 
-## 5. 初始迁移脚本
+## 5. 注意事项
 
-### 5.1 001_initial_schema.py
-
-```python
-"""initial schema — M0 基础表
-
-Revision ID: 001
-Create Date: 2026-09-19
-"""
-from alembic import op
-import sqlalchemy as sa
-
-revision = "001"
-down_revision = None
-branch_labels = None
-depends_on = None
-
-
-def upgrade() -> None:
-    # branches
-    op.create_table(
-        "branches",
-        sa.Column("id", sa.String, primary_key=True),
-        sa.Column("forked_from_branch", sa.String, nullable=True),
-        sa.Column("forked_from_seq", sa.Integer, nullable=True),
-        sa.Column("status", sa.String, nullable=False, server_default="active"),
-        sa.Column("abandoned_at", sa.Float, nullable=True),
-        sa.Column("created_at", sa.Float, nullable=False),
-    )
-    op.create_index("idx_branches_status", "branches", ["status"])
-
-    # events
-    op.create_table(
-        "events",
-        sa.Column("branch_id", sa.String, nullable=False),
-        sa.Column("seq", sa.Integer, nullable=False),
-        sa.Column("tick", sa.Integer, nullable=False),
-        sa.Column("event_type", sa.String, nullable=False),
-        sa.Column("actor_id", sa.String, nullable=False),
-        sa.Column("target_id", sa.String, nullable=True),
-        sa.Column("parent_seq", sa.Integer, nullable=True),
-        sa.Column("payload", sa.Text, nullable=False),
-        sa.Column("witnesses", sa.Text, nullable=False),
-        sa.Column("entropy_ref", sa.String, nullable=True),
-        sa.Column("created_at", sa.Float, nullable=False),
-        sa.PrimaryKeyConstraint("branch_id", "seq"),
-    )
-    op.create_index("idx_events_branch_tick", "events", ["branch_id", "tick"])
-    op.create_index("idx_events_actor", "events", ["branch_id", "actor_id"])
-    op.create_index("idx_events_type", "events", ["branch_id", "event_type"])
-
-    # snapshots
-    op.create_table(
-        "snapshots",
-        sa.Column("branch_id", sa.String, nullable=False),
-        sa.Column("seq", sa.Integer, nullable=False),
-        sa.Column("tick", sa.Integer, nullable=False),
-        sa.Column("snapshot_data", sa.LargeBinary, nullable=False),
-        sa.Column("is_cold", sa.Boolean, nullable=False, server_default="0"),
-        sa.Column("created_at", sa.Float, nullable=False),
-        sa.PrimaryKeyConstraint("branch_id", "seq"),
-    )
-    op.create_index("idx_snapshots_branch_tick", "snapshots", ["branch_id", "tick"])
-    op.create_index("idx_snapshots_cold", "snapshots", ["is_cold"])
-
-    # player_anchors
-    op.create_table(
-        "player_anchors",
-        sa.Column("id", sa.String, primary_key=True),
-        sa.Column("name", sa.String, nullable=False),
-        sa.Column("branch_id", sa.String, nullable=False),
-        sa.Column("tick", sa.Integer, nullable=False),
-        sa.Column("seq", sa.Integer, nullable=False),
-        sa.Column("agent_override", sa.Text, nullable=False, server_default="{}"),
-        sa.Column("created_at", sa.Float, nullable=False),
-        sa.Column("updated_at", sa.Float, nullable=False),
-    )
-    op.create_index("idx_anchors_branch", "player_anchors", ["branch_id"])
-
-    # llm_profiles
-    op.create_table(
-        "llm_profiles",
-        sa.Column("id", sa.String, primary_key=True),
-        sa.Column("name", sa.String, nullable=False),
-        sa.Column("base_url", sa.String, nullable=False),
-        sa.Column("api_key_enc", sa.LargeBinary, nullable=False),
-        sa.Column("model", sa.String, nullable=False),
-        sa.Column("temperature", sa.Float, nullable=False, server_default="0.7"),
-        sa.Column("max_tokens", sa.Integer, nullable=False, server_default="2048"),
-        sa.Column("is_active", sa.Boolean, nullable=False, server_default="0"),
-        sa.Column("created_at", sa.Float, nullable=False),
-    )
-
-    # entropy_log
-    op.create_table(
-        "entropy_log",
-        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("stream", sa.String, nullable=False),
-        sa.Column("reason", sa.Text, nullable=False),
-        sa.Column("tick", sa.Integer, nullable=False),
-        sa.Column("value", sa.String, nullable=False),
-        sa.Column("branch_id", sa.String, nullable=False),
-        sa.Column("created_at", sa.Float, nullable=False),
-    )
-    op.create_index("idx_entropy_branch_tick", "entropy_log", ["branch_id", "tick"])
-
-
-def downgrade() -> None:
-    op.drop_table("entropy_log")
-    op.drop_table("llm_profiles")
-    op.drop_table("player_anchors")
-    op.drop_table("snapshots")
-    op.drop_table("events")
-    op.drop_table("branches")
-```
-
----
-
-## 6. 后续迁移脚本骨架
-
-### 6.1 002_add_npc_memories.py（M3 阶段）
-
-```python
-"""add npc_memories and relationships — M3
-
-Revision ID: 002
-"""
-from alembic import op
-import sqlalchemy as sa
-
-revision = "002"
-down_revision = "001"
-
-
-def upgrade() -> None:
-    op.create_table(
-        "npc_memories",
-        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("npc_id", sa.String, nullable=False),
-        sa.Column("event_seq", sa.Integer, nullable=True),
-        sa.Column("branch_id", sa.String, nullable=False),
-        sa.Column("content", sa.Text, nullable=False),
-        sa.Column("importance", sa.Float, nullable=False),
-        sa.Column("emotion_tag", sa.String, nullable=True),
-        sa.Column("distortion", sa.Float, nullable=False, server_default="0.0"),
-        sa.Column("embedding", sa.LargeBinary, nullable=True),
-        sa.Column("created_at_tick", sa.Integer, nullable=False),
-        sa.Column("last_accessed_tick", sa.Integer, nullable=True),
-        sa.Column("created_at", sa.Float, nullable=False),
-    )
-    op.create_index("idx_memories_npc", "npc_memories", ["npc_id", "branch_id"])
-    op.create_index("idx_memories_importance", "npc_memories", ["npc_id", "importance"])
-
-    op.create_table(
-        "relationships",
-        sa.Column("branch_id", sa.String, nullable=False),
-        sa.Column("owner_id", sa.String, nullable=False),
-        sa.Column("other_id", sa.String, nullable=False),
-        sa.Column("trust", sa.Float, nullable=False, server_default="0.0"),
-        sa.Column("affection", sa.Float, nullable=False, server_default="0.0"),
-        sa.Column("fear", sa.Float, nullable=False, server_default="0.0"),
-        sa.Column("debt", sa.Float, nullable=False, server_default="0.0"),
-        sa.Column("face", sa.Float, nullable=False, server_default="0.0"),
-        sa.Column("last_interaction", sa.Integer, nullable=False, server_default="0"),
-        sa.PrimaryKeyConstraint("branch_id", "owner_id", "other_id"),
-    )
-    op.create_index("idx_rel_owner", "relationships", ["branch_id", "owner_id"])
-
-    op.create_table(
-        "knowledge",
-        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("holder_id", sa.String, nullable=False),
-        sa.Column("fact", sa.Text, nullable=False),
-        sa.Column("confidence", sa.Float, nullable=False),
-        sa.Column("source", sa.String, nullable=False),
-        sa.Column("learned_at", sa.Integer, nullable=False),
-        sa.Column("branch_id", sa.String, nullable=False),
-        sa.Column("created_at", sa.Float, nullable=False),
-    )
-    op.create_index("idx_knowledge_holder", "knowledge", ["branch_id", "holder_id"])
-
-
-def downgrade() -> None:
-    op.drop_table("knowledge")
-    op.drop_table("relationships")
-    op.drop_table("npc_memories")
-```
-
-### 6.2 0006_m4_structures.py（M4-D2a 已落地）
-
-实际迁移：`sim/core/persistence/alembic/versions/0006_m4_structures.py`。
-
-- 新建 `structures`（§4.9 瘦身形状），主键 `(branch_id, structure_id)`；
-- `op.batch_alter_table("matter_state")` 将主键由 `subject_id` 改为
-  `(branch_id, subject_id)`，关闭跨分支投影串写；
-- 0004 旧 PK 未命名，迁移用 `naming_convention` 规范成
-  `pk_matter_state_subject_id` 后删除；索引在 batch 外维护；
-- downgrade 逆序：删 structures 索引/表，再把 matter PK 还原为单列。
-
----
-
-### 6.3 0007_m4_material_balances.py（M4-D2d 已落地）
-
-- 新建 `material_balances`：复合主键 `(branch_id, ref, material_id)`；
-- 索引 `(branch_id, material_id)`；
-- 纯 `create_table`，无需 batch；downgrade 先删索引再删表。
-
----
-
-### 6.4 0008_m5_fork_identity.py（M5-D3-a 已落地，裁 1 / 3 / 4 / 9）
-
-实际迁移：`sim/core/persistence/alembic/versions/0008_m5_fork_identity.py`
-（revision id = `0008_m5_fork_identity`）。读档 = 分叉（DESIGN §12）的身份前置，四件：
-
-| 件 | 表 | 变更 | 手法 |
-|---|---|---|---|
-| a（裁 1） | `npc_profiles` | 主键 `id` → **`(branch_id, id)`** | `batch_alter_table` + `naming_convention` 规范旧 PK 名（0006 同款） |
-| 3 | `events` | 加 `parent_branch_id` + `ck_events_parent_branch_pair` | batch（CHECK 是表级约束，`ADD COLUMN` 表达不了，0005 同款） |
-| 4 | `knowledge` | 加 `evidence_branch_id` + `ck_knowledge_evidence_pair` | batch |
-| 9 | `player_anchors` | 加 `protected`（NOT NULL DEFAULT 0） | 纯 `add_column`（带 `server_default`） |
-
-- **两条成对 CHECK 是单向的**：`parent_branch_id IS NULL OR parent_seq IS NOT NULL`
-  （knowledge 同理）。`(NULL, seq)` = 引用在本分支，合法且是既有行的常态；只有
-  「指名分支却没给 seq」的残缺引用才拒。写成等值会把既有行全打成非法。
-- **零回填**：`parent_branch_id` / `evidence_branch_id` 的 `NULL` 语义就是「本分支」，
-  既有行天然正确。
-- **downgrade 前置条件**：还原 `npc_profiles` 单列主键要求库内**不存在同 id 跨分支
-  共存行**（否则重建表主键冲突）。0008 之后产生的分叉数据不可降到 0007
-  （downgrade 只服务迁移往返验证，正常路径不回退）。
-- **往返零漂移验证**（本仓纪律）：scratch DB + **全 revision id**
-  （`alembic downgrade 0007_m4_material_balances`，不写 `0007` 前缀——alembic 接受
-  唯一前缀，同前缀 revision 将来会静默命中错支）→ `upgrade head` →
-  `revision --autogenerate` 期望 `upgrade()` 只剩 `pass` → 删临时迁移。
-  **本树根目录 `world.db` 是脏库**（`alembic_version` 缺失但表已存在 →
-  `upgrade head` 撞 `branches` exists），必须用 `WORLD_DB_URL` 指向临时库。
-
----
-
-### 6.5 0009_branches_rng_state.py（M5-A-DATA 已落地，裁 27-B b2）
-
-- `branches` 加 `rng_state TEXT NULL`：本分支承接的随机流状态包
-  （`sim/core/rng_state.capture_rng_state` 的 JSON，≈198 B/流）。读档 = 分叉时由
-  `fork_from_anchor(rng_state=…)` 在 **fork 事务内**原子写入 ⇒ 分支自带状态、**可连续分叉**；
-- 纯 `add_column`（可空、无 CHECK、无 `server_default`）⇒ **不需要** `batch_alter_table`
-  （0008 需要 batch 是因为 CHECK 属表级约束、`ADD COLUMN` 表达不了）；
-- 为什么不是一个 `seed` 列：seed 表达不了抽签进度（实测「只承接 registry」后续抽签必然跳变，
-  `m5-fork-archive-preplan.md` §6.3）；
-- 往返验证同 0008 纪律：scratch DB + **全 revision id**（`downgrade 0008_m5_fork_identity`）
-  → `upgrade head` → autogenerate 期望 `upgrade()` 只剩 `pass`（实测零漂移）。
-
----
-
-## 7. 迁移执行命令
-
-```bash
-# 生成新迁移（自动检测模型变更）
-alembic revision --autogenerate -m "description"
-
-# 执行迁移到最新版本
-alembic upgrade head
-
-# 回滚到上一个版本
-alembic downgrade -1
-
-# 查看当前版本
-alembic current
-
-# 查看迁移历史
-alembic history
-
-# 生成离线 SQL 脚本
-alembic upgrade head --sql > migration.sql
-```
-
----
-
-## 8. 数据库初始化流程
-
-```python
-# sim/core/persistence/database.py
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-
-DATABASE_URL = "sqlite+aiosqlite:///world.db"
-
-engine = create_async_engine(DATABASE_URL, echo=False)
-async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-
-async def init_db():
-    """首次启动：创建表 + 初始分支"""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    # 创建初始分支
-    async with async_session() as session:
-        root_branch = Branch(
-            id="main",
-            status="active",
-            created_at=datetime.utcnow().timestamp(),
-        )
-        session.add(root_branch)
-        await session.commit()
-```
-
----
-
-## 9. 迁移注意事项
-
-| 事项 | 说明 |
-|------|------|
-| **tick 暂停** | 迁移期间世界暂停（tick 不推进），避免迁移中产生新事件 |
-| **备份** | 迁移前自动备份 world.db → world.db.bak |
-| **回滚** | 每个迁移必须有 downgrade()，支持回滚 |
-| **版本锁** | Alembic 版本表 `alembic_version` 记录当前版本，多进程安全 |
-| **大表迁移** | events 表可能很大，ALTER TABLE 需要谨慎（SQLite 重建表机制） |
-| **sqlite-vec** | 虚拟表（npc_memory_vec）不在 Alembic 管理范围内，手动创建 |
+- **autogenerate 只是草稿**：SQLite 的 ALTER 能力有限，涉及列改名/删除/加约束时必须手写
+  `batch_alter_table`，并补 `downgrade()`。
+- **不可重建表**（events / snapshots / npc_power / fires）的迁移不得丢列或改语义；
+  重建能力本身是 `schema.md` 的契约，迁移只是载体。
+- **不要在迁移里读写业务数据**：`0010_protected_backfill.py` 这类回填是例外，
+  需在文件头说明「为什么必须在迁移期做，而不是启动期做」。
+- **迁移期间停 tick**：单文件 SQLite 下长事务会阻塞写入，迁移脚本保持短小。
+- **测试库独立**：API 测试用临时 sqlite（`LZ_MASTER_KEY` + tmp path），不碰开发库。

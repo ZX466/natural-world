@@ -736,8 +736,8 @@ async def materialize_matter(
   （`amount=0`、`durability=integrity`、`note="register"`，x/y 默认 -1），
   走 C4 唯一写路径。`NpcStore.flush_tick` 同事务投影 `matter_state`；
   `flush_events` 只落事件、由 `materialize_matter_replay` 冷启重建。
-  structures 表 M3 不建；M4 建造时再裁拓扑投影（见 §9 与
-  `docs/data/matter-register-proposal.md`）。
+  structures 表 M3 不建；M4 建造时再裁拓扑投影（见 §9；matter 注册提案
+  已归档至 git 历史）。
   *（M2-D6 核对：本条与 V 系裁决 3 的 V6「记忆召回端治理过滤」无交集——V6 作用于
   `npc_memories`/`npc_memory_vec`（记忆域），本条为 matter 域注册语义，二者互不影响。）*
 - **分支隔离**：`WHERE branch_id = self._branch_id`，同 `materialize`。
@@ -839,9 +839,8 @@ async def materialize_matter(
 
 ## 21. npc_power（权力状态 — 批次 C 数据面，M5-A7 / 0013）
 
-设计稿 `m5-power-data-preplan.md`（裁 31-1：预研稿推荐案 = 施工案）；判据
-`docs/security/m5-authority-criteria-preplan.md`（D-10 权力不可见 / 红线 A 不新增 kind /
-红线 B 禁键集）。
+设计稿与判据（裁 31-1：预研稿推荐案 = 施工案；D-10 权力不可见 / 红线 A 不新增 kind /
+红线 B 禁键集）均随 2026-10-25 文档大整理删除，可从 git 历史找回。
 
 | 字段 | 类型 | 约束 | 说明 | 对齐 |
 |------|------|------|------|------|
@@ -870,8 +869,8 @@ async def materialize_matter(
 
 ## 22. fires（火场生命周期 — 批次 D 数据面，M5-A9 / 0014）
 
-设计稿 `m5-fire-data-preplan.md`（A8）；事件面判定 `docs/api/m5-fire-api-prestudy.md`（K12
-**F1-F5**）；安规钉 `docs/security/m5-fire-threatmodel.md`（S9 **D-1..D-7**）；裁 33 落地。
+设计稿、事件面判定（K12 **F1-F5**）与安规钉（S9 **D-1..D-7**）均随 2026-10-25 文档大整理
+删除，可从 git 历史找回；现行火灾契约见 `docs/api/ws-protocol.md` §8；裁 33 落地。
 
 | 字段 | 类型 | 约束 | 说明 | 对齐 |
 |------|------|------|------|------|
@@ -907,7 +906,7 @@ async def materialize_matter(
 
 施工单（数据面 `sim/core/persistence/anchor_package.py` 新模块）；设计稿
 `m5-anchor-materialization-preplan.md`（A3 §1.1/§1.2/§1.4/§3.2，预研稿即施工案）；安规钉
-`docs/security/m5-batch-e-security-preplan.md`（S10 **E-1..E-5 + E-13**、§2.3 包内容边界
+安全预研稿（S10 **E-1..E-5 + E-13**、§2.3 包内容边界，已归档至 git 历史）
 裁决）。表结构本身仍是 0011（A4 建的），本节只固化**格式与读档形态**。
 
 ### 23.1 零迁移（与派单预留的 0015 不同）

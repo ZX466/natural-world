@@ -335,4 +335,4 @@ sim/api/ws  (FastAPI WebSocket 网关)
 
 历史提案顺序为 `fire.ignited → fire.spread → fire.extinguished`；其中 `fire.spread`
 已被上述两 kind 方案取代。保留这条决策链以防旧方案复活；完整预研稿可从
-`git show 3b33328:docs/api/m5-fire-api-prestudy.md` 查阅。
+`git show 3b33328:docs/api/m5-fire-api-prestudy.md` 查阅（已从工作树删除）。

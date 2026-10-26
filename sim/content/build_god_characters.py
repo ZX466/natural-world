@@ -1,6 +1,6 @@
 """build_god_characters.py — GOD 古风角色接入管线（2026-10-12 D1-D5 裁决兑现）。
 
-裁决记录（docs/data/god-reuse-final.md §5，2026-10-12 用户逐项拍板）:
+裁决记录（GOD 素材裁决记录 §5 已归档至 git 历史；2026-10-12 用户逐项拍板）:
 - D1=甲 素材缩半入 16px 管线（前端零改动）
 - D2=甲 角色重切 16x32（与主角帧高一致）
 - D3=采纳 Apache-2.0 突破 CC0-only（署名义务: sim/content/README.md 素材清单

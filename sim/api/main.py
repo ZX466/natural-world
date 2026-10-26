@@ -1120,7 +1120,7 @@ class MapChunk(BaseModel):
     )
     ground_b64: str = Field(
         description="base64 编码的地面 tile id（u16 小端、行主序；"
-        "调色板值域见前端 sprout-palette.json）"
+        "取值见 sim/content/linhe-town.json 与 god-town-16.png 图集）"
     )
 
 

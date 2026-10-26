@@ -1,9 +1,9 @@
 ﻿# docs 索引（临河镇）
 
-> 本文件是设计文档的唯一入口。**2026-10-25 大整理**：M0–M6 的历史规划、审计、闭环、
-> 预研与台账文档已删除，只保留仍在生效的活文档。删除内容可从 git 历史找回：
-> `git log --diff-filter=D --name-only -- docs/`。
-> 代码注释中的 `docs/api/m5-*`、`docs/security/m4-*` 等引用是历史出处，不再指向现存文件。
+> 本文件是设计文档的唯一入口。**2026-10-25/26 大整理**：M0–M6 的规划、审计、闭环、
+> 预研与台账文档已删除，`voxel-transition-plan.md` 已并入执行规格，只保留仍在生效的
+> 活文档。删除内容可从 git 历史找回：`git log --diff-filter=D --name-only -- docs/`。
+> 代码注释里出现的已删文档名是历史出处，不代表文件仍存在。
 > 协议字段以 `shared/openapi.json` 与生成类型为准；数据字段以 ORM 模型与迁移为准。
 
 ## 1. 读顺序
@@ -31,8 +31,7 @@
 
 | 文档 | 内容 |
 |---|---|
-| `arch/voxel-execution-spec.md` | 等距体素 V0–V3 施工规格（**现行**） |
-| `arch/voxel-transition-plan.md` | 体素转向方案与决策链（背景，冲突时以执行规格为准） |
+| `arch/voxel-execution-spec.md` | 等距体素 V0–V3 施工规格 + 决策链（**现行唯一真相源**） |
 | `arch/m7-render-art.md` | 渲染美术面（星露谷调性落地） |
 
 ### 数据
@@ -54,7 +53,6 @@
 | `security/t1-sampling-10k.md` | T1 信息边界 10k 采样验收 |
 | `security/t3-corpus.md` | T3 闸门对抗语料（**运行时真相源**，测试双向核对） |
 | `security/t4-corpus.md` | T4 出戏探针语料（**运行时真相源**，测试双向核对） |
-| `security/gameplay-integrity-audit-2026-10-21.md` | 最近一次玩法完整性审计 |
 
 ### 性能
 
