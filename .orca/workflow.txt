@@ -42,14 +42,17 @@
 - 远程：
   - origin = https://github.com/ZX466/natural-world.git
   - gitee  = https://gitee.com/ZX666X/natural-world.git
-  - 推送：`git push origin main && git push gitee main`
+  - 只允许向远程推送 `main`、`develop/*`、`feature/*` 等非 agent 分支中的代码；`main` 与上游保持一致。
+  - codex 只在本地 `codex` 分支提交，不推远程；收编和远程推送由主树负责。
 - GitHub 网络不通，走代理 `127.0.0.1:7897`（全局已按域名配置，仅 github.com 生效）。
-- **除 `.orca` 外，其他 `.` 开头的文件夹一律不入 git、不推送到仓库**（.gitignore 已排除）。
+- **除 `.orca` 外，其他 `.` 开头的 agent 配置目录在本地入 git，但不推送到远程仓库。**
+- `.codegraph`、`.agents` 所有工作树都要有；`.claude`、`.opencode`、`.codex`、`.pi` 只需在对应 agent 工作树存在，主工作树全部保留。
 
 ## 5. 环境约束
 
 - **Python 项目必须用 uv 构建虚拟环境**，在虚拟环境中构建（用 uv 是必要的）。
-- Agent 用 playwright 调浏览器时只用 `D:\develop\hermes\chrome` 里的，不要访问其他地方。
+- **只有用户明确要求时，才使用浏览器自动化或渲染验证。**
+- Agent 用 Playwright 调浏览器时只用 `C:\Users\zx198\AppData\Local\ms-playwright` 里的，不访问其他浏览器，不干扰用户正在使用的浏览器。
 - npm 包和 venv 的删除需要先询问用户。
 
 ## 6. Context 管理
@@ -66,9 +69,9 @@
 ## 8. 记忆机制（memory.md，规则 #7）
 
 - **每个工作树 `.orca/memory.md` 保存各自记忆**（tracked 入库；talking.txt 才是 gitignore 的本地件）：
-  - 主树文件 = 六树**融合合集**（①Claude ②cline ③opencode ④codex ⑤pi ⑥kilo 分节）；
+  - 主树文件融合当前两树记忆（Claude、codex 分节）；历史六树内容按需从 git history 查询。
   - 各树本地副本是其对应节的**权威来源**，收编冲突时以各树版本为准，由 Claude（主导）分节融合。
-- **新对话恢复序**（每树一致）：`.orca/talking.txt`（当前任务单）→ `.orca/memory.md` **自己那一节** → `.orca/workflow.txt` + `.orca/agent-registry.md`。
+- **新对话恢复序**（每树一致）：先读 `.orca/workflow.txt`，再读 `.orca/talking.txt`（当前任务单）、`.orca/memory.md` **自己那一节**和 `.orca/agent-registry.md`。
 - **快照纪律**：每轮交付/收编后，在**自己节**顶部写一行快照 `【日期 轮次｜状态】做了什么/关键决定/坑/下一步`；旧快照压缩为 git log 指针（`git log --oneline -- .orca/memory.md` 可考古），不无限堆积。
 - **写入即提交**：memory.md 改动走 `git add -f .orca/memory.md`（`.orca/` 被 catch-all ignore，已跟踪文件更新也须 -f）+ 常规提交；收编时 Claude 随主分支分发到各树。
-- 收编流程随附动作：Claude 收编时把各树新快照融合进主树合集对应节，然后 `git merge main` 同步六树（冲突时各树本地版优先——即快照内容由原树裁决，但结构以 main 为主）。
+- 收编流程随附动作：Claude 收编时把两树新快照融合进主树对应节，再由 Claude 安排两树同步；codex 不自行 merge main（冲突时各树快照内容由原树裁决，结构以 main 为主）。

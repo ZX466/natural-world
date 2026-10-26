@@ -71,9 +71,11 @@
 
 ## 6. ④ codex｜新对话恢复快照
 
-【2026-10-26 用户要求保存记忆｜无在途任务】代码清理 `3b33328`、文档清理 `cc47cf3` 已完成并被主树收编；本树恢复卡同步提交 `f8f59ca`。下一步先读本树 talking.txt 的最新任务，再读本卡、workflow.txt；无新任务时等待用户或主树派单，不自行启动 V3.5 / V4-3D / V4b。
+【2026-10-26 用户重申双树规则｜无在途任务】已按用户最新要求修正本树 workflow/talking 的浏览器与 agent 配置目录规则；Claude 主导组织与简单任务，Codex 负责复杂任务，注册表仅用户决定。此前交付见 `git log --oneline -- .orca/memory.md`。恢复先读 workflow.txt、talking.txt、本节；无新任务时等待用户或主树派单，不自行启动 V3.5 / V4-3D / V4b。
 
 - 主树 10-26 留言：旧 Zelda 图管线、闭环审计台账已在主树退役；voxel-transition-plan 已合并到 voxel-execution-spec §10，后续以执行规格为准。本树尚未同步这些代码变化，不自行 merge/rebase，不重复清理，不恢复主树已删除的旧资源。
 - 本树上一轮亲测：Python 2945 passed / 121 skipped / 72 deselected；代码清理时 client 221 passed；代码与文档证据分别在 `.orca/audits/cleanup-2026-10-25/`、`.orca/audits/docs-cleanup-2026-10-25/`。本卡 §1 是主树收编后读数，不能冒充本次或本树新实测；本次只保存记忆。
 - 用户偏好：中文简洁、行动和结果优先；i-have-adhd 技能持续启用；合理调用技能，查代码先 CodeGraph（显式 projectPath 指向本树），然后用文件证据复核。旧详细实现与踩坑通过 `git show cc47cf3:.orca/memory.md` 查询，不扩写重复文档。
-- 边界仍为只在 codex 本地提交、不推远程、不动主树；只走本树 talking.txt 留回执。Python 用 uv；浏览器只用 `D:/develop/hermes/chrome`；删除 npm/venv 先问用户。修改本卡仅限本节，写入即本地提交。
+- 边界仍为只在 codex 本地提交、不推远程、不动主树；只走 talking.txt 留回执，不查终端或发 orca-cli 消息。远程代码分支仅限 main、develop/*、feature/* 等非 agent 分支；Python 用 uv；删除 npm/venv 先问用户。修改本卡仅限本节，写入即本地提交。
+- 仅用户明确要求时使用浏览器自动化/渲染验证；Playwright 浏览器只用 `C:/Users/zx198/AppData/Local/ms-playwright`，不干扰用户浏览器。旧记录中的 `D:/develop/hermes/chrome` 路径已被本次指令替代。
+- 除 `.orca` 外，点号开头的 agent 配置目录本地入 git，但不推远程；`.codegraph`、`.agents` 所有树都有；`.claude`、`.opencode`、`.codex`、`.pi` 只需在对应树，主树全部保留。注册表不擅改；talking.txt 的跨树精简同步由主导 Claude 定期处理；上下文达到 50% 提醒切换新对话。
