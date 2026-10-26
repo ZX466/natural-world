@@ -71,7 +71,7 @@
 
 ## 6. ④ codex｜新对话恢复快照
 
-【2026-10-26 用户重申双树规则｜无在途任务】已按用户最新要求修正本树 workflow/talking 的浏览器与 agent 配置目录规则；Claude 主导组织与简单任务，Codex 负责复杂任务，注册表仅用户决定。此前交付见 `git log --oneline -- .orca/memory.md`。恢复先读 workflow.txt、talking.txt、本节；无新任务时等待用户或主树派单，不自行启动 V3.5 / V4-3D / V4b。
+【2026-10-26 第五轮 A/B｜第 0 步阻塞，未开始实现】已接单体素挖土降一层与等距渲染增量更新；按派单执行 `git diff 621fd38 7b9c7b3 -- client/ | git apply` 退出 128，补丁第 49 行是 `client/public/assets/tilesets/sprout-tileset.png` 的二进制删除摘要（原命令没有 `--binary`）。git status 确认未应用任何 client 改动。遵守 talking.txt 的失败即停要求，没有手改补丁、重试应用或运行代码测试；下一步由主树修正基线命令，再继续 A/B。恢复先读 workflow.txt、talking.txt、本节，历史快照见 git log。
 
 - 主树 10-26 留言：旧 Zelda 图管线、闭环审计台账已在主树退役；voxel-transition-plan 已合并到 voxel-execution-spec §10，后续以执行规格为准。本树尚未同步这些代码变化，不自行 merge/rebase，不重复清理，不恢复主树已删除的旧资源。
 - 本树上一轮亲测：Python 2945 passed / 121 skipped / 72 deselected；代码清理时 client 221 passed；代码与文档证据分别在 `.orca/audits/cleanup-2026-10-25/`、`.orca/audits/docs-cleanup-2026-10-25/`。本卡 §1 是主树收编后读数，不能冒充本次或本树新实测；本次只保存记忆。
@@ -79,3 +79,4 @@
 - 边界仍为只在 codex 本地提交、不推远程、不动主树；只走 talking.txt 留回执，不查终端或发 orca-cli 消息。远程代码分支仅限 main、develop/*、feature/* 等非 agent 分支；Python 用 uv；删除 npm/venv 先问用户。修改本卡仅限本节，写入即本地提交。
 - 仅用户明确要求时使用浏览器自动化/渲染验证；Playwright 浏览器只用 `C:/Users/zx198/AppData/Local/ms-playwright`，不干扰用户浏览器。旧记录中的 `D:/develop/hermes/chrome` 路径已被本次指令替代。
 - 除 `.orca` 外，点号开头的 agent 配置目录本地入 git，但不推远程；`.codegraph`、`.agents` 所有树都有；`.claude`、`.opencode`、`.codex`、`.pi` 只需在对应树，主树全部保留。注册表不擅改；talking.txt 的跨树精简同步由主导 Claude 定期处理；上下文达到 50% 提醒切换新对话。
+- 本单补丁实际是 9 文件 / +104/-42（含旧贴图删除），不是派单描述的 5 文件 / +101。可供主树修正的方案：`git diff --binary --output=.orca/client-baseline.patch 621fd38 7b9c7b3 -- client/` 后用 `git apply .orca/client-baseline.patch`，同时避开当前 Windows PowerShell 5.1 的 ASCII 管道。此替代方案本轮未执行。派单顺带要求 agent 配置目录不进 Git，与用户在本会话明确规则冲突，仍保留用户的本地入 Git 规则。
