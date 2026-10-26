@@ -20,7 +20,7 @@ export function advanceAnimClock(current: number, moved: boolean, deltaMs: numbe
   return current < 0 ? 0 : current + deltaMs;
 }
 
-/** facing → 图集行号（build_palette.py 布局实测：下/上/右/左 = 0/1/2/3）。 */
+/** facing → 图集行号（素材帧布局实测：下/上/右/左 = 0/1/2/3）。 */
 export function facingRow(facing: Facing): number {
   return { n: 1, e: 2, s: 0, w: 3 }[facing];
 }

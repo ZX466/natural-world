@@ -228,7 +228,7 @@ def _scatter_near(
     到达判定的 tick 相差几十上百 tick，若散点随 tick 漂移则 `pos == goal`
     永假 → 生理回写永不到账。tick 无关散点 = 常客有固定摊位（更戏内），
     且到站判定闭合。候选按 (dx,dy) 字典序固定序遍历 → 哈希取模（C5）；
-    候选集恒非空（锚点自身可走——build_town 站点坐标约束），锚点兜底。
+    候选集恒非空（锚点自身可走——建图脚本的站点坐标约束），锚点兜底。
     """
     sx, sy = site
     digest = _hash_u32("site-scatter", npc_id, sx, sy, seed)

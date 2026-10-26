@@ -112,7 +112,7 @@ class TileMap(BaseModel):
     def from_json_file(cls, path: Path) -> TileMap:
         """加载内部格式 JSON（Tiled → 内部格式由构建期脚本转换，见 sim/content）。
 
-        chunk 键格式 `"cx,cy"`（build_town.py 产出）；M0 原实现的
+        chunk 键格式 `"cx,cy"`（内部格式约定）；M0 原实现的
         `for (cx, cy), c in items()` 对字符串键解构即炸（管线未实现时无真实
         文件验证）——M7-T3 修为按逗号拆分。
         """

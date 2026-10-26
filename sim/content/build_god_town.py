@@ -1,6 +1,6 @@
 """build_god_town.py — GOD 桃花源整图替换转换器（2026-10-12 D6-D10 裁决兑现）。
 
-裁决记录（docs/data/god-map-integration.md §4，用户逐项拍板）:
+裁决记录（GOD 地图集成裁决记录 §4 已归档至 git 历史；用户逐项拍板）:
 - D6=整图替换（方案 B）——14000/14000 全引用实测否定摘瓦片路径
 - D7=压平单层起步
 - D8=桃花源底图
@@ -37,7 +37,7 @@ OUT_TILESET = REPO / "client" / "public" / "assets" / "tilesets" / "god-town-16.
 MAP_W = 140
 MAP_H = 100
 TILE = 16  # 临河镇运行时格尺寸（源 32px 缩半）
-CHUNK = 16  # 内部格式 chunk 边长（build_town.py 同款）
+CHUNK = 16  # 内部格式 chunk 边长（TileMap.from_json_file 约定）
 
 # --- 常量：GOD 语义层名（实测唯一有内容的渲染层） ---------------------------
 
@@ -96,7 +96,7 @@ def build_chunks(
 ) -> dict[str, dict]:
     """140×100 → 内部格式 chunks（ceil 除法：9×7 = 63 个 16×16 chunk）。
 
-    内部格式（build_town.py 同款）：chunk 键 "cx,cy"，
+    内部格式（TileMap.from_json_file 约定）：chunk 键 "cx,cy"，
     ground = 逐 chunk 16×16 的 gid 拼接行（256 项），
     collision = 16×16 布尔平铺（256 项，True=阻挡）。
     gid 保持 1-based（Tiled 语义，0=空）。

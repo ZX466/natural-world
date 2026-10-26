@@ -1,9 +1,9 @@
-"""M7 小镇地图：调色板值域钉 + 可加载性 + 结构判据。
+"""M7 小镇地图：尺寸/可走性 + 可加载性 + 结构判据 + 确定性构建。
 
-设计：docs/arch/m7-render-art.md §3（R5 调色板单源 / R6 确定性构建）。
-2026-10-12 D6-D10 换图：真相源 = build_god_town.py（桃花源整图 140×100）；
-Zelda-like 旧图管线（build_town.py/sprout 调色板）退役出运行时但保留
-（D10 回退保险），旧 96×96 断言随图退休。
+设计：docs/arch/m7-render-art.md §3（R6 确定性构建）。
+2026-10-12 D6-D10 换图：真相源 = build_god_town.py（桃花源整图 140×100）。
+Zelda-like 旧图管线（build_town.py / sprout 调色板）已于 2026-10-26 删除，
+完整实现可从 git 历史找回；旧 96×96 断言随图退休。
 """
 
 from pathlib import Path
@@ -16,8 +16,6 @@ pytestmark = pytest.mark.t1
 
 REPO = Path(__file__).resolve().parents[2]
 TOWN_JSON = REPO / "sim" / "content" / "linhe-town.json"
-#: 换图后调色板判据失效（GOD 整图 gid 直用，非调色板值域）——R5 钉随旧管线
-#: 保留在 build_palette.py 侧，不再约束新图。
 TOWN_SPAWN = (100, 53)  # main.py SPAWN_TILE 同源
 
 

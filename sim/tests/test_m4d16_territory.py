@@ -3,8 +3,8 @@
 用户验收口径：「npc 和主角还是在一部分区域乱走」+「将地图扩大，每个 npc
 在固定的区域呆着，之后再发生互动」。三个面：
 
-1. **扩图**：build_town SIZE 48→96（面积 ×4），linhe-town.json 产物随
-   管线再生；确定性重跑产物漂移钉保持（test_m7_town_map 同款）；
+1. **扩图**：建图管线原有 48→96 扩图历史；现行 140×100 图由 build_god_town.py
+   生成，确定性重跑产物漂移钉保持（test_m7_town_map 同款）；
 2. **定籍领地**：每人按 npc_id 哈希**定籍一个片区锚点**（HOME_BASES）——
    - wander 锚定**本片区**（不再锚定当前位置：D14 的 wander_near(entity.pos)
      随机游走逐拍累积仍会漂出街区——「一部分区域乱走」的根因收口）；
@@ -88,7 +88,7 @@ class TestTownGodMap:
             assert town.is_walkable(*base), f"片区锚点 {base} 必须可走（锚点兜底依赖）"
 
     def test_deterministic_build(self) -> None:
-        """换图后确定性真相源 = build_god_town.py（build_town.py 随 D10 退役）。"""
+        """换图后确定性真相源 = build_god_town.py（build_town.py 已于 2026-10-26 删除）。"""
         before = _TOWN_JSON.read_bytes()
         import subprocess
         import sys
