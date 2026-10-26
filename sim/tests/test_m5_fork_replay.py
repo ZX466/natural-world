@@ -88,27 +88,6 @@ VEC_DIM = 8
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
-
-
-@pytest.fixture
-def store(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    return SqlEventStore(sf)
-
-
-@pytest.fixture
-async def session(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with sf() as s:
-        yield s
-
-
 async def _noop_preflush() -> None:
     return None
 

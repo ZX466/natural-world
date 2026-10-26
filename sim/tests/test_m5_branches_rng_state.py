@@ -28,12 +28,10 @@ from typing import cast
 import numpy as np
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from sim.core.persistence.database import init_database
 from sim.core.persistence.fork import ForkError, fork_from_anchor
 from sim.core.persistence.models import Branch, Event, NpcMemory
-from sim.core.persistence.store import SqlEventStore
 from sim.core.rng import RngRegistry
 from sim.core.rng_state import capture_rng_state, restore_rng_state
 
@@ -41,27 +39,6 @@ PARENT = "main"
 CHILD = "fork-b"
 GRANDCHILD = "fork-c"
 STREAMS = ("world.weather", "combat.critical", "npc.decide")
-
-
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
-
-
-@pytest.fixture
-def store(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    return SqlEventStore(sf)
-
-
-@pytest.fixture
-async def session(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with sf() as s:
-        yield s
 
 
 async def _noop_preflush() -> None:

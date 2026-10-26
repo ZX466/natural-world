@@ -26,9 +26,8 @@ from __future__ import annotations
 
 import pytest
 from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from sim.core.persistence.database import init_database
 from sim.core.persistence.knowledge_store import (
     REASON_CASCADE,
     REASON_SOURCE_SUPERSEDED,
@@ -45,14 +44,6 @@ from sim.npc.hidden import HiddenAttribute, HiddenProfile
 # ---------------------------------------------------------------------------
 # 夹具
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
 
 
 @pytest.fixture

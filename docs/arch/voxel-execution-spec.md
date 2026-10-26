@@ -29,7 +29,7 @@
 | A13 | **碰撞语义两套必须分清**：桃花源源图 `Collisions` 是 **1=阻挡/0=可走**；`extract_collision` 取反直转后，`linhe-town.json`/前端是 **1=可走 / 0=阻挡**（build_god_town.py:62-71；前端判据 `map.collision[...] === 1` WorldScene.ts:169/:227） | build_god_town.py:62-71 |
 | A14 | 桃花源 `map_pack.json` 有 10 地标 anchor 坐标（祠堂/染坊市集/梯田等，D9 已裁避开瑕疵区） | assets/god-packs/taohuayuan-online/map_pack.json |
 | A15 | **建筑不是地面贴图**：`structureLayer` 是独立 Graphics（depth 14），逐格 `fillRect` 平涂（phase=built 不透明度 0.92） | WorldScene.ts:81/:132/:246-259 |
-| A16 | **前端没有任何迷雾渲染**：客户端无 fog/revealed 字段；`FogOfWar` 只在 sim 侧影响 NPC 知识（`sim/world/fog.py`） | 全客户端 grep 实证 |
+| A16 | **全仓没有迷雾**：客户端无 fog/revealed 字段；sim 侧 `FogOfWar` 亦无任何消费方，2026-10-26 随死代码清理删除（视觉雾已于协议 1.8 移除；历史 `fog.reveal` 事件仍由 no-op handler 重放） | 全客户端 + sim grep 实证 |
 | A17 | 建筑完工发 `tile_changed(tile_id=0)`（前端渲染时 `id===0` 直接跳过=留空），碰撞置不可走；坍塌/拆除按 P-6 补发静态原值恢复 | sim/agent/build_exec.py:199；sim/api/main.py:135-155 |
 | A18 | 点击处理在 `handlePointer`（:221-234），碰撞判据在 **:227**，发 `client:move_request`（:233） | WorldScene.ts:221-234 |
 | A19 | **没有 BootScene**（`game/scenes/` 只有 WorldScene.ts；客户端 README 过时）：预载在 `WorldScene.preload()` :90，tileset 于 :92 加载 | WorldScene.ts:90-92 |
@@ -164,9 +164,10 @@ depthKey(x, y): number          // (x+y)*1024 + y（R4 行序）
 
 1. **气泡/名牌**：`isoProject(x, y, effectiveHeight(x,y))` 定位并按屏幕坐标上浮；
    深度沿用「气泡置顶」惯例。
-2. **迷雾：本单无此任务（A16 修正）**。客户端当前**没有任何迷雾渲染**——`FogOfWar`
-   只影响 sim 侧 NPC 知识。V3 不新增视觉雾；将来若要「玩家探索迷雾」，是独立需求
-   （届时才做菱形覆盖），**不要按旧稿去找不存在的 chunk 雾盖**。
+2. **迷雾：本单无此任务（A16 修正）**。全仓当前**没有任何迷雾实现**——客户端无渲染，
+   sim 侧 `FogOfWar` 也已随死代码清理删除（2026-10-26）。V3 不新增视觉雾；将来若要
+   「玩家探索迷雾」，是独立需求（届时才做菱形覆盖与揭示事件），**不要按旧稿去找
+   不存在的 chunk 雾盖或 `sim/world/fog.py`**。
 3. **雨层/昼夜色罩**：屏幕空间，预期零改动——如有裁剪错位只动呈现参数。
 4. **结构阶段表现**：building/collapsed 相位的等距方块透明度与步进动画（复用现有
    phase 字段），坍塌后高块移除、静态地面高度回落（§3.2 有效高度规则）。
@@ -206,7 +207,7 @@ npm run gen:protocol:check            # EXIT 0 硬门禁
 
 - V4a 挖放（含「谁来挖」裁决——**需用户拍板，默认建议 A：只陈默挖**）
 - V3.5 内容包（音效/日记/录屏）、V4.5（合成/采集/季节）、V4-3D（Three.js，T 系列）
-- **玩家侧视觉迷雾**（A16：客户端当前无此功能，属独立新需求，不进本单）
+- **玩家侧视觉迷雾**（A16：全仓无此实现，属独立新需求，不进本单）
 - 任何 sim 内核改动、任何协议字段、任何新 npm 依赖（V1-V3 零新依赖）
 - 阴影区局部失效优化（V2 局部重建够用）、移动端 chunk 画布
 

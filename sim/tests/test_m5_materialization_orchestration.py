@@ -29,7 +29,7 @@ from typing import Any
 
 import pytest
 from sqlalchemy import text as sa_text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from sim.core.events import npc_lod_change_event
 from sim.core.flush import flush_rows
@@ -41,7 +41,6 @@ from sim.core.persistence.anchor_package import (
     encode_corpus_blob,
     write_anchor_package,
 )
-from sim.core.persistence.database import init_database
 from sim.core.persistence.fire_store import FireStore
 from sim.core.persistence.fork import ForkError
 from sim.core.persistence.fork_orchestration import (
@@ -67,19 +66,6 @@ ORCH_PY = Path(__file__).resolve().parents[1] / "core" / "persistence" / "fork_o
 # ---------------------------------------------------------------------------
 # 夹具与工具
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
-
-
-@pytest.fixture
-def store(engine):
-    return SqlEventStore(async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False))
 
 
 @pytest.fixture(autouse=True)
@@ -237,13 +223,6 @@ async def _seed_package(
     )
     await session.commit()
     return anchor_seq, anchor_tick
-
-
-@pytest.fixture
-async def session(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with sf() as s:
-        yield s
 
 
 async def _branches(session: AsyncSession) -> list[str]:

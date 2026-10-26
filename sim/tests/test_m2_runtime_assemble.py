@@ -15,10 +15,8 @@ from __future__ import annotations
 
 import json
 
-import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from sim.core.persistence.database import init_database
 from sim.core.persistence.npc_store import NpcStore
 from sim.core.persistence.store import SqlEventStore
 from sim.npc.assemble import assemble_runtime
@@ -75,21 +73,6 @@ def _health_row(npc_id: str, *, trigger: str) -> dict:
         "notes": None,
         "created_at_tick": 0,
     }
-
-
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
-
-
-@pytest.fixture
-async def session(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with sf() as s:
-        yield s
 
 
 async def _seed(session, profiles: list[dict], health: list[dict]) -> None:

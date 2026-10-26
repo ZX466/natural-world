@@ -32,9 +32,8 @@ from __future__ import annotations
 
 import pytest
 from sqlalchemy import delete, func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from sim.core.persistence.database import init_database
 from sim.core.persistence.models import Branch, Event
 from sim.core.persistence.store import SqlEventStore
 
@@ -45,14 +44,6 @@ BRANCH_CHILD = "fork-a"
 # ---------------------------------------------------------------------------
 # 夹具：内存 SQLite（Base.metadata.create_all，与 test_persistence.py 同款）
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
 
 
 @pytest.fixture

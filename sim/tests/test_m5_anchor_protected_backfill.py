@@ -31,30 +31,14 @@ from pathlib import Path
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy import text as sa_text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from sim.core.persistence.database import init_database
 from sim.core.persistence.models import PlayerAnchor
 
 BACKFILL_SQL = (
     "UPDATE player_anchors SET protected = 1 WHERE id = ("
     " SELECT id FROM player_anchors ORDER BY updated_at DESC, id DESC LIMIT 1)"
 )
-
-
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
-
-
-@pytest.fixture
-async def session(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with sf() as s:
-        yield s
 
 
 def _anchor(anchor_id: str, *, updated_at: float, name: str = "档") -> PlayerAnchor:

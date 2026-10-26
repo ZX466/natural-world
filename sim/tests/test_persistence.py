@@ -16,30 +16,13 @@ test_m2_runtime_store.py 覆盖）。
 import json
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from sim.core.persistence.database import init_database
-from sim.core.persistence.store import SqlEventStore, decompress_snapshot
+from sim.core.persistence.store import decompress_snapshot
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-async def engine():
-    """内存 SQLite 引擎。"""
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
-
-
-@pytest.fixture
-async def store(engine):
-    """SqlEventStore 实例。"""
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    return SqlEventStore(sf)
 
 
 def _make_event(tick: int, kind: str = "move", actor: str = "player", **kwargs) -> dict:
@@ -270,7 +253,6 @@ class TestEntropyRows:
     async def test_append_with_entropy_rows_atomic(self, store, engine):
         """事件 + 熵日志行在同一事务提交，均可读回。"""
         from sqlalchemy import select
-        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
         from sim.core.persistence.models import EntropyLog
 
@@ -298,7 +280,6 @@ class TestEntropyRows:
     async def test_append_without_entropy_rows(self, store, engine):
         """不传 entropy_rows 时只写事件（当前内核路径）。"""
         from sqlalchemy import select
-        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
         from sim.core.persistence.models import EntropyLog
 

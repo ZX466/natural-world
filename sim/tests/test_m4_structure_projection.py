@@ -6,7 +6,7 @@ import json
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sim.core.events import (
     structure_checkpoint_event,
@@ -15,32 +15,10 @@ from sim.core.events import (
     structure_removed_event,
     structure_started_event,
 )
-from sim.core.persistence.database import init_database
 from sim.core.persistence.models import Branch, Structure
 from sim.core.persistence.npc_store import NpcStore, NpcStoreError
 from sim.core.persistence.store import SqlEventStore
 from sim.world.structure import StructurePhase
-
-
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
-
-
-@pytest.fixture
-def store(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    return SqlEventStore(sf)
-
-
-@pytest.fixture
-async def session(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with sf() as s:
-        yield s
 
 
 def started(

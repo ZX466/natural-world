@@ -13,27 +13,11 @@ from __future__ import annotations
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sim.core.events import EventKind, matter_event
-from sim.core.persistence.database import init_database
 from sim.core.persistence.models import Branch, MatterState
 from sim.core.persistence.npc_store import NpcStore
-from sim.core.persistence.store import SqlEventStore
-
-
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
-
-
-@pytest.fixture
-def store(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    return SqlEventStore(sf)
 
 
 def _ledger_state(ledger) -> dict[str, tuple[float, float, bool]]:

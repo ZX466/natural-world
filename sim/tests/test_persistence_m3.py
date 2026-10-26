@@ -13,9 +13,8 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from sim.core.persistence.database import init_database
 from sim.core.persistence.models import (
     EntropyLog,
     Knowledge,
@@ -27,22 +26,6 @@ from sim.core.persistence.vector import (
     create_memory_vec_table,
     memory_vec_exists,
 )
-
-
-@pytest.fixture
-async def engine():
-    """内存 SQLite 库（Base.metadata.create_all，含 M3 表）。"""
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
-
-
-@pytest.fixture
-async def session(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with sf() as s:
-        yield s
 
 
 @pytest.mark.t1

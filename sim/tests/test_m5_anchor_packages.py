@@ -19,24 +19,7 @@ from pathlib import Path
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
-from sim.core.persistence.database import init_database
-
-
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
-
-
-@pytest.fixture
-async def session(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with sf() as s:
-        yield s
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _alembic(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:

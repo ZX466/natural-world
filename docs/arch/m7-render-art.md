@@ -1,11 +1,15 @@
 # m7-render-art — 渲染美术面（星露谷调性落地）
 
-> 状态：**已实施**（2026-10-05/06，T1-T8 提交链 `851aef7..f69de0f`；过程台账已于
-> 2026-10-25 大整理清理）。设计稿 v1（2026-10-05，用户已核方案 A/docs.arch 落点/交付范围）。
-> **素材源裁定变更**：Sprout Lands（需人工购买页+仅非商用）→ ArMM1998
-> Zelda-like（OpenGameArt **CC0** 零限制、直链可脚本化）——R4 的「许可不符则换包」
-> 兜底条款实际触发，调色板/帧布局实测记录在 `sim/content/build_palette.py`。
-> 前置：M0-M6 收官（main `abbe765`）。本文档是 M7 第一单（渲染面）的唯一设计真相源。
+> 状态：**已实施并已被后续管线取代**（2026-10-05/06 实施，T1-T8 提交链
+> `851aef7..f69de0f`；2026-10-26 起 §3–§5 的 Sprout/Zelda 图管线**整体退役**，
+> 见 §3.0）。设计稿 v1（2026-10-05，用户已核方案 A/docs.arch 落点/交付范围）。
+> 前置：M0-M6 收官（main `abbe765`）。本文档是 M7 第一单（渲染面）的**历史**设计真相源；
+> 现行渲染架构见 `docs/arch/voxel-execution-spec.md`。
+>
+> **保留下来的裁决**：R2（前端位移推断 facing/anim）、R3（戏内时钟服务端权威+前端平滑）、
+> R8（phase 色罩 + ambient_light 乘子）仍是现行实现，代码与测试都在用（WorldScene.ts）。
+> R1（`ground_b64` 走 HTTP）、R6（`linhe-town.json`）、协议 1.3 加法变更同样是现行事实，
+> 只是**素材源与构建脚本已换**（R4/R5 的 Sprout 调色板方案被桃花源整图方案取代）。
 
 ## 0. 范围与结论
 
@@ -64,12 +68,26 @@
 
 ## 3. 内容管线（sim/content）
 
+### 3.0 ⚠ 本节已被取代（2026-10-26）
+
+下文 3.1–3.3 记录的是 **M7 当时**的 Sprout Lands / Zelda-like 图管线，用于解释
+`linhe-town.json` 的内部格式来源。**现行实现不再走这条线**：
+
+| 当时的方案 | 现状 |
+|---|---|
+| `build_town.py` 生成 48×48 程序化小镇 | **已删除**。现行 `build_god_town.py` 从桃花源 `map_pack.json` 提取 **140×100** 图与碰撞 |
+| `sprout-palette.json` 作 ground id 单一真相源 | **已删除**。现行调色板 = `client/public/assets/tilesets/linhe-block-atlas.json`，tileId 是整图切片序号（voxel-spec A12） |
+| Sprout Lands / Zelda-like 16×16 图集 | 运行时图集为 `god-town-16.png`（桃花源源图缩半）；旧 Zelda 原件与 `build_palette.py` 已于 2026-10-26 退役，仅 `actors/*.png` 仍在用 |
+| `BootScene.ts` 预载、`game/render/tilemap.ts` | **从未按此文实现**（现无这两文件）。预载在 `WorldScene.preload()`；地图渲染在 `render/iso-terrain.ts` |
+
+**看现行实现请以 `docs/arch/voxel-execution-spec.md` 为准**；本节与 §4/§5 仅作 M7 决策留档。
+
 ### 3.1 素材落库与登记
 
 ```
 sim/content/
 ├── README.md            # 追加：素材清单登记（来源/许可/版本/落库日期）
-├── build_town.py        # 确定性地图构建脚本（R6）
+├── build_town.py        # 【已删除】确定性地图构建脚本（R6）
 ├── linhe-town.json      # 构建产物（内部格式，from_json_file 可加载）
 └── assets/              # 素材原件存档（tileset png + 角色表 png + LICENSE 记录）
 ```
@@ -78,6 +96,10 @@ sim/content/
 - `sim/content/README.md` 登记：包名/作者/官方页/许可条款/落库日期/文件清单（DESIGN §20 风险对策「M0 就列素材清单」的兑现）。
 
 ### 3.2 调色板（R5）
+
+> **已退役（2026-10-26）**：`sprout-palette.json` 与 `build_town.py` 均已删除，
+> 现行真相源是 `client/public/assets/tilesets/linhe-block-atlas.json`（见 §3.0）。
+> 下列内容仅记录 M7 当时的契约与「id ⊆ 调色板值域」防漂移钉思路。
 
 `client/public/assets/tilesets/sprout-palette.json`：
 
@@ -88,11 +110,15 @@ sim/content/
 
 - `ground` 值域 = 图集首列起按行主序的 tile index；sim `build_town.py` 读取此文件取 id 写入 `linhe-town.json`；
 - sim 测试断言 `linhe-town.json` 所有 ground id ⊆ 调色板 `ground` 值域（防漂移钉）。
+  **现行对应钉**：`test_build_god_town.py`（tileId 映射与碰撞取反口径，见 voxel-spec A12/A13）。
 
 ### 3.3 小镇地图（R6，48×48）
 
-- 布局（脚本内矩形定义，全部坐标常量可审）：四周树林墙（不可走）+ 草地底 + 十字土路 + 药铺/住宅 2-3 座房屋脚印（不可走，占位矩形——本轮不画建筑精灵图，房屋用色块 tile 表达，建筑精修留后续）+ 农田若干 + 水塘 + 主角出生点 (0,0) 附近保证可走；
-- `collision` 语义沿用：不可走 = false；房屋脚印/水/树 = 不可走。
+> **已退役（2026-10-26）**：现行地图是 **140×100**，由 `build_god_town.py` 从桃花源
+> `map_pack.json` 提取（含 10 地标 anchor 坐标），不是程序化矩形布局。
+
+- ~~布局（脚本内矩形定义，全部坐标常量可审）：四周树林墙（不可走）+ 草地底 + 十字土路 + 药铺/住宅 2-3 座房屋脚印（不可走，占位矩形——本轮不画建筑精灵图，房屋用色块 tile 表达，建筑精修留后续）+ 农田若干 + 水塘 + 主角出生点 (0,0) 附近保证可走；~~
+- `collision` 语义沿用：不可走 = false；房屋脚印/水/树 = 不可走。（**现行仍然成立**，见 voxel-spec A13）
 
 ## 4. sim 侧改动
 
@@ -105,15 +131,18 @@ sim/content/
 
 ## 5. client 侧改动
 
+> 行内标 ~~删除线~~ 者为实现路径已被后续管线取代（2026-10-26 核对）；
+> 未标记者描述的行为仍在现行代码中成立。
+
 | 文件 | 改动 |
 |---|---|
-| 新增 `game/scenes/BootScene.ts` | 预载 tileset 图集 + 角色精灵表（四向 idle/walk 帧），完成后启动 WorldScene |
+| ~~新增 `game/scenes/BootScene.ts`~~ | **未按此实现**：预载直接写在 `WorldScene.preload()`（tileset / block atlas / 主角与村民 sprite sheet 全在此处 `this.load.*`），无独立 BootScene |
 | `game/scenes/WorldScene.ts` | ① `redrawMap` 改为解码 `ground_b64` → Phaser tilemap 层（静态单层，碰撞层仅作寻路请求过滤，仍不渲染调试层）；② `syncActorViews` 矩形换精灵：按调色板/精灵表 key 取帧，位移推断 facing/anim（R2）；主角保留摄像机跟随 |
-| 新增 `game/render/tilemap.ts` | `ground_b64 + MapInfo + 调色板 → tilemap` 组装纯函数（可 vitest） |
+| ~~新增 `game/render/tilemap.ts`~~ | **未按此实现**：现行地面渲染在 `game/render/iso-terrain.ts`（等距整图切片）+ `iso.ts`（投影纯函数），非 Phaser tilemap |
 | 新增 `game/render/actors.ts` | facing/anim 推断纯函数 + 精灵帧选择（可 vitest） |
 | `net/ws.ts` | ① `PROTOCOL_VERSION → '1.3'`（第二落点）；② dispatch 增 `time` 处理：快照/增量/`session_state` → `uiStore.setGameClock`（R3 权威帧）；③ `/api/world/map` HTTP 加载实现（现缺位）：取 chunks → 解码 collision + ground → `worldMirror.setMap` |
 | 新增 `game/clock.ts` | 本地时钟推进器：权威帧重同步 + 按 speed/paused 平滑推进（R3；mock 的 `mockStep` 时钟逻辑迁来泛化） |
-| `game/runtime.ts` | mock 分支**保留**（无后端演示价值，用户实际在用），但 mock 也走 BootScene 素材与新渲染路径（同一渲染代码，只是数据源不同） |
+| `game/runtime.ts` | ~~mock 分支**保留**~~ → **已删（2026-10-12）**：sim 未起时前端诚实断线，不生成演示世界（README §3）。故本行描述的「mock 同走新渲染路径」不再适用 |
 
 ## 6. 协议变更登记（1.2 → 1.3，minor/additive）
 
@@ -130,14 +159,14 @@ sim/content/
 ## 7. 测试与门禁
 
 **sim 侧（pytest，T1/T2 口径）**：
-- 地图加载：`linhe-town.json` 可被 `from_json_file` 加载；48×48；出生点可走；ground id ⊆ 调色板值域（R5 钉）；
+- 地图加载：`linhe-town.json` 可被 `from_json_file` 加载；**140×100**（现行；M7 当时为 48×48）；出生点可走；~~ground id ⊆ 调色板值域（R5 钉）~~ → 现行由 `test_build_god_town.py` 钉 tileId 映射与碰撞取反（voxel-spec A12/A13）；
 - `map_static_payload`：`ground_b64` 解码后与 chunk.ground 逐位一致；碰撞位与现口径一致；
 - 快照/增量/`session_state` 的 `time` 块：由固定 tick 推导断言（确定性）；**零禁键**（tick/seq 原值不出站，沿用 T3 出站扫描）；
 - 创世：4 实体在 entities（含 3 村民）；回放确定性（T2 既有钉自动覆盖）；
-- 版本钉：`EXPECTED_VERSION = "1.3"`。
+- 版本钉：~~`EXPECTED_VERSION = "1.3"`~~ → 现行 `1.12`（本行数值随协议推进，以 `sim/api/ws.py::_PROTOCOL_VERSION` 为准）。
 
 **client 侧（vitest）**：
-- `tilemap.ts`：b64 u16 解码、调色板组装、越界容错；
+- ~~`tilemap.ts`：b64 u16 解码、调色板组装、越界容错~~ → 现行对应 `iso.ts` / `iso-terrain.ts` 的投影与切片测试；
 - `actors.ts`：位移→facing/anim 推断表驱动用例；
 - `clock.ts`：权威重同步、speed 推进、暂停停走、回退容错；
 - 既有 `protocol-types.test.ts` 随生成物再生自动覆盖新字段。

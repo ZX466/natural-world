@@ -42,7 +42,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy import text as sa_text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from sim.core.events import npc_lod_change_event
 from sim.core.flush import flush_rows
@@ -58,7 +58,6 @@ from sim.core.persistence.anchor_package import (
     materialize_anchor,
     write_anchor_package,
 )
-from sim.core.persistence.database import init_database
 from sim.core.persistence.fire_store import FireStore
 from sim.core.persistence.fork import ForkError, fork_from_anchor
 from sim.core.persistence.models import (
@@ -93,27 +92,6 @@ VERSIONS_DIR = Path(__file__).resolve().parents[1] / "core" / "persistence" / "a
 # ---------------------------------------------------------------------------
 # 夹具与小工具
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
-
-
-@pytest.fixture
-def store(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    return SqlEventStore(sf)
-
-
-@pytest.fixture
-async def session(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with sf() as s:
-        yield s
 
 
 @pytest.fixture

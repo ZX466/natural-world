@@ -36,9 +36,8 @@ import pytest
 from sqlalchemy import func, select, update
 from sqlalchemy import text as sa_text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from sim.core.persistence.database import init_database
 from sim.core.persistence.fork import fork_from_anchor
 from sim.core.persistence.models import Branch, Event
 from sim.core.persistence.store import (
@@ -67,27 +66,6 @@ BACKFILL_SQL = (
 # ---------------------------------------------------------------------------
 # 夹具
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
-
-
-@pytest.fixture
-def store(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    return SqlEventStore(sf)
-
-
-@pytest.fixture
-async def session(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with sf() as s:
-        yield s
 
 
 def _branch(branch_id: str, *, status: str = "active", is_current: bool = False, **kw: Any):

@@ -17,7 +17,7 @@ import json
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from sim.core.events import (
     EventKind,
@@ -26,35 +26,11 @@ from sim.core.events import (
     npc_lod_change_event,
 )
 from sim.core.flush import flush_events
-from sim.core.persistence.database import init_database
 from sim.core.persistence.models import Event, MatterState, NpcProfile
 from sim.core.persistence.npc_store import NpcStore, NpcStoreError
-from sim.core.persistence.store import SqlEventStore
 from sim.llm.memory_scan import REASON_HIDDEN_LEAK
 from sim.npc.hidden import HiddenAttribute, HiddenProfile
 from sim.npc.model import NpcProfileData
-
-
-@pytest.fixture
-async def engine():
-    """内存 SQLite 库（Base.metadata.create_all，含 M2 表）。"""
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
-
-
-@pytest.fixture
-def store(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    return SqlEventStore(sf)
-
-
-@pytest.fixture
-async def session(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with sf() as s:
-        yield s
 
 
 def _profile(npc_id: str, **overrides) -> NpcProfile:

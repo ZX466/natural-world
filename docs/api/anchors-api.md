@@ -480,7 +480,7 @@ components.setdefault("responses", {})["Problem"] = {
 ## 5. 施工清单 + 验收对表（Claude 域，照本文施工）
 
 **验收对表用法**：右列「验收标准」是**可测断言**——Claude 施工后逐条自测；kilo 复验时照此逐条核。
-断言分两类：`[T]` = pytest 断言（`sim/tests/test_api_anchors.py`）、`[O]` = OpenAPI/静态形状断言（`client.get("/openapi.json")` 或快照 diff）、`[C]` = 前端类型断言（`client/src/net/__tests__/protocol-types.test.ts`）。
+断言分两类：`[T]` = pytest 断言（`sim/tests/test_m5_api_anchors.py`）、`[O]` = OpenAPI/静态形状断言（`client.get("/openapi.json")` 或快照 diff）、`[C]` = 前端类型断言（`client/src/net/__tests__/protocol-types.test.ts`）。
 测试 fixture 沿用 `sim/tests/test_m2_openapi_rework.py:46-56` 的 `client` 写法（`LZ_MASTER_KEY` + 临时 sqlite）。
 
 | # | 施工项 | 验收标准（可测断言） |
@@ -490,7 +490,7 @@ components.setdefault("responses", {})["Problem"] = {
 | 3 | `sim/api/errors.py` §3.2 handler + `main.py` 调 `install_error_handlers(app)` | `[T]` **未匹配路由** 404 也是 ProblemDetail 形（`{"type","title","status","detail"}`，非 FastAPI 默认 `{"detail":"Not Found"}`）；`[T]` 422（缺 `name`）形同 ProblemDetail 且 `status==422`；`[T]` `title`/`status` 必填，`type`/`detail` 出现 |
 | 4 | `openapi_ext.py` 注入 `ProblemDetail`/`responses.Problem` + anchors 响应声明 | `[O]` `components.schemas.ProblemDetail` 存在且 `required==["title","status"]`；`[O]` `components.responses.Problem.$ref` 或内联 `content.application/json.schema.$ref` 指 `#/components/schemas/ProblemDetail`；`[O]` anchors 三路由的 404/409/422/400 响应声明齐全（清单见 §5.1） |
 | 5 | 路由 404/409 的 `detail` 用 §3.2 机器码（含 `settings.py` 小幅改写） | `[T]` `PATCH /api/anchors/<不存在>` 回 `404` 且 `body["type"]=="/errors/anchor-not-found"`；`[T]` `DELETE` 末梢档回 `409` 且 `type=="/errors/anchor-protected"`；`[T]` `POST` 世界未就绪回 `400` 且 `type=="/errors/world-not-ready"` |
-| 6 | 测试：`sim/tests/test_api_anchors.py` | `[T]` **空库** `GET /api/anchors` → `200` + `[]`（**非 404**；这是最易写错的一条）；`[T]` POST 回 `201` 且 body 含全部 5 键 `{id,name,story_label,created_at,protected}`（`story_label` 可为 `""`，**不得缺键**）；`[T]` PATCH 回 `200` 且 `name` 已改、`created_at` 不变；`[T]` `name` 缺失/空串/65 字符 → `422`；`[T]` 越权字段 `{"name":"x","tick":100}` → `422`（`extra="forbid"`）；`[T]` 响应体**不含** `tick`/`seq`/`seed`/`branch_id`/`agent_override`（出戏边界，§0） |
+| 6 | 测试：`sim/tests/test_m5_api_anchors.py` | `[T]` **空库** `GET /api/anchors` → `200` + `[]`（**非 404**；这是最易写错的一条）；`[T]` POST 回 `201` 且 body 含全部 5 键 `{id,name,story_label,created_at,protected}`（`story_label` 可为 `""`，**不得缺键**）；`[T]` PATCH 回 `200` 且 `name` 已改、`created_at` 不变；`[T]` `name` 缺失/空串/65 字符 → `422`；`[T]` 越权字段 `{"name":"x","tick":100}` → `422`（`extra="forbid"`）；`[T]` 响应体**不含** `tick`/`seq`/`seed`/`branch_id`/`agent_override`（出戏边界，§0） |
 | 7 | `shared/openapi.json` 的 anchors 路径已就绪（M5-K2 归一 `{anchor_id}`） | `[O]` `paths` 键为 `/api/anchors` 与 `/api/anchors/{anchor_id}`；**`/api/anchors/{id}` 必须为 0 处**；`[O]` `AnchorListItem.properties` 恰为 `{id,name,story_label,created_at,protected}` 五键（无 tick/seq/seed/branch_id）；`[C]` `protocol-types.test.ts` K03 #5 绿；`[O]` 形参名逐字 `anchor_id`（`sim/api/anchors.py` 的 `def rename_anchor(anchor_id: str, ...)`），否则 FastAPI 生成 `{id}` 造成漂移 |
 
 ### 5.1 OpenAPI responses 声明清单（#4 注入点，供 `custom_openapi` 手抄）

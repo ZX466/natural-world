@@ -10,9 +10,8 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from sim.core.persistence.database import init_database
 from sim.core.persistence.knowledge_store import KnowledgeStore
 from sim.core.persistence.models import Knowledge
 from sim.llm.memory_scan import MemoryWritePipeline
@@ -26,14 +25,6 @@ from sim.llm.prompts.assembler import (
 )
 from sim.llm.prompts.identity import IdentityAnchor
 from sim.npc.norms import MAX_NORMS, norms_text_of, select_norms
-
-
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
 
 
 @pytest.fixture

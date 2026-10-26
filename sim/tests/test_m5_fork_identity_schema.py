@@ -37,38 +37,15 @@ import pytest
 from sqlalchemy import ColumnDefault, Table, select
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.schema import CreateTable
 
 from sim.core.events import npc_lod_change_event
-from sim.core.persistence.database import init_database
 from sim.core.persistence.models import Event, Knowledge, NpcProfile, PlayerAnchor
 from sim.core.persistence.npc_store import NpcStore
-from sim.core.persistence.store import SqlEventStore
 
 BRANCH_MAIN = "main"
 BRANCH_FORK = "fork-a"
-
-
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
-
-
-@pytest.fixture
-def store(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    return SqlEventStore(sf)
-
-
-@pytest.fixture
-async def session(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with sf() as s:
-        yield s
 
 
 def _profile(

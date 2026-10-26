@@ -621,28 +621,6 @@ def world_create_event(
     )
 
 
-def fog_reveal_event(
-    tick: int,
-    chunks: tuple[tuple[int, int], ...],
-    branch_id: str = "main",
-) -> WorldEvent:
-    """迷雾揭示事件（D17 视觉雾；只载已踏入事实——S4 FG-1 禁未探索先验）。
-
-    chunks 封闭校验：非空、元素为 int 二元组（世界真相面不收脏形状）。
-    """
-    if not chunks:
-        msg = "fog.reveal 空揭示（无块可揭不发事件）"
-        raise ValueError(msg)
-    cleaned = tuple((int(cx), int(cy)) for cx, cy in chunks)
-    p = FogRevealPayload(chunks=cleaned)
-    return WorldEvent(
-        branch_id=branch_id,
-        tick=tick,
-        event_type=EventKind.FOG_REVEAL,
-        payload=p.model_dump(mode="json"),
-    )
-
-
 def move_event(
     tick: int,
     actor_id: str,

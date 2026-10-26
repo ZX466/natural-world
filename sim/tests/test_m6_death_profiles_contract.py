@@ -23,7 +23,7 @@ from typing import Any
 import pytest
 from sqlalchemy import select
 from sqlalchemy import text as sa_text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from sim.core.persistence.anchor_package import (
     MaterializationHooks,
@@ -32,7 +32,6 @@ from sim.core.persistence.anchor_package import (
     encode_corpus_blob,
     write_anchor_package,
 )
-from sim.core.persistence.database import init_database
 from sim.core.persistence.models import Branch, NpcProfile
 from sim.core.persistence.store import SnapshotData, SqlEventStore
 
@@ -183,26 +182,6 @@ def _death_event(tick: int, npc_id: str) -> Any:
         except TypeError:
             pytest.skip("死亡事件构造失败（签名未定）")
     pytest.skip(f"未找到 `{keyword}*_event` 工厂")
-
-
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
-
-
-@pytest.fixture
-def store(engine):
-    return SqlEventStore(async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False))
-
-
-@pytest.fixture
-async def session(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with sf() as s:
-        yield s
 
 
 @requires_death_path

@@ -30,9 +30,8 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from sim.core.persistence.database import init_database
 from sim.core.persistence.fork import fork_from_anchor
 from sim.core.persistence.knowledge_store import KnowledgeStore
 from sim.core.persistence.models import Event, Knowledge
@@ -76,20 +75,6 @@ def _emerge_event(tick: int, *, subject: str, attr: str, witness: str) -> dict:
 
 async def _noop_preflush() -> None:
     return None
-
-
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
-
-
-@pytest.fixture
-def store(engine):
-    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    return SqlEventStore(sf)
 
 
 @pytest.fixture

@@ -20,7 +20,3 @@ class PerceptionProfile(BaseModel):
     vision_floor: float = 0.02  # 显著性地板（视觉：夜间低强度不抹掉人影）
     hearing_floor: float = 0.04  # 显著性地板（听觉：低于则「没注意到」）
     max_observations: int = 12  # 单帧单者观测数上限（prompt 体积治理）
-
-
-class PerceptionEngineLike:  # pragma: no cover — 仅文档化协议，见 senses.PerceptionEngine
-    pass

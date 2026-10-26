@@ -14,9 +14,8 @@ C5：同种子同事件流逐位可重放（纯函数链 + 管线确定性）。
 from __future__ import annotations
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from sim.core.persistence.database import init_database
 from sim.core.persistence.knowledge_store import (
     REASON_SOURCE_SUPERSEDED,
     KnowledgeStore,
@@ -24,14 +23,6 @@ from sim.core.persistence.knowledge_store import (
 from sim.llm.memory_scan import MemoryWritePipeline
 from sim.npc.evidence import SELF_DISCLOSURE_CONFIDENCE, WITNESSED_CONFIDENCE
 from sim.npc.propagation import retell
-
-
-@pytest.fixture
-async def engine():
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    await init_database(eng)
-    yield eng
-    await eng.dispose()
 
 
 @pytest.fixture

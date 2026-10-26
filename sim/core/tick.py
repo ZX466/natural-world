@@ -68,9 +68,8 @@ class TickLoop:
     _maintenance_hooks: list[MaintenanceHook] = field(
         default_factory=list, repr=False, compare=False
     )
-    # D17 视觉雾账本已删（2026-10-12 用户裁决：迷雾机制移除）——
-    # 历史 fog.reveal 事件仍可重放（no-op handler 保留，C4 事件流不可销毁）。
-    fog_seen: set[tuple[int, int]] = field(default_factory=set)
+    # D17 视觉雾已撤（2026-10-12 用户裁决：迷雾机制移除）；历史 fog.reveal 事件
+    # 仍可重放（no-op handler 保留，C4 事件流不可销毁），故此处无雾账本字段。
     chaos: ChaosState = field(default_factory=ChaosState)
     _entropy_hook: Callable[[str, int], WorldEvent] | None = field(
         default=None, repr=False, compare=False

@@ -39,7 +39,6 @@ from sim.world.fauna import (
     active_species_at,
     fauna_sightings_at,
 )
-from sim.world.fog import FogOfWar, fold_fog_reveal
 
 # ===========================================================================
 # ① 生态（ecology.py）— tick 纯派生 + 相位跨越信号
@@ -197,40 +196,6 @@ class TestSpeechRegister:
         """空静态档 fail-closed（SpeechRegisterError）。"""
         with pytest.raises(SpeechRegisterError):
             SpeechContext(class_register="")
-
-
-# ===========================================================================
-# ④ 迷雾（fog.py fold）— S4 FG/A3 事件化口径
-# ===========================================================================
-
-
-class TestFogFold:
-    def test_fold_is_union(self) -> None:
-        """fold=并集：两批揭示合并（A3 §2.4 口径）。"""
-        fog = FogOfWar()
-        fog = fold_fog_reveal(fog, ((0, 0), (1, 1)))
-        fog = fold_fog_reveal(fog, ((1, 1), (2, 2)))
-        assert fog.is_revealed(0, 0) and fog.is_revealed(1, 1) and fog.is_revealed(2, 2)
-        assert fog.revealed_count == 3
-
-    def test_fold_idempotent(self) -> None:
-        """幂等：同一批揭示重放第二遍结果不变（重放安全）。"""
-        fog = fold_fog_reveal(FogOfWar(), ((0, 0), (1, 1)))
-        again = fold_fog_reveal(fog, ((0, 0), (1, 1)))
-        assert again == fog
-        assert again.revealed_count == fog.revealed_count == 2
-
-    def test_fold_replay_deterministic(self) -> None:
-        """C5：同事件序列两次重放 ⇒ 同揭示集（T2 逐位口径）。"""
-        batches = [((0, 0),), ((1, 1), (0, 0)), ((2, 2),)]
-
-        def replay() -> FogOfWar:
-            fog = FogOfWar()
-            for b in batches:
-                fog = fold_fog_reveal(fog, b)
-            return fog
-
-        assert replay() == replay()
 
 
 # ===========================================================================
