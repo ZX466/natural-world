@@ -5,7 +5,7 @@
 
 ## 0. 当前状态
 
-- **main HEAD**：`d869059` merge codex 清理（前序 `436040a` 主树大整理、`264b8b8` DA-07/V4a）。
+- **main HEAD**：`1a0546f` 第三轮清理（前序 `036cfaf` memory、`5981417` 文档二轮、`c2156f8` 图管线退役）。
 - **codex HEAD**：`cc47cf3` 文档清理收编点（前序 `3b33328` 代码去重；docs sync 之后以 `git log` 为准）。
 - **协议**：`1.12`（`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts`）。
 - **两棵树**：
@@ -15,19 +15,19 @@
 - **在飞**：无。**未派**：V3.5 内容包 / V4-3D / V4b（材料分类）。
 - **待人工验收**：① DA-07 失能/恢复真模型长局；② V3 画面观感；③ V4a 挖放观感。
 
-## 1. 门禁（2026-10-26 第二轮整理后实测）
+## 1. 门禁（2026-10-26 第三轮整理后实测）
 
 | 项 | 结果 |
 |---|---|
-| pytest `-m "not bench"` | **2951 passed** / 121 skipped / 72 deselected / 0 failed（315s） |
-| ruff check / format | clean（364 files） |
+| pytest `-m "not bench"` | **2948 passed** / 121 skipped / 72 deselected / 0 failed（319s） |
+| ruff check / format | clean（363 files） |
 | pyright | 0 errors, 0 warnings |
 | client typecheck / lint / prettier | EXIT 0 |
 | client vitest | **225 passed / 39 files** |
 | gen:protocol / height map / block atlas | 全通过（byte-identical） |
 | security-scan | C（62/100），0 critical；4 high 在本地 `.claude/mcp.json` |
 
-## 2. 清理结果（两轮累计）
+## 2. 清理结果（三轮累计）
 
 **第一轮（2026-10-25）**
 - 文档 **133 → 28**：删除 M0–M6 规划/审计/预研/台账 105 篇、`GIT-SETUP.md`、
@@ -43,9 +43,20 @@
 - 合并 `docs/arch/voxel-transition-plan.md` → `voxel-execution-spec.md` §10（决策链/边界/风险），原文件已删。
 - 全树清掉失效文档路径引用与 `build_town`/`build_palette`/`sprout-palette` 过期注释；
   协议描述同步 `shared/openapi.json` + 重生成 `shared/protocol.ts`。
-- 文档 **26 篇**（本轮 -2：审计稿、转向方案）。
+- 文档 **26 → 24 篇**（本轮 -2：审计稿、转向方案）。
 - 本地垃圾：cdp profiles / tmp / 截图 / `.playwright-mcp` / `_god_map_preview` 等，
   两树合计约 800 MB；保留 `world.db`、依赖与机器基线。
+
+**第三轮（2026-10-26，主树 · `1a0546f`）**
+- 删 `sim/world/fog.py`（`FogOfWar`/`fold_fog_reveal` 零消费）+ `fog_reveal_event`、
+  `TestFogFold` 三例、`TickLoop.fog_seen` 空字段、`PerceptionEngineLike` 空协议。
+  **`FogRevealPayload` 保留**：`event_validation` 的事件重放映射仍在用。
+- 夹具去重：`engine`/`store`/`session` 上移 `sim/tests/conftest.py`，
+  14 个测试文件逐字副本消除（有差异的变体仍本地覆盖）。
+- 文档失真：`m7-render-art.md` §3–§5 标退役（BootScene/tilemap.ts 未实现、
+  48×48→140×100、1.3→1.12、mock 分支已删）；`voxel-execution-spec.md` A16 改「全仓已删」；
+  `anchors-api.md` 测试路径 4 处；`bench/README` 三处死链；`god-reuse-final.md` 两处改归档。
+- 净删 532 行（39 files, +116/−648）。
 
 ## 3. 踩坑（逐条有效）
 
@@ -65,6 +76,12 @@
 - 查符号/调用链/影响面先用 `codegraph_explore`。
 - 门禁数字同场实测，不引用旧读数。
 - 收编后 main 独立复跑证据，不采信对方读数。
+- **删文件/依赖前先查 `DESIGN.md`**：它写死了承诺（`tests/invariants`、`tests/replay`、
+  Hypothesis/tenacity），零 grep 命中≠可删。第三轮差点删掉两个 DESIGN §5 声明的测试包。
+- 删/移文档后全树扫旧路径（本仓文档交叉引用密）；用脚本抽反引号路径比对存在性最省事。
+- 测试夹具共享在 `sim/tests/conftest.py`；只在与共享版真有差异时才本地覆盖。
+- 协议版本双落点必须同改：`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts`。
+- Windows 提交时 CRLF 警告是正常的（`.gitattributes` 为 `* text=auto eol=lf`），忽略。
 
 ## 4. 恢复序
 
