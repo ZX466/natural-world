@@ -5,47 +5,54 @@
 
 ## 0. 当前状态
 
-- **main HEAD**：`446db42`（docs：本卡指针）；**代码收编点仍是 `e2e1250`**
-  （merge codex 体素挖土降层与等距增量渲染）。
-- **codex HEAD**：`16489c3`，**已被主树收编**；与 main **无分叉**（`merge-base --is-ancestor`
-  实测），落后 22 个提交但可 `merge --ff-only main` 同步。
-- **协议**：`1.12` 现状；**第七轮 V4b 派单要求升 1.13**
-  （`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts` 必须同改）。
+- **main HEAD**：`ba68e88`（V4b 收编完成，**fast-forward，无 merge commit**）。
+- **codex HEAD**：`ba68e88` = main，**两树已同步**（ff 收编）。
+- **协议**：**`1.13`**（V4b 升级）；双落点已同改
+  （`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts::PROTOCOL_VERSION`）。
 - **两棵树**：
   - 主树 `E:/zxdevelop/project7`（`main`）：拆单/架构/质量/收编复核/日常小改。
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex`（`codex`）：复杂/跨层实现、安全合规。
   - 只走各树 `.orca/talking.txt`；不直接对话。
-- **在飞**：**V4b 材料分类**（2026-10-28 派 codex，协议升 1.13）。
-- **未派**：V3.5 内容包 / V4-3D。
+- **在飞**：无。**未派**：V3.5 内容包 / V4-3D。
 - **待人工验收**：① DA-07 失能/恢复真模型长局；② V3 画面观感；④ 走路是否还飘。
   **③ V4a 挖放观感已于 2026-10-28 由用户验收通过。**
+  **新增 ⑤ V4b 三材料挖放观感（行囊显示土/石/木三行）——需肉眼验收。**
 
-## 1. 门禁（2026-10-26 第五轮 merge 后主树实测）
+## 1. 门禁（2026-10-28 V4b 收编后主树独立实测）
 
 | 项 | 结果 |
 |---|---|
-| pytest `-m "not bench"` | **2948 passed** / 121 skipped / 72 deselected / 0 failed（289s） |
+| pytest `-m "not bench"` | **2969 passed** / 121 skipped / 72 deselected / **0 failed**（339s） |
 | ruff check / format | clean（363 files） |
 | pyright | 0 errors, 0 warnings |
 | client typecheck / lint / prettier | EXIT 0 |
-| client vitest | **250 passed / 39 files** |
-| gen:protocol / height map / block atlas | 本单未动协议与素材，未跑 |
+| client vitest | **259 passed / 39 files** |
+| gen:protocol:check | EXIT 0（协议已动，必须跑） |
 
-> codex 自报 246 passed；主树收编后独立复跑得 250（多出主树自己的用例）——数字不同正常，
-> 收编只采信主树读数。
+> codex 自报 2969P/259P，与主树独立复跑一致——本轮两边数字对上了。
 
-## 2. 第七轮派单（2026-10-28）V4b 材料分类
+## 2. 第七轮成果（2026-10-28）V4b 材料分类 —— codex，已收编 `ba68e88`
 
-**为什么选它**：`VoxelEditedPayload.material_id` 写死 `Literal["earth"]`，挖树挖石屋都只进「土」。
+**问题**：`VoxelEditedPayload.material_id` 写死 `Literal["earth"]`——挖树挖石屋都只进「土」。
 主树实测可挖格（碰撞 0 且静态 h>0）**12511 格**，按静态高度正好三档：
-h=1 土 5083 / h=2 石 5102 / h=3 木 2326。数据面已够，**不需要新素材或新采样脚本**。
+h=1 土 5083 / h=2 石 5102 / h=3 木 2326。
 
-**裁决要点**（详见 codex 树派单）：
-1. 材料 = 目标格静态高度（h=1 earth / h=2 stone / h=3 wood），复用已加载的 `voxel_height`。
-2. **place 消耗目标格所属材料**（挖石得石、放石耗石，往返净值 0）。
-3. 协议升 **1.13**：`VoxelInventory` 扩 `{earth, stone?, wood?}`，stone/wood 可选缺省 0（旧端兼容）。
-4. `MaterialMoveReason` **不改**；`MaterialBalance` 按 `(branch,ref,material)` 建键，**零迁移**。
-5. 不做：材料选择 UI、`effectiveHeight`、挖放高度近似、高度表/图集产物。
+**落地**：
+- `voxel_exec.py`：`_MATERIAL_BY_HEIGHT = {1: earth, 2: stone, 3: wood}`；`_validate` 返回材料，
+  `_inventory`/`_reserved` 改为三材料字典；`_pending` 存 `(action, material)`。
+- **place 消耗目标格所属材料**——挖石得石、放石耗石，往返净值 0；缺料 fail-closed
+  （`行囊里没有石料了。`，不落库）。
+- 协议 **1.13**：`VoxelInventory` 保留必需 `earth`，新增可选 `stone`/`wood`（缺省 0，仍封闭对象）。
+  `MaterialMoveReason` 不改，`MaterialBalance` 零迁移。
+- HUD 三行，为 0 不显示；**行囊仍只进 HUD，不进 prompt / 世界事件**（C3）。
+
+**主树独立验证**（不只是跑测试，另写探针实跑）：
+- h=1/2/3 各挖一次 → `material_id` 分别 earth/stone/wood，行囊 `{earth:1, stone:1, wood:1}` ✅
+- 在 h=2 格放置 → stone 1→0 ✅；再放一次 → 拒绝「行囊里没有石料了。」✅
+
+**codex 自报的告警**：全量跑有 `test_m4c_llm_driver::...test_seed_inserts_profile_and_idempotent`
+的 aiosqlite `Event loop is closed`；单独复跑 1P/1.81s 未重现，**未声称已修复**。
+主树本轮 2969P/0F 也未见该失败——按间歇性处理，若复现再查。
 
 **否决的候选**：V4a 精确深度（边角缺陷，需改协议，性价比低，用户已验收观感）/
 V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条启动条件均不成立）。
@@ -109,6 +116,10 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 - **收编的文档冲突按用户最新裁定解**，不按「谁后写谁赢」：本轮 codex 的
   「点号目录本地入 git」与用户 10-26 裁定「维持 gitignore」冲突，取主树侧。
 - `.orca/` 在 `.gitignore` 里，但已跟踪文件仍需 `git add -f`。
+- **`.orca/talking.txt` 永远不进 git**（`.gitignore` 第 73 行：per-worktree local inbox）。
+  `729921a` 曾误 `git add -f` 入库，后果是 codex 执行 `merge --ff-only main` 时被
+  **静默覆盖掉派单**（已实验复现）。2026-10-28 已 `git rm --cached` 修正；
+  改完不要 `git add`，提交里不该出现这个路径。
 - Windows 提交时 CRLF 警告正常（`.gitattributes` 为 `* text=auto eol=lf`），忽略。
 
 ## 4. 恢复序
@@ -126,16 +137,16 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 
 ## 6. ① Claude｜新对话恢复快照
 
-【2026-10-28 第七轮｜V4b 在飞】用户人工验收通过 V4a 挖放观感 → 派 V4b 材料分类给 codex
-（协议升 1.13）。主树实测可挖格三档 5083/5102/2326，作为材料判定依据写进派单。
+【2026-10-28 第七轮收编完成｜无在途任务】V4b 材料分类（codex）已收编 `ba68e88`，
+fast-forward 无冲突；协议升 **1.13**；主树独立复跑全绿（pytest 2969P/0F、vitest 259P）。
 
-- **开新对话只需知道**：① 代码全绿、**V4b 在 codex 树**；② 两项待**肉眼**验收
-  （走路是否还飘、V3 画面）+ DA-07 长局；③ 协议将变 1.13，未推远程。
+- **开新对话只需知道**：① 代码全绿、两树同步无在飞任务；② 三项待**肉眼**验收
+  （走路是否还飘、V3 画面、**V4b 三材料行囊**）+ DA-07 长局；③ 协议已 1.13，未推远程。
 - **未推送**：origin/gitee 停在 `2d7c4cf`；main 领先若干提交未推。推送是用户决定，不自动推。
 - **配置目录**：维持用户 10-26 裁定「不进 git、不推远程、本地须存在」；主树不建 `.pi`。
 - **浏览器**：仅用户明确要求时用，路径 `C:\Users\zx198\AppData\Local\ms-playwright`。
 - **全局 git 邮箱**：`zx19836980213@outlook.com`。
-- 教训已进 §3：两树派单必须写明基线（本轮 ff 可同步，无分叉）；收编冲突按用户最新裁定解。
+- 本轮教训已进 §3：`.orca/talking.txt` 必须保持未跟踪，否则 ff 会覆盖派单。
 
 ## 7. ④ codex｜新对话恢复快照
 
