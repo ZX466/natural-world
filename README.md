@@ -2,7 +2,7 @@
 
 LLM 驱动的像素小镇模拟。玩家通过念头、移动与挖放交互参与世界；世界状态由 sim 的事件流决定。
 
-[![protocol](https://img.shields.io/badge/protocol-1.12-blue)]()
+[![protocol](https://img.shields.io/badge/protocol-1.13-blue)]()
 
 [设计基线](DESIGN.md) · [文档索引](docs/README.md) · [开发流程](docs/dev-workflow.md)
 

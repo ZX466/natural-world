@@ -136,3 +136,14 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 - **浏览器**：仅用户明确要求时用，路径 `C:\Users\zx198\AppData\Local\ms-playwright`。
 - **全局 git 邮箱**：`zx19836980213@outlook.com`。
 - 教训已进 §3：两树派单必须写明基线（本轮 ff 可同步，无分叉）；收编冲突按用户最新裁定解。
+
+## 7. ④ codex｜新对话恢复快照
+
+【2026-10-28 第七轮 V4b｜实现与门禁完成，待主树收编】土/石/木由既有静态高度 1/2/3 判定；挖得对应材料、放置扣目标材料。协议 1.13；库存三字段，stone/wood 可选且缺省 0，HUD 零数量不显示。无在途实现；下一步由 Claude 收编复核，本树不推远程。
+
+- 基线：按本轮派单授权先备份 talking，再 fetch + ff 到 `13e2ca7`；talking 确认未跟踪，不要 git add。TDD RED 检查点 `61570c2`，GREEN 实现 `93b9e29`；后续 live schema/版本预期修正及本快照见 git log。收编须取 `13e2ca7..codex` 整段，不只取末次修正提交。
+- 关键实现：VoxelRuntime 的库存和未刷盘预留量各按材料计数；pending 保存动作与预留材料，提交后释放原材料额度。事件工厂元数据保留，只以已验证的新材料 payload 作不可变替换；events.py 仅扩 VoxelEditedPayload 的三个字面量，数量/原因枚举不变。重放按历史 material_id，不按当前高度重新分类；零迁移。
+- 协议坑：OpenAPI 字段写 `default: 0` 会让现有生成器把 stone/wood 变必填，破坏旧端类型。因此以可选字段 + absent=0 描述定义，客户端补零；不改生成器、不手写 protocol.ts。live OpenAPI 还有 openapi_ext.py 的旧声明，已同步同一库存定义并用对拍测试锁住；FastAPI 自身 version 也升 1.13。README 协议徽标同步，避免状态检查工具报漂移。
+- 本轮亲测：pytest **2969 passed / 121 skipped / 72 deselected / 5 warnings，337.00s**；相关链路 110 passed，含真实冷启动、历史分叉、嵌套分叉、鉴权与错材料零写入。ruff check/format 通过（363 files），pyright 0 errors/warnings；gen:protocol:check、client typecheck/lint/format 通过；Vitest **259 passed / 39 files**，生产构建通过。证据在 `.orca/audits/v4b-materials-2026-10-28/plan.md` 及本地日志。
+- 警告如实保留：全量测试有一条 aiosqlite worker 在 `test_m4c_llm_driver` 清理阶段的 `Event loop is closed` 警告，未造成失败；未改 driver/LLM 模块。构建仍提示大 chunk。覆盖率工具未配置，未报百分比；浏览器验收未请求、未运行。
+- 范围：sim/world、sim/npc、sim/llm、渲染高度/图集产物与依赖均无改动；place 再 dig 的两层视觉近似不变。不启动 V3.5/V4-3D 等未派任务。中文简洁、i-have-adhd 持续启用，CodeGraph 返回源码视作已读；上下文 50% 提醒切新对话，恢复先 workflow → talking → 本节。

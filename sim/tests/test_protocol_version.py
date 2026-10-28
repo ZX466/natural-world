@@ -71,6 +71,15 @@ class TestProtocolVersion:
 
         assert app.openapi()["info"]["version"] == EXPECTED_VERSION
 
+    def test_live_inventory_schema_matches_the_authoritative_protocol_snapshot(self):
+        from sim.api.main import app
+
+        snapshot = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
+        assert (
+            app.openapi()["components"]["schemas"]["VoxelInventory"]
+            == snapshot["components"]["schemas"]["VoxelInventory"]
+        )
+
     def test_inventory_schema_adds_optional_materials_without_opening_extra_fields(
         self,
     ):

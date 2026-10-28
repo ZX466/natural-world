@@ -192,7 +192,7 @@ class TestW6Auth:
             assert ws.receive_json()["type"] == "hello_ack"
             ws.send_json({"type": "evil_action", "channel": "render"})
             reply = ws.receive_json()
-            while reply["type"] == "voxel_state":  # Additive 1.12 inventory frame after hello.
-                assert reply["inventory"] == {"earth": 0}
+            while reply["type"] == "voxel_state":  # Additive 1.13 inventory frame after hello.
+                assert reply["inventory"] == {"earth": 0, "stone": 0, "wood": 0}
                 reply = ws.receive_json()
             assert reply["type"] == "error" and reply["code"] == "unknown_type"

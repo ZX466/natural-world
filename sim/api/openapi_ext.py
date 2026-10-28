@@ -535,7 +535,19 @@ _SUB_SCHEMAS.update(
         "VoxelInventory": {
             "type": "object",
             "required": ["earth"],
-            "properties": {"earth": {"type": "integer", "minimum": 0}},
+            "properties": {
+                "earth": {"type": "integer", "minimum": 0},
+                "stone": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Optional stone count; absent means 0.",
+                },
+                "wood": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Optional wood count; absent means 0.",
+                },
+            },
             "additionalProperties": False,
         },
     }
