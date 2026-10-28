@@ -102,3 +102,41 @@ it('invalidates an empty structure snapshot independently of voxel snapshots', (
   expect(mirror.structures.size).toBe(0);
   expect(mirror.terrainVersion).toBeGreaterThan(version);
 });
+
+it('accepts legacy earth-only stock and whole nonnegative stone/wood counts', () => {
+  const mirror = new WorldMirror();
+  expect(mirror.applyVoxelState({ inventory: { earth: 2 }, dig: null })).toBe(true);
+  expect(
+    mirror.applyVoxelState({
+      inventory: { earth: 0, stone: 2, wood: 3 },
+      dig: { x: 1, y: 1, progress: 0.5 },
+    }),
+  ).toBe(true);
+  expect(mirror.voxelDig).toEqual({ x: 1, y: 1, progress: 0.5 });
+});
+
+it.each(['earth', 'stone', 'wood'] as const)(
+  'rejects malformed %s stock without changing dig state',
+  (material) => {
+    const mirror = new WorldMirror();
+    mirror.applyVoxelState({ inventory: { earth: 1 }, dig: { x: 1, y: 1, progress: 0.4 } });
+    for (const value of [-1, 0.5, NaN, Infinity, '2', null, true]) {
+      const state = {
+        inventory: { earth: 1, stone: 2, wood: 3, [material]: value },
+        dig: null,
+      } as unknown as Parameters<WorldMirror['applyVoxelState']>[0];
+      expect(mirror.applyVoxelState(state), `${material}: ${String(value)}`).toBe(false);
+      expect(mirror.voxelDig).toEqual({ x: 1, y: 1, progress: 0.4 });
+    }
+  },
+);
+
+it('still requires earth when optional materials are supplied', () => {
+  const mirror = new WorldMirror();
+  expect(
+    mirror.applyVoxelState({
+      inventory: { stone: 1, wood: 1 },
+      dig: null,
+    } as unknown as Parameters<WorldMirror['applyVoxelState']>[0]),
+  ).toBe(false);
+});

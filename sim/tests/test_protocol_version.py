@@ -33,7 +33,7 @@ SNAPSHOT = REPO_ROOT / "shared" / "openapi.json"
 VERSIONING = REPO_ROOT / "docs" / "api" / "versioning.md"
 
 #: 当前版本（1.1=裁 34-1 甲案三个 minor；1.2=M6-K2 诊断面进快照，仍是 minor）。
-EXPECTED_VERSION = "1.12"
+EXPECTED_VERSION = "1.13"
 
 #: 登记在 §7 的 minor 变更关键词（doc 同步钉用，避免「登记与代码各说各话」）。
 REGISTERED_MINOR_KEYWORDS = (
@@ -66,6 +66,21 @@ def _registration_section() -> str:
 
 
 class TestProtocolVersion:
+    def test_inventory_schema_adds_optional_zero_default_materials_without_opening_extra_fields(
+        self,
+    ):
+        schema = json.loads(SNAPSHOT.read_text(encoding="utf-8"))["components"]["schemas"][
+            "VoxelInventory"
+        ]
+        assert schema["required"] == ["earth"]
+        assert schema["additionalProperties"] is False
+        assert set(schema["properties"]) == {"earth", "stone", "wood"}
+        for material in ("earth", "stone", "wood"):
+            assert schema["properties"][material]["type"] == "integer"
+            assert schema["properties"][material]["minimum"] == 0
+        for material in ("stone", "wood"):
+            assert schema["properties"][material]["default"] == 0
+
     def test_sim_version_is_expected(self) -> None:
         """sim 侧常量 = `1.1`（防回退：降版会让新前端按旧契约解析）。"""
         assert _PROTOCOL_VERSION == EXPECTED_VERSION, (

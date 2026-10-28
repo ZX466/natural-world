@@ -4,19 +4,21 @@ import pytest
 
 from sim.agent.voxel_exec import DIG_TICKS, VoxelRejected, VoxelRuntime
 from sim.core.clock import GameClock
-from sim.core.events import EventKind
+from sim.core.events import EventKind, material_moved_event, voxel_edited_event
+from sim.core.persistence.npc_store import NpcStore
 from sim.core.persistence.event_validation import validate_store_row
 from sim.core.tick import TickLoop
 from sim.core.world import EntityState, WorldState, build_default_bus
 from sim.tests.test_p_rebuild_tile_map_contract import make_open_map
 
 
-def setup_runtime():
+def setup_runtime(*, heights=None):
     maps = [make_open_map().with_collision(2, 1, walkable=False)]
     water, occupied = set(), set()
+    heights = heights or {}
     runtime = VoxelRuntime(
         tile_map=lambda: maps[0],
-        height_of=lambda x, y: 0 if (x, y) in water else 3,
+        height_of=lambda x, y: 0 if (x, y) in water else heights.get((x, y), 1),
         ground_gid=lambda x, y: 7,
         occupied=lambda x, y: (x, y) in occupied,
     )
@@ -63,10 +65,10 @@ def test_dig_finishes_after_exactly_thirty_ticks_and_commits_one_unit():
     assert events[1].payload["reason"] == "dig_yield"
     assert events[1].payload["quantity"] == 1
     assert events[2].payload["tile_id"] == 7
-    assert runtime.snapshot()["inventory"] == {"earth": 0}
+    assert runtime.snapshot()["inventory"] == {"earth": 0, "stone": 0, "wood": 0}
     commit(events)
     assert maps[0].is_walkable(2, 1)
-    assert runtime.snapshot() == {"dig": None, "inventory": {"earth": 1}}
+    assert runtime.snapshot() == {"dig": None, "inventory": {"earth": 1, "stone": 0, "wood": 0}}
     assert runtime.tick(state, 1000) == []
 
 
@@ -85,7 +87,7 @@ def test_place_checks_stock_and_reserves_pending_consumption():
         runtime.request("place", 4, 1, state)
     commit(events)
     assert not maps[0].is_walkable(3, 1)
-    assert runtime.snapshot()["inventory"] == {"earth": 0}
+    assert runtime.snapshot()["inventory"] == {"earth": 0, "stone": 0, "wood": 0}
     with pytest.raises(VoxelRejected):
         runtime.request("place", 4, 1, state)
 
@@ -134,7 +136,7 @@ def test_bad_coordinates_and_distance_do_not_start_digging(position):
     with pytest.raises(VoxelRejected):
         x, y = position
         runtime.request("dig_start", x, y, state)
-    assert runtime.snapshot() == {"dig": None, "inventory": {"earth": 0}}
+    assert runtime.snapshot() == {"dig": None, "inventory": {"earth": 0, "stone": 0, "wood": 0}}
 
 
 @pytest.mark.parametrize("obstruction", ["water", "structure", "already_open"])
@@ -180,7 +182,7 @@ def test_completion_revalidates_and_rejects_without_producing_events(change):
     else:
         state = state.model_copy(update={"entities": {}})
     assert runtime.tick(state, 130) == []
-    assert runtime.snapshot() == {"dig": None, "inventory": {"earth": 0}}
+    assert runtime.snapshot() == {"dig": None, "inventory": {"earth": 0, "stone": 0, "wood": 0}}
     assert any("error" in payload for _, payload in runtime.drain_updates())
 
 
@@ -197,7 +199,7 @@ def test_replay_restores_inventory_and_drops_unfinished_control_state():
         occupied=lambda x, y: False,
     )
     restored.restore_from_events([event.to_store_dict() for event in [*events, *placed]])
-    assert restored.snapshot() == {"dig": None, "inventory": {"earth": 0}}
+    assert restored.snapshot() == {"dig": None, "inventory": {"earth": 0, "stone": 0, "wood": 0}}
     assert restored.tick(state, 500) == []
 
 
@@ -259,4 +261,157 @@ def test_foreign_fractional_earth_transfers_do_not_touch_player_stock():
             )
         ]
     )
-    assert runtime.snapshot()["inventory"] == {"earth": 0}
+    assert runtime.snapshot()["inventory"] == {"earth": 0, "stone": 0, "wood": 0}
+
+
+def test_dig_yields_each_cells_static_height_material_and_credits_separate_stock():
+    runtime, state, maps, _, _, commit = setup_runtime(heights={(2, 1): 1, (3, 1): 2, (1, 2): 3})
+    for x, y, material in [(2, 1, "earth"), (3, 1, "stone"), (1, 2, "wood")]:
+        maps[0] = maps[0].with_collision(x, y, walkable=False)
+        runtime.request("dig_start", x, y, state)
+        events = runtime.tick(state, state.tick + DIG_TICKS)
+        assert events[0].payload["material_id"] == material
+        assert events[1].payload["material_id"] == material
+        assert events[0].payload["quantity"] == events[1].payload["quantity"] == 1
+        commit(events)
+        state = state.model_copy(update={"tick": state.tick + DIG_TICKS})
+    assert runtime.snapshot()["inventory"] == {"earth": 1, "stone": 1, "wood": 1}
+
+
+@pytest.mark.parametrize(("height", "material"), [(1, "earth"), (2, "stone"), (3, "wood")])
+def test_dig_place_round_trip_consumes_the_targets_material(height, material):
+    runtime, state, maps, _, _, commit = setup_runtime(heights={(2, 1): height})
+    dug = dig_once(runtime, state)
+    commit(dug)
+    assert runtime.snapshot()["inventory"][material] == 1
+    placed = runtime.request("place", 2, 1, state.model_copy(update={"tick": 130}))
+    assert placed[0].payload["material_id"] == material
+    assert placed[1].payload["material_id"] == material
+    assert placed[1].payload["reason"] == "place_consumed"
+    commit(placed)
+    assert runtime.snapshot()["inventory"] == {"earth": 0, "stone": 0, "wood": 0}
+    assert not maps[0].is_walkable(2, 1)
+
+
+def stock_events():
+    return [
+        material_moved_event(
+            1,
+            transfer_id=f"seed-{material}",
+            material_id=material,
+            quantity=1,
+            from_ref="world:tile",
+            to_ref="npc:chenmo",
+            reason="dig_yield",
+        )
+        for material in ("earth", "stone", "wood")
+    ]
+
+
+def test_pending_placements_reserve_each_material_independently_until_flush():
+    runtime, state, _, _, _, commit = setup_runtime(heights={(3, 1): 2, (4, 1): 2, (1, 2): 3})
+    runtime.observe(stock_events())
+    stone = runtime.request("place", 3, 1, state)
+    wood = runtime.request("place", 1, 2, state)
+    assert stone[0].payload["material_id"] == "stone"
+    assert wood[0].payload["material_id"] == "wood"
+    assert runtime.snapshot()["inventory"] == {"earth": 1, "stone": 1, "wood": 1}
+    with pytest.raises(VoxelRejected):
+        runtime.request("place", 4, 1, state)
+    commit(stone)
+    with pytest.raises(VoxelRejected):
+        runtime.request("place", 4, 1, state)
+    commit(wood)
+    commit(runtime.request("place", 1, 3, state))
+    assert runtime.snapshot()["inventory"] == {"earth": 0, "stone": 0, "wood": 0}
+
+
+def test_restore_discards_pending_reservations_for_every_material():
+    runtime, state, _, _, _, _ = setup_runtime(heights={(3, 1): 2, (1, 2): 3})
+    grants = stock_events()
+    runtime.observe(grants)
+    runtime.request("place", 3, 1, state)
+    runtime.request("place", 1, 2, state)
+    runtime.restore_from_events([event.to_store_dict() for event in grants])
+    assert runtime.request("place", 3, 1, state)[0].payload["material_id"] == "stone"
+    assert runtime.request("place", 1, 2, state)[0].payload["material_id"] == "wood"
+
+
+async def test_three_material_persistence_snapshot_and_replay_are_bit_equal(store):
+    runtime, state, maps, _, _, commit = setup_runtime(heights={(2, 1): 1, (3, 1): 2, (1, 2): 3})
+    ns = NpcStore(store)
+    for x, y in [(2, 1), (3, 1), (1, 2)]:
+        maps[0] = maps[0].with_collision(x, y, walkable=False)
+        runtime.request("dig_start", x, y, state)
+        events = runtime.tick(state, state.tick + DIG_TICKS)
+        await ns.flush_tick(events)
+        commit(events)
+        state = state.model_copy(update={"tick": state.tick + DIG_TICKS})
+    placed = runtime.request("place", 3, 1, state)
+    await ns.flush_tick(placed)
+    commit(placed)
+    balances = await ns.materialize_material_balances()
+    assert balances == await ns.materialize_material_balances_replay()
+    assert runtime.snapshot()["inventory"] == {"earth": 1, "stone": 0, "wood": 1}
+    assert {
+        material: balances[("npc:chenmo", material)] for material in ("earth", "stone", "wood")
+    } == {
+        "earth": 1.0,
+        "stone": 0.0,
+        "wood": 1.0,
+    }
+    restored, _, _, _, _, _ = setup_runtime()
+    restored.restore_from_events(await ns.read_branch_history())
+    assert restored.snapshot() == runtime.snapshot()
+    restored.restore_from_events([])
+    assert restored.snapshot()["inventory"] == {"earth": 0, "stone": 0, "wood": 0}
+
+
+def test_old_earth_events_replay_verbatim_even_on_a_static_wood_cell():
+    runtime, _, _, _, _, _ = setup_runtime(heights={(2, 1): 3})
+    old_edit = voxel_edited_event(1, x=2, y=1, action="dig")
+    old_material = stock_events()[0]
+    runtime.restore_from_events([old_edit.to_store_dict(), old_material.to_store_dict()])
+    assert runtime.snapshot()["inventory"] == {"earth": 1, "stone": 0, "wood": 0}
+
+
+@pytest.mark.parametrize("material", ["earth", "stone", "wood"])
+def test_fractional_or_negative_player_stock_is_rejected_without_mutating_counts(material):
+    runtime, _, _, _, _, _ = setup_runtime()
+    before = runtime.snapshot()
+    for quantity, from_ref, to_ref in [
+        (0.25, "world:tile", "npc:chenmo"),
+        (1, "npc:chenmo", "world:tile"),
+    ]:
+        event = material_moved_event(
+            1,
+            transfer_id="invalid-stock",
+            material_id=material,
+            quantity=quantity,
+            from_ref=from_ref,
+            to_ref=to_ref,
+            reason="dig_yield",
+        )
+        with pytest.raises(ValueError):
+            runtime.observe([event])
+        assert runtime.snapshot() == before
+
+
+def test_foreign_and_unknown_material_transfers_do_not_credit_player_stock():
+    runtime, _, _, _, _, _ = setup_runtime()
+    before = runtime.snapshot()
+    for material, to_ref in [("iron", "npc:chenmo"), ("stone", "npc:other"), ("wood", "npc:other")]:
+        runtime.observe(
+            [
+                material_moved_event(
+                    1,
+                    transfer_id=f"foreign-{material}",
+                    material_id=material,
+                    quantity=0.25,
+                    from_ref="world:tile",
+                    to_ref=to_ref,
+                    reason="dig_yield",
+                )
+            ]
+        )
+    assert runtime.snapshot() == before

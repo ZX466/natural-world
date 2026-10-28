@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from sim.api import ws
 from sim.core.clock import GameClock
 from sim.core.events import VoxelEditedPayload
+from sim.core.persistence.npc_store import NpcStore
 from sim.core.tick import TickLoop
 from sim.core.world import build_default_bus
 from sim.tests.test_voxel_runtime import setup_runtime
@@ -14,8 +15,10 @@ from sim.world.pathfinding import Pathfinder
 
 
 @pytest.fixture
-def scene():
-    runtime, state, maps, _water, _occupied, commit = setup_runtime()
+def scene(request):
+    runtime, state, maps, _water, _occupied, commit = setup_runtime(
+        heights=getattr(request, "param", None)
+    )
     loop = TickLoop(clock=GameClock(), bus=build_default_bus(), state=state)
     pf = Pathfinder(tile_map=maps[0])
     ws.set_voxel_runtime(runtime)
@@ -25,9 +28,9 @@ def scene():
     ws.reset_voxel_edits()
 
 
-def test_voxel_dispatch_and_snapshot_delta_use_protocol_112(scene):
+def test_voxel_dispatch_and_snapshot_delta_use_protocol_113(scene):
     runtime, loop, pf, maps, commit = scene
-    assert ws._PROTOCOL_VERSION == "1.12"
+    assert ws._PROTOCOL_VERSION == "1.13"
     assert (
         ws.handle_client_message(
             {"type": "voxel_request", "channel": "render", "action": "dig_start", "x": 2, "y": 1},
@@ -77,7 +80,7 @@ def test_invalid_voxel_input_is_sealed_and_has_no_events(scene, fields):
     frames = ws.frames_of(reply)
     assert [frame["type"] for frame in frames] == ["error", "voxel_state"]
     assert frames[0]["ref"] == "voxel_request" and frames[0]["code"] == "bad_target"
-    assert frames[1]["inventory"] == {"earth": 0}
+    assert frames[1]["inventory"] == {"earth": 0, "stone": 0, "wood": 0}
     assert runtime.snapshot()["dig"] is None
     assert loop.pending_events == []
 
@@ -88,7 +91,7 @@ def test_invalid_voxel_input_is_sealed_and_has_no_events(scene, fields):
         {"by": "villager_01"},
         {"quantity": 2},
         {"quantity": True},
-        {"material_id": "stone"},
+        {"material_id": "iron"},
         {"inventory": {"earth": 99}},
         {"x": True},
     ],
@@ -166,3 +169,73 @@ def test_rejection_text_is_a_closed_literal_set_not_an_exception_channel():
         "voxel_request", "bad_target", "这处地方动不了土。"
     )
     assert ws._voxel_bad_target("行囊里没有土了。")["message"] == "行囊里没有土了。"
+
+
+@pytest.mark.parametrize("material", ["earth", "stone", "wood"])
+def test_voxel_payload_allows_exactly_the_three_authorized_materials(material):
+    payload = VoxelEditedPayload.model_validate(
+        {
+            "x": 2,
+            "y": 1,
+            "action": "dig",
+            "material_id": material,
+        }
+    )
+    assert payload.material_id == material
+    assert payload.quantity == 1
+
+
+@pytest.mark.parametrize("scene", [{(3, 1): 2}], indirect=True)
+async def test_wrong_material_is_rejected_without_new_events_or_database_writes(scene, store):
+    runtime, loop, pf, maps, commit = scene
+    ns = NpcStore(store)
+    runtime.request("dig_start", 2, 1, loop.state)
+    dug = runtime.tick(loop.state, 130)
+    await ns.flush_tick(dug)
+    commit(dug)
+    before = await ns.read_branch_history()
+    balances = await ns.materialize_material_balances()
+    reply = ws.handle_client_message(
+        {"type": "voxel_request", "channel": "render", "action": "place", "x": 3, "y": 1},
+        loop,
+        pf,
+    )
+    frames = ws.frames_of(reply)
+    assert frames[0]["type"] == "error"
+    assert "石料" in frames[0]["message"]
+    assert frames[1]["inventory"] == {"earth": 1, "stone": 0, "wood": 0}
+    assert loop.pending_events == []
+    assert maps[0].is_walkable(3, 1)
+    assert await ns.read_branch_history() == before
+    assert await ns.materialize_material_balances() == balances
+
+
+@pytest.mark.parametrize("material", ["stone", "wood"])
+async def test_three_material_inventory_is_published_only_to_authenticated_hud_connections(
+    scene, material
+):
+    runtime, _, _, _, _ = scene
+    from sim.core.events import material_moved_event
+
+    manager = ws.ConnectionManager()
+    private, unauthenticated = Socket(), Socket()
+    manager.register(private, control=ws.ControlState())
+    manager.register(unauthenticated)
+    manager.mark_authenticated(private)
+    runtime.observe(
+        [
+            material_moved_event(
+                1,
+                transfer_id="hud-material",
+                material_id=material,
+                quantity=1,
+                from_ref="world:tile",
+                to_ref="npc:chenmo",
+                reason="dig_yield",
+            )
+        ]
+    )
+    await ws.flush_voxel_updates(manager)
+    assert private.frames[-1]["inventory"][material] == 1
+    assert private.frames[-1]["v"] == "1.13"
+    assert unauthenticated.frames == []

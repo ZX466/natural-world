@@ -20,7 +20,7 @@ function scene() {
   });
   const dispatch = (client as unknown as { dispatch(raw: string): void }).dispatch.bind(client);
   const send = (type: string, body: Record<string, unknown>) =>
-    dispatch(JSON.stringify({ type, channel: 'render', v: '1.12', ws_seq: 1, ...body }));
+    dispatch(JSON.stringify({ type, channel: 'render', v: '1.13', ws_seq: 1, ...body }));
   return { mirror, onVoxelState, send };
 }
 
@@ -64,4 +64,25 @@ it('ignores malformed edit coordinates instead of corrupting the typed arrays', 
   });
   expect(mirror.voxelEdits.size).toBe(0);
   expect([...mirror.map!.collision]).toEqual(new Array(16).fill(1));
+});
+
+it('forwards three-material stock but rejects malformed optional counts before the HUD callback', () => {
+  const { onVoxelState, send } = scene();
+  send('voxel_state', { dig: null, inventory: { earth: 0, stone: 2, wood: 3 } });
+  expect(onVoxelState).toHaveBeenCalledTimes(1);
+  expect(onVoxelState).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      inventory: { earth: 0, stone: 2, wood: 3 },
+    }),
+  );
+  for (const inventory of [
+    { earth: 0, stone: -1 },
+    { earth: 0, wood: 0.5 },
+    { earth: 0, stone: null },
+  ]) {
+    send('voxel_state', { dig: null, inventory });
+  }
+  expect(onVoxelState).toHaveBeenCalledTimes(1);
+  send('voxel_state', { v: '1.12', dig: null, inventory: { earth: 4 } });
+  expect(onVoxelState).toHaveBeenCalledTimes(2);
 });
