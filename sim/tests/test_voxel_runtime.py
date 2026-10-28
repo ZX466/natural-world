@@ -5,8 +5,8 @@ import pytest
 from sim.agent.voxel_exec import DIG_TICKS, VoxelRejected, VoxelRuntime
 from sim.core.clock import GameClock
 from sim.core.events import EventKind, material_moved_event, voxel_edited_event
-from sim.core.persistence.npc_store import NpcStore
 from sim.core.persistence.event_validation import validate_store_row
+from sim.core.persistence.npc_store import NpcStore
 from sim.core.tick import TickLoop
 from sim.core.world import EntityState, WorldState, build_default_bus
 from sim.tests.test_p_rebuild_tile_map_contract import make_open_map

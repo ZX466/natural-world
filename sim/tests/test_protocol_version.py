@@ -66,7 +66,12 @@ def _registration_section() -> str:
 
 
 class TestProtocolVersion:
-    def test_inventory_schema_adds_optional_zero_default_materials_without_opening_extra_fields(
+    def test_live_openapi_version_matches_the_envelope_version(self):
+        from sim.api.main import app
+
+        assert app.openapi()["info"]["version"] == EXPECTED_VERSION
+
+    def test_inventory_schema_adds_optional_materials_without_opening_extra_fields(
         self,
     ):
         schema = json.loads(SNAPSHOT.read_text(encoding="utf-8"))["components"]["schemas"][
@@ -78,8 +83,6 @@ class TestProtocolVersion:
         for material in ("earth", "stone", "wood"):
             assert schema["properties"][material]["type"] == "integer"
             assert schema["properties"][material]["minimum"] == 0
-        for material in ("stone", "wood"):
-            assert schema["properties"][material]["default"] == 0
 
     def test_sim_version_is_expected(self) -> None:
         """sim 侧常量 = `1.1`（防回退：降版会让新前端按旧契约解析）。"""

@@ -241,6 +241,10 @@ export class WorldMirror {
     const inventory = state.inventory,
       dig = state.dig;
     if (!inventory || !Number.isInteger(inventory.earth) || inventory.earth < 0) return false;
+    for (const material of ['stone', 'wood'] as const) {
+      const count = inventory[material];
+      if (count !== undefined && (!Number.isInteger(count) || count < 0)) return false;
+    }
     if (
       dig !== null &&
       (!dig ||

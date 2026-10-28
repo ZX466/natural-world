@@ -13,8 +13,8 @@ Scope: sim/agent/voxel_exec.py, sim/api/ws.py (and main.py only if existing wiri
 ## Tasks
 
 - [x] 0. Backup talking.txt, fetch and fast-forward local main; verify inbox remains untracked. Baseline 13e2ca7, clean worktree.
-- [ ] 1. RED: cover height-based yields, symmetric spending, separate pending reservations, wrong-material rejection without persistence, replay/snapshot equality, old history, three-field validation and HUD rows. Record intended failures and commit the test checkpoint.
-- [ ] 2. GREEN: implement per-material state and reservations, literal expansion, protocol 1.13/OpenAPI generation, client validation and HUD. Run the same targets and commit the green checkpoint.
+- [x] 1. RED: cover height-based yields, symmetric spending, separate pending reservations, wrong-material rejection without persistence, replay/snapshot equality, old history, three-field validation and HUD rows. Record intended failures and commit the test checkpoint.
+- [x] 2. GREEN: implement per-material state and reservations, literal expansion, protocol 1.13/OpenAPI generation, client validation and HUD. Run the same targets and commit the green checkpoint.
 - [ ] 3. Run all assigned gates plus production build; review boundaries and read/load integration, record results, update Codex recovery and talking receipt.
 
 ## Review focus
@@ -31,3 +31,7 @@ Scope: sim/agent/voxel_exec.py, sim/api/ws.py (and main.py only if existing wiri
 - Environment: pytest via uv; client npm/Vitest and existing server-rendered React tests. coverage/pytest-cov are not installed or configured; no test dependency will be added solely for a coverage number.
 - Pre-flight: protocol schema generation is shared by runtime frame tests, client validation and HUD tests. Event factory accepts no material argument; preserve its metadata via a validated immutable payload replacement rather than changing its signature outside the permitted one-line events.py scope.
 - Scope decision: use the already-loaded static height callback; no height sampling/statistics rerun and no extra asset.
+- Task 1 complete: baseline Python 50 passed and client 12 passed. RED Python 43 failed/26 passed; RED client 6 failed/15 passed. Checkpoint 61570c2 is on codex. Logs in this audit directory.
+- Generator ruling: JSON Schema `default: 0` makes the installed openapi-typescript emit required fields, breaking legacy earth-only frames (typecheck observed RED). Keep stone/wood outside required, document absent=0 in their descriptions, and implement zero fallback in HUD; do not alter the generator or hand-edit its output.
+- Version integration: live FastAPI still had an independent 1.12 literal. New real app.openapi version test observed RED before updating only that literal to 1.13; WS constants and physical OpenAPI source are aligned.
+- Task 2 GREEN: focused Python 70/70 and client 21/21 passed; gen:protocol:check and typecheck passed with generated stone?/wood?. Full client 259/259, ruff check/format (363 files), pyright and production build passed. Full Python suite is in progress; commit this implementation checkpoint without claiming final gate completion.

@@ -9,7 +9,7 @@
 
 - **major**：不兼容变更——字段删除 / 改名 / 语义反转 / 消息行为改变。major 不一致 = 必须协商，协商失败即拒绝连接。
 - **minor**：兼容增量——新增可选字段 / 新增消息类型。minor 升级对旧端**透明**（旧端忽略未知字段与未知 type）。
-- 当前基线：`v = 1.12`（信封 `v` 字段，见 ws-protocol.md §2）。
+- 当前基线：`v = 1.13`（信封 `v` 字段，见 ws-protocol.md §2）。
 
 > 信封里的 `v` 在协商后全程不变，等于协商选定的 major.minor。
 
@@ -60,6 +60,7 @@ client ◄──hello_ack── { "v": "1.1", "server_versions": ["1.0","1.1"], 
 
 | 版本 | 变更 | 影响端 | 日期 |
 |---|---|---|---|
+| 1.13 | V4b 材料分类：静态高度 1/2/3 分别挖得土/石/木，放置消耗目标格对应材料；`VoxelInventory` 保留必需 `earth`，新增可选 `stone`/`wood`，缺省 0，仍为封闭对象。旧 earth 事件原样重放；库存仅进 HUD，世界事件与渲染高度规则不变。 | sim+client | 2026-10-28 |
 | 1.12 | V4a 陈默单格挖放：新增 render 通道 `voxel_request`（起手/取消/放置）与 `voxel_state`（挖掘进度/earth 行囊）；`full_snapshot`、`state_delta` 新增可选 `voxel_edits`。旧端忽略新消息/可选字段；事件、材料与分叉历史保留。 | sim+client | 2026-10-24 |
 | 1.11 | W6 鉴权闭环：新增本机 `GET /api/ws-token`（来源/Host/回环连接校验，响应不缓存），生产 WS 在 hello 成功前拒绝写命令，客户端先取 token 并发 hello，hello_ack 后才发同步及暂存命令。既有只读接入问候与 sync 保留；hello/hello_ack 仍为会话握手，不加入世界消息联合。 | sim+client | 2026-10-20 |
 | 1.10 | 战斗幽灵帧接线：既有 `combat.scale_change` 事件转发为 `timescale`，交换结算投影为既有 `combat_event`；客户端消费战斗态与表现帧，角标使用戏内措辞。沿用既有 schema，不新增世界事件 kind，不改变战斗结算。 | sim+client | 2026-10-20 |

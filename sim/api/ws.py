@@ -88,7 +88,7 @@ logger = structlog.get_logger(__name__)
 #: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
 #: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
 #: PlanDelta 封闭）；1.2 = 批次 E 只读诊断面进协议快照（M6-K2）——登记见 versioning.md §7。
-_PROTOCOL_VERSION = "1.12"
+_PROTOCOL_VERSION = "1.13"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 _VOXEL_RUNTIME: VoxelRuntime | None = None
 
@@ -884,6 +884,10 @@ def _voxel_bad_target(reason: object) -> dict[str, Any]:
         return _error_frame("voxel_request", _ERROR_BAD_TARGET, "离得太远，够不着那里。")
     if reason == "行囊里没有土了。":
         return _error_frame("voxel_request", _ERROR_BAD_TARGET, "行囊里没有土了。")
+    if reason == "行囊里没有石料了。":
+        return _error_frame("voxel_request", _ERROR_BAD_TARGET, "行囊里没有石料了。")
+    if reason == "行囊里没有木料了。":
+        return _error_frame("voxel_request", _ERROR_BAD_TARGET, "行囊里没有木料了。")
     if reason == "水面上动不了土。":
         return _error_frame("voxel_request", _ERROR_BAD_TARGET, "水面上动不了土。")
     if reason == "这里已有屋舍，不能动土。":

@@ -672,6 +672,10 @@ export type components = {
     };
     readonly VoxelInventory: {
       readonly earth: number;
+      /** @description Optional stone count; absent means 0. */
+      readonly stone?: number;
+      /** @description Optional wood count; absent means 0. */
+      readonly wood?: number;
     };
     readonly VoxelRequestMessage: {
       /** @enum {string} */

@@ -161,7 +161,7 @@ class VoxelEditedPayload(BaseModel):
     x: int = Field(ge=0, strict=True)
     y: int = Field(ge=0, strict=True)
     action: Literal["dig", "place"]
-    material_id: Literal["earth"] = "earth"
+    material_id: Literal["earth", "stone", "wood"] = "earth"
     quantity: int = Field(default=1, ge=1, le=1, strict=True)
     by: Literal["chenmo"] = "chenmo"
 
