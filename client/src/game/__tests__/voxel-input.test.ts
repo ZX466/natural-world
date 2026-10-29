@@ -28,7 +28,7 @@ function setup() {
     const point = isoProject(x, y, height, screenBounds(4, 4));
     return { worldX: point.sx, worldY: point.sy, button, id: 1 };
   };
-  return { scene, input, emit, pointer };
+  return { scene, input, emit, pointer, mirror };
 }
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
@@ -40,7 +40,11 @@ it('keeps a short left press as the existing move_request', () => {
   vi.advanceTimersByTime(100);
   input.handlePointerUp(p);
   expect(emit).toHaveBeenCalledTimes(1);
-  expect(emit).toHaveBeenLastCalledWith('client:move_request', { x: 0, y: 3 });
+  expect(emit).toHaveBeenLastCalledWith(
+    'client:move_request',
+    { x: 0, y: 3 },
+    expect.any(Function),
+  );
 });
 
 it('starts dig only after 150ms on the visible blocked cell and cancels on release', () => {
@@ -70,13 +74,15 @@ it('maps right click to a visible walkable placement cell without movement', () 
   expect(emit).toHaveBeenLastCalledWith('client:voxel_request', { action: 'place', x: 0, y: 3 });
 });
 
-it('does not dig walkable ground or turn a long hold into movement', () => {
+it('moves on a walkable press immediately even when held longer than 150ms', () => {
   const { input, emit, pointer } = setup();
   const p = pointer(0, 3, 1);
   input.handlePointerDown(p);
+  expect(emit).toHaveBeenCalledWith('client:move_request', { x: 0, y: 3 }, expect.any(Function));
   vi.advanceTimersByTime(200);
   input.handlePointerUp(p);
-  expect(emit).not.toHaveBeenCalled();
+  expect(emit.mock.calls.filter((call) => call[0] === 'client:move_request')).toHaveLength(1);
+  expect(emit.mock.calls.some((call) => call[0] === 'client:voxel_request')).toBe(false);
 });
 
 it('clears a pending hold when the pointer leaves before the threshold', () => {

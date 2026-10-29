@@ -8,11 +8,14 @@
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
-type MoveHandler = (payload: {
-  x: number;
-  y: number;
-  action?: 'dig_start' | 'dig_cancel' | 'place';
-}) => void;
+type MoveHandler = (
+  payload: {
+    x: number;
+    y: number;
+    action?: 'dig_start' | 'dig_cancel' | 'place';
+  },
+  result?: (accepted: boolean) => void,
+) => void;
 
 describe('createGame move_request bridge', () => {
   const handlers = new Map<string, Set<MoveHandler>>();
@@ -90,5 +93,18 @@ describe('createGame move_request bridge', () => {
     const { runtime } = await import('../runtime');
     expect(runtime.requestVoxel).toHaveBeenCalledWith('dig_start', 7, 9);
     expect(runtime.requestMove).not.toHaveBeenCalled();
+  });
+
+  it('returns the runtime acceptance result to the scene without changing the wire payload', async () => {
+    const { createGame } = await import('../main');
+    createGame({} as HTMLElement, {} as Parameters<typeof createGame>[1]);
+    const { runtime } = await import('../runtime');
+    const result = vi.fn();
+    vi.mocked(runtime.requestMove).mockReturnValue(true);
+    for (const cb of handlers.get('client:move_request')!) cb({ x: 1, y: 2 }, result);
+    expect(result).toHaveBeenLastCalledWith(true);
+    vi.mocked(runtime.requestMove).mockReturnValue(false);
+    for (const cb of handlers.get('client:move_request')!) cb({ x: 2, y: 3 }, result);
+    expect(result).toHaveBeenLastCalledWith(false);
   });
 });
