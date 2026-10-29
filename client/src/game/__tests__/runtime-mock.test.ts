@@ -41,6 +41,10 @@ describe('runtime 无 mock 生命周期', () => {
         wsStatus: 'connecting',
         paused: false,
         speed: 1,
+        voxelError: null as string | null,
+        setVoxelError: (message: string | null) => {
+          state.voxelError = message;
+        },
         setWsStatus: (s: string) => {
           state.wsStatus = s;
         },
@@ -98,6 +102,8 @@ describe('runtime 无 mock 生命周期', () => {
 
     expect(() => runtime.sendControl('pause')).not.toThrow();
     expect(() => runtime.sendImpulse('心里想想')).not.toThrow();
-    expect(() => runtime.requestMove(3, 3)).not.toThrow();
+    expect(runtime.requestMove(3, 3)).toBe(false);
+    const { useUiStore } = await import('../../store/uiStore');
+    expect(useUiStore.getState().voxelError).toBe('这会儿走不了。');
   });
 });

@@ -229,11 +229,12 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-10-28 第七轮 V4b｜实现与门禁完成，待主树收编】土/石/木由既有静态高度 1/2/3 判定；挖得对应材料、放置扣目标材料。协议 1.13；库存三字段，stone/wood 可选且缺省 0，HUD 零数量不显示。无在途实现；下一步由 Claude 收编复核，本树不推远程。
+【2026-10-29 第九轮移动操作｜实现与门禁完成，待主树收编】可走格短/长按即时发移动；拖拽合并目标，WASD/方向键八向持续，松手/Escape/失焦取消续走；目标标记到达/换目标/取消会清理。墙、断路、断线和世界未就绪均给戏内提示。协议仍 1.13；无在途实现，下一步由 Claude 独立收编与人工验手感。
 
-- 基线：按本轮派单授权先备份 talking，再 fetch + ff 到 `13e2ca7`；talking 确认未跟踪，不要 git add。TDD RED 检查点 `61570c2`，GREEN 实现 `93b9e29`；后续 live schema/版本预期修正及本快照见 git log。收编须取 `13e2ca7..codex` 整段，不只取末次修正提交。
-- 关键实现：VoxelRuntime 的库存和未刷盘预留量各按材料计数；pending 保存动作与预留材料，提交后释放原材料额度。事件工厂元数据保留，只以已验证的新材料 payload 作不可变替换；events.py 仅扩 VoxelEditedPayload 的三个字面量，数量/原因枚举不变。重放按历史 material_id，不按当前高度重新分类；零迁移。
-- 协议坑：OpenAPI 字段写 `default: 0` 会让现有生成器把 stone/wood 变必填，破坏旧端类型。因此以可选字段 + absent=0 描述定义，客户端补零；不改生成器、不手写 protocol.ts。live OpenAPI 还有 openapi_ext.py 的旧声明，已同步同一库存定义并用对拍测试锁住；FastAPI 自身 version 也升 1.13。README 协议徽标同步，避免状态检查工具报漂移。
-- 本轮亲测：pytest **2969 passed / 121 skipped / 72 deselected / 5 warnings，337.00s**；相关链路 110 passed，含真实冷启动、历史分叉、嵌套分叉、鉴权与错材料零写入。ruff check/format 通过（363 files），pyright 0 errors/warnings；gen:protocol:check、client typecheck/lint/format 通过；Vitest **259 passed / 39 files**，生产构建通过。证据在 `.orca/audits/v4b-materials-2026-10-28/plan.md` 及本地日志。
-- 警告如实保留：全量测试有一条 aiosqlite worker 在 `test_m4c_llm_driver` 清理阶段的 `Event loop is closed` 警告，未造成失败；未改 driver/LLM 模块。构建仍提示大 chunk。覆盖率工具未配置，未报百分比；浏览器验收未请求、未运行。
-- 范围：sim/world、sim/npc、sim/llm、渲染高度/图集产物与依赖均无改动；place 再 dig 的两层视觉近似不变。不启动 V3.5/V4-3D 等未派任务。中文简洁、i-have-adhd 持续启用，CodeGraph 返回源码视作已读；上下文 50% 提醒切新对话，恢复先 workflow → talking → 本节。
+- 基线 `0aa5d00`（含 `37e6a51` 新地形）：按派单先备份 talking，再 fetch+ff；talking 仍未跟踪，永不 git add。V4b 已收编。移动 RED 检查点 `f74f4af`，实现与最终交付提交见 git log；收编取 `0aa5d00..codex` 整段。旧 V4b 细节查历史快照，不重复启动。
+- 实现只在客户端：movement.ts 复用碰撞数组做八邻 BFS，禁斜穿角；runtime 做连接/可达性预检并复用现有 HUD 提示槽。main 的本地结果回调只表示客户端受理，不是服务端确认。移动一律 move_request，无 impulse 旁路；鼠标移动与挖放共用可见格拾取，不改投影/高度函数。
+- 输入：可走格 pointerdown 同步发起；阻挡格仍按住 150ms 才挖，右键放置保留。拖拽保留最新点，至少 100ms 且看到角色位置进展才替换在途路径，避免反复插入起点导致原地不动；松手最多补最后一条。键盘按逻辑格轴八向（W/上=-y），同源同方向不重发；松手以现有 move_request 指向最新角色格取消。输入框/textarea/select/contenteditable 不吞键，keyup、blur、shutdown、断线及换世界均有清理测试。
+- 实测条件与数字：客户端虚拟时钟下按键/可走格按下同栈派发（0ms）；4Hz 位置快照夹具中 1000ms 的 124 次 pointermove 合成 **4 条移动请求，释放补 1 条**。真实服务端无网络探针遍历 15 种起始相位，首次实际换格 **266.667–500ms（16–30 tick）**；路径包含起点会先消耗一拍，不能只算派单的 0..14 tick 相位。长直线路径稳态 **4 格/s**，逐邻格键盘续发 **2 格/s**；本单按约束未改 sim 相位/路径语义。
+- 本轮亲测：pytest **2985P / 121S / 72D / 0F，4 warnings，371.81s**；ruff check/format（365 files）与 pyright 0 errors/warnings；gen:protocol:check、client typecheck/lint/format 通过；Vitest **290 passed / 40 files**；生产 build 通过（11.56s，保留现有大 chunk 提示）。两资产 --check 逐字节一致。证据/复核在 `.orca/audits/movement-input-2026-10-29/plan.md`，原生探针 server_timing.py 可复跑；日志/JSON 为本地件。
+- 范围与限制：sim/**、shared/**、renderer/**、client/public 资产与依赖均零改动；相机方法逐字节不变，INTERP_MS=200 / effectiveHeight 不动。未做浏览器、网络 RTT 或真人输入到显示延迟验收，服务端已经迈出的在途一步不能由客户端撤销；覆盖率未配置、不报百分比。保留工作树，仅本地提交、不推远程，只用 talking 留回执。
+- 恢复先 workflow → talking → 本节；i-have-adhd 与简洁中文持续启用，CodeGraph 返回源码视为已读；50% 上下文提醒已给，本单交付后建议切新对话。不启动未派的 V3.5/V4-3D。

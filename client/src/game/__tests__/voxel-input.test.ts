@@ -23,6 +23,7 @@ function setup() {
     handlePointerDown(p: unknown): void;
     handlePointerUp(p: unknown): void;
     cancelVoxelInput(): void;
+    syncMovementInput(): void;
   };
   const pointer = (x: number, y: number, height: number, button = 0) => {
     const point = isoProject(x, y, height, screenBounds(4, 4));
@@ -35,7 +36,7 @@ afterEach(() => vi.useRealTimers());
 
 it('keeps a short left press as the existing move_request', () => {
   const { input, emit, pointer } = setup();
-  const p = pointer(0, 3, 0);
+  const p = pointer(0, 3, 1); // Click the intended visible surface, as for editing.
   input.handlePointerDown(p);
   vi.advanceTimersByTime(100);
   input.handlePointerUp(p);
@@ -91,4 +92,14 @@ it('clears a pending hold when the pointer leaves before the threshold', () => {
   input.cancelVoxelInput();
   vi.advanceTimersByTime(200);
   expect(emit).not.toHaveBeenCalled();
+});
+
+it('drops an old dig gesture on snapshot replacement without sending into the new world', () => {
+  const { input, emit, pointer, mirror } = setup();
+  input.handlePointerDown(pointer(2, 1, 3));
+  vi.advanceTimersByTime(150);
+  expect(emit).toHaveBeenCalledTimes(1);
+  mirror.applyVoxelEdits([], true);
+  input.syncMovementInput();
+  expect(emit).toHaveBeenCalledTimes(1);
 });

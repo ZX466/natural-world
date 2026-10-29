@@ -12,6 +12,7 @@ import { worldClock } from './clock';
 import { useUiStore, type Speed } from '../store/uiStore';
 import { rendererFromSearch } from './render/presentation';
 import type { VoxelRequestMessage } from '../net/protocol';
+import { movementFailure } from './movement';
 
 export const worldMirror = new WorldMirror();
 
@@ -83,6 +84,9 @@ class Runtime {
         }
       },
       onError: (msg) => {
+        if (msg.ref === 'move_request') {
+          useUiStore.getState().setVoxelError('那处走不过去。');
+        }
         if (msg.ref === 'voxel_request') {
           useUiStore
             .getState()
@@ -154,14 +158,32 @@ class Runtime {
 
   /** WorldScene 点击寻路请求：专用 move_request 消息（TASK-K01；W5 红线——
    *  移动绝不走 impulse 文本旁路，codex C04 抽查记账项）。 */
-  requestMove(x: number, y: number): void {
+  requestMove(x: number, y: number): boolean {
+    const state = useUiStore.getState();
+    if (state.wsStatus !== 'open' || this.ws === null) {
+      state.setVoxelError('这会儿走不了。');
+      return false;
+    }
+    const map = worldMirror.map;
+    const actor = worldMirror.actors.get(worldMirror.protagonist ?? '');
+    if (!map || !actor) {
+      state.setVoxelError('这会儿走不了。');
+      return false;
+    }
+    const failure = movementFailure(map, actor, { x, y });
+    if (failure !== null) {
+      state.setVoxelError(failure);
+      return false;
+    }
+    state.setVoxelError(null);
     const move: { type: 'move_request'; channel: 'render'; target_x: number; target_y: number } = {
       type: 'move_request',
       channel: 'render',
       target_x: x,
       target_y: y,
     };
-    this.ws?.send(move);
+    this.ws.send(move);
+    return true;
   }
 
   /** 读档=分叉（批次 D4）：发 load_anchor，成功后服务端推「分叉告知 + 全量

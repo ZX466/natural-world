@@ -27,9 +27,13 @@ export function createGame(parent: HTMLElement, mirror: WorldMirror): Phaser.Gam
     },
     scene: [new WorldScene(mirror)],
   });
-  game.events.on('client:move_request', ({ x, y }: { x: number; y: number }) => {
-    runtime.requestMove(x, y);
-  });
+  game.events.on(
+    'client:move_request',
+    ({ x, y }: { x: number; y: number }, result?: (accepted: boolean) => void) => {
+      const accepted = runtime.requestMove(x, y);
+      result?.(accepted);
+    },
+  );
   game.events.on(
     'client:voxel_request',
     ({ action, x, y }: Pick<VoxelRequestMessage, 'action' | 'x' | 'y'>) => {

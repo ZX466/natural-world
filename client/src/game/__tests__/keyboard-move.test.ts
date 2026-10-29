@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { WorldMirror } from '../world-mirror';
+import { EventEmitter } from 'node:events';
 import { useUiStore } from '../../store/uiStore';
 vi.mock('phaser', () => ({ default: { Scene: class {} } }));
+vi.mock('../render/fauna', () => ({ createFaunaTextures: vi.fn() }));
 import { WorldScene } from '../scenes/WorldScene';
 
 function setup() {
@@ -26,6 +28,7 @@ function setup() {
     handleMovementKeyDown(event: unknown): void;
     handleMovementKeyUp(event: unknown): void;
     syncMovementInput(): void;
+    syncVoxelPresentation(): void;
     cancelMovement(): void;
     handlePointerDown(pointer: unknown): void;
     handlePointerMove(pointer: unknown): void;
@@ -83,6 +86,26 @@ it('starts toward an adjacent tile, repeats after progress, and cancels on key r
   input.syncMovementInput();
   expect(emit).toHaveBeenCalledTimes(count);
 });
+
+it('does not replace an unchanged keyboard goal after an unrelated terrain update', () => {
+  const { input, key, mirror, emit } = setup();
+  input.handleMovementKeyDown(key('KeyD'));
+  mirror.applyStructures([{ rtoken: 'distant-house', x: 0, y: 0, phase: 'built' }]);
+  input.syncMovementInput();
+  expect(emit).toHaveBeenCalledTimes(1);
+});
+
+it.each(['pointer', 'keyboard'])(
+  'gives local feedback for %s input before the world is ready',
+  (kind) => {
+    const { input, key, pointer, mirror, emit } = setup();
+    mirror.map = null;
+    if (kind === 'pointer') input.handlePointerDown(pointer(7, 4));
+    else input.handleMovementKeyDown(key('KeyD'));
+    expect(emit).not.toHaveBeenCalled();
+    expect(useUiStore.getState().voxelError).toBe('这会儿走不了。');
+  },
+);
 
 it.each(['INPUT', 'TEXTAREA', 'SELECT'])(
   'does not capture keys while a %s is focused',
@@ -152,6 +175,32 @@ it('keeps rejected goals hidden', () => {
   expect(marker.setVisible).not.toHaveBeenCalledWith(true);
 });
 
+it('drops a rejected offline drag instead of resuming it after reconnect', () => {
+  const { input, pointer, emit, accepted } = setup();
+  accepted.value = false;
+  useUiStore.setState({ wsStatus: 'closed' });
+  input.handlePointerDown(pointer(7, 4));
+  expect(emit).toHaveBeenCalledTimes(1);
+  input.syncMovementInput();
+  useUiStore.setState({ wsStatus: 'open' });
+  accepted.value = true;
+  vi.advanceTimersByTime(200);
+  input.handlePointerMove(pointer(8, 4));
+  input.syncMovementInput();
+  expect(emit).toHaveBeenCalledTimes(1);
+});
+
+it('cancels an old walking goal before a right-click placement', () => {
+  const { input, pointer, emit, marker } = setup();
+  input.handlePointerDown(pointer(7, 4));
+  input.handlePointerUp(pointer(7, 4));
+  emit.mockClear();
+  input.handlePointerDown({ ...pointer(5, 4), button: 2 });
+  expect(emit.mock.calls[0]).toEqual(['client:move_request', { x: 4, y: 4 }, expect.any(Function)]);
+  expect(emit).toHaveBeenLastCalledWith('client:voxel_request', { action: 'place', x: 5, y: 4 });
+  expect(marker.setVisible).toHaveBeenLastCalledWith(false);
+});
+
 it('coalesces a fast drag and does not replace an active path before the actor progresses', () => {
   const { input, pointer, emit, hero } = setup();
   input.handlePointerDown(pointer(6, 4));
@@ -166,4 +215,135 @@ it('coalesces a fast drag and does not replace an active path before the actor p
   expect(emit.mock.calls.length).toBe(2);
   input.handlePointerUp(pointer(14, 4));
   expect(emit.mock.calls.length).toBeLessThanOrEqual(3);
+});
+
+it('retains a valid drag through the first presentation update without a new snapshot', () => {
+  const { input, pointer, hero, emit } = setup();
+  input.handlePointerDown(pointer(7, 4));
+  input.syncMovementInput();
+  input.syncVoxelPresentation();
+  vi.advanceTimersByTime(200);
+  hero.x = 5;
+  input.handlePointerMove(pointer(8, 4));
+  expect(emit).toHaveBeenLastCalledWith(
+    'client:move_request',
+    { x: 8, y: 4 },
+    expect.any(Function),
+  );
+});
+
+it.each([
+  { keys: ['ArrowUp'], x: 4, y: 3 },
+  { keys: ['ArrowUp', 'ArrowRight'], x: 5, y: 3 },
+  { keys: ['ArrowRight'], x: 5, y: 4 },
+  { keys: ['ArrowDown', 'ArrowRight'], x: 5, y: 5 },
+  { keys: ['ArrowDown'], x: 4, y: 5 },
+  { keys: ['ArrowDown', 'ArrowLeft'], x: 3, y: 5 },
+  { keys: ['ArrowLeft'], x: 3, y: 4 },
+  { keys: ['ArrowUp', 'ArrowLeft'], x: 3, y: 3 },
+])('supports grid direction $keys', ({ keys, x, y }) => {
+  const { input, key, emit } = setup();
+  for (const code of keys) input.handleMovementKeyDown(key(code));
+  expect(emit).toHaveBeenLastCalledWith('client:move_request', { x, y }, expect.any(Function));
+});
+
+it('does not issue a new direction on keyup after focus enters a text box', () => {
+  const { input, key, emit } = setup();
+  input.handleMovementKeyDown(key('KeyW'));
+  input.handleMovementKeyDown(key('KeyD'));
+  vi.stubGlobal('document', { activeElement: { tagName: 'INPUT' } });
+  input.handleMovementKeyUp(key('KeyD'));
+  expect(emit).toHaveBeenLastCalledWith(
+    'client:move_request',
+    { x: 4, y: 4 },
+    expect.any(Function),
+  );
+});
+
+it('wires real input events, cancels on blur, and detaches keyboard listeners on shutdown', () => {
+  const { mirror, key } = setup();
+  const scene = new WorldScene(mirror, 'flat');
+  const keyboard = new EventEmitter();
+  const input = Object.assign(new EventEmitter(), {
+    keyboard,
+    mouse: { disableContextMenu: vi.fn() },
+  });
+  const events = new EventEmitter();
+  const gameEvents = new EventEmitter();
+  const moves: { x: number; y: number }[] = [];
+  gameEvents.on('client:move_request', (target, result) => {
+    moves.push(target);
+    result(true);
+  });
+  const object = {
+    setDepth: vi.fn().mockReturnThis(),
+    setOrigin: vi.fn().mockReturnThis(),
+    setScrollFactor: vi.fn().mockReturnThis(),
+    setVisible: vi.fn().mockReturnThis(),
+    setPosition: vi.fn().mockReturnThis(),
+    clear: vi.fn(),
+    fillStyle: vi.fn(),
+    fillRect: vi.fn(),
+  };
+  Object.assign(scene, {
+    input,
+    events,
+    game: { events: gameEvents },
+    scale: Object.assign(new EventEmitter(), { width: 800, height: 600 }),
+    add: { graphics: () => object, rectangle: () => object, circle: () => object },
+  });
+  scene.create();
+  keyboard.emit('keydown', key('KeyD'));
+  expect(moves.at(-1)).toEqual({ x: 5, y: 4 });
+  gameEvents.emit('blur');
+  expect(moves.at(-1)).toEqual({ x: 4, y: 4 });
+  keyboard.emit('keydown', key('KeyW'));
+  events.emit('shutdown');
+  const count = moves.length;
+  keyboard.emit('keydown', key('KeyD'));
+  expect(moves).toHaveLength(count);
+  expect(keyboard.listenerCount('keydown')).toBe(0);
+  expect(keyboard.listenerCount('keyup')).toBe(0);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('measures immediate client dispatch and the admitted drag rate with a 4Hz position feed', () => {
+  const stamp = () => Date.now();
+  const keyboard = setup();
+  const keyAt = stamp();
+  keyboard.input.handleMovementKeyDown(keyboard.key('KeyD'));
+  expect(keyboard.emit).toHaveBeenCalledTimes(1);
+  const keyDelay = stamp() - keyAt;
+  const click = setup();
+  const clickAt = stamp();
+  click.input.handlePointerDown(click.pointer(6, 4));
+  expect(click.emit).toHaveBeenCalledTimes(1);
+  const clickDelay = stamp() - clickAt;
+  const drag = setup();
+  const start = stamp();
+  drag.input.handlePointerDown(drag.pointer(6, 4));
+  for (let frame = 1; frame < 125; frame++) {
+    vi.advanceTimersByTime(8);
+    drag.hero.x = 4 + Math.floor((stamp() - start) / 250);
+    drag.input.handlePointerMove(drag.pointer(8 + (Math.floor(frame / 20) % 7), 4));
+    drag.input.syncMovementInput();
+  }
+  const steadyFrames = drag.emit.mock.calls.length;
+  vi.advanceTimersByTime(8);
+  drag.input.handlePointerUp(drag.pointer(14, 4));
+  expect(keyDelay).toBe(0);
+  expect(clickDelay).toBe(0);
+  expect(steadyFrames).toBe(4);
+  expect(drag.emit.mock.calls.length - steadyFrames).toBe(1);
+  console.info(
+    'movement input timing',
+    JSON.stringify({
+      mode: 'fake-clock client, 4Hz authoritative-position fixture',
+      key_to_request_ms: keyDelay,
+      pointerdown_to_request_ms: clickDelay,
+      pointermove_events_in_1000_ms: 124,
+      admitted_moves_in_1000_ms: steadyFrames,
+      extra_release_move: drag.emit.mock.calls.length - steadyFrames,
+    }),
+  );
 });

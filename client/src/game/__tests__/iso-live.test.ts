@@ -65,7 +65,10 @@ function setup(mode: 'flat' | 'iso' = 'iso') {
     stopFollow: vi.fn(),
   };
   const marker = new View(0, 0);
-  const emit = vi.fn();
+  const emit = vi.fn((_name: string, _target: unknown, result?: (accepted: boolean) => void) => {
+    const target = _target as { x: number; y: number };
+    result?.(mirror.map?.collision[target.y * mirror.map.w + target.x] === 1);
+  });
   const scene = new WorldScene(mirror, mode);
   Object.assign(scene, {
     heightAt: createHeightLookup({ w: 4, h: 4, h_values: heights }),
@@ -259,11 +262,17 @@ describe.each(['flat', 'iso'] as const)('%s interaction and movement', (mode) =>
     },
   );
 
-  it('keeps move requests/collision guards and positions the target marker on its surface', () => {
+  it('routes visible move intents to preflight and marks only accepted targets on their surface', () => {
     const { internal, mirror, marker, emit } = setup(mode);
-    const hit = mode === 'iso' ? isoProject(2, 1, 0, screenBounds(4, 4)) : { sx: 40, sy: 24 };
+    mirror.actors.get('hero')!.x = 0;
+    mirror.actors.get('hero')!.y = 0;
+    const hit = mode === 'iso' ? isoProject(2, 1, 3, screenBounds(4, 4)) : { sx: 40, sy: 24 };
     internal.handlePointer({ worldX: hit.sx, worldY: hit.sy });
-    expect(emit).toHaveBeenLastCalledWith('client:move_request', { x: 2, y: 1 });
+    expect(emit).toHaveBeenLastCalledWith(
+      'client:move_request',
+      { x: 2, y: 1 },
+      expect.any(Function),
+    );
     const markerPos = mode === 'iso' ? isoProject(2, 1, 3, screenBounds(4, 4)) : hit;
     expect(marker.setPosition).toHaveBeenLastCalledWith(markerPos.sx, markerPos.sy);
     if (mode === 'iso') {
@@ -272,10 +281,12 @@ describe.each(['flat', 'iso'] as const)('%s interaction and movement', (mode) =>
       expect(marker.setDepth).not.toHaveBeenCalled(); // flat keeps the depth chosen at create().
     }
     emit.mockClear();
+    marker.setVisible.mockClear();
     mirror.map!.collision[6] = 0;
     internal.handlePointer({ worldX: hit.sx, worldY: hit.sy });
     internal.handlePointer({ worldX: -10000, worldY: -10000 });
-    expect(emit).not.toHaveBeenCalled();
+    expect(emit).toHaveBeenCalledTimes(1); // The local bridge owns rejection, not a server frame.
+    expect(marker.setVisible).not.toHaveBeenCalledWith(true);
   });
 
   it('preserves four-way facing, the existing walk clock, and animation frames', () => {

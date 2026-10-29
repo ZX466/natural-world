@@ -81,6 +81,7 @@ function setup(mode: 'flat' | 'iso') {
     scale: { width: 1200, height: 700, on: vi.fn() },
     input: { on: vi.fn() },
     events: { once: vi.fn() },
+    game: { events: { on: vi.fn(), off: vi.fn() } },
     cameras: { main: { startFollow: vi.fn() } },
     add: {
       graphics: () => new Node(),

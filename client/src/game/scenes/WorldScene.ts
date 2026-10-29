@@ -12,7 +12,6 @@ import {
   depthKey,
   effectiveHeight,
   isoProject,
-  isoUnproject,
   screenBounds,
 } from '../render/iso';
 import { IsoTerrain } from '../render/iso-terrain';
@@ -48,9 +47,21 @@ import {
   rendererFromSearch,
 } from '../render/presentation';
 import { useUiStore } from '../../store/uiStore';
+import { canStep, type MovePoint } from '../movement';
 
 const PIXEL_SCALE = 3.5; // A 档：3x→3.5x（人物更可辨，缓解小片区人群拥挤观感）
 const TILE = 16;
+const DRAG_INTERVAL_MS = 100;
+const MOVE_KEYS = new Set([
+  'KeyW',
+  'KeyA',
+  'KeyS',
+  'KeyD',
+  'ArrowUp',
+  'ArrowLeft',
+  'ArrowDown',
+  'ArrowRight',
+]);
 // 批次 D1：插值窗口基于行走节拍（sim 侧 15 tick/格 @1x = 250ms/格）。
 // 2026-10-28「移动闪现」修：窗口原先**正好等于**节拍 250ms——服务端每格
 // 250±15ms 到达，抖动使滑行永远差一点没走完，下一格又重置起点，于是逐格
@@ -122,9 +133,9 @@ export class WorldScene extends Phaser.Scene {
   private isoFollowToken: string | null = null;
   private voxelPress: {
     id: number;
-    at: number;
     target: { x: number; y: number } | null;
     digging: boolean;
+    moving: boolean;
     version: number;
   } | null = null;
   private voxelHoldTimer: ReturnType<typeof setTimeout> | null = null;
@@ -132,6 +143,16 @@ export class WorldScene extends Phaser.Scene {
   private lastVoxelVersion = -1;
   private lastVoxelSignature = '';
   private lastVoxelMap: WorldMirror['map'] = null;
+  private movementGoal: MovePoint | null = null;
+  private movementOrigin: MovePoint | null = null;
+  private pendingDrag: MovePoint | null = null;
+  private lastDragCell = '';
+  private lastDragAt = -Infinity;
+  private movementKeys = new Set<string>();
+  private lastKeyboardIntent = '';
+  private inputMap: WorldMirror['map'];
+  private inputReset: number;
+  private inputSnapshot: number;
 
   constructor(
     mirror: WorldMirror,
@@ -140,6 +161,10 @@ export class WorldScene extends Phaser.Scene {
     super({ key: 'world' });
     this.mirror = mirror;
     this.renderMode = renderer;
+    this.inputMap = mirror.map;
+    this.inputReset = mirror.resetCount;
+    this.inputSnapshot = mirror.voxelSnapshotVersion;
+    this.lastVoxelVersion = mirror.voxelSnapshotVersion;
   }
 
   preload(): void {
@@ -204,9 +229,27 @@ export class WorldScene extends Phaser.Scene {
       this.handlePointerDown(pointer),
     );
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.handlePointerUp(pointer));
-    this.input.on('pointerupoutside', () => this.cancelVoxelInput());
-    this.input.on('gameout', () => this.cancelVoxelInput());
-    this.events.once('shutdown', () => this.cancelVoxelInput());
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) =>
+      this.handlePointerMove(pointer),
+    );
+    this.input.on('pointerupoutside', () => this.cancelMovement());
+    this.input.on('gameout', () => {
+      if (this.voxelPress) this.cancelMovement();
+    });
+    const keyDown = (event: KeyboardEvent) => this.handleMovementKeyDown(event);
+    const keyUp = (event: KeyboardEvent) => this.handleMovementKeyUp(event);
+    const blur = () => this.cancelMovement();
+    // Capture only in our handler, after checking text focus. Global captures
+    // would also swallow the arrows used to edit ImpulseBar's text.
+    this.input.keyboard?.on('keydown', keyDown);
+    this.input.keyboard?.on('keyup', keyUp);
+    this.game.events.on('blur', blur);
+    this.events.once('shutdown', () => {
+      this.cancelMovement();
+      this.input.keyboard?.off('keydown', keyDown);
+      this.input.keyboard?.off('keyup', keyUp);
+      this.game.events.off('blur', blur);
+    });
 
     this.scale.on('resize', () => this.redrawMap());
     this.redrawMap();
@@ -333,10 +376,15 @@ export class WorldScene extends Phaser.Scene {
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
     this.cancelVoxelInput();
+    if (this.movementKeys.size) this.cancelMovement();
     const map = this.mirror.map;
-    if (map === null || this.mirror.protagonist === null) return;
+    if (map === null || this.mirror.protagonist === null) {
+      useUiStore.getState().setVoxelError('这会儿走不了。');
+      return;
+    }
     const target = this.voxelTarget(pointer);
     if (pointer.button === 2) {
+      this.stopMovement();
       if (target && map.collision[target.y * map.w + target.x] === 1)
         this.game.events.emit('client:voxel_request', { action: 'place', ...target });
       return;
@@ -344,12 +392,17 @@ export class WorldScene extends Phaser.Scene {
     if (pointer.button !== 0) return;
     const press = {
       id: pointer.id,
-      at: Date.now(),
       target,
       digging: false,
+      moving: target !== null && map.collision[target.y * map.w + target.x] === 1,
       version: this.mirror.voxelSnapshotVersion,
     };
     this.voxelPress = press;
+    if (press.moving && target) {
+      this.pendingDrag = target;
+      this.flushDragTarget(true);
+      return;
+    }
     this.voxelHoldTimer = setTimeout(() => {
       this.voxelHoldTimer = null;
       const current = this.mirror.map;
@@ -362,6 +415,7 @@ export class WorldScene extends Phaser.Scene {
       )
         return;
       press.digging = true;
+      this.stopMovement();
       this.game.events.emit('client:voxel_request', { action: 'dig_start', ...target });
     }, 150);
   }
@@ -369,45 +423,234 @@ export class WorldScene extends Phaser.Scene {
   private handlePointerUp(pointer: Phaser.Input.Pointer): void {
     const press = this.voxelPress;
     if (press === null || pointer.id !== press.id) return;
-    this.cancelVoxelInput();
-    if (
-      !press.digging &&
-      press.version === this.mirror.voxelSnapshotVersion &&
-      Date.now() - press.at < 150
-    )
+    if (press.version !== this.mirror.voxelSnapshotVersion) {
+      this.cancelVoxelInput();
+      return;
+    }
+    if (press.moving) {
+      const target = this.voxelTarget(pointer);
+      if (target) this.pendingDrag = target;
+      this.flushDragTarget(true);
+    } else if (!press.digging) {
       this.handlePointer(pointer);
+    }
+    this.cancelVoxelInput();
   }
 
-  private cancelVoxelInput(): void {
+  private handlePointerMove(pointer: Phaser.Input.Pointer): void {
+    const press = this.voxelPress;
+    if (!press || pointer.id !== press.id) return;
+    if (press.version !== this.mirror.voxelSnapshotVersion) {
+      this.cancelVoxelInput();
+      return;
+    }
+    const target = this.voxelTarget(pointer);
+    if (!target) return;
+    if (!press.moving) {
+      if (target.x === press.target?.x && target.y === press.target.y) return;
+      if (this.voxelHoldTimer !== null) clearTimeout(this.voxelHoldTimer);
+      this.voxelHoldTimer = null;
+      if (press.digging && press.target)
+        this.game.events.emit('client:voxel_request', { action: 'dig_cancel', ...press.target });
+      press.digging = false;
+      press.moving = true;
+    }
+    this.pendingDrag = target;
+    this.flushDragTarget();
+  }
+
+  private flushDragTarget(force = false): void {
+    const target = this.pendingDrag;
+    if (!target) return;
+    const key = `${target.x},${target.y}`;
+    if (key === this.lastDragCell) {
+      this.pendingDrag = null;
+      return;
+    }
+    if (!force) {
+      if (Date.now() - this.lastDragAt < DRAG_INTERVAL_MS) return;
+      const actor = this.mirror.actors.get(this.mirror.protagonist ?? '');
+      if (
+        this.movementGoal &&
+        this.movementOrigin &&
+        actor &&
+        actor.x === this.movementOrigin.x &&
+        actor.y === this.movementOrigin.y
+      )
+        return;
+    }
+    this.pendingDrag = null;
+    this.lastDragCell = key;
+    this.lastDragAt = Date.now();
+    this.requestMovement(target);
+  }
+
+  private cancelVoxelInput(sendCancel = true): void {
     if (this.voxelHoldTimer !== null) clearTimeout(this.voxelHoldTimer);
     this.voxelHoldTimer = null;
     const press = this.voxelPress;
     this.voxelPress = null;
-    if (press?.digging && press.target)
+    this.pendingDrag = null;
+    this.lastDragCell = '';
+    if (sendCancel && press?.digging && press.target)
       this.game.events.emit('client:voxel_request', { action: 'dig_cancel', ...press.target });
   }
 
   private handlePointer(pointer: Phaser.Input.Pointer): void {
-    if (this.mirror.protagonist === null || this.mirror.map === null) return;
+    const target = this.voxelTarget(pointer);
+    if (target) this.requestMovement(target);
+    else useUiStore.getState().setVoxelError('那处走不过去。');
+  }
+
+  private requestMovement(target: MovePoint): void {
+    this.game.events.emit('client:move_request', target, (accepted: boolean) => {
+      if (!accepted) return;
+      this.goalMarker?.setVisible(false);
+      const actor = this.mirror.actors.get(this.mirror.protagonist ?? '');
+      this.movementOrigin = actor ? { x: actor.x, y: actor.y } : null;
+      this.movementGoal = target;
+      if (actor?.x === target.x && actor.y === target.y) {
+        this.movementGoal = null;
+        return;
+      }
+      const goal = this.projectSurface(target.x, target.y);
+      this.goalMarker?.setPosition(goal.sx, goal.sy).setVisible(true);
+      if (this.renderMode === 'iso') this.goalMarker?.setDepth(depthKey(target.x, target.y) + 1.5);
+    });
+  }
+
+  private typingMovement(): boolean {
+    const active = globalThis.document?.activeElement as HTMLElement | null | undefined;
+    return (
+      !!active &&
+      (['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName) ||
+        active.isContentEditable ||
+        !!active.closest?.('[contenteditable="true"],[contenteditable=""]'))
+    );
+  }
+
+  private movementCode(event: KeyboardEvent): string {
+    return (
+      event.code ||
+      ({ w: 'KeyW', a: 'KeyA', s: 'KeyS', d: 'KeyD' }[event.key?.toLowerCase()] ?? event.key)
+    );
+  }
+
+  private movementDirection(): MovePoint {
+    const has = (a: string, b: string) => this.movementKeys.has(a) || this.movementKeys.has(b);
+    return {
+      x: Number(has('KeyD', 'ArrowRight')) - Number(has('KeyA', 'ArrowLeft')),
+      y: Number(has('KeyS', 'ArrowDown')) - Number(has('KeyW', 'ArrowUp')),
+    };
+  }
+
+  private handleMovementKeyDown(event: KeyboardEvent): void {
+    if (
+      this.typingMovement() ||
+      event.ctrlKey ||
+      event.altKey ||
+      event.metaKey ||
+      event.isComposing
+    )
+      return;
+    const code = this.movementCode(event);
+    if (code === 'Escape') {
+      event.preventDefault();
+      this.cancelMovement();
+      return;
+    }
+    if (!MOVE_KEYS.has(code)) return;
+    event.preventDefault();
+    if (event.repeat || this.movementKeys.has(code)) return;
+    this.cancelVoxelInput();
+    this.movementKeys.add(code);
+    this.driveKeyboard();
+  }
+
+  private handleMovementKeyUp(event: KeyboardEvent): void {
+    if (!this.movementKeys.delete(this.movementCode(event))) return;
+    if (this.typingMovement()) {
+      this.cancelMovement();
+      return;
+    }
+    const direction = this.movementDirection();
+    if (direction.x === 0 && direction.y === 0) {
+      this.lastKeyboardIntent = '';
+      this.stopMovement();
+    } else this.driveKeyboard();
+  }
+
+  private driveKeyboard(): void {
+    const actor = this.mirror.actors.get(this.mirror.protagonist ?? '');
     const map = this.mirror.map;
-    // R6: picking intersects the ground plane; the marker then uses the shared surface.
-    const { x: wx, y: wy } =
-      this.renderMode === 'iso'
-        ? isoUnproject(pointer.worldX, pointer.worldY, screenBounds(map.w, map.h))
-        : { x: Math.floor(pointer.worldX / TILE), y: Math.floor(pointer.worldY / TILE) };
-    if (wx < 0 || wy < 0 || wx >= map.w || wy >= map.h) return;
-    if (map.collision[wy * map.w + wx] !== 1) return; // 目标不可通行，不请求
-    const goal = this.projectSurface(wx, wy);
-    this.goalMarker?.setPosition(goal.sx, goal.sy).setVisible(true);
-    if (this.renderMode === 'iso') this.goalMarker?.setDepth(depthKey(wx, wy) + 1.5);
-    // sim 负责寻路（世界真相在 sim）；前端发的是玩家对主角的「移动请求」——
-    // move_request 协议早已落地（ws.py `_handle_move_request` → `issue_move`，
-    // 含 bad_target 错误帧与不可达静默两条路径）。旧注释说「用 player_impulse
-    // 占位」是 M0 时代残留，2026-10-20 核实后更正。
-    this.game.events.emit('client:move_request', { x: wx, y: wy });
+    const direction = this.movementDirection();
+    if (!actor || !map) {
+      useUiStore.getState().setVoxelError('这会儿走不了。');
+      return;
+    }
+    if (direction.x === 0 && direction.y === 0) {
+      this.stopMovement();
+      return;
+    }
+    const intent = `${actor.x},${actor.y},${direction.x},${direction.y},${this.mirror.terrainVersion}`;
+    if (intent === this.lastKeyboardIntent) return;
+    this.lastKeyboardIntent = intent;
+    const target = { x: actor.x + direction.x, y: actor.y + direction.y };
+    if (!canStep(map, actor, target)) {
+      this.stopMovement();
+      useUiStore.getState().setVoxelError('那处挡着路。');
+      return;
+    }
+    if (this.movementGoal?.x === target.x && this.movementGoal.y === target.y) return;
+    this.requestMovement(target);
+  }
+
+  private stopMovement(sendStop = true): void {
+    const hadGoal = this.movementGoal !== null;
+    this.movementGoal = null;
+    this.movementOrigin = null;
+    this.goalMarker?.setVisible(false);
+    const actor = this.mirror.actors.get(this.mirror.protagonist ?? '');
+    if (sendStop && hadGoal && actor)
+      this.game.events.emit('client:move_request', { x: actor.x, y: actor.y }, () => {});
+  }
+
+  private cancelMovement(sendStop = true): void {
+    this.cancelVoxelInput(sendStop);
+    this.movementKeys.clear();
+    this.lastKeyboardIntent = '';
+    this.stopMovement(sendStop);
+  }
+
+  private syncMovementInput(): void {
+    if (
+      this.inputMap !== this.mirror.map ||
+      this.inputReset !== this.mirror.resetCount ||
+      this.inputSnapshot !== this.mirror.voxelSnapshotVersion
+    ) {
+      this.cancelMovement(false);
+      this.inputMap = this.mirror.map;
+      this.inputReset = this.mirror.resetCount;
+      this.inputSnapshot = this.mirror.voxelSnapshotVersion;
+    }
+    if (useUiStore.getState().wsStatus !== 'open') {
+      if (this.movementGoal || this.movementKeys.size || this.voxelPress)
+        this.cancelMovement(false);
+      return;
+    }
+    if (this.typingMovement() && this.movementKeys.size) {
+      this.cancelMovement();
+      return;
+    }
+    const actor = this.mirror.actors.get(this.mirror.protagonist ?? '');
+    if (actor && this.movementGoal?.x === actor.x && this.movementGoal.y === actor.y)
+      this.stopMovement(false);
+    if (this.movementKeys.size) this.driveKeyboard();
+    else if (this.voxelPress?.moving) this.flushDragTarget();
   }
 
   update(time: number, delta: number): void {
+    this.syncMovementInput();
     this.syncVoxelPresentation();
     this.syncActorViews(delta, time);
     this.syncCamera();
