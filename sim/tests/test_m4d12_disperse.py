@@ -144,7 +144,7 @@ class TestSiteScatter:
         ~10 格 + chat 25 人去 25 目标邻域有自然重叠——再拧死会逼出乱跑）。"""
         from collections import Counter
 
-        from sim.content.villagers import build_roster
+        from sim.content.villagers import build_roster, territory_spawn_positions
         from sim.core.world import EntityState, WorldState
         from sim.npc.sim_exec import _resolve_goal
         from sim.npc.utility import UtilityModel, evaluate_batch
@@ -155,10 +155,18 @@ class TestSiteScatter:
         pf = Pathfinder(town)
         w, h = pf.tile_map.width, pf.tile_map.height
         roster = list(build_roster())
+        # 2026-10-28：不再把 50 人全塞进同一格。同格会让 25 个 request_chat
+        # 共享同一个散点候选集（村广场邻域实测只有 10 个可走格），量到的是
+        # 「候选集大小」而不是散点机制。改用生产路径的定籍出生（D18），
+        # 也就是玩家真正看到的开局分布。
+        spawn = territory_spawn_positions(
+            town, [p.npc_id for p in roster], occupied={"chenmo": (100, 53)}
+        )
         state = WorldState(
             world_seed=42,
-            # 换图：药铺=村广场带（旧 (8,16) 新图不可走）
-            entities={p.npc_id: EntityState(entity_id=p.npc_id, pos=(100, 53)) for p in roster},
+            entities={
+                p.npc_id: EntityState(entity_id=p.npc_id, pos=spawn[p.npc_id]) for p in roster
+            },
         )
         decisions = evaluate_batch(roster, UtilityModel(n_npc=50))
         goals = [

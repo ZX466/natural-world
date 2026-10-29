@@ -1,94 +1,56 @@
-"""Build V1's coordinate-indexed height map from the committed map and tileset.
+"""Write/verify V1's coordinate-indexed height map.
 
 Run: uv run python -m sim.content.build_height_map [--check]
 
-Fixed HSV thresholds (degrees; saturation/value 0..1), evaluated in this order:
-  water -> 0: H 165..245, S >= .30, V >= .24, B > 1.10*R
-  peach/magenta canopy -> 3: H >= 300, S >= .18, V >= .34,
-                           R > 1.20*G and B > 1.05*G
-  dark green canopy -> 3: H 65..170, S >= .28, V <= .40
-  grey roof/wall -> 2: S <= .26 and V .18.. .68
-  dark timber/wall -> 2: H <= 65, S <= .60, V .18.. .49
-  remaining vegetation, paths, soil -> 1; gid=0 -> 1 (deterministic fallback).
+## Single source of truth
 
-RGB = integer floor of the central 4x4 mean, matching the browser sampler.
-This is a visual approximation, not collision or semantic truth. Pink flowers
-and canopy share a color class; the 4x preview requires main-tree human review.
+Heights are **not** derived here. They come from
+`sim.content.build_god_town.derive_terrain`, the same call that produces the
+collision bits in `linhe-town.json`. That function runs
+`sim.content.terrain_class.classify`, which classifies each 16x16 source tile by
+its pixel mix (bright paving vs. dark roof vs. canopy vs. water) and then applies
+a 5x5 mean filter, because the source pack is a 1:1 slice of a single painting
+with no tile semantics.
+
+Keeping one derivation is a hard requirement: when collision and render height
+were derived independently, the two disagreed and the player could walk through
+blocks that were drawn as solid (2026-10-28 report).
+
+This module therefore exists to (a) emit the height JSON plus a 4x visual
+preview for human review, and (b) `--check` that the committed artifacts are
+byte-identical to a fresh derivation. It never introduces a second classifier.
+
 No random values, timestamps, ignored source packs, or third-party dependencies.
 """
 
 from __future__ import annotations
 
 import argparse
-import colorsys
 import json
 import textwrap
 from collections import Counter
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from sim.content.png_codec import read_png_rgba, write_png_rgba
+from sim.content.png_codec import write_png_rgba
 
 REPO = Path(__file__).resolve().parents[2]
 MAP_PATH = REPO / "sim/content/linhe-town.json"
-TILESET_PATH = REPO / "client/public/assets/tilesets/god-town-16.png"
 HEIGHT_PATH = REPO / "client/public/assets/tilesets/linhe-height.json"
 PREVIEW_PATH = REPO / "sim/content/linhe-height-preview.png"
-TILE = 16
 CHUNK = 16
 SCALE = 4
-FALLBACK_RGB = (107, 79, 42)  # Same gid=0 timber color as iso-terrain.ts.
 PREVIEW_COLORS = ((66, 143, 166), (196, 181, 123), (127, 128, 139), (207, 107, 156))
-type Pixels = list[list[tuple[int, int, int, int]]]
 
 
-def classify_height(rgb: tuple[int, int, int]) -> int:
-    """Fixed, ordered color classes; gameplay never consumes these heights."""
-    r, g, b = rgb
-    hue, saturation, value = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
-    hue *= 360
-    if 165 <= hue <= 245 and saturation >= 0.30 and value >= 0.24 and b > 1.10 * r:
-        return 0
-    if hue >= 300 and saturation >= 0.18 and value >= 0.34 and r > 1.20 * g and b > 1.05 * g:
-        return 3
-    if 65 <= hue <= 170 and saturation >= 0.28 and value <= 0.40:
-        return 3
-    if saturation <= 0.26 and 0.18 <= value <= 0.68:
-        return 2
-    if hue <= 65 and saturation <= 0.60 and 0.18 <= value <= 0.49:
-        return 2
-    return 1
-
-
-def sample_rgb(pixels: Pixels, gid: int) -> tuple[int, int, int]:
-    """gid (1 based), not map coordinate, locates the tileset's central 4x4."""
-    if gid == 0:
-        return FALLBACK_RGB
-    cols = len(pixels[0]) // TILE
-    if gid < 0 or gid > cols * (len(pixels) // TILE):
-        msg = f"ground gid outside tileset: {gid}"
-        raise ValueError(msg)
-    sx, sy = ((gid - 1) % cols) * TILE + 6, ((gid - 1) // cols) * TILE + 6
-    samples = [pixels[y][x] for y in range(sy, sy + 4) for x in range(sx, sx + 4)]
-    return (
-        sum(pixel[0] for pixel in samples) // 16,
-        sum(pixel[1] for pixel in samples) // 16,
-        sum(pixel[2] for pixel in samples) // 16,
-    )
-
-
-def build(height_path: Path, preview_path: Path) -> Counter[int]:
-    """Only visit in-bounds map cells; chunk-edge padding is never sampled."""
+def _load_ground() -> tuple[int, int, list[int]]:
+    """行主序 gid 清单（来自已提交的 linhe-town.json）。"""
     document = json.loads(MAP_PATH.read_text(encoding="utf-8"))
     w, h = document["width"], document["height"]
     if not isinstance(w, int) or not isinstance(h, int) or w <= 0 or h <= 0:
         msg = "map dimensions must be positive integers"
         raise ValueError(msg)
-    pixels = read_png_rgba(TILESET_PATH)
-    if (len(pixels[0]), len(pixels)) != (2240, 1600):
-        msg = "expected god-town-16.png at 2240x1600 (140 tileset columns)"
-        raise ValueError(msg)
-    heights: list[int] = []
+    gids = [0] * (w * h)
     for y in range(h):
         for x in range(w):
             chunk = document["chunks"][f"{x // CHUNK},{y // CHUNK}"]
@@ -96,7 +58,34 @@ def build(height_path: Path, preview_path: Path) -> Counter[int]:
             if not isinstance(gid, int):
                 msg = f"invalid ground gid at ({x},{y})"
                 raise ValueError(msg)
-            heights.append(1 if gid == 0 else classify_height(sample_rgb(pixels, gid)))
+            gids[y * w + x] = gid
+    return w, h, gids
+
+
+def derive() -> tuple[int, int, list[int]]:
+    """同源推导：直接复用 build_god_town 的那一次分类，不另起炉灶。"""
+    from sim.content.build_god_town import (
+        MAP_H,
+        MAP_W,
+        derive_terrain,
+        extract_ground,
+        extract_spawn,
+        load_landmarks,
+        load_tiled_map,
+    )
+
+    tiled = load_tiled_map()
+    ground = extract_ground(tiled)
+    spawn = extract_spawn(tiled)
+    _collision, heights, _stats = derive_terrain(ground, spawn, load_landmarks())
+    if (_load_ground()[0], _load_ground()[1]) != (MAP_W, MAP_H):
+        msg = "map dimensions disagree between source pack and committed product"
+        raise ValueError(msg)
+    return MAP_W, MAP_H, heights
+
+
+def render(w: int, h: int, heights: list[int], height_path: Path, preview_path: Path) -> Counter:
+    """写出高度 JSON + 4x 预览图（唯一写出路径，build_god_town 也复用它）。"""
     height_path.parent.mkdir(parents=True, exist_ok=True)
     # Match the client's Prettier printWidth=100 without adding a Node dependency.
     values = textwrap.fill(
@@ -117,23 +106,12 @@ def build(height_path: Path, preview_path: Path) -> Counter[int]:
 
 def check() -> None:
     """Rebuild twice without changing committed artifacts; compare exact bytes."""
-    # Small contract probes live here, as requested; no additional sim/tests.
-    assert classify_height((50, 120, 150)) == 0
-    assert classify_height((190, 100, 150)) == 3
-    assert classify_height((40, 70, 35)) == 3
-    assert classify_height((90, 95, 100)) == 2
-    assert classify_height((180, 160, 100)) == 1
-    fixture = [[(0, 0, 0, 255)] * 32 for _ in range(16)]
-    for y in range(6, 10):
-        for x in range(22, 26):
-            fixture[y][x] = (50, 120, 150, 255)
-    assert sample_rgb(fixture, 2) == (50, 120, 150)
-    assert sample_rgb(fixture, 0) == FALLBACK_RGB
     with TemporaryDirectory(prefix="linhe-height-") as scratch:
         root = Path(scratch)
         first, second = root / "first", root / "second"
-        counts = build(first / "height.json", first / "preview.png")
-        build(second / "height.json", second / "preview.png")
+        w, h, heights = derive()
+        counts = render(w, h, heights, first / "height.json", first / "preview.png")
+        render(w, h, heights, second / "height.json", second / "preview.png")
         for name, committed in (("height.json", HEIGHT_PATH), ("preview.png", PREVIEW_PATH)):
             expected = (first / name).read_bytes()
             if expected != (second / name).read_bytes():
@@ -142,7 +120,7 @@ def check() -> None:
             if not committed.exists() or committed.read_bytes() != expected:
                 msg = (
                     f"stale/missing artifact: {committed.relative_to(REPO)}; "
-                    "rebuild without --check"
+                    "run `uv run python -m sim.content.build_god_town` then rebuild without --check"
                 )
                 raise ValueError(msg)
         print(f"CHECK OK: byte-identical JSON/PNG; heights={dict(sorted(counts.items()))}")
@@ -151,17 +129,19 @@ def check() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--check", action="store_true", help="verify contracts and exact rebuilt bytes"
+        "--check",
+        action="store_true",
+        help="verify exact rebuilt bytes against committed artifacts",
     )
     args = parser.parse_args()
     if args.check:
         check()
-    else:
-        counts = build(HEIGHT_PATH, PREVIEW_PATH)
-        print(
-            f"BUILT: heights={dict(sorted(counts.items()))}; "
-            f"preview={PREVIEW_PATH.relative_to(REPO)}"
-        )
+        return
+    w, h, heights = derive()
+    counts = render(w, h, heights, HEIGHT_PATH, PREVIEW_PATH)
+    print(
+        f"BUILT: heights={dict(sorted(counts.items()))}; preview={PREVIEW_PATH.relative_to(REPO)}"
+    )
 
 
 if __name__ == "__main__":

@@ -97,25 +97,25 @@ def test_talk_line_deterministic_per_tick():
 def test_investigate_moves_toward_target_pos():
     from sim.agent.intent import Intent
 
-    # 隔几格的可走直线区（换图：村广场带，(100,52)-(104,52) 沿街；旧图
-    # 药铺前空地 (30,46)-(34,46) 随 D10 退役）
+    # 隔几格的可走直线区。2026-10-28 换可走面推导后，(100,52)-(104,52) 沿街
+    # 东段已不可走；改用村广场北侧同一片空地，行 51 的 x=96..101 连片可走。
     state = WorldState(
         world_seed=42,
         entities={
-            "chenmo": EntityState(entity_id="chenmo", pos=(100, 52)),
+            "chenmo": EntityState(entity_id="chenmo", pos=(96, 51)),
         },
     )
     loop = _loop(state)
     driver = _driver()
     driver._pending.append(
-        Intent(action="investigate", target_pos=(104, 52), reason="那边有动静", confidence=0.9)
+        Intent(action="investigate", target_pos=(101, 51), reason="那边有动静", confidence=0.9)
     )
     pf = Pathfinder(_town_map())
     driver.execute_pending(loop, pathfinder=pf)
     events = loop.drain_events()
     moves = [e for e in events if e.event_type.value == "move"]
     assert len(moves) == 1
-    assert moves[0].payload["goal"] == [104, 52]
+    assert moves[0].payload["goal"] == [101, 51]
 
 
 def test_template_pool_all_clean():

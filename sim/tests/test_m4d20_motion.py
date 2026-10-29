@@ -45,7 +45,7 @@ class TestPathJitter:
         from sim.npc.sim_exec import _jitter_path
 
         pf = _town_pf()
-        base = pf.find((95, 52), (100, 52))
+        base = pf.find((105, 56), (111, 56))
         paths = {
             _jitter_path(base, f"villager_{i:02d}", tick=100, pathfinder=pf) for i in range(1, 11)
         }
@@ -56,7 +56,7 @@ class TestPathJitter:
         from sim.npc.sim_exec import _jitter_path
 
         pf = _town_pf()
-        base = pf.find((95, 52), (100, 52))
+        base = pf.find((105, 56), (111, 56))
         a = _jitter_path(base, "villager_01", tick=100, pathfinder=pf)
         b = _jitter_path(base, "villager_01", tick=100, pathfinder=pf)
         assert a == b
@@ -66,7 +66,7 @@ class TestPathJitter:
         from sim.npc.sim_exec import _jitter_path
 
         pf = _town_pf()
-        base = pf.find((95, 52), (100, 52))
+        base = pf.find((105, 56), (111, 56))
         for tick in range(30):
             p = _jitter_path(base, "villager_02", tick=tick, pathfinder=pf)
             assert p[0] == base[0] and p[-1] == base[-1]
@@ -77,7 +77,7 @@ class TestPathJitter:
         from sim.npc.sim_exec import _jitter_path
 
         pf = _town_pf()
-        base = pf.find((95, 52), (100, 52))
+        base = pf.find((105, 56), (111, 56))
         for tick in range(30):
             p = _jitter_path(base, "villager_03", tick=tick, pathfinder=pf)
             assert len(p) <= max(2, int(len(base) * 1.6) + 1), (
@@ -89,7 +89,7 @@ class TestPathJitter:
         from sim.npc.sim_exec import _jitter_path
 
         pf = _town_pf()
-        base = pf.find((95, 52), (97, 52))
+        base = pf.find((105, 56), (107, 56))
         assert _jitter_path(base, "villager_01", tick=7, pathfinder=pf) == base
 
     def test_plan_move_applies_jitter(self) -> None:

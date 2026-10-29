@@ -51,10 +51,14 @@ import { useUiStore } from '../../store/uiStore';
 
 const PIXEL_SCALE = 3.5; // A 档：3x→3.5x（人物更可辨，缓解小片区人群拥挤观感）
 const TILE = 16;
-// 批次 D1：插值窗口 = 行走节拍（sim 侧 15 tick/格 @1x = 250ms/格）。
-// 服务端每 delta 帧给出新格坐标，客户端在 250ms 内平滑走完一格——
-// 1x 手感对齐；16x 快进时 sim 节奏加快，帧到得更密，窗口缩短自然适配。
-const INTERP_MS = 250;
+// 批次 D1：插值窗口基于行走节拍（sim 侧 15 tick/格 @1x = 250ms/格）。
+// 2026-10-28「移动闪现」修：窗口原先**正好等于**节拍 250ms——服务端每格
+// 250±15ms 到达，抖动使滑行永远差一点没走完，下一格又重置起点，于是逐格
+// 累积落后（实测 57% 帧落后 >0.5 格，最大 1.20 格），攒够距离再被追上 =
+// 视觉上「闪一下」。取节拍的 80%（200ms）留出抖动余量：滑行在下一格到达前
+// 必然走完，多出的时间是站立帧而不是负债（实测平均落后 0.43 格、最大 1.00）。
+// 16x 快进时 sim 节奏加快，帧到得更密，窗口按倍速缩短自然适配。
+const INTERP_MS = 200;
 // 2026-10-12 D6-D8 换图：GOD 桃花源缩半图集（build_god_town.py 产物，
 // 2240×1600 = 140 列 @16px）。gid 1-based，id%140/id/140 换算在 renderTileset。
 const TILESET_KEY = 'god-town-16';
@@ -67,7 +71,8 @@ interface ActorView {
   sprite: Phaser.GameObjects.Sprite;
   /** 快照对快照插值基准（D20 漂移修）：上一快照的逻辑格 + 到达时刻——
    *  精灵在 [snapAtMs, snapAtMs+INTERP_MS) 内从 prev 线性走到最新快照格，
-   *  到点即停；修前是帧对帧指数逼近（永远落后渐近=滑行漂移感）。 */
+   *  到点即停；修前是帧对帧指数逼近（永远落后渐近=滑行漂移感）。
+   *  窗口须短于行走节拍，否则逐格累积落后（见 INTERP_MS 注释）。 */
   fromX: number;
   fromY: number;
   snapAtMs: number;

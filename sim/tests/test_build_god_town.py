@@ -3,10 +3,10 @@
 裁决（GOD 地图集成裁决记录 §4 已归档）: D6=整图替换 / D7=压平单层 /
 D8=桃花源 / D9=选片区避开瑕疵区 / D10=旧 Zelda 退休出运行时管线保留。
 
-实测数据形态（止损门探查 + 人审通过 2026-10-12）:
-- 渲染层唯一有内容 = Bottom Ground（GOD 已预压平，D7 无分支）
-- Collisions: 1=阻挡 / 0=可走；临河镇语义 collision=True=可走（取反直转）
-- 可走 820 格 / 795 连片 / 10 地标同连通块 / spawn 候选 90 格
+2026-10-28 变更：可走性不再取源包 `Collisions` 层（那只是三条贯穿建筑与河道
+的直线带，820 格 = 5.9%），改由 `terrain_class.classify` 从画面推导，与渲染
+高度同源。故「可走 820」的旧钉换成不变量钉：地标/出生点必须可走、可走面
+显著大于直线带、walkable ⇔ height==EARTH。
 """
 
 from __future__ import annotations
@@ -22,15 +22,20 @@ from sim.content.build_god_town import (
     MAP_W,
     OUT_TILESET,
     build_chunks,
-    extract_collision,
+    derive_terrain,
     extract_ground,
     extract_spawn,
+    load_landmarks,
     load_tiled_map,
 )
+from sim.content.terrain_class import HEIGHT_EARTH
 from sim.world.map import TileMap
 
 _REPO = Path(__file__).resolve().parents[2]
 _PACK = _REPO / "sim" / "content" / "assets" / "god-packs" / "taohuayuan-online"
+
+#: 旧源包直线带的可走格数——新可走面必须远超它（回归护栏）。
+LEGACY_BAND_CELLS = 820
 
 #: 10 地标 anchor（map_pack.json 实测；转换器 _landmarks 同源）
 LANDMARK_ANCHORS = {
@@ -57,6 +62,17 @@ def _tiled() -> dict:
     return load_tiled_map()
 
 
+@pytest.fixture(scope="module")
+def terrain() -> tuple[list[list[int]], list[int], dict[str, int]]:
+    """同源推导一次（collision, heights, stats）；缺素材/产物则 skip。"""
+    if not _PACK.is_dir():
+        pytest.skip("GOD 素材原件区缺席")
+    if not OUT_TILESET.exists():
+        pytest.skip("god-town-16.png 未产出（先跑 build_god_town）")
+    tiled = load_tiled_map()
+    return derive_terrain(extract_ground(tiled), extract_spawn(tiled), load_landmarks())
+
+
 # --- 提取层语义钉 ------------------------------------------------------------
 
 
@@ -67,21 +83,32 @@ def test_ground_layer_full_coverage():
     assert all(gid > 0 for row in ground for gid in row), "ground 出现空格"
 
 
-def test_collision_polarity():
-    """极性钉（施工中抓过反转 bug）：临河镇语义 collision=True=可走。
-    10 地标 anchor 全可走；全图可走 820。"""
-    collision = extract_collision(_tiled())
-    walkable = sum(r.count(1) for r in collision)
-    assert walkable == 820
+def test_collision_polarity(terrain):
+    """极性钉（施工中抓过反转 bug）：临河镇语义 collision=1 才是可走。
+    10 地标 anchor 全可走；可走面远超旧直线带。"""
+    collision, _heights, stats = terrain
     for name, (x, y) in LANDMARK_ANCHORS.items():
         assert collision[y][x] == 1, f"{name} anchor 不可走"
+    assert stats["walkable"] > LEGACY_BAND_CELLS * 2, f"可走面过小: {stats['walkable']}"
 
 
-def test_spawn_candidates():
+def test_walkable_is_always_earth_height(terrain):
+    """同源不变量（单向）：可走格高度必为 EARTH，否则渲染出现「高方块却可穿过」。
+
+    反向不成立：土坎是阻挡的 EARTH 格（earth 的唯一来源），故不能双向断言。
+    """
+    collision, heights, stats = terrain
+    for y in range(MAP_H):
+        for x in range(MAP_W):
+            if collision[y][x] == 1:
+                assert heights[y * MAP_W + x] == HEIGHT_EARTH, f"({x},{y}) 可走却画成高块"
+    assert stats["earth_banks"] > 0, "没有土坎 → earth 无来源，place 必然缺料"
+
+
+def test_spawn_candidates(terrain):
     """spawn 候选 90 格且全可走。"""
-    tiled = _tiled()
-    spawn = extract_spawn(tiled)
-    collision = extract_collision(tiled)
+    collision, _heights, _stats = terrain
+    spawn = extract_spawn(_tiled())
     assert len(spawn) == 90
     assert all(collision[y][x] == 1 for x, y in spawn)
 
@@ -89,12 +116,11 @@ def test_spawn_candidates():
 # --- chunk 组装钉 ------------------------------------------------------------
 
 
-def test_build_chunks_covers_full_map():
+def test_build_chunks_covers_full_map(terrain):
     """63 chunks（ceil 除法）覆盖 140×100 全图；边缘 chunk 越界格
     ground=0 + collision=0（不可走）。"""
-    tiled = _tiled()
-    ground = extract_ground(tiled)
-    collision = extract_collision(tiled)
+    ground = extract_ground(_tiled())
+    collision, _heights, _stats = terrain
     chunks = build_chunks(ground, collision)
     assert len(chunks) == 63  # ceil(140/16)=9 x ceil(100/16)=7
     assert all(len(c["ground"]) == CHUNK * CHUNK for c in chunks.values())
@@ -128,12 +154,12 @@ def test_tilemap_loads_god_town():
 
 
 def test_tilemap_walkable_semantics():
-    """加载后语义自洽：地标可走 / 可走总数 820 / 越界拒行。"""
+    """加载后语义自洽：地标可走 / 可走面显著大于旧直线带 / 越界拒行。"""
     m = _tilemap()
     for name, (x, y) in LANDMARK_ANCHORS.items():
         assert m.is_walkable(x, y), f"{name} 不可走"
     total = sum(1 for x in range(MAP_W) for y in range(MAP_H) if m.is_walkable(x, y))
-    assert total == 820
+    assert total > LEGACY_BAND_CELLS * 2, f"可走面过小: {total}"
     assert not m.is_walkable(MAP_W, 50)
     assert not m.is_walkable(-1, 50)
 
@@ -169,11 +195,10 @@ def test_tileset_halved():
 # --- 确定性钉（C5） ----------------------------------------------------------
 
 
-def test_conversion_deterministic(tmp_path):
+def test_conversion_deterministic(terrain):
     """同输入重跑 → chunks 逐字节一致（无随机/无时间依赖）。"""
-    tiled = _tiled()
-    ground = extract_ground(tiled)
-    collision = extract_collision(tiled)
+    ground = extract_ground(_tiled())
+    collision, _heights, _stats = terrain
     c1 = build_chunks(ground, collision)
     c2 = build_chunks(ground, collision)
     assert json.dumps(c1, sort_keys=True) == json.dumps(c2, sort_keys=True)

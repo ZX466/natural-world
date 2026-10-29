@@ -1,10 +1,13 @@
 """Deterministic V3 block atlas: four height roles x three 16px faces.
 
 Run: uv run python -m sim.content.build_block_atlas [--check]
-Only committed inputs are used. Colors are averages of the same central 4x4
-gid samples as build_height_map.py. Detail is integer arithmetic, with no RNG
-or clock. Faces are top 100%, left 75%, right 60%. The browser normalizes each
-role to a luminance mask and tints it with the original per-cell sample color.
+
+Roles come from `linhe-height.json`, the single-source terrain product, so the
+atlas can never disagree with collision or with the isometric renderer. Base
+colors are the mean of the tileset's central 4x4 sample over every cell in that
+role. Detail is integer arithmetic, with no RNG or clock. Faces are top 100%,
+left 75%, right 60%. The browser normalizes each role to a luminance mask and
+tints it with the original per-cell sample color.
 """
 
 from __future__ import annotations
@@ -14,16 +17,39 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from sim.content.build_height_map import CHUNK, MAP_PATH, TILESET_PATH, classify_height, sample_rgb
 from sim.content.png_codec import read_png_rgba, write_png_rgba
 
 REPO = Path(__file__).resolve().parents[2]
 OUT = REPO / "client/public/assets/tilesets"
 ATLAS_PATH = OUT / "linhe-block-atlas.png"
 META_PATH = OUT / "linhe-block-atlas.json"
+MAP_PATH = REPO / "sim/content/linhe-town.json"
+TILESET_PATH = OUT / "god-town-16.png"
+HEIGHT_PATH = OUT / "linhe-height.json"
 ROLES = ("water", "ground", "building", "canopy")
 FACE_SHADE = (100, 75, 60)
 TILE = 16
+CHUNK = 16
+#: 与 iso-terrain.ts 的 gid=0 木色兜底一致。
+FALLBACK_RGB = (107, 79, 42)
+type Pixels = list[list[tuple[int, int, int, int]]]
+
+
+def sample_rgb(pixels: Pixels, gid: int) -> tuple[int, int, int]:
+    """gid（1 起，非地图坐标）定位图集中心 4x4 采样块。"""
+    if gid == 0:
+        return FALLBACK_RGB
+    cols = len(pixels[0]) // TILE
+    if gid < 0 or gid > cols * (len(pixels) // TILE):
+        msg = f"ground gid outside tileset: {gid}"
+        raise ValueError(msg)
+    sx, sy = ((gid - 1) % cols) * TILE + 6, ((gid - 1) // cols) * TILE + 6
+    samples = [pixels[y][x] for y in range(sy, sy + 4) for x in range(sx, sx + 4)]
+    return (
+        sum(pixel[0] for pixel in samples) // 16,
+        sum(pixel[1] for pixel in samples) // 16,
+        sum(pixel[2] for pixel in samples) // 16,
+    )
 
 
 def tone(role: int, x: int, y: int) -> int:
@@ -40,17 +66,26 @@ def tone(role: int, x: int, y: int) -> int:
 
 def build(png_path: Path, meta_path: Path) -> dict:
     document = json.loads(MAP_PATH.read_text(encoding="utf-8"))
+    heights_doc = json.loads(HEIGHT_PATH.read_text(encoding="utf-8"))
+    w, h = document["width"], document["height"]
+    if (heights_doc["w"], heights_doc["h"]) != (w, h):
+        msg = "linhe-height.json 与 linhe-town.json 尺寸不一致"
+        raise ValueError(msg)
+    heights = heights_doc["h_values"]
     source = read_png_rgba(TILESET_PATH)
     if (len(source[0]), len(source)) != (2240, 1600):
         msg = "expected committed 2240x1600 god-town tileset"
         raise ValueError(msg)
     groups: list[list[tuple[int, int, int]]] = [[] for _ in ROLES]
-    for y in range(document["height"]):
-        for x in range(document["width"]):
+    for y in range(h):
+        for x in range(w):
             chunk = document["chunks"][f"{x // CHUNK},{y // CHUNK}"]
             gid = chunk["ground"][(y % CHUNK) * CHUNK + x % CHUNK]
-            rgb = sample_rgb(source, gid)
-            groups[1 if gid == 0 else classify_height(rgb)].append(rgb)
+            role = heights[y * w + x]
+            if not 0 <= role < len(ROLES):
+                msg = f"height role out of range at ({x},{y}): {role}"
+                raise ValueError(msg)
+            groups[role].append(sample_rgb(source, gid))
     colors: list[tuple[int, int, int]] = []
     for samples in groups:
         if not samples:
@@ -78,6 +113,7 @@ def build(png_path: Path, meta_path: Path) -> dict:
         "rows": 3,
         "source_tileset": "god-town-16.png",
         "source_map": "linhe-town.json",
+        "source_heights": "linhe-height.json",
         "sampling": "ground gid central 4x4 RGB mean, integer floor",
         "base_colors": {
             name: (r << 16) | (g << 8) | b for name, (r, g, b) in zip(ROLES, colors, strict=True)

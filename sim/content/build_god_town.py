@@ -10,8 +10,9 @@
 实测数据形态（本会话探查，比文档假设更干净）:
 - 渲染层只有 Bottom Ground 有内容（100%），其余 9 层全空——GOD 已预压平，
   层压合代码免写；D7 无分支必要
-- Collisions 1=阻挡 / 0=可走（spawn 90/90 全 0 + 10 地标 anchor 全 0 实证；
-  可走 820 格连片路网 795 连通，10 地标同块）
+- Collisions 1=阻挡 / 0=可走，但该层与 World Blocks 逐字节相同，只是三条
+  贯穿建筑与河道的直线带（820/14000 = 5.9%）——2026-10-28 起不再采用，
+  改由 terrain_class 从画面推导（见 extract_collision 文档）
 - Spawning Blocks 90 格两簇（行 17-20 / 51-54）
 
 输出:
@@ -33,6 +34,8 @@ REPO = Path(__file__).resolve().parents[2]
 PACK_DIR = REPO / "sim" / "content" / "assets" / "god-packs" / "taohuayuan-online"
 OUT_MAP = REPO / "sim" / "content" / "linhe-town.json"
 OUT_TILESET = REPO / "client" / "public" / "assets" / "tilesets" / "god-town-16.png"
+#: 高度图产物（等距渲染高度 + V4b 材料档；与碰撞同源，见 derive_terrain）
+HEIGHT_OUT = REPO / "client" / "public" / "assets" / "tilesets" / "linhe-height.json"
 
 MAP_W = 140
 MAP_H = 100
@@ -42,8 +45,9 @@ CHUNK = 16  # 内部格式 chunk 边长（TileMap.from_json_file 约定）
 # --- 常量：GOD 语义层名（实测唯一有内容的渲染层） ---------------------------
 
 GROUND_LAYER = "Bottom Ground"
-COLLISION_LAYER = "Collisions"  # 1=阻挡 / 0=可走
 SPAWN_LAYER = "Spawning Blocks"  # 1=出生候选格
+#: 地标锚点来源（10 个地点的 anchor_tile；LLM 计划文本直接引用这些坐标）
+PACK_META = "map_pack.json"
 
 
 def load_tiled_map() -> dict:
@@ -58,17 +62,18 @@ def extract_ground(tiled: dict) -> list[list[int]]:
     return [[data[y * MAP_W + x] for x in range(MAP_W)] for y in range(MAP_H)]
 
 
-def extract_collision(tiled: dict) -> list[list[int]]:
-    """Collisions → 临河镇语义矩阵。
+def extract_collision(walkable_flat: list[bool]) -> list[list[int]]:
+    """可走性 → 临河镇语义矩阵（1=可走 / 0=阻挡）。
 
-    GOD 语义：1=阻挡 / 0=可走（spawn 90/90 全 0 + 10 地标 anchor 全 0 实证）。
-    临河镇语义（实测 sim/world/map.py::Chunk.is_walkable 直接返回
-    collision[lx,ly]）：**collision=True=可走**——与 GOD 相反，取反直转。
-    （2026-10-12 施工中发现：首版同向直转得全图 13180 可走=反转了，
-    TileMap 加载实测抓出。）
+    **不读源包 `Collisions` 层。** 该层与 `World Blocks` 逐字节相同，只画了
+    三条贯穿建筑与河道的直线带（820/14000 格），既不是美术对齐的碰撞，也不是
+    可行走区域——2026-10-28 用户报告的「障碍物可以穿过 / 移动特别局限 /
+    只挖不放」三个症状都由它派生。
+
+    真正的可走性由 `sim.content.terrain_class.classify` 从画面推导，与渲染高度
+    同源；本函数只做形状转换。`walkable_flat` 为行主序 w*h 布尔。
     """
-    data = next(ly for ly in tiled["layers"] if ly["name"] == COLLISION_LAYER)["data"]
-    return [[1 - data[y * MAP_W + x] for x in range(MAP_W)] for y in range(MAP_H)]
+    return [[1 if walkable_flat[y * MAP_W + x] else 0 for x in range(MAP_W)] for y in range(MAP_H)]
 
 
 def extract_spawn(tiled: dict) -> list[tuple[int, int]]:
@@ -129,12 +134,60 @@ def build_chunks(
     return chunks
 
 
+def load_landmarks() -> dict[str, tuple[int, int]]:
+    """map_pack.json 的 10 个地点锚点（与 _landmarks 字段同源）。"""
+    with PACK_DIR.joinpath(PACK_META).open(encoding="utf-8") as f:
+        pack = json.load(f)
+    return {
+        str(loc["id"]): (int(loc["anchor_tile"]["x"]), int(loc["anchor_tile"]["y"]))
+        for loc in pack["locations"]
+    }
+
+
+def tile_samples_from_source() -> dict[int, tuple[float, float, float]]:
+    """图集每格 16x16 → terrain_class 特征（只采样实际用到的 gid）。"""
+    from sim.content.png_codec import read_png_rgba
+    from sim.content.terrain_class import tile_features
+
+    source = read_png_rgba(OUT_TILESET)
+    if (len(source[0]), len(source)) != (2240, 1600):
+        msg = f"expected halved tileset 2240x1600, got {(len(source[0]), len(source))}"
+        raise ValueError(msg)
+    cols = len(source[0]) // TILE
+    samples: dict[int, tuple[float, float, float]] = {0: (0.0, 0.0, 0.0)}
+    for gid in range(1, cols * (len(source) // TILE) + 1):
+        sx, sy = ((gid - 1) % cols) * TILE, ((gid - 1) // cols) * TILE
+        samples[gid] = tile_features([row[sx : sx + TILE] for row in source[sy : sy + TILE]])
+    return samples
+
+
+def derive_terrain(
+    ground: list[list[int]],
+    spawn: list[tuple[int, int]],
+    landmarks: dict[str, tuple[int, int]],
+) -> tuple[list[list[int]], list[int], dict[str, int]]:
+    """单一真相源：一次分类同时产出 collision 与 heights。"""
+    from sim.content.terrain_class import classify
+
+    flat_gids = [ground[y][x] for y in range(MAP_H) for x in range(MAP_W)]
+    forced = tuple(y * MAP_W + x for x, y in spawn) + tuple(
+        y * MAP_W + x for x, y in landmarks.values()
+    )
+    heights, walkable, stats = classify(
+        flat_gids, tile_samples_from_source(), MAP_W, MAP_H, forced_walkable=forced
+    )
+    return extract_collision(walkable), heights, stats
+
+
 def main() -> None:
     tiled = load_tiled_map()
     ground = extract_ground(tiled)
-    collision = extract_collision(tiled)
     spawn = extract_spawn(tiled)
+    landmarks = load_landmarks()
 
+    halve_tileset(PACK_DIR / "assets" / "tileset-0.png", OUT_TILESET)
+
+    collision, heights, stats = derive_terrain(ground, spawn, landmarks)
     chunks = build_chunks(ground, collision)
     payload = {
         "width": MAP_W,
@@ -143,29 +196,27 @@ def main() -> None:
         "source": "god-packs/taohuayuan-online (D6-D8 裁决 2026-10-12)",
         "spawn_candidates": [list(p) for p in spawn],
         "chunks": chunks,
-        "_landmarks": {
-            "peach_gate": (15, 18),
-            "ancestral_hall": (40, 18),
-            "stream_bridge": (66, 19),
-            "old_school": (93, 19),
-            "terraced_fields": (122, 19),
-            "signal_hill": (18, 52),
-            "guest_yard": (44, 53),
-            "craft_market": (72, 52),
-            "village_square": (100, 52),
-            "archive_room": (124, 52),
-        },
+        "_landmarks": {name: list(pos) for name, pos in landmarks.items()},
     }
     OUT_MAP.write_text(
         json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",
     )
 
-    halve_tileset(PACK_DIR / "assets" / "tileset-0.png", OUT_TILESET)
-    walkable = sum(r.count(0) for r in collision)
-    print(f"地图: {OUT_MAP} ({MAP_W}x{MAP_H}, {len(chunks)} chunks, 可走 {walkable} 格)")
+    # 高度图与碰撞同源（terrain_class 一次分类的两个投影）。写出格式只有一份，
+    # 由 build_height_map.render 提供，避免两处格式漂移导致 --check 失配。
+    from sim.content.build_height_map import PREVIEW_PATH, render
+
+    render(MAP_W, MAP_H, heights, HEIGHT_OUT, PREVIEW_PATH)
+
+    print(f"地图: {OUT_MAP} ({MAP_W}x{MAP_H}, {len(chunks)} chunks)")
+    print(f"高度: {HEIGHT_OUT}")
     print(f"tileset: {OUT_TILESET} (2240x1600)")
     print(f"出生候选: {len(spawn)} 格")
+    print(
+        f"地形: 可走 {stats['walkable']} / 土 {stats['earth']} / 石 {stats['stone']} / "
+        f"木 {stats['wood']} / 水 {stats['water']} / 挖通 {stats['carved']}"
+    )
 
 
 if __name__ == "__main__":

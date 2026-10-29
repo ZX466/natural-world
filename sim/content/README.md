@@ -24,11 +24,16 @@ DESIGN.md §5：地图源文件 / 素材清单 / 地标命名规范。
 
 现行管线（按执行顺序）：
 
-- `build_god_town.py`：从 GOD 桃花源原件生成整图 `linhe-town.json`（140×100，内部格式）
-  与 `client/public/assets/tilesets/god-town-16.png`。**改地图跑这里**，确定性可 diff。
-- `build_height_map.py`：从入库地图与图集生成等距高度表 `linhe-height.json`；
+- `terrain_class.py`：**地形单一真相源**。一次分类（每格 16×16 像素的走/冠/水占比 →
+  5×5 均值滤波 4 轮 → 只留最大连通块 → 作者真值挖通道）同时产出可走性与高度档。
+  碰撞与渲染高度**不得各自推导**——两者错位就是「看得见的高方块却能穿过去」。
+- `build_god_town.py`：从 GOD 桃花源原件生成整图 `linhe-town.json`（140×100，内部格式，
+  碰撞位取自 `terrain_class`）、`linhe-height.json` 与 `god-town-16.png`。
+  **改地图跑这里**，确定性可 diff。
+- `build_height_map.py`：高度表 `linhe-height.json` 的写出/校验入口——数据来自
+  `build_god_town.derive_terrain`（同一次分类），本模块**不再自带分类器**；
   `--check` 逐字节对照已提交产物。
-- `build_block_atlas.py`：仅从入库的 `god-town-16.png` 与 `linhe-town.json` 按 ground gid
+- `build_block_atlas.py`：读 `linhe-height.json` 的角色分档 + `god-town-16.png` 的 ground gid
   采中心 4×4 均色，生成四高度档/三面方块图集；前端以共享遮罩加逐格 tint 保留色差。
   运行 `uv run python -m sim.content.build_block_atlas`；`--check` 两次临时重建并逐字节
   对照 PNG/JSON，禁止随机数与时间戳。
