@@ -212,12 +212,16 @@ export class WorldMirror {
         !Number.isInteger(row.gid) ||
         row.gid < 0 ||
         row.gid > 65535 ||
+        !Number.isInteger(row.height) ||
+        row.height < 0 ||
+        row.height > 3 ||
         (row.action !== 'dig' && row.action !== 'place')
       )
         continue;
       const key = `${row.x},${row.y}`;
       const prior = this.voxelEdits.get(key);
-      if (prior?.action === row.action && prior.gid === row.gid) continue;
+      if (prior?.action === row.action && prior.gid === row.gid && prior.height === row.height)
+        continue;
       this.voxelEdits.set(key, { ...row });
       changed = true;
     }
@@ -231,9 +235,10 @@ export class WorldMirror {
     for (const row of this.voxelEdits.values()) {
       if (row.x >= map.w || row.y >= map.h) continue;
       const index = row.y * map.w + row.x;
-      // gid is the committed TILE_CHANGED truth, including structure restores.
-      map.collision[index] = row.gid === 0 ? 0 : 1;
-      if (map.ground) map.ground[index] = row.gid;
+      // Structure overrides may block height 1; no other height can admit movement.
+      const gid = row.height === 1 ? row.gid : 0;
+      map.collision[index] = gid === 0 ? 0 : 1;
+      if (map.ground) map.ground[index] = gid;
     }
   }
 

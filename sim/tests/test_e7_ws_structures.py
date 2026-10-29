@@ -12,7 +12,7 @@ def teardown_function(_):
 
 
 def test_protocol_version_bumped():
-    assert ws_mod._PROTOCOL_VERSION == "1.13"
+    assert ws_mod._PROTOCOL_VERSION == "1.14"
 
 
 def test_set_and_delta_payload():

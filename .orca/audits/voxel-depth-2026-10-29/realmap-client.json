@@ -1,0 +1,42 @@
+{
+  "states": [
+    {
+      "attempts": 0,
+      "cells": 14000,
+      "heightMismatch": 0,
+      "mouseMismatch": 0,
+      "keyboardMismatch": 0,
+      "invariantMismatch": 0,
+      "snapshotMismatch": 0
+    },
+    {
+      "attempts": 1,
+      "cells": 14000,
+      "heightMismatch": 0,
+      "mouseMismatch": 0,
+      "keyboardMismatch": 0,
+      "invariantMismatch": 0,
+      "snapshotMismatch": 0
+    },
+    {
+      "attempts": 2,
+      "cells": 14000,
+      "heightMismatch": 0,
+      "mouseMismatch": 0,
+      "keyboardMismatch": 0,
+      "invariantMismatch": 0,
+      "snapshotMismatch": 0
+    },
+    {
+      "attempts": 3,
+      "cells": 14000,
+      "heightMismatch": 0,
+      "mouseMismatch": 0,
+      "keyboardMismatch": 0,
+      "invariantMismatch": 0,
+      "snapshotMismatch": 0
+    }
+  ],
+  "total_cells": 56000,
+  "conditions": "Pure TS runtime/projection/picking; no browser or renderer launched."
+}

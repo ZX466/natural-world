@@ -29,24 +29,32 @@ it('invalidates height-only edits even when action and blocked gid have not chan
   expect(effectiveHeight(2, 1, () => 3, mirror.structures, mirror.voxelEdits)).toBe(0);
 });
 
-it.each([0, 1, 2, 3])('admits mouse and cardinal keyboard at height %i only with valid collision', (height) => {
-  const mirror = world();
-  mirror.applyVoxelEdits([row(height, 7)]);
-  const heightAt = (x: number, y: number) =>
-    effectiveHeight(x, y, () => 3, mirror.structures, mirror.voxelEdits);
-  const { sx, sy } = isoProject(2, 1, 1, screenBounds(4, 4));
-  const walkable = (x: number, y: number) => mirror.map!.collision[y * 4 + x] === 1;
-  expect(walkable(2, 1)).toBe(height === 1);
-  expect(canStep(mirror.map!, { x: 1, y: 1 }, { x: 2, y: 1 })).toBe(height === 1);
-  expect(pickGround(sx, sy, 4, 4, heightAt, walkable)).toEqual(height === 1 ? { x: 2, y: 1 } : null);
-});
+it.each([0, 1, 2, 3])(
+  'admits mouse and cardinal keyboard at height %i only with valid collision',
+  (height) => {
+    const mirror = world();
+    mirror.applyVoxelEdits([row(height, 7)]);
+    const heightAt = (x: number, y: number) =>
+      effectiveHeight(x, y, () => 3, mirror.structures, mirror.voxelEdits);
+    const { sx, sy } = isoProject(2, 1, 1, screenBounds(4, 4));
+    const walkable = (x: number, y: number) => mirror.map!.collision[y * 4 + x] === 1;
+    expect(walkable(2, 1)).toBe(height === 1);
+    expect(canStep(mirror.map!, { x: 1, y: 1 }, { x: 2, y: 1 })).toBe(height === 1);
+    expect(pickGround(sx, sy, 4, 4, heightAt, walkable)).toEqual(
+      height === 1 ? { x: 2, y: 1 } : null,
+    );
+  },
+);
 
-it.each([-1, 4, 1.5, true, '1', null, undefined, NaN])('rejects invalid wire height %s', (height) => {
-  const mirror = world();
-  mirror.applyVoxelEdits([{ ...row(1, 7), height } as unknown as VoxelEdit]);
-  expect(mirror.voxelEdits.size).toBe(0);
-  expect(mirror.map!.collision[6]).toBe(0);
-});
+it.each([-1, 4, 1.5, true, '1', null, undefined, NaN])(
+  'rejects invalid wire height %s',
+  (height) => {
+    const mirror = world();
+    mirror.applyVoxelEdits([{ ...row(1, 7), height } as unknown as VoxelEdit]);
+    expect(mirror.voxelEdits.size).toBe(0);
+    expect(mirror.map!.collision[6]).toBe(0);
+  },
+);
 
 it('retains blocked height-one earth banks without inventing walkability', () => {
   const mirror = world();

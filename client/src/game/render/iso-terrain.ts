@@ -9,6 +9,7 @@ const TILE = 16;
 // Structures may replace their ground gid with 0. No source pixels exist then;
 // use the same deterministic timber fallback as build_height_map.py.
 const FALLBACK_COLOR = 0x6b4f2a;
+const EDIT_COLORS = [0x8f8055, 0x8f8055, 0x8a8880, FALLBACK_COLOR] as const;
 type Structures = WorldMirror['structures'];
 type Edits = WorldMirror['voxelEdits'];
 const NO_EDITS: Edits = new Map();
@@ -234,7 +235,7 @@ export class IsoTerrain {
         const h = effectiveHeight(x, y, this.heightOf, structures, edits);
         const color =
           edits.has(key) && phase === undefined
-            ? 0x8f8055
+            ? EDIT_COLORS[h]!
             : this.colors(map.ground?.[y * map.w + x] ?? 0);
         const cell = {
           x,
@@ -243,7 +244,7 @@ export class IsoTerrain {
           color,
           phase,
           rubble: phase === undefined && ruins.has(key),
-          scar: phase === undefined && h > 0 && edits.get(key)?.action === 'dig',
+          scar: phase === undefined && h === 1 && edits.get(key)?.action === 'dig',
         };
         cells.push(cell);
         const prior = full ? undefined : previous[y * map.w + x];
@@ -458,7 +459,7 @@ export class IsoTerrain {
       if (x < 0 || y < 0 || x >= map.w || y >= map.h) continue;
       if (active.has(key) || retained.has(key)) continue;
       const height = effectiveHeight(x, y, this.heightOf, structures, edits);
-      if (height === 0) continue;
+      if (height !== 1) continue;
       let marker = this.scars.get(key);
       if (marker === undefined) {
         marker = this.scene.add.graphics();

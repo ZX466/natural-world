@@ -513,12 +513,13 @@ _SUB_SCHEMAS.update(
     {
         "VoxelEdit": {
             "type": "object",
-            "required": ["x", "y", "action", "gid"],
+            "required": ["x", "y", "action", "gid", "height"],
             "properties": {
                 "x": dict(_VOXEL_POSITION),
                 "y": dict(_VOXEL_POSITION),
                 "action": {"type": "string", "enum": ["dig", "place"]},
                 "gid": {"type": "integer", "minimum": 0, "maximum": 65535},
+                "height": {"type": "integer", "minimum": 0, "maximum": 3},
             },
             "additionalProperties": False,
         },

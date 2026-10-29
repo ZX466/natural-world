@@ -56,6 +56,7 @@ def test_dig_finishes_after_exactly_thirty_ticks_and_commits_one_unit():
         "x": 2,
         "y": 1,
         "action": "dig",
+        "height": 0,
         "material_id": "earth",
         "quantity": 1,
         "by": "chenmo",
@@ -64,10 +65,10 @@ def test_dig_finishes_after_exactly_thirty_ticks_and_commits_one_unit():
     assert events[1].payload["to_ref"] == "npc:chenmo"
     assert events[1].payload["reason"] == "dig_yield"
     assert events[1].payload["quantity"] == 1
-    assert events[2].payload["tile_id"] == 7
+    assert events[2].payload["tile_id"] == 0
     assert runtime.snapshot()["inventory"] == {"earth": 0, "stone": 0, "wood": 0}
     commit(events)
-    assert maps[0].is_walkable(2, 1)
+    assert not maps[0].is_walkable(2, 1)
     assert runtime.snapshot() == {"dig": None, "inventory": {"earth": 1, "stone": 0, "wood": 0}}
     assert runtime.tick(state, 1000) == []
 
@@ -279,18 +280,24 @@ def test_dig_yields_each_cells_static_height_material_and_credits_separate_stock
 
 
 @pytest.mark.parametrize(("height", "material"), [(1, "earth"), (2, "stone"), (3, "wood")])
-def test_dig_place_round_trip_consumes_the_targets_material(height, material):
+def test_place_on_a_walkable_surface_requires_earth_after_each_yield(height, material):
     runtime, state, maps, _, _, commit = setup_runtime(heights={(2, 1): height})
     dug = dig_once(runtime, state)
     commit(dug)
     assert runtime.snapshot()["inventory"][material] == 1
-    placed = runtime.request("place", 2, 1, state.model_copy(update={"tick": 130}))
-    assert placed[0].payload["material_id"] == material
-    assert placed[1].payload["material_id"] == material
+    if material != "earth":
+        with pytest.raises(VoxelRejected, match="没有土"):
+            runtime.request("place", 3, 1, state.model_copy(update={"tick": 130}))
+        assert runtime.snapshot()["inventory"][material] == 1
+        return
+    placed = runtime.request("place", 3, 1, state.model_copy(update={"tick": 130}))
+    assert placed[0].payload["material_id"] == "earth"
+    assert placed[0].payload["height"] == 2
+    assert placed[1].payload["material_id"] == "earth"
     assert placed[1].payload["reason"] == "place_consumed"
     commit(placed)
     assert runtime.snapshot()["inventory"] == {"earth": 0, "stone": 0, "wood": 0}
-    assert not maps[0].is_walkable(2, 1)
+    assert not maps[0].is_walkable(3, 1)
 
 
 def stock_events():
@@ -308,33 +315,34 @@ def stock_events():
     ]
 
 
-def test_pending_placements_reserve_each_material_independently_until_flush():
-    runtime, state, _, _, _, commit = setup_runtime(heights={(3, 1): 2, (4, 1): 2, (1, 2): 3})
+def test_pending_placements_reserve_target_materials_independently_until_flush():
+    runtime, state, _, _, _, commit = setup_runtime(heights={(3, 1): 2, (4, 1): 2})
     runtime.observe(stock_events())
     stone = runtime.request("place", 3, 1, state)
-    wood = runtime.request("place", 1, 2, state)
+    earth = runtime.request("place", 1, 2, state)
     assert stone[0].payload["material_id"] == "stone"
-    assert wood[0].payload["material_id"] == "wood"
+    assert earth[0].payload["material_id"] == "earth"
     assert runtime.snapshot()["inventory"] == {"earth": 1, "stone": 1, "wood": 1}
     with pytest.raises(VoxelRejected):
         runtime.request("place", 4, 1, state)
     commit(stone)
     with pytest.raises(VoxelRejected):
         runtime.request("place", 4, 1, state)
-    commit(wood)
-    commit(runtime.request("place", 1, 3, state))
-    assert runtime.snapshot()["inventory"] == {"earth": 0, "stone": 0, "wood": 0}
+    commit(earth)
+    with pytest.raises(VoxelRejected):
+        runtime.request("place", 1, 3, state)
+    assert runtime.snapshot()["inventory"] == {"earth": 0, "stone": 0, "wood": 1}
 
 
 def test_restore_discards_pending_reservations_for_every_material():
-    runtime, state, _, _, _, _ = setup_runtime(heights={(3, 1): 2, (1, 2): 3})
+    runtime, state, _, _, _, _ = setup_runtime(heights={(3, 1): 2})
     grants = stock_events()
     runtime.observe(grants)
     runtime.request("place", 3, 1, state)
     runtime.request("place", 1, 2, state)
     runtime.restore_from_events([event.to_store_dict() for event in grants])
     assert runtime.request("place", 3, 1, state)[0].payload["material_id"] == "stone"
-    assert runtime.request("place", 1, 2, state)[0].payload["material_id"] == "wood"
+    assert runtime.request("place", 1, 2, state)[0].payload["material_id"] == "earth"
 
 
 async def test_three_material_persistence_snapshot_and_replay_are_bit_equal(store):
@@ -352,12 +360,12 @@ async def test_three_material_persistence_snapshot_and_replay_are_bit_equal(stor
     commit(placed)
     balances = await ns.materialize_material_balances()
     assert balances == await ns.materialize_material_balances_replay()
-    assert runtime.snapshot()["inventory"] == {"earth": 1, "stone": 0, "wood": 1}
+    assert runtime.snapshot()["inventory"] == {"earth": 0, "stone": 1, "wood": 1}
     assert {
         material: balances[("npc:chenmo", material)] for material in ("earth", "stone", "wood")
     } == {
-        "earth": 1.0,
-        "stone": 0.0,
+        "earth": 0.0,
+        "stone": 1.0,
         "wood": 1.0,
     }
     restored, _, _, _, _, _ = setup_runtime()

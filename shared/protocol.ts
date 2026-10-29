@@ -667,6 +667,7 @@ export type components = {
       /** @enum {string} */
       readonly action: 'dig' | 'place';
       readonly gid: number;
+      readonly height: number;
       readonly x: number;
       readonly y: number;
     };

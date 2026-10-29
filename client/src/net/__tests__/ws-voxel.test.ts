@@ -20,7 +20,7 @@ function scene() {
   });
   const dispatch = (client as unknown as { dispatch(raw: string): void }).dispatch.bind(client);
   const send = (type: string, body: Record<string, unknown>) =>
-    dispatch(JSON.stringify({ type, channel: 'render', v: '1.13', ws_seq: 1, ...body }));
+    dispatch(JSON.stringify({ type, channel: 'render', v: '1.14', ws_seq: 1, ...body }));
   return { mirror, onVoxelState, send };
 }
 
@@ -37,7 +37,10 @@ it('consumes voxel state only after validating progress and whole nonnegative st
 
 it('merges edit deltas and clears stale edits on a full snapshot even when omitted', () => {
   const { mirror, send } = scene();
-  send('state_delta', { actors: [], voxel_edits: [{ x: 2, y: 1, action: 'place', gid: 0 }] });
+  send('state_delta', {
+    actors: [],
+    voxel_edits: [{ x: 2, y: 1, action: 'place', gid: 0, height: 2 }],
+  });
   expect(mirror.map!.collision[6]).toBe(0);
   send('full_snapshot', {
     actors: [],
@@ -56,8 +59,8 @@ it('ignores malformed edit coordinates instead of corrupting the typed arrays', 
   send('state_delta', {
     actors: [],
     voxel_edits: [
-      { x: true, y: 1, action: 'place', gid: 0 },
-      { x: 99, y: 1, action: 'place', gid: 0 },
+      { x: true, y: 1, action: 'place', gid: 0, height: 2 },
+      { x: 99, y: 1, action: 'place', gid: 0, height: 2 },
       { x: 1, y: 1, action: 'paint', gid: 0 },
       { x: 1, y: 1, action: 'dig', gid: -1 },
     ],

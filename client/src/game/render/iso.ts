@@ -13,7 +13,7 @@ export function screenBounds(w = 140, h = 100, maxH = 3) {
 
 type Bounds = ReturnType<typeof screenBounds>;
 const TOWN_BOUNDS = screenBounds();
-export type VoxelEdits = ReadonlyMap<string, { readonly action: 'dig' | 'place' }>;
+export type VoxelEdits = ReadonlyMap<string, { readonly height: number }>;
 const NO_EDITS: VoxelEdits = new Map();
 
 /** Top face center; callers never add an origin or subtract the height again. */
@@ -63,11 +63,7 @@ export function effectiveHeight(
     if (structure.tiles.some(([sx, sy]) => sx === x && sy === y)) return 2;
   }
   // Structures take precedence over an older dig beneath their footprint.
-  const height = heightAt(x, y);
-  const action = edits.get(`${x},${y}`)?.action;
-  if (action === 'dig') return Math.max(0, height - 1);
-  if (action === 'place') return Math.min(3, height + 1);
-  return height;
+  return edits.get(`${x},${y}`)?.height ?? heightAt(x, y);
 }
 
 export function heightOf(x: number, y: number, table?: HeightTable | null): number {

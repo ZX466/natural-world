@@ -161,9 +161,16 @@ class VoxelEditedPayload(BaseModel):
     x: int = Field(ge=0, strict=True)
     y: int = Field(ge=0, strict=True)
     action: Literal["dig", "place"]
+    # Height-less pre-1.14 rows remain readable; new completed edits always carry it.
+    height: int | None = Field(default=None, ge=0, le=3, strict=True)
     material_id: Literal["earth", "stone", "wood"] = "earth"
     quantity: int = Field(default=1, ge=1, le=1, strict=True)
     by: Literal["chenmo"] = "chenmo"
+
+    def result_height(self, previous: int) -> int:
+        if self.height is not None:
+            return self.height
+        return max(0, min(3, previous + (-1 if self.action == "dig" else 1)))
 
 
 class NpcLodChangePayload(BaseModel):
@@ -686,15 +693,21 @@ def tile_changed_event(
 
 
 def voxel_edited_event(
-    tick: int, *, x: int, y: int, action: Literal["dig", "place"], branch_id: str = "main"
+    tick: int,
+    *,
+    x: int,
+    y: int,
+    action: Literal["dig", "place"],
+    height: int | None = None,
+    branch_id: str = "main",
 ) -> WorldEvent:
-    payload = VoxelEditedPayload(x=x, y=y, action=action)
+    payload = VoxelEditedPayload(x=x, y=y, action=action, height=height)
     return WorldEvent(
         branch_id=branch_id,
         tick=tick,
         event_type=EventKind.VOXEL_EDITED,
         actor_id="chenmo",
-        payload=payload.model_dump(mode="json"),
+        payload=payload.model_dump(mode="json", exclude_none=True),
     )
 
 

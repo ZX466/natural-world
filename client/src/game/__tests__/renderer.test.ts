@@ -36,7 +36,7 @@ it('keeps the explicit flat grid and original structure phase drawing', () => {
 
 it('marks a dug cell on the flat renderer with a dark inset', () => {
   const { internal, mirror, graphics } = rendererScene('?renderer=flat');
-  mirror.applyVoxelEdits([{ x: 0, y: 0, action: 'dig', gid: 1 }]);
+  mirror.applyVoxelEdits([{ x: 0, y: 0, action: 'dig', gid: 1, height: 1 }]);
   internal.redrawMap();
   // 4 grid cells + earth fill + dark inset for the dug cell.
   expect(graphics.fillRect).toHaveBeenCalledTimes(6);
@@ -45,7 +45,7 @@ it('marks a dug cell on the flat renderer with a dark inset', () => {
 
 it('keeps the placed strip on the flat renderer instead of a dig scar', () => {
   const { internal, mirror, graphics } = rendererScene('?renderer=flat');
-  mirror.applyVoxelEdits([{ x: 0, y: 0, action: 'place', gid: 0 }]);
+  mirror.applyVoxelEdits([{ x: 0, y: 0, action: 'place', gid: 0, height: 2 }]);
   internal.redrawMap();
   expect(graphics.fillStyle).toHaveBeenCalledWith(0x6b4f2a, 1);
   expect(graphics.fillStyle.mock.calls.filter((call) => call[0] === 0x3f3020)).toHaveLength(0);
@@ -84,7 +84,7 @@ it('preloads the height table alongside the current tileset', () => {
 
 it('shows committed voxel walls and dug earth in flat without keeping future collision', () => {
   const { internal, mirror, graphics } = rendererScene('?renderer=flat');
-  mirror.applyVoxelEdits([{ x: 0, y: 0, action: 'place', gid: 0 }]);
+  mirror.applyVoxelEdits([{ x: 0, y: 0, action: 'place', gid: 0, height: 2 }]);
   internal.redrawMap();
   expect(graphics.fillStyle).toHaveBeenLastCalledWith(0x6b4f2a, 1);
   expect(graphics.fillRect).toHaveBeenLastCalledWith(13, 0, 3, 16);

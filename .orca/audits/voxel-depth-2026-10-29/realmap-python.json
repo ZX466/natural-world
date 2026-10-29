@@ -1,0 +1,72 @@
+{
+  "map": [
+    140,
+    100
+  ],
+  "states": [
+    {
+      "dig_attempts_per_cell": 0,
+      "cells": 14000,
+      "edits_this_round": 0,
+      "walkable": 3947,
+      "height_counts": {
+        "0": 1112,
+        "1": 5515,
+        "2": 4379,
+        "3": 2994
+      },
+      "blocked_height_one": 1568,
+      "invariant_violations": 0
+    },
+    {
+      "dig_attempts_per_cell": 1,
+      "cells": 14000,
+      "edits_this_round": 8941,
+      "walkable": 8326,
+      "height_counts": {
+        "0": 2680,
+        "1": 8326,
+        "2": 2994
+      },
+      "blocked_height_one": 0,
+      "invariant_violations": 0
+    },
+    {
+      "dig_attempts_per_cell": 2,
+      "cells": 14000,
+      "edits_this_round": 2994,
+      "walkable": 11320,
+      "height_counts": {
+        "0": 2680,
+        "1": 11320
+      },
+      "blocked_height_one": 0,
+      "invariant_violations": 0
+    },
+    {
+      "dig_attempts_per_cell": 3,
+      "cells": 14000,
+      "edits_this_round": 0,
+      "walkable": 11320,
+      "height_counts": {
+        "0": 2680,
+        "1": 11320
+      },
+      "blocked_height_one": 0,
+      "invariant_violations": 0
+    }
+  ],
+  "yield": {
+    "wood": 2994,
+    "stone": 7373,
+    "earth": 1568
+  },
+  "events_replayed": 35805,
+  "height_replay_mismatches": 0,
+  "view_replay_mismatches": 0,
+  "asset_sha256": {
+    "sim\\content\\linhe-town.json": "cb93b3226c71b7dc76637db25290570772702ab7930b57411c0d983557d25098",
+    "client\\public\\assets\\tilesets\\linhe-height.json": "4209dcf489d7d31355831ac031fa4e211aa15ca56b10b1c87d0502a3808b6fa0"
+  },
+  "conditions": "Headless. Each cell is an isolated reachable edit target; no structures/NPC occupancy. Legal requests only; open/zero cells reject subsequent digs."
+}

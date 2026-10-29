@@ -375,23 +375,29 @@ it('shares a fixed height texture across differently colored cells and preserves
   expect([...textures.keys()].filter((key) => key.startsWith('iso-block-'))).toHaveLength(1);
 });
 
-it('includes edits in the surface cache and uses earth appearance even when the original gid is unchanged', () => {
+it('includes edits in the surface cache and uses the resulting stone layer for a dug high column', () => {
   const { terrain, map, structures, images } = setup([0, 1, 3, 3]);
-  const edits = new Map<string, { x: number; y: number; action: 'dig' | 'place'; gid: number }>();
+  const edits = new Map<
+    string,
+    { x: number; y: number; action: 'dig' | 'place'; gid: number; height: number }
+  >();
   terrain.redraw(map, structures, edits);
   const high = images[1]!;
-  edits.set('0,1', { x: 0, y: 1, action: 'dig', gid: 1 });
+  edits.set('0,1', { x: 0, y: 1, action: 'dig', gid: 0, height: 2 });
   terrain.sync(map, structures, edits);
-  expect(high.setTint).toHaveBeenLastCalledWith(0x8f8055);
+  expect(high.setTint).toHaveBeenLastCalledWith(0x8a8880);
   expect(high.setDisplaySize).toHaveBeenLastCalledWith(32, 48); // Dig lowers the canopy from 3 to 2.
 });
 
 it('marks a dug cell with a dark scar and clears it when the edit goes away', () => {
   const { terrain, map, structures, graphics } = setup([0, 1, 2, 3]);
-  const edits = new Map<string, { x: number; y: number; action: 'dig' | 'place'; gid: number }>();
+  const edits = new Map<
+    string,
+    { x: number; y: number; action: 'dig' | 'place'; gid: number; height: number }
+  >();
   terrain.redraw(map, structures, edits);
   expect(graphics).toHaveLength(0);
-  edits.set('0,1', { x: 0, y: 1, action: 'dig', gid: 1 });
+  edits.set('0,1', { x: 0, y: 1, action: 'dig', gid: 1, height: 1 });
   terrain.sync(map, structures, edits);
   expect(graphics).toHaveLength(1);
   const top = isoProject(0, 1, 1, screenBounds(2, 2));
@@ -404,8 +410,11 @@ it('marks a dug cell with a dark scar and clears it when the edit goes away', ()
 
 it('does not scar a placed cell, whose raised block is its own marker', () => {
   const { terrain, map, structures, graphics } = setup([0, 1, 0, 0]);
-  const edits = new Map<string, { x: number; y: number; action: 'dig' | 'place'; gid: number }>();
-  edits.set('1,0', { x: 1, y: 0, action: 'place', gid: 0 });
+  const edits = new Map<
+    string,
+    { x: number; y: number; action: 'dig' | 'place'; gid: number; height: number }
+  >();
+  edits.set('1,0', { x: 1, y: 0, action: 'place', gid: 0, height: 2 });
   terrain.redraw(map, structures, edits);
   expect(graphics).toHaveLength(0);
 });
@@ -414,7 +423,7 @@ it('removes a height-two image when digging lowers it into the ground canvas', (
   const { terrain, map, structures, images, graphics } = setup([0, 1, 2, 3]);
   terrain.redraw(map, structures);
   const high = images[1]!;
-  const edits = new Map([['0,1', { x: 0, y: 1, action: 'dig' as const, gid: 1 }]]);
+  const edits = new Map([['0,1', { x: 0, y: 1, action: 'dig' as const, gid: 1, height: 1 }]]);
   terrain.sync(map, structures, edits);
   expect(high.destroyed).toBe(true);
   expect(graphics[0]!.y).toBe(48); // origin 56 + diagonal 8 - one height 16.
@@ -422,17 +431,17 @@ it('removes a height-two image when digging lowers it into the ground canvas', (
 
 it('leaves no floating scar when digging reaches ground level', () => {
   const { terrain, map, structures, graphics } = setup([0, 1, 0, 0]);
-  const edits = new Map([['1,0', { x: 1, y: 0, action: 'dig' as const, gid: 1 }]]);
+  const edits = new Map([['1,0', { x: 1, y: 0, action: 'dig' as const, gid: 0, height: 0 }]]);
   terrain.redraw(map, structures, edits);
   expect(graphics).toHaveLength(0);
 });
 
 it('destroys a prior scar when a replacement edit reaches zero', () => {
   const { terrain, map, structures, graphics } = setup([0, 1, 2, 3]);
-  const edits = new Map([['0,1', { x: 0, y: 1, action: 'dig' as const, gid: 1 }]]);
+  const edits = new Map([['0,1', { x: 0, y: 1, action: 'dig' as const, gid: 1, height: 1 }]]);
   terrain.redraw(map, structures, edits);
   expect(graphics).toHaveLength(1);
-  const replacement = new Map([['1,0', { x: 1, y: 0, action: 'dig' as const, gid: 1 }]]);
+  const replacement = new Map([['1,0', { x: 1, y: 0, action: 'dig' as const, gid: 0, height: 0 }]]);
   terrain.sync(map, structures, replacement);
   expect(graphics[0]!.destroyed).toBe(true);
   expect(graphics).toHaveLength(1);
@@ -440,10 +449,13 @@ it('destroys a prior scar when a replacement edit reaches zero', () => {
 
 it('marks a dug cell with a dark scar and clears it when the edit goes away', () => {
   const { terrain, map, structures, graphics } = setup([0, 1, 2, 3]);
-  const edits = new Map<string, { x: number; y: number; action: 'dig' | 'place'; gid: number }>();
+  const edits = new Map<
+    string,
+    { x: number; y: number; action: 'dig' | 'place'; gid: number; height: number }
+  >();
   terrain.redraw(map, structures, edits);
   expect(graphics).toHaveLength(0);
-  edits.set('0,1', { x: 0, y: 1, action: 'dig', gid: 1 });
+  edits.set('0,1', { x: 0, y: 1, action: 'dig', gid: 1, height: 1 });
   terrain.sync(map, structures, edits);
   expect(graphics).toHaveLength(1);
   // 2026-10-26 裁：dig 一次降一层，疤痕贴在**降后**的顶面（height 2 → 1）。
@@ -457,21 +469,27 @@ it('marks a dug cell with a dark scar and clears it when the edit goes away', ()
 
 it('does not scar a placed cell, whose raised block is its own marker', () => {
   const { terrain, map, structures, graphics } = setup([0, 1, 0, 0]);
-  const edits = new Map<string, { x: number; y: number; action: 'dig' | 'place'; gid: number }>();
-  edits.set('1,0', { x: 1, y: 0, action: 'place', gid: 0 });
+  const edits = new Map<
+    string,
+    { x: number; y: number; action: 'dig' | 'place'; gid: number; height: number }
+  >();
+  edits.set('1,0', { x: 1, y: 0, action: 'place', gid: 0, height: 2 });
   terrain.redraw(map, structures, edits);
   expect(graphics).toHaveLength(0);
 });
 
 it('creates a placed height-two block and removes it on an empty restored edit ledger', () => {
   const { terrain, map, structures, images } = setup([0, 1, 0, 0]);
-  const edits = new Map<string, { x: number; y: number; action: 'dig' | 'place'; gid: number }>();
+  const edits = new Map<
+    string,
+    { x: number; y: number; action: 'dig' | 'place'; gid: number; height: number }
+  >();
   terrain.redraw(map, structures, edits);
-  edits.set('1,0', { x: 1, y: 0, action: 'place', gid: 0 });
+  edits.set('1,0', { x: 1, y: 0, action: 'place', gid: 0, height: 2 });
   terrain.sync(map, structures, edits);
   const placed = images[1]!;
   expect(placed.setDisplaySize).toHaveBeenLastCalledWith(32, 48);
-  expect(placed.setTint).toHaveBeenLastCalledWith(0x8f8055);
+  expect(placed.setTint).toHaveBeenLastCalledWith(0x8a8880);
   edits.clear();
   terrain.sync(map, structures, edits);
   expect(placed.destroyed).toBe(true);
@@ -506,7 +524,10 @@ it('repaints a clipped neighborhood after one edit and retains the canvas textur
     40,
     40,
   );
-  const edits = new Map<string, { x: number; y: number; action: 'dig' | 'place'; gid: number }>();
+  const edits = new Map<
+    string,
+    { x: number; y: number; action: 'dig' | 'place'; gid: number; height: number }
+  >();
   terrain.redraw(map, structures, edits, 1);
   const ground = textures.get('iso-ground-composite');
   const ctx = canvases.find((c) => c.width === 1280)!.ctx;
@@ -515,7 +536,7 @@ it('repaints a clipped neighborhood after one edit and retains the canvas textur
   ctx.fill.mockClear();
   scene.textures.addCanvas.mockClear();
   scene.textures.remove.mockClear();
-  edits.set('20,20', { x: 20, y: 20, action: 'dig', gid: 1 });
+  edits.set('20,20', { x: 20, y: 20, action: 'dig', gid: 0, height: 0 });
   terrain.sync(map, structures, edits, 2);
   expect(textures.get('iso-ground-composite')).toBe(ground);
   expect(canvases).toHaveLength(canvasCount);
@@ -537,12 +558,15 @@ it('repaints a clipped neighborhood after one edit and retains the canvas textur
 it('does not upload ground pixels for phase-only or high-only changes', () => {
   const { terrain, map, structures, canvases, refresh } = setup([2, 2, 2, 2]);
   structures.set('house', { tiles: [[1, 0]], phase: 'built' });
-  const edits = new Map<string, { x: number; y: number; action: 'dig' | 'place'; gid: number }>();
+  const edits = new Map<
+    string,
+    { x: number; y: number; action: 'dig' | 'place'; gid: number; height: number }
+  >();
   terrain.redraw(map, structures, edits, 1);
   const canvasCount = canvases.length;
   structures.get('house')!.phase = 'collapsing';
   terrain.sync(map, structures, edits, 2);
-  edits.set('0,1', { x: 0, y: 1, action: 'place', gid: 0 });
+  edits.set('0,1', { x: 0, y: 1, action: 'place', gid: 0, height: 3 });
   terrain.sync(map, structures, edits, 3);
   expect(refresh).not.toHaveBeenCalled();
   expect(canvases.length - canvasCount).toBeLessThanOrEqual(1); // At most the shared h=3 texture.
@@ -551,16 +575,19 @@ it('does not upload ground pixels for phase-only or high-only changes', () => {
 it('matches a fresh full bake through clipped dig/place, low/high transitions and edge edits', () => {
   const heights = [0, 1, 2, 3, 1, 0, 1, 2, 1, 1, 0, 1, 3, 2, 1, 0];
   const live = setup(heights, 4, 4, true);
-  const edits = new Map<string, { x: number; y: number; action: 'dig' | 'place'; gid: number }>();
+  const edits = new Map<
+    string,
+    { x: number; y: number; action: 'dig' | 'place'; gid: number; height: number }
+  >();
   live.terrain.redraw(live.map, live.structures, edits, 0);
   const original = live.textures.get('iso-ground-composite');
   expect(live.canvases.find((c) => c.width === 128)!.ctx.pixels()).toContain(0xff6496c8);
   const snapshots = [
-    [{ x: 0, y: 0, action: 'place' as const, gid: 0 }],
-    [{ x: 1, y: 0, action: 'dig' as const, gid: 1 }],
-    [{ x: 2, y: 0, action: 'dig' as const, gid: 1 }],
-    [{ x: 2, y: 2, action: 'place' as const, gid: 0 }],
-    [{ x: 3, y: 3, action: 'place' as const, gid: 0 }],
+    [{ x: 0, y: 0, action: 'place' as const, gid: 0, height: 2 }],
+    [{ x: 1, y: 0, action: 'dig' as const, gid: 1, height: 1 }],
+    [{ x: 2, y: 0, action: 'dig' as const, gid: 1, height: 1 }],
+    [{ x: 2, y: 2, action: 'place' as const, gid: 0, height: 2 }],
+    [{ x: 3, y: 3, action: 'place' as const, gid: 0, height: 2 }],
     [],
   ];
   for (const [i, snapshot] of snapshots.entries()) {
@@ -583,7 +610,7 @@ it('matches full ground pixels after versioned structures, in-place edits, empty
   mirror.setMap(live.map);
   live.terrain.redraw(mirror.map, mirror.structures, mirror.voxelEdits, mirror.terrainVersion);
   const changes = [
-    () => mirror.applyVoxelEdits([{ x: 1, y: 0, action: 'place', gid: 0 }]),
+    () => mirror.applyVoxelEdits([{ x: 1, y: 0, action: 'place', gid: 0, height: 2 }]),
     () => mirror.applyStructures([{ rtoken: 'house', x: 1, y: 0, phase: 'built' }]),
     () => mirror.applyStructures([{ rtoken: 'house', x: 1, y: 0, phase: 'collapsing' }]),
     () => mirror.applyStructures([{ rtoken: 'house', x: 1, y: 0, phase: 'rubble' }]),
@@ -609,7 +636,10 @@ it.each([
   { w: 3, h: 2, heights: [0, 2, 1, 3, 1, 0] },
 ])('preserves every edge on a $w by $h map', ({ w, h, heights }) => {
   const live = setup(heights, w, h, true);
-  const edits = new Map<string, { x: number; y: number; action: 'dig' | 'place'; gid: number }>();
+  const edits = new Map<
+    string,
+    { x: number; y: number; action: 'dig' | 'place'; gid: number; height: number }
+  >();
   live.terrain.redraw(live.map, live.structures, edits, 0);
   let version = 0;
   for (let index = 0; index < w * h; index++) {
@@ -617,7 +647,13 @@ it.each([
       const x = index % w,
         y = Math.floor(index / w);
       edits.clear();
-      edits.set(`${x},${y}`, { x, y, action, gid: action === 'dig' ? 1 : 0 });
+      edits.set(`${x},${y}`, {
+        x,
+        y,
+        action,
+        gid: action === 'dig' ? 1 : 0,
+        height: action === 'dig' ? 1 : 2,
+      });
       live.terrain.sync(live.map, live.structures, edits, ++version);
       const reference = setup(heights, w, h, true);
       reference.terrain.redraw(reference.map, reference.structures, edits);

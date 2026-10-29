@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import contextlib
 import ipaddress
+import json
 import uuid
 from collections import deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Any
 
@@ -69,6 +70,21 @@ VOXEL_HEIGHT_PATH = (
 )
 
 
+def _voxel_height_lookup() -> Callable[[int, int], int]:
+    heights = json.loads(VOXEL_HEIGHT_PATH.read_text(encoding="utf-8"))
+    width, height = heights["w"], heights["h"]
+    values = heights["h_values"]
+    if len(values) != width * height or not all(
+        type(value) is int and 0 <= value <= 3 for value in values
+    ):
+        raise ValueError("invalid voxel water-height table")
+
+    def lookup(x: int, y: int) -> int:
+        return values[y * width + x] if 0 <= x < width and 0 <= y < height else 1
+
+    return lookup
+
+
 def _fallback_map() -> TileMap:
     """M0 占位 32×32 全平图（真实图缺失/损坏时的 fail-safe 底座）。"""
     from sim.world.map import CHUNK_SIZE, Chunk
@@ -97,15 +113,24 @@ def _default_map() -> TileMap:
 
 async def rebuild_tile_map(branch_store: Any) -> TileMap:
     """从静态底图与本分支的瓦片事件重建碰撞，不继承旧分支内存图。"""
-    from sim.core.events import TileChangedPayload
+    from sim.core.events import TileChangedPayload, VoxelEditedPayload
 
     tile_map = _default_map()
+    voxel_heights: dict[tuple[int, int], int] = {}
+    height_of = None
     if branch_store is not None:
         for event in await branch_store.read_branch_history():
-            if event["event_type"] == "tile_changed":
+            if event["event_type"] == EventKind.VOXEL_EDITED.value:
+                edit = VoxelEditedPayload.model_validate(event["payload"])
+                if height_of is None:
+                    height_of = _voxel_height_lookup()
+                pos = (edit.x, edit.y)
+                voxel_heights[pos] = edit.result_height(voxel_heights.get(pos, height_of(*pos)))
+            elif event["event_type"] == "tile_changed":
                 payload = TileChangedPayload.model_validate(event["payload"])
+                height = voxel_heights.get((payload.x, payload.y), 1)
                 tile_map = tile_map.with_collision(
-                    payload.x, payload.y, walkable=payload.tile_id != 0
+                    payload.x, payload.y, walkable=payload.tile_id != 0 and height == 1
                 )
     return tile_map
 
@@ -261,7 +286,6 @@ def _active_profile_snapshot_provider():
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     import asyncio
-    import json
 
     from sim.agent.voxel_exec import VoxelRuntime
     from sim.api import ws as voxel_gateway
@@ -339,7 +363,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             pathfinder.cache.entries.clear()
         voxel_runtime.observe(events)
         voxel_gateway.apply_voxel_events(
-            events, ground_gid=lambda x, y: _ground_tile_id(tile_map, x, y)
+            events,
+            ground_gid=lambda x, y: _ground_tile_id(tile_map, x, y),
+            height_of=voxel_height,
         )
         maintenance.observe(events)
         for event in events:
@@ -939,6 +965,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 voxel_gateway.restore_voxel_edits(
                     branch_events,
                     ground_gid=lambda x, y, at_cursor=tile_map: _ground_tile_id(at_cursor, x, y),
+                    height_of=voxel_height,
                 )
                 pathfinder.observe_map(tile_map)
                 pathfinder.cache.entries.clear()
@@ -1011,16 +1038,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         async with store.session_factory() as session:
             source_ready = await session.scalar(select(Branch.id).limit(1)) is None
     app.state.world_source_ready = source_ready
-    heights = json.loads(await asyncio.to_thread(VOXEL_HEIGHT_PATH.read_text, encoding="utf-8"))
-    height_w, height_h = heights["w"], heights["h"]
-    height_values = heights["h_values"]
-    if len(height_values) != height_w * height_h or not all(
-        type(height) is int and 0 <= height <= 3 for height in height_values
-    ):
-        raise ValueError("invalid voxel water-height table")
-
-    def voxel_height(x: int, y: int) -> int:
-        return height_values[y * height_w + x] if 0 <= x < height_w and 0 <= y < height_h else 1
+    voxel_height = await asyncio.to_thread(_voxel_height_lookup)
 
     def voxel_occupied(x: int, y: int) -> bool:
         return any((x, y) in structure.tiles for structure in maintenance.structures.values()) or (
@@ -1040,7 +1058,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     voxel_runtime.restore_from_events(voxel_history)
     voxel_gateway.restore_voxel_edits(
-        voxel_history, ground_gid=lambda x, y: _ground_tile_id(tile_map, x, y)
+        voxel_history,
+        ground_gid=lambda x, y: _ground_tile_id(tile_map, x, y),
+        height_of=voxel_height,
     )
     app.state.voxel_runtime = voxel_runtime
     voxel_gateway.set_voxel_runtime(voxel_runtime)
@@ -1077,7 +1097,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 raise result
 
 
-app = FastAPI(title="临河镇 sim", version="1.13", lifespan=lifespan)
+app = FastAPI(title="临河镇 sim", version="1.14", lifespan=lifespan)
 app.include_router(settings_router)
 app.include_router(anchors_router)  # M5-K7：玩家档读路径（落库 → WS 查表集供数）
 

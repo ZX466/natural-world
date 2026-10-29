@@ -117,10 +117,11 @@ depthKey(x, y): number          // (x+y)*1024 + y（R4 行序）
   实体脚底 = `isoProject(x, y, effectiveHeight(x,y))`（顶面中心）。
 - **有效高度（2026-10-26 用户裁决：挖一次降一层，放一次升一层）**：
   建筑 footprint 的 `phase ∈ {built, collapsing}` 优先返回 2；其余格从静态
-  `heightOf(x,y)` 计算：`dig → max(0, h-1)`、`place → min(3, h+1)`，无编辑保留 h。
-  挖到 0 不留悬空菱形疤痕；碰撞与 gid 仍由 `TileMap.collision` / 服务端编辑决定。
-  同格连续重复同一动作会被服务端拒绝；当前协议只记录最后动作，故先 place 再 dig 会从
-  视觉 h+1 变为 h-1（边界截断除外）。这是本轮明确接受的近似，精确深度须另改协议。
+  `heightOf(x,y)` 读取，无编辑保留 h；协议 **1.14** 起，有编辑直接使用服务端提交的
+  `VoxelEdit.height`（0..3），不再按最后动作推算。服务端在已提交高度上每次挖降一层、
+  放升一层：挖 3→2 仍阻挡，2→1 才可走；阻挡土坎 1→0 出 earth，挖空后仍阻挡且不能再挖。
+  只有 `height==1 && gid!=0` 可走，反向不成立（土坎与结构可阻挡）。挖到 0 不留悬空疤痕；
+  高度/出料从事件重放，旧事件没有 height 时按顺序累计层数，原材料账不改写。
   **客户端只有 `built | collapsing | rubble` 三态**（world-mirror.ts:70；planned/building
   不进客户端投影）。rubble 已补发静态原值恢复地面（P-6），按上述地面编辑规则回落，无编辑时为 heightOf。
   依据 A15/A17：建筑完工后地面 gid 变 0（画布留空）+ 碰撞不可走，建筑由

@@ -28,9 +28,9 @@ def scene(request):
     ws.reset_voxel_edits()
 
 
-def test_voxel_dispatch_and_snapshot_delta_use_protocol_113(scene):
+def test_voxel_dispatch_and_snapshot_delta_use_protocol_114(scene):
     runtime, loop, pf, maps, commit = scene
-    assert ws._PROTOCOL_VERSION == "1.13"
+    assert ws._PROTOCOL_VERSION == "1.14"
     assert (
         ws.handle_client_message(
             {"type": "voxel_request", "channel": "render", "action": "dig_start", "x": 2, "y": 1},
@@ -43,8 +43,8 @@ def test_voxel_dispatch_and_snapshot_delta_use_protocol_113(scene):
     assert runtime.snapshot()["dig"]["progress"] == 0
     events = runtime.tick(loop.state, 130)
     commit(events)
-    ws.apply_voxel_events(events, ground_gid=lambda x, y: 7)
-    expected = [{"x": 2, "y": 1, "action": "dig", "gid": 7}]
+    ws.apply_voxel_events(events, ground_gid=lambda x, y: 7, height_of=runtime._height)
+    expected = [{"x": 2, "y": 1, "action": "dig", "gid": 0, "height": 0}]
     assert ws.snapshot_payload(loop, maps[0])["voxel_edits"] == expected
     assert ws.delta_payload(loop, set())["voxel_edits"] == expected
     assert "voxel_edits" not in ws.delta_payload(loop, set())
@@ -109,16 +109,16 @@ def test_restore_edits_folds_tile_truth_and_clears_future_cells(scene):
     placed = runtime.request("place", 3, 1, loop.state)
     commit(placed)
     rows = [event.to_store_dict() for event in [*dug, *placed]]
-    ws.restore_voxel_edits(rows, ground_gid=lambda x, y: 7)
+    ws.restore_voxel_edits(rows, ground_gid=lambda x, y: 7, height_of=runtime._height)
     assert ws.snapshot_payload(loop, scene[3][0])["voxel_edits"] == [
-        {"x": 2, "y": 1, "action": "dig", "gid": 7},
-        {"x": 3, "y": 1, "action": "place", "gid": 0},
+        {"x": 2, "y": 1, "action": "dig", "gid": 0, "height": 0},
+        {"x": 3, "y": 1, "action": "place", "gid": 0, "height": 2},
     ]
-    ws.restore_voxel_edits(rows[:3], ground_gid=lambda x, y: 7)
+    ws.restore_voxel_edits(rows[:3], ground_gid=lambda x, y: 7, height_of=runtime._height)
     assert ws.snapshot_payload(loop, scene[3][0])["voxel_edits"] == [
-        {"x": 2, "y": 1, "action": "dig", "gid": 7},
+        {"x": 2, "y": 1, "action": "dig", "gid": 0, "height": 0},
     ]
-    ws.restore_voxel_edits([], ground_gid=lambda x, y: 7)
+    ws.restore_voxel_edits([], ground_gid=lambda x, y: 7, height_of=runtime._height)
     assert ws.snapshot_payload(loop, scene[3][0]).get("voxel_edits", []) == []
 
 
@@ -237,5 +237,5 @@ async def test_three_material_inventory_is_published_only_to_authenticated_hud_c
     )
     await ws.flush_voxel_updates(manager)
     assert private.frames[-1]["inventory"][material] == 1
-    assert private.frames[-1]["v"] == "1.13"
+    assert private.frames[-1]["v"] == "1.14"
     assert unauthenticated.frames == []

@@ -67,7 +67,14 @@ class VoxelRuntime:
         self._inventory = dict.fromkeys(_MATERIAL_BY_HEIGHT.values(), 0)
         self._reserved = dict.fromkeys(_MATERIAL_BY_HEIGHT.values(), 0)
         self._pending: dict[tuple[int, int], tuple[Action, str]] = {}
+        self._heights: dict[tuple[int, int], int] = {}
         self._updates: list[tuple[object | None, dict[str, Any]]] = []
+
+    def height_at(self, x: int, y: int) -> int:
+        return self._heights.get((x, y), self._height(x, y))
+
+    def _observe_height(self, edit: VoxelEditedPayload) -> None:
+        self._heights[(edit.x, edit.y)] = edit.result_height(self.height_at(edit.x, edit.y))
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -104,7 +111,7 @@ class VoxelRuntime:
             or abs(actor.pos[0] - x) + abs(actor.pos[1] - y) > VOXEL_REACH
         ):
             raise VoxelRejected("离得太远，够不着那里。")
-        height = self._height(x, y)
+        height = self.height_at(x, y)
         if height == 0:
             raise VoxelRejected("水面上动不了土。")
         material = _MATERIAL_BY_HEIGHT.get(height)
@@ -115,6 +122,8 @@ class VoxelRuntime:
         if (x, y) in self._pending:
             raise VoxelRejected("这块地方刚动过，稍等一等。")
         if self._map().is_walkable(x, y) != (action == "place"):
+            raise VoxelRejected("这块地方不用再动了。")
+        if action == "place" and height >= 3:
             raise VoxelRejected("这块地方不用再动了。")
         return material
 
@@ -186,13 +195,14 @@ class VoxelRuntime:
         return [*events, *stopped]
 
     def _edit(self, tick: int, x: int, y: int, action: Action, material: str) -> list[WorldEvent]:
-        gid = 0 if action == "place" else self._ground(x, y)
-        if action == "dig" and gid <= 0:
+        height = self.height_at(x, y) + (-1 if action == "dig" else 1)
+        gid = self._ground(x, y) if height == 1 else 0
+        if height == 1 and gid <= 0:
             raise VoxelRejected("这处没有能落脚的土面。")
         edit = voxel_edited_event(tick, x=x, y=y, action=action)
-        # Preserve the existing factory's metadata; validate the material before
-        # replacing its frozen payload without widening the legacy factory API.
-        payload = VoxelEditedPayload.model_validate({**edit.payload, "material_id": material})
+        payload = VoxelEditedPayload.model_validate(
+            {**edit.payload, "material_id": material, "height": height}
+        )
         return [
             edit.model_copy(update={"payload": payload.model_dump(mode="json")}),
             material_moved_event(
@@ -245,6 +255,7 @@ class VoxelRuntime:
                 changed = self._material(event.payload) or changed
             elif event.event_type is EventKind.VOXEL_EDITED:
                 edit = VoxelEditedPayload.model_validate(event.payload)
+                self._observe_height(edit)
                 pos = (edit.x, edit.y)
                 pending = self._pending.pop(pos, None)
                 if pending is not None and pending[0] == "place":
@@ -258,4 +269,6 @@ class VoxelRuntime:
         for event in events:
             if str(event["event_type"]) == EventKind.MATERIAL_MOVED.value:
                 self._material(event["payload"])
+            elif str(event["event_type"]) == EventKind.VOXEL_EDITED.value:
+                self._observe_height(VoxelEditedPayload.model_validate(event["payload"]))
         self._notify()

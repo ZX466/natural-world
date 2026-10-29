@@ -256,12 +256,13 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-10-29 第九轮移动操作｜实现与门禁完成，待主树收编】可走格短/长按即时发移动；拖拽合并目标，WASD/方向键八向持续，松手/Escape/失焦取消续走；目标标记到达/换目标/取消会清理。墙、断路、断线和世界未就绪均给戏内提示。协议仍 1.13；无在途实现，下一步由 Claude 独立收编与人工验手感。
+【2026-10-29 第十轮挖深/悬空修复｜实现与门禁完成，待主树收编】协议升 1.14；服务端事件记录结果高度，挖 3→2 仍阻挡/得木、2→1 开路/得石、土坎 1→0 阻挡/得土，零高度拒绝再挖。客户端渲染/碰撞/鼠标与键盘统一读取提交高度。无在途实现，下一步由 Claude 收编复核与人工验观感。
 
-- 基线 `0aa5d00`（含 `37e6a51` 新地形）：按派单先备份 talking，再 fetch+ff；talking 仍未跟踪，永不 git add。V4b 已收编。移动 RED 检查点 `f74f4af`，实现与最终交付提交见 git log；收编取 `0aa5d00..codex` 整段。旧 V4b 细节查历史快照，不重复启动。
-- 实现只在客户端：movement.ts 复用碰撞数组做八邻 BFS，禁斜穿角；runtime 做连接/可达性预检并复用现有 HUD 提示槽。main 的本地结果回调只表示客户端受理，不是服务端确认。移动一律 move_request，无 impulse 旁路；鼠标移动与挖放共用可见格拾取，不改投影/高度函数。
-- 输入：可走格 pointerdown 同步发起；阻挡格仍按住 150ms 才挖，右键放置保留。拖拽保留最新点，至少 100ms 且看到角色位置进展才替换在途路径，避免反复插入起点导致原地不动；松手最多补最后一条。键盘按逻辑格轴八向（W/上=-y），同源同方向不重发；松手以现有 move_request 指向最新角色格取消。输入框/textarea/select/contenteditable 不吞键，keyup、blur、shutdown、断线及换世界均有清理测试。
-- 实测条件与数字：客户端虚拟时钟下按键/可走格按下同栈派发（0ms）；4Hz 位置快照夹具中 1000ms 的 124 次 pointermove 合成 **4 条移动请求，释放补 1 条**。真实服务端无网络探针遍历 15 种起始相位，首次实际换格 **266.667–500ms（16–30 tick）**；路径包含起点会先消耗一拍，不能只算派单的 0..14 tick 相位。长直线路径稳态 **4 格/s**，逐邻格键盘续发 **2 格/s**；本单按约束未改 sim 相位/路径语义。
-- 本轮亲测：pytest **2985P / 121S / 72D / 0F，4 warnings，371.81s**；ruff check/format（365 files）与 pyright 0 errors/warnings；gen:protocol:check、client typecheck/lint/format 通过；Vitest **290 passed / 40 files**；生产 build 通过（11.56s，保留现有大 chunk 提示）。两资产 --check 逐字节一致。证据/复核在 `.orca/audits/movement-input-2026-10-29/plan.md`，原生探针 server_timing.py 可复跑；日志/JSON 为本地件。
-- 范围与限制：sim/**、shared/**、renderer/**、client/public 资产与依赖均零改动；相机方法逐字节不变，INTERP_MS=200 / effectiveHeight 不动。未做浏览器、网络 RTT 或真人输入到显示延迟验收，服务端已经迈出的在途一步不能由客户端撤销；覆盖率未配置、不报百分比。保留工作树，仅本地提交、不推远程，只用 talking 留回执。
-- 恢复先 workflow → talking → 本节；i-have-adhd 与简洁中文持续启用，CodeGraph 返回源码视为已读；50% 上下文提醒已给，本单交付后建议切新对话。不启动未派的 V3.5/V4-3D。
+- 基线 **9b375bd**：按第十轮派单先备份 talking 并 ff，包含主树拾取 P0 **b0d4341**。移动拾取 pickGround 与编辑拾取 pickVoxel 必须分开；第九轮已收编，不再按旧 §7 的共用拾取结论执行。RED 提交 **7b1d559**；实现提交见 git log，收编取 **9b375bd..codex** 全段。talking 仍 ignored/untracked，永不 git add；仅本地 codex 提交、不推送、不改主树。
+- 高度：VoxelRuntime.height_at 折叠已提交编辑，pending 不提前改高度/库存。voxel.edited.height 为 strict 0..3；缺省仅为读旧历史，按原有界分支顺序逐层折叠，旧材料账原样保留。VoxelEdit.height 在 render 协议中必需；主树冷启动/分叉的碰撞重建同样约束旧无高度事件。无数据库迁移。
+- 保留 **walkable ⇒ height==1**，反向不成立（土坎/结构仍可挡路）。dig 只受理阻挡格，place 仍只受理可走格、升一层并按目标当前高度扣料，因此正常高 1 层地面扣 earth；石木仍为独立库存。本轮未加跳跃、堆高/材料选择 UI。高块颜色随结果层，scar 只贴 dig 后的 h=1；结构覆盖仍优先 h=2，零高度不悬空留疤。
+- 真实 **140×100** 地图逐格跑 0/1/2/3 轮合法挖掘：可走 **3947/8326/11320/11320**；四态合计 **56000 格**，高度/碰撞/鼠标地面拾取/键盘相邻通行/重连快照差异全部 0。原 **1568** 阻挡土坎保留并出 **1568 earth**；总出 stone=7373 / wood=2994。**35805** 事件重放高度/编辑投影零差异。真实存档冷启动、历史/两级分叉另逐格核对 14000 高度与碰撞、库存和材料余额一致。
+- 本轮亲测：pytest **2996P / 121S / 72D / 0F，4 旧弃用警告，377.83s**；Ruff check/format 366 files、Pyright 0 errors/warnings；client typecheck/lint/format 与 **310 passed / 42 files**；build 13.05s（现有大 chunk 提示）、gen:protocol:check 及两资产 --check 逐字节一致。首次 full 仅 README 徽章漏升导致 1F，修到 1.14 后复跑全绿。
+- 证据在 **.orca/audits/voxel-depth-2026-10-29/plan.md** 与 realmap-python.json / realmap-client.json（tracked）；日志本地。一次性 .orca/tmp 探针/配置/输入按派单删除。无浏览器/真人视觉验收，不报覆盖率百分比；资产/依赖/摄像机/插值/行走节拍零改动。主树独立复核仍需执行。
+- Windows 测试统一设 PYTHONUTF8=1（可同时 PYTHONIOENCODING=utf-8），避免只改子进程 stdout 后父进程用 GBK 读日志导致线程警告。Python 全程 uv；删 npm/venv 先问用户；浏览器仅用户明确要求，固定 C:/Users/zx198/AppData/Local/ms-playwright。
+- 恢复先 workflow → talking → 本节；i-have-adhd/简洁中文持续启用；CodeGraph 显式 projectPath，返回源码视为已读。50% 上下文提醒已给，本轮交付后建议开新对话。不启动未派任务。

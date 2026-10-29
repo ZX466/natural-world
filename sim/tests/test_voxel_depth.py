@@ -67,9 +67,7 @@ def test_event_rejects_invalid_result_heights(height):
 
 
 def test_event_accepts_an_explicit_result_height_and_retains_legacy_rows():
-    payload = VoxelEditedPayload.model_validate(
-        {"x": 2, "y": 1, "action": "dig", "height": 1}
-    )
+    payload = VoxelEditedPayload.model_validate({"x": 2, "y": 1, "action": "dig", "height": 1})
     assert payload.height == 1
     assert "height" not in voxel_edited_event(1, x=2, y=1, action="dig").payload
 
@@ -102,9 +100,9 @@ def test_legacy_replay_folds_depth_but_preserves_original_material_stock():
 
 
 async def test_server_map_rebuild_normalizes_heightless_voxel_history():
-    from sim.api.main import VOXEL_HEIGHT_PATH, _default_map, _ground_tile_id, rebuild_tile_map
-
     import json
+
+    from sim.api.main import VOXEL_HEIGHT_PATH, _default_map, _ground_tile_id, rebuild_tile_map
 
     heights = json.loads(VOXEL_HEIGHT_PATH.read_text(encoding="utf-8"))
     tile_map = _default_map()
