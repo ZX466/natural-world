@@ -15,7 +15,7 @@ import {
   screenBounds,
 } from '../render/iso';
 import { IsoTerrain } from '../render/iso-terrain';
-import { pickVoxel } from '../render/voxel-picking';
+import { pickGround, pickVoxel } from '../render/voxel-picking';
 import { BLOCK_ATLAS_KEY, BLOCK_ATLAS_META_KEY } from '../render/block-atlas';
 import { placeBubble, selectBubbleNames } from '../render/bubbles';
 import type { WorldMirror } from '../world-mirror';
@@ -362,6 +362,7 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  /** 编辑拾取：看得见的那个方块柱（高方块优先）。 */
   private voxelTarget(pointer: Phaser.Input.Pointer): { x: number; y: number } | null {
     const map = this.mirror.map;
     if (map === null) return null;
@@ -374,6 +375,33 @@ export class WorldScene extends Phaser.Scene {
     return x >= 0 && y >= 0 && x < map.w && y < map.h ? { x, y } : null;
   }
 
+  /**
+   * 移动拾取：玩家脚下那层地面，**不判遮挡**。
+   *
+   * 2026-10-29「人物无法移动」修：此前移动复用 `voxelTarget`（= `pickVoxel`，
+   * 为编辑设计、h>=2 优先）。等距画面里 h=3 方块与其斜后方 4 格的 h=1 地面顶面
+   * 菱形完全重合，于是「点空地」被判成「点房子」→ `movementFailure` 全拒。
+   * 真实地图实测 19.3% 的可走格如此，出生点邻域 26 格里 21 格如此。
+   */
+  private groundTarget(pointer: Phaser.Input.Pointer): { x: number; y: number } | null {
+    const map = this.mirror.map;
+    if (map === null) return null;
+    if (this.renderMode === 'iso')
+      return pickGround(
+        pointer.worldX,
+        pointer.worldY,
+        map.w,
+        map.h,
+        (x, y) =>
+          effectiveHeight(x, y, this.heightAt, this.mirror.structures, this.mirror.voxelEdits),
+        (x, y) => map.collision[y * map.w + x] === 1,
+      );
+    const x = Math.floor(pointer.worldX / TILE),
+      y = Math.floor(pointer.worldY / TILE);
+    if (x < 0 || y < 0 || x >= map.w || y >= map.h) return null;
+    return map.collision[y * map.w + x] === 1 ? { x, y } : null;
+  }
+
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
     this.cancelVoxelInput();
     if (this.movementKeys.size) this.cancelMovement();
@@ -382,41 +410,47 @@ export class WorldScene extends Phaser.Scene {
       useUiStore.getState().setVoxelError('这会儿走不了。');
       return;
     }
-    const target = this.voxelTarget(pointer);
+    // 一次按下同时问两个拾取器：`digTarget` 是看得见的高方块（编辑），
+    // `ground` 是脚下那层地面（移动）。二者在等距画面里可能指向不同格——
+    // 见 `groundTarget` 注释，这不是 bug 而是投影本身的重合。
+    const digTarget = this.voxelTarget(pointer);
+    const ground = this.groundTarget(pointer);
     if (pointer.button === 2) {
       this.stopMovement();
-      if (target && map.collision[target.y * map.w + target.x] === 1)
-        this.game.events.emit('client:voxel_request', { action: 'place', ...target });
+      if (digTarget && map.collision[digTarget.y * map.w + digTarget.x] === 1)
+        this.game.events.emit('client:voxel_request', { action: 'place', ...digTarget });
       return;
     }
     if (pointer.button !== 0) return;
+    const canDig = digTarget !== null && map.collision[digTarget.y * map.w + digTarget.x] === 0;
     const press = {
       id: pointer.id,
-      target,
+      target: digTarget,
       digging: false,
-      moving: target !== null && map.collision[target.y * map.w + target.x] === 1,
+      moving: !canDig && ground !== null,
       version: this.mirror.voxelSnapshotVersion,
     };
     this.voxelPress = press;
-    if (press.moving && target) {
-      this.pendingDrag = target;
+    // 只点得到地面 → 立即走（长按也不转挖掘，可走格没有可挖的东西）。
+    if (press.moving && ground) {
+      this.pendingDrag = ground;
       this.flushDragTarget(true);
       return;
     }
+    if (!canDig || !digTarget) return;
     this.voxelHoldTimer = setTimeout(() => {
       this.voxelHoldTimer = null;
       const current = this.mirror.map;
       if (
         this.voxelPress !== press ||
         press.version !== this.mirror.voxelSnapshotVersion ||
-        !target ||
         !current ||
-        current.collision[target.y * current.w + target.x] !== 0
+        current.collision[digTarget.y * current.w + digTarget.x] !== 0
       )
         return;
       press.digging = true;
       this.stopMovement();
-      this.game.events.emit('client:voxel_request', { action: 'dig_start', ...target });
+      this.game.events.emit('client:voxel_request', { action: 'dig_start', ...digTarget });
     }, 150);
   }
 
@@ -428,10 +462,12 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
     if (press.moving) {
-      const target = this.voxelTarget(pointer);
-      if (target) this.pendingDrag = target;
+      const ground = this.groundTarget(pointer);
+      if (ground) this.pendingDrag = ground;
       this.flushDragTarget(true);
     } else if (!press.digging) {
+      // 短按：没到挖掘阈值就抬手 → 当作移动。这一条修掉了「点被遮挡的地面
+      // 什么都不发生」——那正是 2026-10-29「人物无法移动」的直接表现。
       this.handlePointer(pointer);
     }
     this.cancelVoxelInput();
@@ -444,10 +480,10 @@ export class WorldScene extends Phaser.Scene {
       this.cancelVoxelInput();
       return;
     }
-    const target = this.voxelTarget(pointer);
-    if (!target) return;
+    const ground = this.groundTarget(pointer);
+    if (!ground) return;
     if (!press.moving) {
-      if (target.x === press.target?.x && target.y === press.target.y) return;
+      if (ground.x === press.target?.x && ground.y === press.target.y) return;
       if (this.voxelHoldTimer !== null) clearTimeout(this.voxelHoldTimer);
       this.voxelHoldTimer = null;
       if (press.digging && press.target)
@@ -455,7 +491,7 @@ export class WorldScene extends Phaser.Scene {
       press.digging = false;
       press.moving = true;
     }
-    this.pendingDrag = target;
+    this.pendingDrag = ground;
     this.flushDragTarget();
   }
 
@@ -497,8 +533,8 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private handlePointer(pointer: Phaser.Input.Pointer): void {
-    const target = this.voxelTarget(pointer);
-    if (target) this.requestMovement(target);
+    const ground = this.groundTarget(pointer);
+    if (ground) this.requestMovement(ground);
     else useUiStore.getState().setVoxelError('那处走不过去。');
   }
 

@@ -266,26 +266,31 @@ describe.each(['flat', 'iso'] as const)('%s interaction and movement', (mode) =>
     const { internal, mirror, marker, emit } = setup(mode);
     mirror.actors.get('hero')!.x = 0;
     mirror.actors.get('hero')!.y = 0;
-    const hit = mode === 'iso' ? isoProject(2, 1, 3, screenBounds(4, 4)) : { sx: 40, sy: 24 };
+    // 目标格必须是生产形状的可走格：不变量 `walkable ⇒ h == 1`（夹具里 (2,1) 是
+    // 可走却 h=3 的违规格，只用于高度/镜头用例，不能当移动目标）。
+    const goal = { x: 1, y: 1 };
+    const hit =
+      mode === 'iso' ? isoProject(goal.x, goal.y, 1, screenBounds(4, 4)) : { sx: 16, sy: 16 };
     internal.handlePointer({ worldX: hit.sx, worldY: hit.sy });
-    expect(emit).toHaveBeenLastCalledWith(
-      'client:move_request',
-      { x: 2, y: 1 },
-      expect.any(Function),
-    );
-    const markerPos = mode === 'iso' ? isoProject(2, 1, 3, screenBounds(4, 4)) : hit;
+    expect(emit).toHaveBeenLastCalledWith('client:move_request', goal, expect.any(Function));
+    const markerPos =
+      mode === 'iso'
+        ? isoProject(goal.x, goal.y, 1, screenBounds(4, 4))
+        : { sx: goal.x * 16 + 8, sy: goal.y * 16 + 8 };
     expect(marker.setPosition).toHaveBeenLastCalledWith(markerPos.sx, markerPos.sy);
     if (mode === 'iso') {
-      expect(marker.setDepth).toHaveBeenLastCalledWith(depthKey(2, 1) + 1.5);
+      expect(marker.setDepth).toHaveBeenLastCalledWith(depthKey(goal.x, goal.y) + 1.5);
     } else {
-      expect(marker.setDepth).not.toHaveBeenCalled(); // flat keeps the depth chosen at create().
+      expect(marker.setDepth).not.toHaveBeenCalled(); // flat keeps the depth created at create().
     }
     emit.mockClear();
     marker.setVisible.mockClear();
-    mirror.map!.collision[6] = 0;
+    // 本地预检拒绝：可走性判在拾取阶段（`groundTarget` 只返回可走格），
+    // 阻挡格与界外都不发网络帧——世界真相仍只由 sim 决定。
+    mirror.map!.collision[goal.y * 4 + goal.x] = 0;
     internal.handlePointer({ worldX: hit.sx, worldY: hit.sy });
     internal.handlePointer({ worldX: -10000, worldY: -10000 });
-    expect(emit).toHaveBeenCalledTimes(1); // The local bridge owns rejection, not a server frame.
+    expect(emit).not.toHaveBeenCalled();
     expect(marker.setVisible).not.toHaveBeenCalledWith(true);
   });
 
