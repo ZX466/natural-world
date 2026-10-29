@@ -5,10 +5,10 @@
 
 ## 0. 当前状态
 
-- **main HEAD**：本卡所在提交（第九轮收编 docs）；**代码收编点 `b0d4341`**
+- **main HEAD**：本卡所在提交（talking 精简 docs）；**代码收编点 `b0d4341`**
   （移动操作收编 + 拾取回归修复）。
-- **codex HEAD**：`04e2175`，**已被主树收编**；落后 2 个提交（`b0d4341` 修复 +
-  本卡 docs），**无分叉**，可 `merge --ff-only main` 同步。
+- **codex HEAD**：`04e2175`，**已被主树收编**；落后 3 个提交（`b0d4341` 修复 +
+  收编 docs + 本卡 docs），**无分叉**，可 `merge --ff-only main` 同步。
 - **协议**：**`1.13`**（V4b 升级）；双落点已同改
   （`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts::PROTOCOL_VERSION`）。
   第八/九轮改动均未动协议字段（第九轮纯客户端）。
@@ -33,7 +33,7 @@
 | ruff check / format | clean（365 files） |
 | pyright | 0 errors, 0 warnings |
 | client typecheck / lint / prettier | EXIT 0 |
-| client vitest | **295 passed / 41 files**（较第八轮 +36） |
+| client vitest | **295 passed / 41 files**（codex 交付时 290P/40F，主树修 P0 新增 5 条） |
 | gen:protocol:check | EXIT 0 |
 | build_height_map --check | CHECK OK，heights={0:1112, 1:5515, 2:4379, 3:2994} |
 | build_block_atlas --check | CHECK OK，counts 同上 |
@@ -74,7 +74,7 @@
 拾取器：`digTarget`（编辑）、`ground`（移动）；能挖则起计时器，短按抬手仍落回移动。
 拖拽与键盘同改走 `groundTarget`。
 
-**教训（已进 §3）**：**单测全绿 ≠ 真机能动**。codex 295 个前端测试全过、门禁全绿，
+**教训（已进 §3）**：**单测全绿 ≠ 真机能动**。codex 交付时 290 个前端测试全过、门禁全绿，
 但真实地图上 19% 的可走格根本点不中——因为测试夹具造的是「可走格与高块不重叠」的
 玩具图，而真实地图上重叠是常态。凡涉及拾取/投影的改动，**必须用真实地图数据实测命中率**。
 
