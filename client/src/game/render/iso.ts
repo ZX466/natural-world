@@ -1,3 +1,5 @@
+import type { VoxelEdit } from '../world-mirror';
+
 /** V1 geometry. Logical TILE=16 stays independent of the rendered block size. */
 export const ISO = { TW: 32, TH: 16, HH: 16 } as const;
 
@@ -13,7 +15,7 @@ export function screenBounds(w = 140, h = 100, maxH = 3) {
 
 type Bounds = ReturnType<typeof screenBounds>;
 const TOWN_BOUNDS = screenBounds();
-export type VoxelEdits = ReadonlyMap<string, { readonly height: number }>;
+export type VoxelEdits = ReadonlyMap<string, Pick<VoxelEdit, 'height' | 'action'>>;
 const NO_EDITS: VoxelEdits = new Map();
 
 /** Top face center; callers never add an origin or subtract the height again. */

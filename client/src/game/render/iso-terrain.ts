@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import type { MapStatic, WorldMirror } from '../world-mirror';
-import { ISO, depthKey, effectiveHeight, isoProject, screenBounds } from './iso';
+import { ISO, depthKey, effectiveHeight, isoProject, screenBounds, type VoxelEdits } from './iso';
 import { BlockAtlas } from './block-atlas';
 
 const GROUND_KEY = 'iso-ground-composite';
@@ -10,8 +10,10 @@ const TILE = 16;
 // use the same deterministic timber fallback as build_height_map.py.
 const FALLBACK_COLOR = 0x6b4f2a;
 const EDIT_COLORS = [0x8f8055, 0x8f8055, 0x8a8880, FALLBACK_COLOR] as const;
+const BANK_DARK = 0x2c1b10;
+const BANK_LIGHT = 0xf1d793;
 type Structures = WorldMirror['structures'];
-type Edits = WorldMirror['voxelEdits'];
+type Edits = VoxelEdits;
 const NO_EDITS: Edits = new Map();
 type HeightLookup = (x: number, y: number) => number;
 interface BlockView {
@@ -27,6 +29,7 @@ interface SurfaceCell {
   phase: string | undefined;
   rubble: boolean;
   scar: boolean;
+  bank: boolean;
 }
 type Rect = { left: number; top: number; right: number; bottom: number };
 
@@ -96,6 +99,7 @@ export class IsoTerrain {
   private blocks = new Map<string, BlockView>();
   private rubble = new Map<string, Phaser.GameObjects.Graphics>();
   private scars = new Map<string, Phaser.GameObjects.Graphics>();
+  private banks = new Map<string, Phaser.GameObjects.Graphics>();
   private textureKeys = new Set<string>();
   private colors: ((gid: number) => number) | null = null;
   private lastMap: MapStatic | null = null;
@@ -233,6 +237,7 @@ export class IsoTerrain {
         const key = `${x},${y}`;
         const phase = overrides.get(key);
         const h = effectiveHeight(x, y, this.heightOf, structures, edits);
+        const bank = h === 1 && map.collision[y * map.w + x] === 0;
         const color =
           edits.has(key) && phase === undefined
             ? EDIT_COLORS[h]!
@@ -244,7 +249,8 @@ export class IsoTerrain {
           color,
           phase,
           rubble: phase === undefined && ruins.has(key),
-          scar: phase === undefined && h === 1 && edits.get(key)?.action === 'dig',
+          scar: phase === undefined && h === 1 && !bank && edits.get(key)?.action === 'dig',
+          bank,
         };
         cells.push(cell);
         const prior = full ? undefined : previous[y * map.w + x];
@@ -253,7 +259,12 @@ export class IsoTerrain {
           includeLow(cell);
           changed = true;
         }
-        if (prior?.phase !== phase || prior?.rubble !== cell.rubble || prior?.scar !== cell.scar)
+        if (
+          prior?.phase !== phase ||
+          prior?.rubble !== cell.rubble ||
+          prior?.scar !== cell.scar ||
+          prior?.bank !== cell.bank
+        )
           changed = true;
       }
     }
@@ -286,7 +297,8 @@ export class IsoTerrain {
       this.blocks.delete(key);
     }
     this.syncRubble(map, structures, overrides, bounds, edits);
-    this.syncScars(map, structures, bounds, edits);
+    this.syncScars(cells, bounds);
+    this.syncBanks(cells, bounds);
     this.lastMap = map;
     this.lastWidth = map.w;
     this.lastHeight = map.h;
@@ -437,35 +449,20 @@ export class IsoTerrain {
     }
   }
 
-  /** Dug cells now drop one height level, so the lowered block itself reads as
-   * disturbed ground and the dark inset diamond is a highlight, not the only cue.
+  /** Only walkable dug surfaces get the inset diamond; banks use separate slats.
    * A cell lowered to zero has no floating scar; placed cells are their own marker.
    */
-  private syncScars(
-    map: MapStatic,
-    structures: Structures,
-    bounds: ReturnType<typeof screenBounds>,
-    edits: Edits,
-  ): void {
+  private syncScars(cells: readonly SurfaceCell[], bounds: ReturnType<typeof screenBounds>): void {
     const retained = new Set<string>();
-    const active = new Set<string>();
-    for (const structure of structures.values()) {
-      if (structure.phase !== 'built' && structure.phase !== 'collapsing') continue;
-      for (const [x, y] of structure.tiles) active.add(`${x},${y}`);
-    }
-    for (const [key, edit] of edits) {
-      if (edit.action !== 'dig') continue;
-      const { x, y } = edit;
-      if (x < 0 || y < 0 || x >= map.w || y >= map.h) continue;
-      if (active.has(key) || retained.has(key)) continue;
-      const height = effectiveHeight(x, y, this.heightOf, structures, edits);
-      if (height !== 1) continue;
+    for (const { x, y, h, scar } of cells) {
+      if (!scar) continue;
+      const key = `${x},${y}`;
       let marker = this.scars.get(key);
       if (marker === undefined) {
         marker = this.scene.add.graphics();
         this.scars.set(key, marker);
       }
-      const top = isoProject(x, y, height, bounds);
+      const top = isoProject(x, y, h, bounds);
       // Above its own block, below the actor standing on it (depthKey + 1).
       marker.setPosition(top.sx, top.sy).setDepth(depthKey(x, y) + 0.5);
       marker.clear();
@@ -487,6 +484,53 @@ export class IsoTerrain {
       if (retained.has(key)) continue;
       marker.destroy();
       this.scars.delete(key);
+    }
+  }
+
+  /** Three earth-toned slats distinguish low obstructions from the dug diamond.
+   * Retained glyph geometry is immutable; only its anchor can move with map bounds.
+   */
+  private syncBanks(cells: readonly SurfaceCell[], bounds: ReturnType<typeof screenBounds>): void {
+    const retained = new Set<string>();
+    for (const { x, y, bank } of cells) {
+      if (!bank) continue;
+      const key = `${x},${y}`;
+      let marker = this.banks.get(key);
+      if (marker === undefined) {
+        marker = this.scene.add.graphics();
+        marker.clear();
+        for (const offset of [-7, 0, 7]) {
+          marker.fillStyle(BANK_DARK, 1);
+          marker.fillPoints(
+            [
+              { x: offset - 3, y: 1 },
+              { x: offset - 1, y: 2 },
+              { x: offset + 3, y: -1 },
+              { x: offset + 1, y: -2 },
+            ],
+            true,
+          );
+          marker.fillStyle(BANK_LIGHT, 1);
+          marker.fillPoints(
+            [
+              { x: offset - 2.5, y: 1.25 },
+              { x: offset - 1.5, y: 1.75 },
+              { x: offset + 2.5, y: -1.25 },
+              { x: offset + 1.5, y: -1.75 },
+            ],
+            true,
+          );
+        }
+        this.banks.set(key, marker);
+      }
+      const top = isoProject(x, y, 1, bounds);
+      marker.setPosition(top.sx, top.sy).setDepth(depthKey(x, y) + 0.5);
+      retained.add(key);
+    }
+    for (const [key, marker] of this.banks) {
+      if (retained.has(key)) continue;
+      marker.destroy();
+      this.banks.delete(key);
     }
   }
 
@@ -521,6 +565,8 @@ export class IsoTerrain {
     this.rubble.clear();
     for (const marker of this.scars.values()) marker.destroy();
     this.scars.clear();
+    for (const marker of this.banks.values()) marker.destroy();
+    this.banks.clear();
     for (const key of this.textureKeys) this.scene.textures.remove(key);
     this.textureKeys.clear();
     if (this.scene.textures.exists(GROUND_KEY)) this.scene.textures.remove(GROUND_KEY);

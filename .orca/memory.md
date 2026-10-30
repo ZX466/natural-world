@@ -256,13 +256,10 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-10-29 第十轮挖深/悬空修复｜实现与门禁完成，待主树收编】协议升 1.14；服务端事件记录结果高度，挖 3→2 仍阻挡/得木、2→1 开路/得石、土坎 1→0 阻挡/得土，零高度拒绝再挖。客户端渲染/碰撞/鼠标与键盘统一读取提交高度。无在途实现，下一步由 Claude 收编复核与人工验观感。
+【2026-10-30 第十一轮土坎视觉｜实现与门禁完成，待主树收编】阻挡且有效高度1的土坎新增三道明暗短斜纹，与可走地面/菱形挖痕区分。按坐标复用标记，碰撞或高度变化时撤标；只改两份渲染源码。协议仍1.14，碰撞/高度/地图资产不变。无在途实现，下一步由Claude收编复核并人工验观感。
 
-- 基线 **9b375bd**：按第十轮派单先备份 talking 并 ff，包含主树拾取 P0 **b0d4341**。移动拾取 pickGround 与编辑拾取 pickVoxel 必须分开；第九轮已收编，不再按旧 §7 的共用拾取结论执行。RED 提交 **7b1d559**；实现提交见 git log，收编取 **9b375bd..codex** 全段。talking 仍 ignored/untracked，永不 git add；仅本地 codex 提交、不推送、不改主树。
-- 高度：VoxelRuntime.height_at 折叠已提交编辑，pending 不提前改高度/库存。voxel.edited.height 为 strict 0..3；缺省仅为读旧历史，按原有界分支顺序逐层折叠，旧材料账原样保留。VoxelEdit.height 在 render 协议中必需；主树冷启动/分叉的碰撞重建同样约束旧无高度事件。无数据库迁移。
-- 保留 **walkable ⇒ height==1**，反向不成立（土坎/结构仍可挡路）。dig 只受理阻挡格，place 仍只受理可走格、升一层并按目标当前高度扣料，因此正常高 1 层地面扣 earth；石木仍为独立库存。本轮未加跳跃、堆高/材料选择 UI。高块颜色随结果层，scar 只贴 dig 后的 h=1；结构覆盖仍优先 h=2，零高度不悬空留疤。
-- 真实 **140×100** 地图逐格跑 0/1/2/3 轮合法挖掘：可走 **3947/8326/11320/11320**；四态合计 **56000 格**，高度/碰撞/鼠标地面拾取/键盘相邻通行/重连快照差异全部 0。原 **1568** 阻挡土坎保留并出 **1568 earth**；总出 stone=7373 / wood=2994。**35805** 事件重放高度/编辑投影零差异。真实存档冷启动、历史/两级分叉另逐格核对 14000 高度与碰撞、库存和材料余额一致。
-- 本轮亲测：pytest **2996P / 121S / 72D / 0F，4 旧弃用警告，377.83s**；Ruff check/format 366 files、Pyright 0 errors/warnings；client typecheck/lint/format 与 **310 passed / 42 files**；build 13.05s（现有大 chunk 提示）、gen:protocol:check 及两资产 --check 逐字节一致。首次 full 仅 README 徽章漏升导致 1F，修到 1.14 后复跑全绿。
-- 证据在 **.orca/audits/voxel-depth-2026-10-29/plan.md** 与 realmap-python.json / realmap-client.json（tracked）；日志本地。一次性 .orca/tmp 探针/配置/输入按派单删除。无浏览器/真人视觉验收，不报覆盖率百分比；资产/依赖/摄像机/插值/行走节拍零改动。主树独立复核仍需执行。
-- Windows 测试统一设 PYTHONUTF8=1（可同时 PYTHONIOENCODING=utf-8），避免只改子进程 stdout 后父进程用 GBK 读日志导致线程警告。Python 全程 uv；删 npm/venv 先问用户；浏览器仅用户明确要求，固定 C:/Users/zx198/AppData/Local/ms-playwright。
-- 恢复先 workflow → talking → 本节；i-have-adhd/简洁中文持续启用；CodeGraph 显式 projectPath，返回源码视为已读。50% 上下文提醒已给，本轮交付后建议开新对话。不启动未派任务。
+- **基线与提交**：已备份talking并按派单ff到 **2ad6606**（main多了README提交，派单表旧记1895014）；talking SHA256未变且ignored/untracked，永不git add。第十轮 **7b1d559→1895014已被主树独立收编验收**，不要重做。第十一轮RED **46ce58e**，实现见git log，收编取 **2ad6606..codex** 全段。旧轮次细节查git历史；不自行推远程或改主树。
+- **实现/语义**：iso.ts::VoxelEdits统一为协议VoxelEdit派生的 readonly Map<height/action>，IsoTerrain使用同一类型。SurfaceCell缓存bank=(h==1&&collision==0)，碰撞独变也触发同步；syncBanks只在changed时运行，保留对象不重画几何；版本不变120帧碰撞读取/新建/重画/位移更新均0。scar仅可走的dig后h1，bank与scar互斥，原疤颜色/透明度/形状保留。原h1土坎挖到h0仍阻挡但撤标，h2挖到h1开路；不要按派单含混句子修改物理。有效高度/投影/移动拾取/相机不变，结构仍优先h2。
+- **实图与视觉证据**：140×100逐格 **1568土坎全标/3947可走格零土坎标/269贴路土坎全标**。当前代码出生点 **(100,53)**，31×31内 **135** 格；派单坐标 **(14,17)** 内实际 **57** 格，不是18，两处已覆盖且已留言说明。三道不透明深#2c1b10/浅#f1d793土色短纹，亮度Y=29.820/215.618（差185.798）；在1568真实瓦片中心4×4样本上至少一面纹理的亮度差最低 **92.905**，0格低于15。3.5倍相机下外纹7px/亮芯3.5px；均为数值/绘图指令核验，未做浏览器或真人视觉验收。
+- **本轮门禁与证据**：pytest **2996P/121S/72D/0F，4旧弃用警告，366.30s**；Ruff check/format366files与Pyright0E/0W；client typecheck/lint/format、**318P/43files（含原29地形测试）**；build13.38s（现有大chunk提示）；gen:protocol:check与两资产--check逐字节一致。证据 **.orca/audits/earth-bank-2026-10-30/plan.md + acceptance.json**（tracked），日志本地。回归入口client下npm run test -- src/game/render/__tests__/iso-banks.test.ts。sim/**、shared、资产生成器/数据、依赖均零改动；无新依赖、无数据库迁移、不报覆盖率或GPU帧率。
+- **恢复约束**：先workflow→talking→本节；只走自身talking协调，无直接消息/查其他agent终端。CodeGraph显式本树projectPath、已返回源码视为已读。Python全程uv，Windows设PYTHONUTF8=1；PowerShell重定向日志常为UTF16LE BOM，Python读日志应检测BOM，不能一律utf8。删npm包/venv先问；浏览器仅用户明确要求且固定C:/Users/zx198/AppData/Local/ms-playwright。i-have-adhd与简洁中文持续启用；50%上下文提醒已给，交付后建议新对话。未派任务不启动。

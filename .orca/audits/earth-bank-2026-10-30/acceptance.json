@@ -1,0 +1,57 @@
+{
+  "map": [
+    140,
+    100
+  ],
+  "counts": {
+    "banks": 1568,
+    "walkable": 3947,
+    "adjacent": 269,
+    "requestedArea": 57,
+    "currentArea": 135,
+    "idle_frames": 120,
+    "idle_collision_reads": 0,
+    "idle_marker_creations": 0,
+    "idle_marker_redraws": 0,
+    "changed_false_marker_updates": 0
+  },
+  "actual_spawn": [
+    100,
+    53
+  ],
+  "requested_center": [
+    14,
+    17
+  ],
+  "neighborhood": "inclusive abs(dx)<=15 and abs(dy)<=15, clipped to map bounds",
+  "glyph": {
+    "colors": [
+      2890512,
+      15849363
+    ],
+    "luminances": [
+      29.82,
+      215.61800000000002
+    ],
+    "zoom": 3.5,
+    "dark_width_px": 7,
+    "light_width_px": 3.5
+  },
+  "contrast": {
+    "metric": "Y=0.2126R+0.7152G+0.0722B, RGB range 0..255; central 4x4 sample, per-channel floor, matching sampleTileColor",
+    "sampled_bank_tiles": 1568,
+    "background_y_min": 51.4,
+    "background_y_max": 190.7532,
+    "background_y_mean": 121.9507,
+    "min_stronger_face_y_difference": 92.905,
+    "mean_stronger_face_y_difference": 111.1801,
+    "ink_pair_y_difference": 185.798,
+    "tiles_below_required_difference_15": 0
+  },
+  "asset_sha256": {
+    "sim\\content\\linhe-town.json": "cb93b3226c71b7dc76637db25290570772702ab7930b57411c0d983557d25098",
+    "client\\public\\assets\\tilesets\\linhe-height.json": "4209dcf489d7d31355831ac031fa4e211aa15ca56b10b1c87d0502a3808b6fa0",
+    "client\\public\\assets\\tilesets\\god-town-16.png": "994bdca74287345bc0c02e9ca60a9f43992a20b884d7837ec05300d5dd6ae275"
+  },
+  "conditions": "Actual source PNG pixel analysis and headless draw-command/pool tests; no browser, screenshot, GPU/frame-rate or human visual acceptance."
+}
