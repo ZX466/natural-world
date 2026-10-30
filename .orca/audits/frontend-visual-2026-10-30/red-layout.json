@@ -1,0 +1,54 @@
+{
+  "layouts": [
+    {
+      "width": 1440,
+      "height": 900,
+      "canvasWidth": 872,
+      "canvasHeight": 790,
+      "canvasCount": 1,
+      "scrollWidth": 1440,
+      "saveVisible": true,
+      "hasJournalToggle": false,
+      "hasSaveToggle": false
+    },
+    {
+      "width": 1024,
+      "height": 768,
+      "canvasWidth": 456,
+      "canvasHeight": 658,
+      "canvasCount": 1,
+      "scrollWidth": 1024,
+      "saveVisible": true,
+      "hasJournalToggle": false,
+      "hasSaveToggle": false
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "canvasWidth": 0,
+      "canvasHeight": 692,
+      "canvasCount": 2,
+      "scrollWidth": 390,
+      "saveVisible": true,
+      "hasJournalToggle": false,
+      "hasSaveToggle": false
+    }
+  ],
+  "failures": [
+    "1440: canvas squeezed to 872",
+    "1440: empty save column permanently visible",
+    "1440: panel controls missing",
+    "1024: canvas squeezed to 456",
+    "1024: empty save column permanently visible",
+    "1024: panel controls missing",
+    "390: canvas squeezed to 0",
+    "390: duplicate game canvas",
+    "390: empty save column permanently visible",
+    "390: panel controls missing"
+  ],
+  "errors": [
+    "Error: Framebuffer status: Incomplete Attachment",
+    "Error: Framebuffer status: Incomplete Attachment",
+    "Error: Framebuffer status: Incomplete Attachment"
+  ]
+}
