@@ -28,15 +28,18 @@ async function main() {
       await page.goto('http://127.0.0.1:5173',{waitUntil:'networkidle'});
       await page.locator('canvas').first().waitFor({state:'attached'});
       await page.evaluate(() => document.fonts.ready);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const layout = await page.evaluate(() => {
         const canvas = document.querySelector('canvas').getBoundingClientRect();
+        const parent = document.querySelector('canvas').parentElement.getBoundingClientRect();
         const save = document.querySelector('.od-menu--saveload');
         const visible = save && save.getBoundingClientRect().width > 0;
-        return {width:innerWidth,height:innerHeight,canvasWidth:canvas.width,canvasHeight:canvas.height,canvasCount:document.querySelectorAll('canvas').length,scrollWidth:document.documentElement.scrollWidth,saveVisible:!!visible,hasJournalToggle:!!document.querySelector('#journal-toggle'),hasSaveToggle:!!document.querySelector('#saves-toggle')};
+        return {width:innerWidth,height:innerHeight,canvasWidth:canvas.width,canvasHeight:canvas.height,parentWidth:parent.width,parentHeight:parent.height,canvasCount:document.querySelectorAll('canvas').length,scrollWidth:document.documentElement.scrollWidth,saveVisible:!!visible,hasJournalToggle:!!document.querySelector('#journal-toggle'),hasSaveToggle:!!document.querySelector('#saves-toggle')};
       });
       layouts.push(layout);
       if (layout.canvasWidth < size.width * (size.width < 900 ? .95 : .70)) failures.push(`${size.width}: canvas squeezed to ${layout.canvasWidth}`);
       if (layout.canvasHeight < size.height * .6) failures.push(`${size.width}: canvas too short`);
+      if (Math.abs(layout.canvasWidth-layout.parentWidth)>1 || Math.abs(layout.canvasHeight-layout.parentHeight)>1) failures.push(`${size.width}: canvas does not fill its container`);
       if (layout.scrollWidth > size.width) failures.push(`${size.width}: horizontal overflow`);
       if (layout.canvasCount !== 1) failures.push(`${size.width}: duplicate game canvas`);
       if (layout.saveVisible) failures.push(`${size.width}: empty save column permanently visible`);
@@ -63,6 +66,12 @@ async function main() {
     await page.waitForFunction(() => document.activeElement?.id === 'saves-toggle');
     assert.equal(await page.getByRole('button',{name:'存一档',exact:true}).count(),0);
     await page.getByRole('button',{name:'手札',exact:true}).click();
+    const impulseInput = page.getByLabel('往陈默心里放一个念头',{exact:true});
+    await impulseInput.focus();
+    await page.evaluate(() => document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',isComposing:true,bubbles:true})));
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert(await page.locator('#side-panel').isVisible(),'IME composition Escape must not close the journal');
+    assert(await impulseInput.evaluate(node=>document.activeElement===node),'IME composition must retain input focus');
     await page.evaluate(async () => {
       const {useUiStore} = await import('/src/store/uiStore.ts');
       for(let i=0;i<30;i++) {
@@ -75,6 +84,8 @@ async function main() {
     await page.screenshot({path:path.join(__dirname,'after-populated-1440.png'),fullPage:true});
 
     await page.setViewportSize(sizes[2]);
+    await page.waitForFunction(() => document.getElementById('side-panel').hidden);
+    await page.waitForFunction(() => document.querySelector('canvas').getBoundingClientRect().width === innerWidth);
     await page.reload({waitUntil:'networkidle'});
     await page.getByRole('button',{name:'存档',exact:true}).click();
     await page.getByRole('button',{name:'存一档',exact:true}).waitFor({state:'visible'});
@@ -91,8 +102,23 @@ async function main() {
     await page.screenshot({path:path.join(__dirname,'after-settings-390.png'),fullPage:true});
     await page.getByRole('button',{name:'返回',exact:true}).click();
     await page.waitForFunction(() => document.activeElement?.id === 'settings-toggle');
+    await page.route('**/api/settings/profiles',route=>route.fulfill({json:[{
+      id:'layout-fixture',name:'布局检查：一个较长的配置名称用于验证换行',
+      base_url:'https://example.invalid/a-long-path-for-layout-checking-only/v1',
+      model:'layout-check-model-with-a-long-display-name',temperature:0.7,max_tokens:2048,
+      active:true,api_key_hint:'•••• 已保存',
+    }]}));
+    await page.getByRole('button',{name:'设置',exact:true}).click();
+    await page.getByText('布局检查：一个较长的配置名称用于验证换行',{exact:true}).waitFor({state:'visible'});
+    const populatedSettings = await page.locator('.od-sheet').evaluate(node=>({width:node.clientWidth,scrollWidth:node.scrollWidth}));
+    assert(populatedSettings.scrollWidth<=populatedSettings.width,'Configured settings overflow the compact viewport');
+    const populatedFields = await page.locator('.od-sheet input').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().right));
+    assert(populatedFields.every(right=>right<=390),'Configured settings form outside viewport');
+    await page.screenshot({path:path.join(__dirname,'after-settings-configured-390.png'),fullPage:true});
+    await page.getByRole('button',{name:'返回',exact:true}).click();
+    await page.waitForFunction(() => document.activeElement?.id === 'settings-toggle');
     assert.deepEqual(errors,[],'Browser errors');
-    fs.writeFileSync(path.join(__dirname,'after-layout.json'),JSON.stringify({layouts,failures,errors,checks:['panel switch','collapse expands canvas','Escape focus return','long narrative scroll','mobile drawer','outside dismissal','mobile settings']},null,2)+'\n');
+    fs.writeFileSync(path.join(__dirname,'after-layout.json'),JSON.stringify({layouts,failures,errors,checks:['panel switch','collapse expands canvas','Escape focus return','IME composition Escape preserves input','long narrative scroll','compact breakpoint closes sidebar','mobile drawer','outside dismissal','empty mobile settings','configured mobile settings']},null,2)+'\n');
     console.log(JSON.stringify({layouts,errors,checks:'passed'}));
   } finally {
     await browser.close();

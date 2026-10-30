@@ -60,6 +60,12 @@
 
 /* ---------- 根壳：暖影底，承托饱和画面 ---------- */
 .od-app {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   background: radial-gradient(
     130% 120% at 50% -10%,
     #3a2513 0%,
@@ -70,10 +76,72 @@
   font-family: var(--od-song);
 }
 
+.od-workspace {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.od-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.od-stage__world {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.od-side-panel {
+  display: flex;
+  flex: 0 0 18rem;
+  flex-direction: column;
+  width: 18rem;
+  min-height: 0;
+  border-left: 3px solid var(--od-wood-edge);
+  background: var(--od-grain), linear-gradient(180deg, #33200f, #1d1207);
+  background-blend-mode: overlay, normal;
+  box-shadow: inset 6px 0 18px rgba(0, 0, 0, 0.3);
+}
+.od-side-panel[hidden] {
+  display: none;
+}
+.od-side-panel__head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.8rem;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--od-wood-edge);
+}
+.od-side-panel__title {
+  font-family: var(--od-kai);
+  font-size: 0.86rem;
+  letter-spacing: 0.18em;
+  color: var(--od-paper-0);
+}
+.od-side-panel__content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.od-panel-backdrop {
+  display: none;
+}
+
 /* ---------- 戏内：顶栏（旧木梁 + 铜钉 + 羊皮纸牌） ---------- */
 .od-topbar {
   position: relative;
   display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
   align-items: center;
   gap: 1rem;
   padding: 0.5rem 1.1rem 0.55rem;
@@ -87,6 +155,12 @@
     inset 0 1px 0 rgba(255, 224, 175, 0.28),
     inset 0 -6px 14px rgba(0, 0, 0, 0.35),
     0 6px 16px rgba(0, 0, 0, 0.4);
+}
+.od-topbar__time {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
 }
 .od-topbar__rivets {
   position: absolute;
@@ -135,10 +209,12 @@
   margin-left: auto;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.35rem;
 }
 
 .od-tb-btn {
+  flex-shrink: 0;
   font-family: var(--od-kai);
   font-size: 0.85rem;
   letter-spacing: 0.08em;
@@ -160,6 +236,11 @@
 }
 .od-tb-btn:active {
   transform: translateY(1px);
+}
+.od-tb-btn.is-on {
+  color: var(--od-wood-edge);
+  background: linear-gradient(180deg, #f6c85f, var(--od-sky));
+  border-color: var(--od-amber-deep);
 }
 
 .od-speed {
@@ -192,6 +273,7 @@
 }
 
 .od-status {
+  flex-shrink: 0;
   display: inline-block;
   width: 0.7rem;
   height: 0.7rem;
@@ -243,14 +325,12 @@
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
-  width: 17rem;
-  flex-shrink: 0;
-  overflow-y: auto;
-  padding: 0.9rem;
-  border-left: 3px solid var(--od-wood-edge);
-  background: var(--od-grain), linear-gradient(180deg, #33200f 0%, #271809 60%, #1d1207 100%);
-  background-blend-mode: overlay, normal;
-  box-shadow: inset 6px 0 18px rgba(0, 0, 0, 0.45);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0.8rem;
   color: var(--od-ink);
   font-family: var(--od-song);
 }
@@ -281,6 +361,10 @@
   flex: 1;
   min-height: 6rem;
   overflow-y: auto;
+}
+.od-panel.is-empty {
+  flex: 0 0 auto;
+  min-height: 7.5rem;
 }
 /* 铜钉：把纸钉在木墙上 */
 .od-panel__pin {
@@ -321,7 +405,7 @@
   font-family: var(--od-kai);
   font-size: 0.8rem;
   line-height: 1.75;
-  color: var(--od-ink-faint);
+  color: var(--od-ink-soft);
 }
 
 .od-voice-list,
@@ -337,8 +421,9 @@
 .od-voice,
 .od-chatter {
   padding: 0.42rem 0.55rem;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   line-height: 1.72;
+  overflow-wrap: anywhere;
   border-radius: 2px;
 }
 .od-voice {
@@ -372,6 +457,7 @@
 /* ---------- 戏内：念头注入条（木托盘 + 火漆印） ---------- */
 .od-impulse {
   position: relative;
+  flex-shrink: 0;
   font-family: var(--od-song);
 }
 .od-impulse__error {
@@ -469,16 +555,9 @@
     0 0 0 2px rgba(224, 151, 47, 0.4);
 }
 
-.od-impulse__seal {
-  flex: none;
-  width: 0.55rem;
-  height: 1.7rem;
-  border-radius: 2px;
-  background: linear-gradient(180deg, #c98a3a, #7a4a12);
-  box-shadow: inset 0 0 0 1px rgba(255, 224, 175, 0.5);
-}
-
 .od-impulse__send {
+  flex-shrink: 0;
+  white-space: nowrap;
   padding: 0.42rem 1.15rem;
   font-family: var(--od-kai);
   font-size: 0.92rem;
@@ -516,13 +595,13 @@
   background: var(--od-menu-bg);
 }
 .od-menu--saveload {
-  width: 18.5rem;
-  flex-shrink: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   overflow-y: auto;
   padding: 0.9rem;
-  border-left: 3px solid #0f0a06;
   background: linear-gradient(180deg, var(--od-menu-bg) 0%, var(--od-menu-bg-2) 100%);
-  box-shadow: inset 6px 0 18px rgba(0, 0, 0, 0.5);
 }
 .od-menu__rule {
   height: 1px;
@@ -642,6 +721,7 @@
   z-index: 50;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
   padding: 1.5rem;
   background: radial-gradient(120% 100% at 50% 0%, #2a1d12 0%, #17100a 60%, #0f0a06 100%);
   color: var(--od-menu-text);
@@ -649,6 +729,7 @@
 }
 .od-sheet__head {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 1rem;
@@ -679,14 +760,21 @@
 
 .od-sheet__grid {
   display: grid;
-  grid-template-columns: 1fr 20rem;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 25rem);
   gap: 1.5rem;
-  min-height: 0;
-  flex: 1;
+  width: min(100%, 72rem);
+  margin-inline: auto;
+  align-items: start;
+}
+.od-sheet__grid.is-empty {
+  grid-template-columns: minmax(0, 28rem);
+  justify-content: center;
 }
 .od-sheet__col {
+  min-width: 0;
   min-height: 0;
   overflow: auto;
+  overflow-wrap: anywhere;
 }
 
 .od-section-title {
@@ -709,10 +797,13 @@
 }
 .od-profile__top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
 }
 .od-profile__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-weight: 600;
 }
 .od-badge {
@@ -757,6 +848,7 @@
 }
 .od-input {
   width: 100%;
+  min-width: 0;
   margin-top: 0.2rem;
   padding: 0.36rem 0.5rem;
   font-family: var(--od-ui);
@@ -780,9 +872,11 @@
 }
 .od-field-row > .od-field {
   flex: 1;
+  min-width: 0;
 }
 .od-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.4rem;
 }
@@ -801,6 +895,59 @@
   outline: 2px solid var(--od-sky);
   outline-offset: 2px;
   border-radius: 2px;
+}
+
+@media (max-width: 899px) {
+  .od-topbar {
+    gap: 0.4rem 0.75rem;
+    padding: 0.5rem 0.75rem;
+  }
+  .od-topbar__right {
+    width: 100%;
+    margin-left: 0;
+  }
+  .od-topbar__right .od-status {
+    margin-left: auto;
+  }
+  .od-tb-btn,
+  .od-speed__btn {
+    min-height: 2.5rem;
+  }
+  .od-side-panel {
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 21;
+    width: min(20rem, calc(100% - 1.25rem));
+    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.45);
+  }
+  .od-panel-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: block;
+    border: 0;
+    background: rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+  }
+  .od-impulse__form {
+    padding-inline: 0.75rem;
+  }
+}
+
+@media (max-width: 699px) {
+  .od-sheet {
+    padding: 1rem;
+  }
+  .od-sheet__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+  .od-sheet__grid.is-empty {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .od-profile__acts {
+    flex-wrap: wrap;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

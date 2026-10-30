@@ -26,7 +26,17 @@ function phaseLabel(phase: string): string {
   return { dawn: '黎明', day: '白天', dusk: '黄昏', night: '夜晚' }[phase] ?? phase;
 }
 
-export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }): ReactElement {
+export type SidePanel = 'journal' | 'saves';
+
+export function TopBar({
+  onOpenSettings,
+  onTogglePanel,
+  activePanel,
+}: {
+  onOpenSettings: () => void;
+  onTogglePanel: (panel: SidePanel) => void;
+  activePanel: SidePanel | null;
+}): ReactElement {
   const wsStatus = useUiStore((s) => s.wsStatus);
   const gameClock = useUiStore((s) => s.gameClock);
   const speed = useUiStore((s) => s.speed);
@@ -40,15 +50,17 @@ export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }): Reac
   return (
     <header className="od-topbar">
       <span className="od-topbar__rivets" aria-hidden="true" />
-      <span className="od-clock">
-        第 {gameClock?.day ?? 1} 天 {hh}:{mm}
-      </span>
-      {gameClock !== null && (
-        <span className="od-clock-phase">
-          {phaseLabel(gameClock.phase)}
-          {gameClock.isMarketDay && <span className="od-market">集市日</span>}
+      <div className="od-topbar__time">
+        <span className="od-clock">
+          第 {gameClock?.day ?? 1} 天 {hh}:{mm}
         </span>
-      )}
+        {gameClock !== null && (
+          <span className="od-clock-phase">
+            {phaseLabel(gameClock.phase)}
+            {gameClock.isMarketDay && <span className="od-market">集市日</span>}
+          </span>
+        )}
+      </div>
       <div className="od-topbar__right">
         {connectionLabel && (
           <span className="od-clock-phase" role="status" data-connection-status={wsStatus}>
@@ -56,7 +68,27 @@ export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }): Reac
           </span>
         )}
         {combatActive && <span role="status">刀光剑影</span>}
-        <button type="button" onClick={onOpenSettings} className="od-tb-btn">
+        <button
+          type="button"
+          id="journal-toggle"
+          aria-controls="side-panel"
+          aria-expanded={activePanel === 'journal'}
+          onClick={() => onTogglePanel('journal')}
+          className={`od-tb-btn${activePanel === 'journal' ? ' is-on' : ''}`}
+        >
+          手札
+        </button>
+        <button
+          type="button"
+          id="saves-toggle"
+          aria-controls="side-panel"
+          aria-expanded={activePanel === 'saves'}
+          onClick={() => onTogglePanel('saves')}
+          className={`od-tb-btn${activePanel === 'saves' ? ' is-on' : ''}`}
+        >
+          存档
+        </button>
+        <button type="button" id="settings-toggle" onClick={onOpenSettings} className="od-tb-btn">
           设置
         </button>
         <button

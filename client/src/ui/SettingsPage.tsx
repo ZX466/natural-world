@@ -193,7 +193,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }): ReactElement
 
       {error !== null && <div className="od-error">{error}</div>}
 
-      <div className="od-sheet__grid">
+      <div className={`od-sheet__grid${profiles.length === 0 ? ' is-empty' : ''}`}>
         {/* 列表 */}
         <section className="od-sheet__col">
           <h2 className="od-section-title">已配置档案</h2>

@@ -71,10 +71,10 @@ export function ImpulseBar(): ReactElement {
           value={text}
           onChange={(e) => setText(e.target.value)}
           maxLength={IMPULSE_MAX_LEN}
+          aria-label="往陈默心里放一个念头"
           placeholder="往陈默心里放一个念头…"
           className="od-impulse__input"
         />
-        <span className="od-impulse__seal" aria-hidden="true" />
         <button type="submit" className="od-impulse__send">
           发送
         </button>

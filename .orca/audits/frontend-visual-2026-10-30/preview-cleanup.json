@@ -1,0 +1,9 @@
+{
+    "user_browser_untouched":  true,
+    "browser_contexts_closed":  true,
+    "stopped_owned_pids":  [
+                               32812,
+                               14916
+                           ],
+    "runtime_directory":  "E:\\zxdevelop\\.orca\\worktrees\\project7\\codex\\.orca\\tmp\\frontend-visual-2026-10-30"
+}

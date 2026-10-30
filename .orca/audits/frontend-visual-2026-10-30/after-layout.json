@@ -1,0 +1,57 @@
+{
+  "layouts": [
+    {
+      "width": 1440,
+      "height": 900,
+      "canvasWidth": 1152,
+      "canvasHeight": 791,
+      "parentWidth": 1152,
+      "parentHeight": 790.671875,
+      "canvasCount": 1,
+      "scrollWidth": 1440,
+      "saveVisible": false,
+      "hasJournalToggle": true,
+      "hasSaveToggle": true
+    },
+    {
+      "width": 1024,
+      "height": 768,
+      "canvasWidth": 736,
+      "canvasHeight": 659,
+      "parentWidth": 736,
+      "parentHeight": 658.671875,
+      "canvasCount": 1,
+      "scrollWidth": 1024,
+      "saveVisible": false,
+      "hasJournalToggle": true,
+      "hasSaveToggle": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "canvasWidth": 390,
+      "canvasHeight": 688,
+      "parentWidth": 390,
+      "parentHeight": 688.1875,
+      "canvasCount": 1,
+      "scrollWidth": 390,
+      "saveVisible": false,
+      "hasJournalToggle": true,
+      "hasSaveToggle": true
+    }
+  ],
+  "failures": [],
+  "errors": [],
+  "checks": [
+    "panel switch",
+    "collapse expands canvas",
+    "Escape focus return",
+    "IME composition Escape preserves input",
+    "long narrative scroll",
+    "compact breakpoint closes sidebar",
+    "mobile drawer",
+    "outside dismissal",
+    "empty mobile settings",
+    "configured mobile settings"
+  ]
+}

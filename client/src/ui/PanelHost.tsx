@@ -27,7 +27,10 @@ export function PanelHost(): ReactElement {
 
   return (
     <aside id="panel-host" className="od-panelhost">
-      <section aria-label="心之声" className="od-panel od-panel--voice">
+      <section
+        aria-label="心之声"
+        className={`od-panel od-panel--voice${monologues.length === 0 ? ' is-empty' : ''}`}
+      >
         <span className="od-panel__pin" aria-hidden="true" />
         <h2 className="od-panel__title">心之声</h2>
         {monologues.length === 0 ? (
@@ -43,7 +46,10 @@ export function PanelHost(): ReactElement {
           </ul>
         )}
       </section>
-      <section aria-label="街谈巷议" className="od-panel od-panel--chatter">
+      <section
+        aria-label="街谈巷议"
+        className={`od-panel od-panel--chatter${chatter.length === 0 ? ' is-empty' : ''}`}
+      >
         <span className="od-panel__pin" aria-hidden="true" />
         <h2 className="od-panel__title">街谈巷议</h2>
         {chatter.length === 0 ? (

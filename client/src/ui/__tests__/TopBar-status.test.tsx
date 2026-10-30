@@ -16,7 +16,14 @@ vi.mock('../../game/runtime', () => ({ runtime: { sendControl: vi.fn() } }));
 
 import { TopBar } from '../TopBar';
 
-const render = () => renderToStaticMarkup(createElement(TopBar, { onOpenSettings: vi.fn() }));
+const render = () =>
+  renderToStaticMarkup(
+    createElement(TopBar, {
+      onOpenSettings: vi.fn(),
+      onTogglePanel: vi.fn(),
+      activePanel: null,
+    }),
+  );
 beforeEach(() => {
   state.wsStatus = 'open';
 });

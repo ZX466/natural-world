@@ -2,7 +2,9 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, expect, it, vi } from 'vitest';
 
-vi.mock('../CanvasHost', () => ({ CanvasHost: () => createElement('div', { 'aria-label': '游戏画面' }) }));
+vi.mock('../CanvasHost', () => ({
+  CanvasHost: () => createElement('div', { 'aria-label': '游戏画面' }),
+}));
 vi.mock('../../game/runtime', () => ({
   IMPULSE_MAX_LEN: 64,
   runtime: { sendControl: vi.fn(), sendImpulse: vi.fn(), loadAnchor: vi.fn() },

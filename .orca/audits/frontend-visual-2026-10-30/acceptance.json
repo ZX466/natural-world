@@ -1,0 +1,88 @@
+{
+    "baseline_commit":  "6aa0528",
+    "red_commit":  "bc6739c",
+    "playwright_core":  "1.64.1",
+    "protocol_check":  "passed; unchanged 1.14",
+    "build":  {
+                  "result":  "passed",
+                  "warning":  "existing \u003e500kB chunk warning",
+                  "seconds":  11.26
+              },
+    "browser_executable":  "C:/Users/zx198/AppData/Local/ms-playwright/chromium-1248/chrome-win64/chrome.exe",
+    "lint":  "passed",
+    "screenshots":  {
+                        "compact_before":  "before-390.png",
+                        "desktop_after":  "after-1440.png",
+                        "desktop_before":  "before-1440.png",
+                        "compact_after":  "after-390.png"
+                    },
+    "cleanup":  {
+                    "user_browser_untouched":  true,
+                    "browser_contexts_closed":  true,
+                    "stopped_owned_pids":  [
+                                               32812,
+                                               14916
+                                           ],
+                    "runtime_directory":  "E:\\zxdevelop\\.orca\\worktrees\\project7\\codex\\.orca\\tmp\\frontend-visual-2026-10-30"
+                },
+    "viewports":  [
+                      {
+                          "canvas_count":  1,
+                          "before_canvas_width":  872,
+                          "after_canvas_height":  791,
+                          "width_gain_percent":  32.11,
+                          "after_canvas_width":  1152,
+                          "viewport":  [
+                                           1440,
+                                           900
+                                       ]
+                      },
+                      {
+                          "canvas_count":  1,
+                          "before_canvas_width":  456,
+                          "after_canvas_height":  659,
+                          "width_gain_percent":  61.4,
+                          "after_canvas_width":  736,
+                          "viewport":  [
+                                           1024,
+                                           768
+                                       ]
+                      },
+                      {
+                          "canvas_count":  1,
+                          "before_canvas_width":  0,
+                          "after_canvas_height":  688,
+                          "width_gain_percent":  null,
+                          "after_canvas_width":  390,
+                          "viewport":  [
+                                           390,
+                                           844
+                                       ]
+                      }
+                  ],
+    "typecheck":  "passed",
+    "client_tests":  {
+                         "passed":  321,
+                         "files":  44
+                     },
+    "preview":  "Own data directory; static real-map/genesis preview, model driver disabled. Narrative/profile fixtures only in the isolated browser. No user saves, credentials or real browser touched.",
+    "format":  "passed",
+    "interaction_checks":  [
+                               "panel switch",
+                               "collapse expands canvas",
+                               "Escape focus return",
+                               "IME composition Escape preserves input",
+                               "long narrative scroll",
+                               "compact breakpoint closes sidebar",
+                               "mobile drawer",
+                               "outside dismissal",
+                               "empty mobile settings",
+                               "configured mobile settings"
+                           ],
+    "page_errors":  [
+
+                    ],
+    "console_errors":  [
+
+                       ]
+}

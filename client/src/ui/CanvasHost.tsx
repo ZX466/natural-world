@@ -14,11 +14,30 @@ export function CanvasHost(): ReactElement {
   const gameRef = useRef<Phaser.Game | null>(null);
 
   useEffect(() => {
-    if (ref.current === null || gameRef.current !== null) return;
-    gameRef.current = createGame(ref.current, worldMirror);
+    const parent = ref.current;
+    if (parent === null || gameRef.current !== null) return;
+    const game = createGame(parent, worldMirror);
+    gameRef.current = game;
+    let disposed = false;
+    const resize = () => {
+      if (disposed || !game.isBooted) return;
+      const width = parent.clientWidth;
+      const height = parent.clientHeight;
+      if (width > 0 && height > 0 && (game.scale.width !== width || game.scale.height !== height)) {
+        // RESIZE mode derives the canvas from parentSize during refresh.
+        game.scale.setParentSize(width, height);
+      }
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(parent);
+    game.events.once('ready', resize);
+    resize();
     return () => {
-      gameRef.current?.destroy(true);
-      gameRef.current = null;
+      disposed = true;
+      observer.disconnect();
+      game.events.off('ready', resize);
+      game.destroy(true);
+      if (gameRef.current === game) gameRef.current = null;
     };
   }, []);
 
