@@ -16,7 +16,8 @@
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex`（`codex`）：复杂/跨层实现、安全合规。
   - 只走各树 `.orca/talking.txt`；不直接对话。
 - **远程**：origin/gitee 均已到 `769b05a`，**已推送**（5 个提交，2026-10-31 用户授权）。
-- **在飞**：无。**未派**：V3.5 内容包 / V4-3D。
+- **在飞**：**第十四轮 `npc_health` 写入路径（端到端）**，已派 codex 树（2026-10-31）。
+  未派：V3.5 内容包 / V4-3D / 音效 / 离线推进 / T5 阈值。
 - **待人工验收**（9 条，已过 4 条，**剩 5/6/7/8/9 共 5 条**）：
   1. ~~DA-07 失能/恢复真模型长局~~ — **2026-10-31 用户验收通过**
   2. ~~V3 画面观感~~ — **2026-10-31 用户验收通过**
@@ -58,7 +59,7 @@
 | 缺口 | 实测证据 |
 |---|---|
 | **音效** | 全仓 0 个 `.mp3/.ogg/.wav`、0 处 `this.sound`；M6 收官单却写了「美术音效打磨」 |
-| **`npc_health`** | `models.py:486` 有模型、`0004_m2_npc_attributes.py` 有迁移、有读路径，但 **`sim/npc/` `sim/agent/` `sim/world/` `sim/api/` 零写入**；`npc/body.py:14` 只写「伤病在 npc_health 档」的注释。疾病/旧伤/成瘾/残疾/创伤应激全未实现 |
+| **`npc_health`** | 有模型/迁移/读路径，但**零写入**（`NpcHealth(` 只在测试里）。**2026-10-31 第十四轮已派 codex 修**，派单另含三个实探事实：读链路在生产中断、bus 缺 6 个 handler、`attr_id` 跨 fork 漂移 |
 | **离线推进** | `sim/world/offline*.py` **不存在**；`grep -rn offline sim/` 只命中 alembic 的 `run_migrations_offline`。却是 M5 验收项「离线再回来世界已变」 |
 | **T5 差事完成率** | `sim/tests/golden/assertions/errands_rate.py` 明写「**本轮不设阈值**」，只校验结构自洽（cases>0、rate∈[0,1]） |
 | **soak 实体流失** | `sim/tests/bench/test_bench_soak.py:112` `SOAK_ENTITY_LOSS_PER_GAME_DAY = 0`，从未抬高 |
@@ -373,9 +374,16 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 
 ## 6. ① Claude｜新对话恢复快照
 
-【2026-10-31 推送 `769b05a`｜无在途任务】用户授权推送，5 个提交双远端直连成功
-（origin 直连绕代理、gitee 直连）。两树同步 `769b05a`、工作区干净。下一步待用户从
-§1b 五缺口 + 验收 5/6/7/8/9 中裁定；**未派单，codex 不自启**。
+【2026-10-31 第十四轮已派 `671931c`｜在飞】用户裁定走 `npc_health` 写入路径、深度端到端，
+已写进 codex 树 talking。**派单前主树实探出三个隐藏事实**（不在 §1b 原表里）：
+① 读链路在生产中断（`main.py:439` 丢弃 `_hidden_states`，`npc_events_for_tick` 无该参数）；
+② `build_default_bus()` 缺 6 个 handler（含 4 个 `matter.*`），接线即崩，主库不炸只因
+`matter_state`/`structures` 均为 0 行；③ `attr_id` 用 DB 自增派生、fork 不克隆 `id` ⇒
+跨分支漂移，而 evidence 按它匹配。派单含 `code` 列（迁移 `0015`）修法。**协议保持 1.14**
+（此前选项里写「预计 1.15」是错的）。收编复核重点见 talking。
+
+【2026-10-31 推送 `671931c`｜无在途任务】用户授权推送，6 个提交双远端直连成功
+（origin 直连绕代理、gitee 直连）。
 
 【2026-10-31 第十三轮收编完成 `317460b`｜无在途任务】快照治理 ff 收编零冲突
 （`1fd362f` RED → `92fbc1b`）。主树独立复核 pytest 3012P/0F/121S、vitest 321P/44F、
