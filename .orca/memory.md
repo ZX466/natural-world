@@ -3,19 +3,19 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-10-31 第十二轮收编后）
+## 0. 当前状态（2026-10-31 第十三轮收编后）
 
-- **main HEAD**：`7f89584`（第十二轮前端画面优化收编点）。
-- **codex HEAD**：`7f89584`，**与主树同步**，工作区干净，无在途任务。
+- **main HEAD**：`92fbc1b`（第十三轮快照治理收编点）。
+- **codex HEAD**：`92fbc1b`，**与主树同步**，工作区干净，无在途任务。
 - **协议**：**`1.14`**（第十轮挖深字段升级）；双落点同改
   （`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts::PROTOCOL_VERSION`
   ↔ `sim/tests/test_protocol_version.py::EXPECTED_VERSION` + README 徽章 + `shared/openapi.json`）。
-  第十一/十二轮均未动协议字段（纯客户端渲染与 UI）。
+  第十一/十二/十三轮均未动协议字段（渲染、UI、持久层内部）。
 - **两棵树**：
   - 主树 `E:/zxdevelop/project7`（`main`）：拆单/架构/质量/收编复核/日常小改。
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex`（`codex`）：复杂/跨层实现、安全合规。
   - 只走各树 `.orca/talking.txt`；不直接对话。
-- **远程**：origin/gitee 停在 `2ad6606`，main 领先 **4 个提交未推**（推送由用户决定）。
+- **远程**：origin/gitee 停在 `e5c54c4`，main 领先 **2 个提交未推**（推送由用户决定）。
 - **在飞**：无。**未派**：V3.5 内容包 / V4-3D。
 - **待人工验收**（9 条，剩余 5/6/7）：
   1. ~~DA-07 失能/恢复真模型长局~~ — **2026-10-31 用户验收通过**
@@ -32,12 +32,12 @@
 > **记录订正**：用户 2026-10-31 先发「1 2 3观感已验收」、随后「3都已验收」，
 > 均指验收清单**第 1/2/3 条**。我最初误记为第 8/9 条，已改回。第 8/9 条**尚未验收**。
 
-## 1. 门禁（2026-10-31 第十二轮收编后主树独立实测）
+## 1. 门禁（2026-10-31 第十三轮收编后主树独立实测）
 
 | 项 | 结果 |
 |---|---|
-| pytest `-m "not bench"` | **2996 passed** / 0 failed（374.09s） |
-| ruff check / format | clean（366 files） |
+| pytest `-m "not bench"` | **3012 passed** / 0 failed / 121 skipped（362.72s） |
+| ruff check / format | clean（368 files） |
 | pyright | 0 errors, 0 warnings, 0 infos |
 | client typecheck / lint / prettier | EXIT 0 |
 | client vitest | **321 passed / 44 files** |
@@ -45,13 +45,47 @@
 | build_height_map --check | 逐字节一致 |
 | build_block_atlas --check | 逐字节一致 |
 | `tools/check_implementation_status.py` | 未发现缺口 |
+| `uv lock --check` | 53 packages，一致 |
 
-> 第十二轮纯 UI 变更（`sim/**`、`game/`、`shared/`、地图/资产/依赖零 diff），
-> 但主树仍按纪律复跑了全套。
+> 第十三轮动的是 `sim/core/persistence/`，故 pytest 全套必跑（3012P 比第十二轮
+> 多 16 条 = codex 新增保留策略测试）。客户端零 diff，但仍复跑。
 
-## 2-newest. 第十～十二轮（2026-10-29 → 10-31）—— 悬空 / 隐形墙 / 前端画面
+## 2-newest. 第十～十三轮（2026-10-29 → 10-31）—— 悬空 / 隐形墙 / 前端 / 快照治理
 
-三轮都已 ff 收编，主树独立复核，无在飞任务。
+四轮都已 ff 收编，主树独立复核，无在飞任务。
+
+**第十三轮｜快照治理（`1fd362f` RED → `92fbc1b`）**
+
+DESIGN §12 三条承诺实测全部不符：每 1000 tick 一份 → 实测每 **9.1 tick** 一份
+（3946 份 / 36001 tick）；「仅留最近 8 份热 + 每日首份」→ 全仓**零**删除语句；
+「abandoned 整体冷归档」→ `is_cold` **从未**置 True。根因是 `846a052`（2026-10-21
+崩溃恢复）把落库改成 `flush_world`，事件 + 完整检查点同事务 → 每帧有事件就写一份。
+**该改动本身是对的**（解决重启丢状态），缺的是保留策略。
+
+落地：新增 `sim/core/persistence/snapshot_policy.py`（`prune_hot_snapshots` /
+`mark_branch_snapshots_cold`，用调用者 session、不自行 commit），接入 `flush_world`
+与 `SqlEventStore.write_snapshot`；`fork_from_anchor` 在**真实 head 封存**父线时同事务
+整体标冷。**不删 events 一行**（C6），不改 gzip 内容，无迁移/新依赖/新公共方法。
+
+**主树独立复算（不看 codex `acceptance.json`）**：
+
+| 项 | 主树实测 |
+|---|---|
+| 同日写 1/8/9/10/100/250/1000 次 | 行数 **1/8/9/9/9/9/9**，events 1001 行不动 |
+| 跨 3 日 1100 次写 | **11 行**（热 11），日首 tick `0/86400/172800`，最新 8 条 `172803..172810` |
+| head-fork 封存 | 行数 **9→9**，全冷，seq/tick/gzip 逐位相同，events 逐行相同，子线全热 |
+| 删中间快照后恢复 | `cutoff_seq=38` 已被删；从 tick 0 回放，`WorldCheckpoint` JSON **逐位相同** |
+| 无合格快照 | 全量重放 **逐位相同**，快照 0 份 |
+| **真实 `world.db` 副本** | **3946 行 → 9 行**，events **187857 行一行未动**，恢复 payload 3768B **逐位相同**，prune **47ms** |
+| 真实 `fork_from_anchor(kind="anchor")` + 被裁快照 | 历史点恢复**逐位相同**，父线仍 `active`，冷行 0（anchor-fork 不标冷） |
+| 稳态 flush 开销 | 带清理 **4.31ms** / 不带 **3.55ms**（+0.76ms），单独 prune **0.97ms** |
+
+> 恢复耗时 base vs pruned 是噪声（2.64/3.05/2.73s vs 2.20/2.76/2.65s）——两条路径都
+> 命中同一最新快照 tick 36001，窗口相同。**删旧快照只影响「从更早游标读档」的耗时**。
+
+**未做（诚实边界，已写进 `docs/data/event-sourcing.md`）**：冷归档只是 `is_cold` 标记、
+仍留主库；不导出独立 SQLite；不批量迁移既有存档；不声称主库已达 <2GB 硬上限。
+活动分支的旧热行在下一次快照写入时才收敛（生产库当前 3946 行，首 flush 后 → 9 行）。
 
 **第十轮｜悬空修复（`7b1d559` RED → `1895014`），协议 1.13→1.14**
 
@@ -268,6 +302,23 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
   而 `iso-terrain.ts` 走协议 `VoxelEdit`（带 `action`）两条路径，`tsc` 不报错但
   「挖过的疤」判定会静默失效。
 
+**持久层**
+- **快照可删，事件不可删（C6）**：热保留删的是 `snapshots` 行；`events` 与 `is_cold=1`
+  的快照一行不动。两者语义不同，别把「热保留」也做成 `is_cold` 标记。
+- **删中间快照不会破坏恢复**：`restore_world` 沿祖先回退到更早的合格快照，再重放；
+  没有任何合格快照时走 `expand_world({}, history)` 全量重放。**只增加耗时，不改正确性**
+  ——真实库副本实测 3946→9 行后恢复 payload 逐位相同。
+- **保留集是「最近 8 份热 ∪ 每日首份」**，可重合，故热行上界是 `8 + 覆盖日数`，
+  不是恒定 8。同 tick 可有多份快照（主键是 `(branch_id, seq)`），日首份要用
+  `row_number() over (partition by tick//86400 order by tick, seq)` 取一条，
+  不能按 `MIN(tick)` 全保。
+- **`prune_hot_snapshots` 先 `session.flush()`**：`autoflush=False` 的工厂里新快照
+  否则对查询不可见。策略函数用**调用者 session、不自行 commit**，失败随事务整体回滚。
+- **只有 `Branch.status == 'active'` 才授权删除**：缺失分支行或 abandoned 分支的旧热行
+  一律保留（legacy 数据不能因为「看着是热的」就被清掉）。
+- **head-fork 封存父线才标冷，anchor-fork 不标**：历史点读档不能把玩家正在跑的线
+  变冷。判据是既有的 `parent_status == "active" and kind == "head"`。
+
 **方法**
 - 查符号/调用链/影响面先用 `codegraph_explore`（显式 `projectPath`）。
 - 门禁数字同场实测，不引用旧读数；**收编后主树必须独立复跑**。
@@ -302,28 +353,32 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 
 ## 6. ① Claude｜新对话恢复快照
 
-【2026-10-31 第十一 + 第十二轮收编完成 `7f89584`｜无在途任务】两轮 ff 收编零冲突：
-第十一轮土坎视觉区分（`46ce58e` RED → `6aa0528`），第十二轮前端画面优化
-（`bc6739c` RED → `7f89584`，用户直派）。主树独立复核 pytest 2996P/0F、
-vitest 321P/44F、土坎判定 1568/0/0。协议仍 1.14。
+【2026-10-31 第十三轮收编完成 `92fbc1b`｜无在途任务】快照治理 ff 收编零冲突
+（`1fd362f` RED → `92fbc1b`）。主树独立复核 pytest 3012P/0F/121S、vitest 321P/44F、
+并在真实 `world.db` 副本上实测 **3946→9 行、events 一行未删、恢复逐位相同**。
+协议仍 1.14。
 
-- **开新对话只需知道**：① 两树同步 `7f89584`、无在飞任务、门禁全绿；
+- **开新对话只需知道**：① 两树同步 `92fbc1b`、无在飞任务、门禁全绿；
   ② 待**肉眼**验收 9 条，**7/8/9 优先**（见 §0）；**主树全程没开浏览器**，
   第十二轮的观感只有 codex 的截图证据；
   ③ **不变量必须单向**（`walkable ⇒ h==EARTH`），做成双向会立刻回归「只挖不放」；
   ④ **移动拾取 ≠ 编辑拾取**，合成一个会在真实地图上死掉 19% 的可走格；
-  ⑤ **单测全绿 ≠ 真机能动**，改拾取/投影必须用真实地图实测命中率。
-- **未推送**：origin/gitee 停在 `2ad6606`，main 领先 4 提交未推。推送是用户决定，不自动推。
+  ⑤ **单测全绿 ≠ 真机能动**，改拾取/投影必须用真实地图实测命中率；
+  ⑥ **快照可删、事件不可删**：热保留删的是 `snapshots` 行，`events` 与冷快照一行不动（C6）。
+- **未推送**：origin/gitee 停在 `e5c54c4`，main 领先 2 提交未推。推送是用户决定，不自动推。
 - **配置目录**：维持用户 10-26 裁定「不进 git、不推远程、本地须存在」；主树不建 `.pi`。
 - **浏览器**：仅用户明确要求时用，路径 `C:\Users\zx198\AppData\Local\ms-playwright`。
 - **全局 git 邮箱**：`zx19836980213@outlook.com`（2026-10-31 实测，`dev-workflow.md`
   原记的 `223049848+ZX466@users.noreply.github.com` 已过期）。
 - 本轮教训已进 §3：`.orca/talking.txt` 必须保持未跟踪，否则 ff 会覆盖派单；
   **派单里的坐标/数字必须来自代码实测，不能拿 `spawn_candidates` 当运行时出生点**。
+- 第十三轮教训已进 §3「持久层」：**收编时在真实库副本上验证，不要只在内存库自测**。
+  codex 的 `world.db`（0 快照/10033 事件）与主树的（3946 快照/187857 事件）是**两个不同文件**，
+  自测结论不能互相冒用。
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-10-31 第十三轮快照治理｜实现、验收与门禁完成，待主树收编】保留每次非空flush的事件+完整检查点同事务写入；新快照后同事务裁剪活动分支旧热行，保留最近8份与每日首份并集。head-fork实际置abandoned时整体标冷、不删行。无在途实现，下一步Claude独立收编/复跑证据。
+【2026-10-31 第十三轮快照治理｜**已由主树收编至 `92fbc1b`**】保留每次非空flush的事件+完整检查点同事务写入；新快照后同事务裁剪活动分支旧热行，保留最近8份与每日首份并集。head-fork实际置abandoned时整体标冷、不删行。主树已在真实 `world.db` 副本独立复算（3946→9 行、events 零删除、恢复逐位相同），无在途实现。
 
 - **基线/角色**：开工c706b40，期间主树同步了仅改恢复卡的e5c54c4（实际实现父基线）；已备份并确认开工ff未覆盖talking，ignored/untracked永不git add。RED **1fd362f**，实现见git log，收编取 **e5c54c4..codex** 全段。此前土坎与UI两轮已由主树独立收编并推双远端，不重做。两树只走自身talking协调；仅本地Conventional Commit、不推远程、不动主树/注册表。
 - **实现要点**：新增persist/snapshot_policy.py，prune_hot_snapshots与mark_branch_snapshots_cold都用调用者Session、不自行commit。flush_world和SqlEventStore.write_snapshot均接入；先flush以覆盖autoflush=False。最近8热按tick/seq降序；每日首份用row_number按tick/seq升序，只留一条（Snapshot主键branch+seq，同tick可多份），游戏日取calendar常量86400。冷行不删，缺失/abandoned分支元数据不授权删除；清理只作用传入活动分支。冷日首份不再额外占热首份名额。head实际封存父线同事务标冷，anchor历史分叉父线不封存/不标冷的既有行为保留。events一行不删，gzip内容不改，无迁移、新依赖或公共EventStore方法。
