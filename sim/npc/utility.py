@@ -79,8 +79,8 @@ class UtilityModel:
     """L1 效用模型：持有动作增益矩阵与可选噪声种子（C5：seed 进构造，不隐式取全局）。"""
 
     def __init__(self, n_npc: int, seed: int = 0) -> None:
-        if n_npc <= 0:
-            msg = f"n_npc 必须为正: {n_npc}"
+        if n_npc < 0:
+            msg = f"n_npc 不能为负: {n_npc}"
             raise ValueError(msg)
         self.n_npc = n_npc
         self.seed = seed

@@ -89,7 +89,7 @@ def test_collapse_incapacitates_protagonist_instead_of_killing() -> None:
     events = [structure_collapsed_event(5, structure_id="base", cause="support_lost")]
     injuries = collapse_injuries(state, events, {"base": _structure("base")}, ledger)
 
-    by_entity = {str(e.payload["entity_id"]): e for e in injuries}
+    by_entity = {str(e.payload["entity_id"]): e for e in injuries if "entity_id" in e.payload}
     assert by_entity["chenmo"].event_type is EventKind.AGENT_INCAPACITATED
     assert by_entity["near"].event_type is EventKind.NPC_DEATH
     assert ledger.hp_of("chenmo") == 0 and ledger.hp_of("near") == 0
@@ -135,8 +135,10 @@ def test_one_entity_is_injured_once_per_collapse_batch() -> None:
     ]
     injuries = collapse_injuries(state, events, structures, CombatLedger())
 
-    assert [str(e.payload["entity_id"]) for e in injuries].count("chenmo") == 1
-    assert [str(e.payload["entity_id"]) for e in injuries].count("near") == 1
+    terminal = [str(e.payload["entity_id"]) for e in injuries if "entity_id" in e.payload]
+    assert terminal.count("chenmo") == 1
+    assert terminal.count("near") == 1
+    assert sum(e.event_type.value == "npc.health.changed" for e in injuries) == 1
 
 
 def test_ticks_with_injuries_report_collapse_and_incapacitation() -> None:

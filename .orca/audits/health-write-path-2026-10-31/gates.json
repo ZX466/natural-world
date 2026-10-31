@@ -1,0 +1,47 @@
+{
+  "pytest": {
+    "passed": 3032,
+    "failed": 0,
+    "skipped": 121,
+    "deselected": 72,
+    "warnings": 4,
+    "seconds": 379.18,
+    "log": "pytest-final.log"
+  },
+  "focused_health_tests": {
+    "passed": 20,
+    "failed": 0
+  },
+  "client": {
+    "vitest_passed": 321,
+    "files_passed": 44,
+    "gen_protocol_check": "pass",
+    "typecheck": "pass",
+    "lint": "pass",
+    "prettier": "pass",
+    "zero_diff": true
+  },
+  "ruff_check": "pass",
+  "ruff_format": {
+    "status": "pass",
+    "files": 374
+  },
+  "pyright": {
+    "errors": 0,
+    "warnings": 0,
+    "log": "pyright-final.log"
+  },
+  "build_height_map_check": "byte-identical JSON/PNG",
+  "build_block_atlas_check": "byte-identical PNG/JSON",
+  "check_implementation_status": "pass",
+  "uv_lock_check": "pass",
+  "migration": "0015_health_code; legacy-row upgrade/downgrade/re-upgrade passed in temporary SQLite",
+  "protocol": "1.14",
+  "production_database_modified": false,
+  "browser_or_paid_llm_used": false,
+  "scope_limitations": [
+    "no daily severity evolution",
+    "HP ledger stays process-local",
+    "historical health projection reconstruction not implemented; existing bounded-table clone retained"
+  ]
+}

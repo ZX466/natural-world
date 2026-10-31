@@ -64,6 +64,7 @@ def _health_row(npc_id: str, *, trigger: str) -> dict:
         "npc_id": npc_id,
         "branch_id": "main",
         "category": "old_injury",
+        "code": "1",
         "label": "旧伤",
         "severity": 0.5,
         "active": True,

@@ -306,8 +306,7 @@ class NpcStore:
         （hidden=True 且 active=True = 自我未知属性），按 npc_id 聚合为
         `{npc_id: HiddenState}`（codex `sim/npc/contract.py`）。
 
-        - attributes 的 `id` = ``f"{npc_id}.health_{row.id}"``（DB 主键派生，
-          稳定且不撞车；不直接暴露 label 作 id）；
+        - attributes 的 `id` = ``f"{npc_id}.health_{row.code}"``（分支稳定内容键）；
         - `descriptors` ← 行 descriptors JSON（直陈词面，供泄漏扫描）；
         - `triggers` ← 行 trigger_conditions JSON（情境触发关键词）；
         - triggered 从空集起（升格后按 tick 用 `HiddenState.evaluate` 重估）；
@@ -318,6 +317,7 @@ class NpcStore:
             .where(NpcHealth.branch_id == self._branch_id)
             .where(NpcHealth.hidden.is_(True))
             .where(NpcHealth.active.is_(True))
+            .order_by(NpcHealth.npc_id, NpcHealth.code)
         )
         if npc_ids is not None:
             ids = list(npc_ids)
@@ -330,7 +330,7 @@ class NpcStore:
         grouped: dict[str, list[HiddenAttribute]] = {}
         for row in rows:
             attr = HiddenAttribute(
-                id=f"{row.npc_id}.health_{row.id}",
+                id=f"{row.npc_id}.health_{row.code}",
                 category=row.category,  # type: ignore[arg-type]  # DB 值受 D1 约束
                 label=row.label,
                 descriptors=tuple(_load_str_list(row.descriptors)),
@@ -625,6 +625,8 @@ async def _project_events(
     for event in events:
         if event.event_type is EventKind.NPC_LOD_CHANGE:
             await _project_lod_change(session, branch_id, event)
+        elif event.event_type is EventKind.NPC_HEALTH_CHANGED:
+            await _project_health(session, branch_id, event)
         elif event.event_type is EventKind.NPC_DEATH:
             await _project_npc_death(session, branch_id, event)
         elif event.event_type in _MATTER_KINDS:
@@ -635,6 +637,44 @@ async def _project_events(
             await _project_material_moved(session, branch_id, event)
         elif event.event_type in FIRE_KINDS:
             await project_fire(session, branch_id, event)
+
+
+async def _project_health(session: AsyncSession, branch_id: str, event: WorldEvent) -> None:
+    """自然键幂等投影；验证、事件追加和健康变更共用一个事务。"""
+    from sim.content.health import health_definition
+    from sim.core.events import NpcHealthChangedPayload
+
+    payload = NpcHealthChangedPayload.model_validate(event.payload)
+    profile = await session.get(NpcProfile, {"branch_id": branch_id, "id": payload.npc_id})
+    if profile is None:
+        raise NpcStoreError(f"NPC_HEALTH_CHANGED 指向未知 NPC: {payload.npc_id}")
+    row = await session.scalar(
+        select(NpcHealth).where(
+            NpcHealth.branch_id == branch_id,
+            NpcHealth.npc_id == payload.npc_id,
+            NpcHealth.code == payload.code,
+        )
+    )
+    if row is None:
+        definition = health_definition(payload.npc_id, payload.code, payload.category)
+        row = NpcHealth(
+            branch_id=branch_id,
+            npc_id=payload.npc_id,
+            code=payload.code,
+            category=payload.category,
+            label=definition.label,
+            descriptors=json.dumps(definition.descriptors, ensure_ascii=False),
+            trigger_conditions=json.dumps(definition.triggers, ensure_ascii=False),
+            created_at_tick=event.tick,
+        )
+        session.add(row)
+    elif row.category != payload.category:
+        raise NpcStoreError("NPC_HEALTH_CHANGED 不能更改同一 code 的类别")
+    row.severity = payload.severity
+    row.active = payload.active
+    row.hidden = payload.hidden
+    row.notes = payload.notes
+    await session.flush()  # 同批下一条同 code 必须能读到本条插入。
 
 
 async def _project_npc_death(session: AsyncSession, branch_id: str, event: WorldEvent) -> None:

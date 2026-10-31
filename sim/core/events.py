@@ -16,6 +16,8 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 
+from sim.npc.hidden import HiddenCategory
+
 
 class EventKind(StrEnum):
     """M0 事件种类。新增种类只能追加（事件流是冻结基线的一部分）。"""
@@ -86,6 +88,7 @@ class EventKind(StrEnum):
     AGENT_INCAPACITATED = "agent.incapacitated"
     AGENT_RECOVERED = "agent.recovered"
     VOXEL_EDITED = "voxel.edited"
+    NPC_HEALTH_CHANGED = "npc.health.changed"
 
 
 # ---------------------------------------------------------------------------
@@ -292,6 +295,25 @@ class HiddenEmergePayload(BaseModel):
 
 _ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
 _ID = Annotated[str, Field(min_length=1, max_length=64, pattern=_ID_PATTERN)]
+
+
+class NpcHealthChangedPayload(BaseModel):
+    """耐久健康状态；仅内部键和值，词面由内容层提供。
+
+    notes 限工程审计标签，不能携带中文叙事或多行模型输出。
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    npc_id: _ID
+    category: HiddenCategory
+    code: _ID
+    severity: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
+    active: bool = Field(default=True, strict=True)
+    hidden: bool = Field(default=False, strict=True)
+    notes: Annotated[str, Field(max_length=256, pattern=r"^[A-Za-z0-9_.:/ =-]*$")] | None = None
+
+
 _OPTIONAL_ID = Annotated[
     str,
     Field(max_length=64, pattern=r"^(?:|[A-Za-z0-9][A-Za-z0-9_.:-]{0,63})$"),
@@ -842,6 +864,35 @@ def matter_event(
 
 
 # ---- M3 工厂（m3-evidence-chain §3/§4；裁 8 E1）----
+
+
+def npc_health_changed_event(
+    tick: int,
+    *,
+    npc_id: str,
+    category: HiddenCategory,
+    code: str,
+    severity: float,
+    active: bool = True,
+    hidden: bool = False,
+    notes: str | None = None,
+    branch_id: str = "main",
+) -> WorldEvent:
+    payload = NpcHealthChangedPayload(
+        npc_id=npc_id,
+        category=category,
+        code=code,
+        severity=severity,
+        active=active,
+        hidden=hidden,
+        notes=notes,
+    )
+    return WorldEvent(
+        branch_id=branch_id,
+        tick=tick,
+        event_type=EventKind.NPC_HEALTH_CHANGED,
+        payload=payload.model_dump(mode="json"),
+    )
 
 
 def hidden_emerge_event(

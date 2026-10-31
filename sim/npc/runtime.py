@@ -21,7 +21,6 @@ from dataclasses import dataclass, field, replace
 from sim.agent.will import WillingnessVerdict, willingness_expression
 from sim.core.events import (
     WorldEvent,
-    hidden_emerge_event,
     npc_act_event,
     npc_monologue_event,
 )
@@ -112,19 +111,13 @@ class NpcRuntime:
         if hidden_states is not None:
             for nid in self._order:
                 if nid in hidden_states:
-                    prev = hidden_states[nid]
-                    ctx = context_of(nid) if context_of is not None else ""
-                    now = prev.evaluate(ctx)
-                    hidden_states[nid] = now
-                    delta = now.triggered - prev.triggered
-                    if delta:
-                        events.append(
-                            hidden_emerge_event(
-                                tick=tick,
-                                npc_id=nid,
-                                attr_ids=tuple(sorted(delta)),
-                            )
-                        )
+                    from sim.npc.contract import advance_hidden_window
+
+                    emerged = advance_hidden_window(
+                        nid, hidden_states, tick=tick, context_of=context_of
+                    )
+                    if emerged is not None:
+                        events.append(emerged)
 
         # 1. 需求推进（frozen：replace 生成新元组；ticks = 本拍游戏秒数）
         advanced: dict[str, NpcProfileData] = {}
@@ -136,7 +129,7 @@ class NpcRuntime:
         active_ids = [nid for nid in self._order if advanced[nid].lod > 0]
         if not active_ids:
             self.profiles = advanced
-            return []
+            return events
         # 批次 C 接线：权力快照按 active 序重排（缺键兜底 0.0——A7「无行=未表态
         # 兜底 0」口径；越界值截到 [-1,1] 量纲，防快照外值混入打分）。
         power_values: list[float] | None = None

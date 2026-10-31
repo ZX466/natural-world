@@ -118,6 +118,10 @@ class CombatLedger:
     def hp_of(self, entity_id: str) -> int:
         return self._hp.get(entity_id, _DEFAULT_HP)
 
+    def health_fraction_of(self, entity_id: str) -> float:
+        """感知身体感受的只读比例；默认血量仍由账本唯一常量给出。"""
+        return max(0.0, min(1.0, self.hp_of(entity_id) / _DEFAULT_HP))
+
     def reset(self) -> None:
         """清空 hp 账本（读档=分叉：旧分支 hp 残留会「一刀秒杀」——review I2）。"""
         self._hp.clear()

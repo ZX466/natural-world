@@ -83,6 +83,7 @@ _BOUNDED_TABLES: tuple[tuple[str, tuple[str, ...]], ...] = (
         "npc_health",
         (
             "npc_id",
+            "code",
             "category",
             "label",
             "severity",

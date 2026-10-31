@@ -445,13 +445,14 @@ relationships / npc_memories / knowledge。迁移：`0004_m2_npc_attributes`。
 隐藏属性为「自我未知」：默认不进任何 LLM/戏内输出面，仅情境触发命中才浮现。
 字段与语义对齐 codex `sim/npc/hidden.py` 的 `HiddenAttribute` 与
 `docs/security/self-unknown.md` §1/§6（方式 A：隐藏标注落在健康档）。
-迁移：`0004_m2_npc_attributes`。
+迁移：`0004_m2_npc_attributes`；`0015_health_code` 增加稳定内容键，历史行回填旧 id 的十进制文本。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
 | `npc_id` | TEXT | NOT NULL | 持有者 entity_id |
 | `branch_id` | TEXT | NOT NULL | 所属分支 |
+| `code` | TEXT | NOT NULL | 稳定戏外键；分叉克隆原值，不依赖新行自增 id |
 | `category` | TEXT | NOT NULL | `disease`/`old_injury`/`addiction`/`disability`/`trauma` |
 | `label` | TEXT | NOT NULL | 世界内指称（文档/调试用，本身也是直陈词面） |
 | `severity` | REAL | NOT NULL DEFAULT 0.0 | 严重度 0.0–1.0（应用层校验） |
@@ -467,10 +468,22 @@ relationships / npc_memories / knowledge。迁移：`0004_m2_npc_attributes`。
 - `idx_health_npc` ON `(branch_id, npc_id)` — 取某 NPC 健康档
 - `idx_health_hidden` ON `(branch_id, hidden)` — 区分常显/隐藏（装配默认过滤）
 - `idx_health_category` ON `(branch_id, category)` — 按健康类别查询
+- `uq_health_code` UNIQUE ON `(branch_id, npc_id, code)` — 幂等健康投影自然键
 
 **约束**：
 - `category` IN 上述五值（应用层校验）
 - `hidden = 1` 且未触发时：感知帧/独白/记忆检索默认结果均不得含其直陈词面（§16 自我未知）
+
+运行时写入：`npc.health.changed` 经 `enqueue/apply` 后由 `NpcStore.flush_tick` 与事件同事务
+投影；存在自然键则更新 `severity/active/hidden/notes`，否则由 `sim/content/health.py`
+提供 `label/descriptors/trigger_conditions` 并记录形成 tick。payload 不含词面，`notes`
+仅容纳有界 ASCII 工程审计标签。不同类别不能复用同一 code。
+
+内容底座：陈默与 `villager_01/02/03` 共六项（四项隐藏），启动只补现有档案的缺项。
+坍塌受伤衍生可重放的可见旧伤事件，结构 id 的 SHA-256 截断派生 code；普通 NPC
+死亡仍连带删除健康档，陈默失能保留健康档。现有坍塌伤害 10、默认 HP 10 保持原规则。
+每十 tick 按真实感知帧评估触发窗口；陈默执行闸门、感知记忆与 NPC 降格写回消费
+同一个隐藏快照，模型等待期间窗口关闭会在发送前再次拦截。每日严重度演进不在此轮。
 
 ---
 
@@ -584,7 +597,7 @@ base_score = importance × recency_factor   # 纯函数，不含偏差
 `materialize_hidden() -> {npc_id: HiddenState}` 一次 SELECT 取 `npc_health` 中
 `hidden=1 AND active=1`（§13）的行，按 npc_id 聚合：
 
-- `HiddenAttribute.id` = `f"{npc_id}.health_{row.id}"`（DB 主键派生，稳定唯一）；
+- `HiddenAttribute.id` = `f"{npc_id}.health_{row.code}"`（跨分支稳定；fork 复制 code）；
 - `descriptors` ← 行 `descriptors` JSON（直陈词面，泄漏扫描面）；
 - `triggers` ← 行 `trigger_conditions` JSON（情境触发关键词）；
 - 返回类型 `sim/npc/contract.py::HiddenState`（M2-S2）；无隐藏行者不在结果中。

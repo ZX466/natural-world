@@ -26,6 +26,7 @@ from __future__ import annotations
 from sim.agent.cognition import CognitionParams
 from sim.content.protagonist import CHENMO_ID
 from sim.llm.memory_scan import MemoryWritePipeline, WriteResult
+from sim.npc.hidden import HiddenProfile
 from sim.npc.memory import MemoryHit, MemoryQuery, retrieve
 
 #: 感知叙述写入的重要性档（0.6 = 目击级；低于反思摘要上限 0.9）。
@@ -41,6 +42,8 @@ def observe(
     *,
     tick: int,
     npc_id: str = CHENMO_ID,
+    hidden: HiddenProfile | None = None,
+    triggered: frozenset[str] = frozenset(),
 ) -> WriteResult:
     """感知叙述 → write() 唯一写入口（闸门照扫；原文绝不绕闸落库）。
 
@@ -54,6 +57,8 @@ def observe(
         event_seq=tick,  # 近因近似：event_seq 存 tick（recency_factor 既定口径）
         importance=_OBSERVE_IMPORTANCE,
         emotion_tag=None,
+        hidden=hidden,
+        triggered=triggered,
     )
 
 

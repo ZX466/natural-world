@@ -330,6 +330,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             display_name_of=_display_names,
             species_of={eid: species for eid, (_, species) in ANIMALS.items()},
             include_fauna=True,
+            include_time=True,
+            body_fraction_of=lambda eid: combat_ledger.health_fraction_of(eid),
         )
     )
 
@@ -351,6 +353,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             world_revision += 1
             driver.reset_combat()
         await flush_world(store, branch_id, loop, events)
+        if any(
+            event.event_type in {EventKind.NPC_HEALTH_CHANGED, EventKind.NPC_DEATH}
+            for event in events
+        ):
+            refresh_hidden_states(
+                hidden_states, await NpcStore(store, branch_id=branch_id).materialize_hidden()
+            )
         if any(event.event_type is EventKind.TILE_CHANGED for event in events):
             # 落库成功后增量消费本批瓦片真相，不能只等下一次读档重建。
             for event in events:
@@ -424,6 +433,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 1) 播种 50 村民 profile（幂等；库已有则零行）；
     # 2) 装配 NpcRuntime（物化 profiles → 效用决策器）；
     # 3) 挂决策钩子（每 10 tick 一轮 → NPC_ACT 批次 + wander/move 拆解 MOVE）。
+    from sim.content.health import seed_health
+    from sim.content.protagonist import seed_protagonist
     from sim.content.villagers import seed_villagers
     from sim.core.persistence.npc_store import NpcStore
     from sim.npc.assemble import assemble_runtime
@@ -434,11 +445,34 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if seeded:
         logger.info("npc.seeded", count=seeded)
     await seed_animals(store.session_factory)
-    npc_store = NpcStore(store)
+    chenmo_seeded = await seed_protagonist(store.session_factory)
+    if chenmo_seeded:
+        logger.info("protagonist.seeded", npc_id="chenmo")
+    await seed_health(store.session_factory, branch_id=current_branch or "main")
+    npc_store = NpcStore(store, branch_id=current_branch or "main")
     # 控制权归属：陈默由 ChenmoDriver 独占，档案是否已持久化不改变装配规则。
-    npc_runtime, _hidden_states = await assemble_runtime(
+    npc_runtime, hidden_states = await assemble_runtime(
         npc_store, external_controller_ids=frozenset({CHENMO_ID})
     )
+    from sim.npc.contract import HiddenState, advance_hidden_window, refresh_hidden_states
+
+    hidden_states.update(await npc_store.materialize_hidden([CHENMO_ID]))
+    app.state.hidden_states = hidden_states
+    _narrated_cache: dict[str, tuple[Any, str]] = {}
+
+    def _hidden_context(npc_id: str) -> str:
+        from sim.perception.senses import rtoken_of
+
+        frame = loop.perception_frames.get(rtoken_of(npc_id))
+        if not isinstance(frame, PerceptionFrame):
+            return ""
+        cached = _narrated_cache.get(npc_id)
+        if cached is not None and cached[0] is frame:
+            return cached[1]
+        text = frame.narrated(language=language if npc_id == CHENMO_ID else None)
+        _narrated_cache[npc_id] = (frame, text)
+        return text
+
     # 批次 D14：真实意愿面——逐人合成（性格/需求/处境 → band 全谱），
     # 替换 D2 的全队 band=1 占位（「四句循环」根因收口）。最终都执行
     # （§10）：verdict 只产独白/defers，不改效用决策。
@@ -453,7 +487,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     attach_power(
         npc_runtime,
-        await PowerStore(store).materialize(None),
+        await PowerStore(store, branch_id=current_branch or "main").materialize(None),
     )
     pathfinder = Pathfinder(tile_map)
     app.state.pathfinder = pathfinder
@@ -540,6 +574,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     loop.attach_maintenance(_maintenance_tick_hook)
 
     def _npc_tick_hook(state: Any, tick: int) -> list[Any] | None:
+        # 降格会同步写回记忆：先更新本拍窗口，再调用 update_lod 的回调。
+        # runtime 随后重估是幂等的，感知文本由帧身份缓存，narrated 每人只算一次。
+        emerged = []
+        for npc_id in sorted(hidden_states):
+            event = advance_hidden_window(
+                npc_id, hidden_states, tick=tick, context_of=_hidden_context
+            )
+            if event is not None:
+                emerged.append(event)
         chenmo = state.entities.get(CHENMO_ID)
         if chenmo is not None:
             for npc_id, _profile in npc_runtime.profiles.items():
@@ -566,7 +609,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             wage_last=wage_last,
             coin_ledger=coin_ledger,
             build_runtime=build_runtime,
+            hidden_states=hidden_states,
+            context_of=_hidden_context,
         )
+        batch[:0] = emerged
         # 批次 D14：npc.act → 动作姿势账本（快照/delta 的 anim 字段供数）。
         from sim.api.ws import set_action_anim
         from sim.npc.sim_exec import anim_of_action
@@ -601,6 +647,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                             event_seq=None,
                             importance=0.7,
                             emotion_tag=None,
+                            **hidden_states.get(npc_id, HiddenState.empty()).memory_kwargs(),
                         )
                     events.extend(batch)
         return events
@@ -653,12 +700,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # LLM 调用全异步、失败降级（driver 内）；世界照常运转不因 LLM 阻塞。
     from sim.agent.driver import ChenmoDriver
     from sim.api.ws import set_impulse_trigger
-    from sim.content.protagonist import seed_protagonist
     from sim.llm.client import LlmClient
 
-    chenmo_seeded = await seed_protagonist(store.session_factory)
-    if chenmo_seeded:
-        logger.info("protagonist.seeded", npc_id="chenmo")
     llm_client = LlmClient()
 
     # 批次 D6：感知帧 → 叙事文本投影（chenmo 的 prompt [处境] 段供数）。
@@ -670,14 +713,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sim.perception.senses import rtoken_of
 
     language = LanguageProfile.from_json(str(_chenmo_profile_row()["knowledge_boundary"]))
-    chenmo_rtoken = rtoken_of("chenmo")
 
     def _chenmo_perception() -> str:
-        frame = loop.perception_frames.get(chenmo_rtoken)
-        if frame is None:
-            return ""
-        assert isinstance(frame, PerceptionFrame)
-        return frame.narrated(language=language)
+        return _hidden_context(CHENMO_ID)
 
     # 批次 D15 补线②：陈默记忆切片——感知叙述经 write() 闸门入记忆
     # （observe），决策前检索 top-k 进 prompt（recall → memory_entries）；
@@ -700,6 +738,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             event_seq=None,
             importance=0.5,
             emotion_tag=None,
+            **hidden_states.get(npc_id, HiddenState.empty()).memory_kwargs(),
         )
 
     npc_runtime.on_downgrade = _writeback_downgrade
@@ -721,6 +760,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         llm=llm_client,
         profile_provider=_active_profile_snapshot_provider(),
         perception_provider=_chenmo_perception,
+        hidden_provider=lambda: hidden_states.get(CHENMO_ID, HiddenState.empty()),
         display_name_of=_display_names.get,  # 批次 E1：talk_to 台词用戏内名
         economy_provider=lambda: (coin_ledger, loop.state.world_seed),  # 批次 E3
         build_runtime_provider=lambda: build_runtime,  # 批次 E4
@@ -804,7 +844,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # （感知文本同轮复用，不二次投影）。
             _perception_text = _chenmo_perception()
             if _perception_text:
-                _mem_observe(memory_pipeline, _perception_text, tick=loop.state.tick)
+                _mem_observe(
+                    memory_pipeline,
+                    _perception_text,
+                    tick=loop.state.tick,
+                    **hidden_states.get(CHENMO_ID, HiddenState.empty()).memory_kwargs(),
+                )
             # 批次 E2：[记忆] 段双源——检索 top-k 为主，当日对话记忆（ledger
             # 最新 3 条）排前（最新鲜的社交事实优先）。
             from sim.agent.chenmo_memory import merge_ledger_entries
@@ -875,7 +920,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # None = 已登记、尚未完成；同步 True 路径只用于已完成的兼容 hook。
 
     async def _drain_loads() -> bool:
-        nonlocal demography, tile_map, world_revision
+        nonlocal demography, tile_map, world_revision, npc_runtime
         """driver 每帧调用：执行 pending fork（事件循环内，可 await）。
 
         失败帧（案 B 最小形，K16 审计稿 §3.2）：失败走既有 `_error_frame` +
@@ -949,6 +994,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 if branch_id is None:
                     raise RuntimeError("fork completed without an active branch")
                 branch_store = NpcStore(store, branch_id=branch_id)
+                npc_runtime, _ = await assemble_runtime(
+                    branch_store, external_controller_ids=frozenset({CHENMO_ID})
+                )
+                npc_runtime.willingness_of = synthesize_verdict
+                npc_runtime.on_downgrade = _writeback_downgrade
+                attach_power(
+                    npc_runtime, await PowerStore(store, branch_id=branch_id).materialize(None)
+                )
+                app.state.npc_runtime = npc_runtime
+                refresh_hidden_states(
+                    hidden_states, await branch_store.materialize_hidden(), reset=True
+                )
+                _narrated_cache.clear()
                 branch_events = await branch_store.read_branch_history()
                 coin_ledger.restore_from_events(branch_events)
                 fire_runtime.restore_from_events(branch_events)

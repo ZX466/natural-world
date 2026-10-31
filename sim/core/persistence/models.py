@@ -488,6 +488,7 @@ class NpcHealth(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     npc_id: Mapped[str] = mapped_column(String, nullable=False)
     branch_id: Mapped[str] = mapped_column(String, nullable=False)
+    code: Mapped[str] = mapped_column(Text, nullable=False)
     category: Mapped[str] = mapped_column(String, nullable=False)  # codex HiddenCategory
     label: Mapped[str] = mapped_column(String, nullable=False)  # 世界内指称
     severity: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)  # 0.0-1.0
@@ -503,6 +504,7 @@ class NpcHealth(TimestampMixin, Base):
         Index("idx_health_npc", "branch_id", "npc_id"),
         Index("idx_health_hidden", "branch_id", "hidden"),
         Index("idx_health_category", "branch_id", "category"),
+        Index("uq_health_code", "branch_id", "npc_id", "code", unique=True),
     )
 
 

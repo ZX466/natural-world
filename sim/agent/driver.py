@@ -39,6 +39,7 @@ from sim.llm.prompts.assembler import (
     assemble_prompt,
 )
 from sim.llm.prompts.identity import IdentityAnchor
+from sim.npc.contract import HiddenState
 from sim.npc.speech_register import SpeechContext
 
 logger = structlog.get_logger(__name__)
@@ -62,6 +63,7 @@ class ChenmoDriver:
         combat_provider: Callable[[], tuple[Any, int]] | None = None,
         entropy_provider: Callable[[str, int], WorldEvent] | None = None,
         speech_context_provider: Callable[[str | None], SpeechContext] | None = None,
+        hidden_provider: Callable[[], HiddenState] | None = None,
     ) -> None:
         self._anchor = anchor
         self._llm = llm
@@ -80,6 +82,7 @@ class ChenmoDriver:
         self._combat = combat_provider
         self._entropy_provider = entropy_provider
         self._speech_context_of = speech_context_provider
+        self._hidden_provider = hidden_provider
         self._gate = IntentGate()
         self._pending: deque[Intent] = deque()
         self._chat_lines: dict[int, str] = {}
@@ -144,14 +147,17 @@ class ChenmoDriver:
             logger.debug("chenmo.no_profile", tick=tick)
             return False
         impulse = self.take_impulse()
-        if self._exchange is not None:
-            perception_text += "\n正在交手，可进攻、防御、拉开、瞄准要害、逃跑或喊话。"
         if perception_text == "" and self._perception_provider is not None:
             try:
                 perception_text = self._perception_provider()
             except Exception as exc:  # 感知面故障不拖垮决策（降级空处境）
                 logger.warning("chenmo.perception_failed", detail=str(exc))
                 perception_text = ""
+        if self._exchange is not None:
+            perception_text += "\n正在交手，可进攻、防御、拉开、瞄准要害、逃跑或喊话。"
+        if self._hidden_provider is not None:
+            hidden = self._hidden_provider()
+            memory_entries = tuple(text for text in memory_entries if not hidden.check_reason(text))
         display_names = {
             entity_id: name
             for entity_id in state.entities
@@ -217,6 +223,11 @@ class ChenmoDriver:
                 reason_len=len(intent.reason),
             )
             return True  # 决策成立但被闸门拦下（幻觉隔离：不入 pending）
+        if self._hidden_provider is not None and self._hidden_provider().check_reason(
+            intent.reason
+        ):
+            logger.info("chenmo.hidden_rejected", tick=tick)
+            return True
         if intent.action == "talk_to" and intent.target_id is not None:
             self._chat_lines[id(intent)] = await self._dialogue_line(
                 profile, intent.target_id, intent.reason, tick
@@ -285,7 +296,15 @@ class ChenmoDriver:
             intent = self._pending.popleft()
             actor_id = self._anchor.entity_id
             verdict = self._gate.revalidate_at_execution(
-                intent, loop.state, actor_id, planned_tick=loop.state.tick
+                intent,
+                loop.state,
+                actor_id,
+                planned_tick=loop.state.tick,
+                **(
+                    self._hidden_provider().gate_kwargs()
+                    if self._hidden_provider is not None
+                    else {}
+                ),
             )
             if verdict.rejected:
                 self._chat_lines.pop(id(intent), None)
@@ -455,6 +474,12 @@ class ChenmoDriver:
                     pass  # 不可达：原地喊话（fail-soft，聊天仍发生）
         listener_name = self._display_name_of(target_id) or "眼前的人"
         line = self._chat_lines.pop(id(intent), None)
+        if (
+            line is not None
+            and self._hidden_provider is not None
+            and self._hidden_provider().check_reason(line)
+        ):
+            line = None
         if line is None:
             context = self._speech_context_of(target_id) if self._speech_context_of else None
             line = template_line(actor_id, listener_name, state.tick, speech_context=context)

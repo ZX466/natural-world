@@ -19,13 +19,14 @@ M0 内核移动是插值制（路径段事件 + 每 tick 挪一格），没有�
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from typing import Any, NamedTuple
 
 import structlog
 
 from sim.core.events import EventKind, WorldEvent
 from sim.core.world import WorldState
-from sim.perception.frame import Channel, PerceptionFrame
+from sim.perception.frame import Channel, Observation, PerceptionFrame
 from sim.perception.narrate import (
     narrate_motion,
     narrate_move_end,
@@ -351,6 +352,8 @@ def run_perception_step(
     species_of: dict[str, str] | None = None,
     *,
     include_fauna: bool = False,
+    include_time: bool = False,
+    body_fraction_of: Callable[[str], float] | None = None,
 ) -> dict[str, PerceptionFrame]:
     """TickLoop 感知挂载点钩子（attach_perception 的标准实现）。
 
@@ -399,6 +402,30 @@ def run_perception_step(
             display_name_of,
             profiles.get((species_of or {}).get(eid, "human"), HUMAN),
         )
+    if include_time or body_fraction_of is not None:
+        from sim.perception.narrate import narrate_hp, narrate_time
+
+        time_text = narrate_time(state.tick) if include_time else ""
+        for eid in observers:
+            token = rtoken_of(eid)
+            frame = frames[token]
+            texts = ([time_text] if time_text else []) + (
+                [narrate_hp(body_fraction_of(eid))] if body_fraction_of is not None else []
+            )
+            frames[token] = frame.model_copy(
+                update={
+                    "observations": tuple(
+                        Observation(
+                            channel=Channel.INTEROCEPTION,
+                            subject=token,
+                            description=text,
+                            strength=1.0,
+                        )
+                        for text in texts
+                    )
+                    + frame.observations
+                }
+            )
     return frames
 
 

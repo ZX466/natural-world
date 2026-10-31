@@ -103,6 +103,7 @@ class TestNpcHealth:
     async def test_insert_health_record(self, session: AsyncSession) -> None:
         session.add(
             NpcHealth(
+                code="legacy_105",
                 npc_id="npc-chenmo",
                 branch_id="main",
                 category="old_injury",
@@ -125,6 +126,7 @@ class TestNpcHealth:
         # 非隐藏记录走默认值
         session.add(
             NpcHealth(
+                code="legacy_127",
                 npc_id="npc-1",
                 branch_id="main",
                 category="disease",
@@ -135,6 +137,7 @@ class TestNpcHealth:
         # 隐藏创伤：descriptors=直陈词面，trigger_conditions=情境触发关键词
         session.add(
             NpcHealth(
+                code="legacy_137",
                 npc_id="npc-1",
                 branch_id="main",
                 category="trauma",
@@ -166,6 +169,7 @@ class TestNpcHealth:
         session.add_all(
             [
                 NpcHealth(
+                    code="legacy_168",
                     npc_id="npc-1",
                     branch_id="main",
                     category="disability",
@@ -174,6 +178,7 @@ class TestNpcHealth:
                     created_at_tick=0,
                 ),
                 NpcHealth(
+                    code="legacy_176",
                     npc_id="npc-1",
                     branch_id="main",
                     category="addiction",

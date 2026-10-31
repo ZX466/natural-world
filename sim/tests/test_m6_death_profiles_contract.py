@@ -416,6 +416,7 @@ async def _seed_npc_with_health(
     session.add(NpcProfile(id=npc_id, name=f"npc-{npc_id}", branch_id=branch_id, lod=1))
     session.add(
         NpcHealth(
+            code="legacy_418",
             npc_id=npc_id,
             branch_id=branch_id,
             category=_CATEGORY,

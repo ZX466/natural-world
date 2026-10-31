@@ -405,6 +405,7 @@ class TestMaterializeHiddenRegression:
             )
             s.add(
                 NpcHealth(
+                    code="legacy_407",
                     npc_id="npc-00",
                     branch_id="main",
                     category="trauma",
@@ -420,6 +421,7 @@ class TestMaterializeHiddenRegression:
             # 非隐藏（可见健康档）不应进 HiddenState
             s.add(
                 NpcHealth(
+                    code="legacy_422",
                     npc_id="npc-00",
                     branch_id="main",
                     category="disease",
@@ -450,6 +452,7 @@ class TestMaterializeHiddenRegression:
         async with sf() as s:
             s.add(
                 NpcHealth(
+                    code="legacy_452",
                     npc_id="npc-01",
                     branch_id="main",
                     category="addiction",
@@ -472,6 +475,7 @@ class TestMaterializeHiddenRegression:
         async with sf() as s:
             s.add(
                 NpcHealth(
+                    code="legacy_474",
                     npc_id="npc-02",
                     branch_id="main",
                     category="disability",

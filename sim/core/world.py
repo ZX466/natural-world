@@ -346,9 +346,26 @@ def _apply_voxel_edited(state: WorldState, event: WorldEvent, ctx: TickContext) 
     return ApplyResult(state=state)
 
 
+def _apply_projection_event(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    """健康/隐藏窗口/物质在专用投影中折叠，世界实体层校验后恒等。"""
+    from sim.core.persistence.event_validation import PAYLOAD_MODELS
+
+    PAYLOAD_MODELS[event.event_type].model_validate(event.payload)
+    return ApplyResult(state=state)
+
+
 def build_default_bus() -> EventBus:
     """M0 默认事件总线（批次 B 增 NPC_ACT no-op——决策记录面）。"""
     bus = EventBus()
+    for kind in (
+        EventKind.NPC_HEALTH_CHANGED,
+        EventKind.NPC_HIDDEN_EMERGE,
+        EventKind.MATTER_BUILD,
+        EventKind.MATTER_COLLAPSE,
+        EventKind.MATTER_DECAY,
+        EventKind.MATTER_DAMAGE,
+    ):
+        bus.register(kind, _apply_projection_event)
     bus.register(EventKind.WORLD_CREATE, _apply_world_create)
     bus.register(EventKind.AGENT_INCAPACITATED, _apply_agent_incapacitated)
     bus.register(EventKind.AGENT_RECOVERED, _apply_agent_recovered)

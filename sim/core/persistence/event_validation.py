@@ -42,6 +42,7 @@ from sim.core.events import (
     NpcActPayload,
     NpcChatPayload,
     NpcDeathPayload,
+    NpcHealthChangedPayload,
     NpcLodChangePayload,
     NpcMonologuePayload,
     SpeechShiftPayload,
@@ -63,6 +64,7 @@ class EventValidationError(ValueError):
 
 #: kind → payload 模型（唯一 schema 真相源；新 kind 必须在此登记）。
 PAYLOAD_MODELS: dict[EventKind, type[BaseModel]] = {
+    EventKind.NPC_HEALTH_CHANGED: NpcHealthChangedPayload,
     EventKind.WORLD_CREATE: WorldCreatePayload,
     EventKind.MOVE: MovePayload,
     EventKind.COMBAT_SCALE_CHANGE: CombatScaleChangePayload,

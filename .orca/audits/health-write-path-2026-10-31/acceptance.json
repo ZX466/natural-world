@@ -1,0 +1,112 @@
+{
+  "status": "pass",
+  "baseline": "3603ecb",
+  "protocol": "1.14",
+  "database": "temporary SQLite; no development database access",
+  "collapse": {
+    "total_before": 6,
+    "total_after": 7,
+    "chenmo_after": 3,
+    "hp_rule": "unchanged: default HP=10, collapse damage=10"
+  },
+  "fork_attr_ids": {
+    "chenmo": {
+      "parent": [
+        "chenmo.health_night_unease"
+      ],
+      "child": [
+        "chenmo.health_night_unease"
+      ],
+      "byte_equal": true
+    },
+    "villager_01": {
+      "parent": [
+        "villager_01.health_shoulder_injury"
+      ],
+      "child": [
+        "villager_01.health_shoulder_injury"
+      ],
+      "byte_equal": true
+    },
+    "villager_02": {
+      "parent": [
+        "villager_02.health_night_fear"
+      ],
+      "child": [
+        "villager_02.health_night_fear"
+      ],
+      "byte_equal": true
+    },
+    "villager_03": {
+      "parent": [
+        "villager_03.health_dusk_unease"
+      ],
+      "child": [
+        "villager_03.health_dusk_unease"
+      ],
+      "byte_equal": true
+    }
+  },
+  "seeds": {
+    "inserted": 6,
+    "idempotent_second_insert": 0,
+    "visible": 2,
+    "hidden": 4,
+    "banned_hits": 0
+  },
+  "nontrigger": {
+    "chenmo": {
+      "triggered": [],
+      "leaks": []
+    },
+    "villager_01": {
+      "triggered": [],
+      "leaks": []
+    },
+    "villager_02": {
+      "triggered": [],
+      "leaks": []
+    },
+    "villager_03": {
+      "triggered": [],
+      "leaks": []
+    }
+  },
+  "trigger": {
+    "ids": {
+      "chenmo": [
+        "chenmo.health_night_unease"
+      ],
+      "villager_01": [
+        "villager_01.health_shoulder_injury"
+      ],
+      "villager_02": [
+        "villager_02.health_night_fear"
+      ],
+      "villager_03": [
+        "villager_03.health_dusk_unease"
+      ]
+    },
+    "persisted_emergence_events": 4,
+    "source": "production run_perception_step + narrated, time/pain providers enabled"
+  },
+  "missing_bus_handlers": [
+    "speech.shift"
+  ],
+  "replay": {
+    "events": 10,
+    "state_hashes": [
+      "c62b2a507e176b7c29555512482a4ba9c293ca23ccbd2b26f614ced63e6b681a",
+      "c62b2a507e176b7c29555512482a4ba9c293ca23ccbd2b26f614ced63e6b681a"
+    ],
+    "equal": true
+  },
+  "narrated_ms_per_decision_beat": {
+    "characters": 4,
+    "samples": 1000,
+    "median": 0.0059,
+    "p95": 0.0063,
+    "max": 0.0169
+  },
+  "chenmo_guards": "wired: decision return, execution, dialogue, memory input/writeback"
+}

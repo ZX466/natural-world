@@ -13,9 +13,14 @@ runtime 调用点契约见 l1-whitelist.md §3（runtime 归 Claude 架构域）
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from sim.npc.hidden import HiddenProfile, evaluate_triggers, hidden_leak_scan
+
+if TYPE_CHECKING:
+    from sim.core.events import WorldEvent
 
 
 @dataclass(frozen=True)
@@ -56,3 +61,37 @@ class HiddenState:
     def memory_kwargs(self) -> dict:
         """传给 MemoryWritePipeline.write 的参数形。"""
         return {"hidden": self.profile, "triggered": self.triggered}
+
+
+def advance_hidden_window(
+    npc_id: str,
+    states: dict[str, HiddenState],
+    *,
+    tick: int,
+    context_of: Callable[[str], str] | None = None,
+) -> WorldEvent | None:
+    """每决策节拍的纯内存触发评估；空档不投影感知，新进窗口才产事件。"""
+    from sim.core.events import hidden_emerge_event
+
+    previous = states.get(npc_id)
+    if previous is None or previous.profile is None or not previous.profile.attributes:
+        return None
+    current = previous.evaluate(context_of(npc_id) if context_of is not None else "")
+    states[npc_id] = current
+    entered = current.triggered - previous.triggered
+    return hidden_emerge_event(tick, npc_id, tuple(sorted(entered))) if entered else None
+
+
+def refresh_hidden_states(
+    states: dict[str, HiddenState], loaded: dict[str, HiddenState], *, reset: bool = False
+) -> None:
+    """提交后替换属性快照，保留仍有效窗口；读档则丢弃旧世界窗口。"""
+    refreshed = {}
+    for npc_id, state in loaded.items():
+        ids = frozenset(a.id for a in state.profile.attributes) if state.profile else frozenset()
+        previous = states.get(npc_id, HiddenState.empty())
+        refreshed[npc_id] = HiddenState(
+            state.profile, frozenset() if reset else previous.triggered & ids
+        )
+    states.clear()
+    states.update(refreshed)

@@ -15,12 +15,13 @@ wander 零票——本执行面让**全部动作族**都产生走动，镇子活
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import replace
 
 from sim.agent.build_exec import BuildRuntime
 from sim.core.events import WorldEvent, move_event, npc_chat_event, npc_monologue_event
 from sim.core.world import EntityState, WorldState
+from sim.npc.contract import HiddenState
 from sim.npc.schedule import MARKET_SITE
 from sim.world.pathfinding import Pathfinder
 
@@ -543,6 +544,8 @@ def npc_events_for_tick(
     wage_last: dict[str, int] | None = None,
     coin_ledger: object | None = None,
     build_runtime: BuildRuntime | None = None,
+    hidden_states: dict[str, HiddenState] | None = None,
+    context_of: Callable[[str], str] | None = None,
 ) -> list[WorldEvent]:
     """一个决策节拍的事件批次：NpcRuntime.tick → NPC_ACT 批次 + MOVE 交错。
 
@@ -567,6 +570,11 @@ def npc_events_for_tick(
         chat_cooldown_until=chat_cooldown_until_of(chat_last, tick=tick)
         if chat_last is not None
         else None,
+        **(
+            {"hidden_states": hidden_states, "context_of": context_of}
+            if hidden_states is not None
+            else {}
+        ),
     )
     events: list[WorldEvent] = []
     for event in acts:
@@ -593,6 +601,8 @@ def npc_events_for_tick(
             events.append(event)
             continue
         if event.event_type.value != "npc.act":
+            if event.event_type.value == "npc.hidden_emerge":
+                events.append(event)
             continue
         events.append(event)
         npc_id = str(event.payload.get("npc_id", ""))

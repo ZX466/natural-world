@@ -98,11 +98,14 @@ def collapse_injuries(
     combat_ledger: CombatLedger,
 ) -> list[WorldEvent]:
     """坍塌结构瓦片附近实体受伤；主角只失能，普通活体仍经 npc.death。"""
+    from hashlib import sha256
+
     from sim.content.protagonist import CHENMO_ID
     from sim.core.events import (
         EventKind,
         agent_incapacitated_event,
         npc_death_event,
+        npc_health_changed_event,
     )
 
     injuries: list[WorldEvent] = []
@@ -116,13 +119,31 @@ def collapse_injuries(
         for entity_id, entity in sorted(state.entities.items()):
             if entity_id in hit or entity.incapacitated_until is not None:
                 continue  # 已经倒下/本批已伤的人不再重复受伤、不刷事件
-            near = any(
-                abs(entity.pos[0] - tile[0]) + abs(entity.pos[1] - tile[1]) <= 3
-                for tile in snapshot.tiles
+            distance = min(
+                (
+                    abs(entity.pos[0] - tile[0]) + abs(entity.pos[1] - tile[1])
+                    for tile in snapshot.tiles
+                ),
+                default=4,
             )
-            if near:
-                hit.add(entity_id)
-            if near and combat_ledger.apply_damage(entity_id, 10):
+            if distance > 3:
+                continue
+            hit.add(entity_id)
+            lethal = combat_ledger.apply_damage(entity_id, 10)
+            if not lethal or entity_id == CHENMO_ID:
+                injuries.append(
+                    npc_health_changed_event(
+                        event.tick,
+                        npc_id=entity_id,
+                        category="old_injury",
+                        code="collapse_" + sha256(snapshot.structure_id.encode()).hexdigest()[:24],
+                        severity=10 / (10 + distance),
+                        hidden=False,
+                        notes="source=collapse damage=10",
+                        branch_id=event.branch_id,
+                    )
+                )
+            if lethal:
                 if entity_id == CHENMO_ID:
                     # DA-07：Agent 永不死——致死只落失能，实体保留可恢复。
                     injuries.append(agent_incapacitated_event(event.tick, entity_id=entity_id))

@@ -122,7 +122,13 @@ async def _seed_bounded(session: AsyncSession, *, branch_id: str = PARENT) -> No
     session.add_all(
         [
             _profile("chenmo", branch_id=branch_id),
-            NpcHealth(npc_id="chenmo", branch_id=branch_id, category="disease", label="旧伤"),
+            NpcHealth(
+                code="legacy_125",
+                npc_id="chenmo",
+                branch_id=branch_id,
+                category="disease",
+                label="旧伤",
+            ),
             Relationship(owner_id="chenmo", other_id="xiaoman", trust=0.5, branch_id=branch_id),
             MatterState(subject_id="hut-1", branch_id=branch_id, integrity=0.8),
             Structure(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -16,9 +17,15 @@ from sim.core.world import build_default_bus
 
 
 def health_event(**overrides):
-    values = dict(tick=1, npc_id="chenmo", category="old_injury", code="wrist", severity=0.4)
+    values: dict[str, Any] = {
+        "tick": 1,
+        "npc_id": "chenmo",
+        "category": "old_injury",
+        "code": "wrist",
+        "severity": 0.4,
+    }
     values.update(overrides)
-    return getattr(ev, "npc_health_changed_event")(**values)
+    return ev.npc_health_changed_event(**values)
 
 
 async def seed_profiles(store):
@@ -34,7 +41,7 @@ def test_default_bus_covers_all_enabled_event_kinds():
 
 
 def test_health_payload_is_private_and_validated():
-    payload_model = getattr(ev, "NpcHealthChangedPayload")
+    payload_model = ev.NpcHealthChangedPayload
     event = health_event(hidden=True)
     assert event.event_type is list(EventKind)[-1]
     assert set(event.payload) <= {
@@ -57,12 +64,15 @@ def test_health_payload_is_private_and_validated():
         {"code": "不合法"},
         {"active": "true"},
         {"category": "guess"},
+        {"notes": "我有隐藏旧伤"},
     ):
         with pytest.raises(ValidationError):
             payload_model.model_validate({**event.payload, **fields})
 
 
 async def test_projection_upserts_in_one_branch_and_rolls_back_with_events(store, session):
+    from sim.core.persistence.store import CurrentBranchConflictError
+
     await seed_profiles(store)
     npc = NpcStore(store)
     await npc.flush_tick([health_event(), health_event(tick=2, severity=0.7, hidden=True)])
@@ -76,7 +86,7 @@ async def test_projection_upserts_in_one_branch_and_rolls_back_with_events(store
     assert (await session.scalar(select(NpcHealth))).severity == 0.7
     assert len((await session.scalars(select(Event))).all()) == 2
     # 别的分支没有该人物：拒绝，不偷偷更新 main。
-    with pytest.raises(NpcStoreError):
+    with pytest.raises((NpcStoreError, CurrentBranchConflictError)):
         await NpcStore(store, branch_id="other").flush_tick([health_event(severity=0.1)])
     session.expire_all()
     assert (await session.scalar(select(NpcHealth))).severity == 0.7
@@ -113,8 +123,20 @@ async def test_fork_preserves_hidden_attribute_id(store, session):
         preflush=preflush,
     )
     after = (await NpcStore(store, branch_id="child").materialize_hidden())["chenmo"].profile
+    assert before is not None and after is not None
     assert before.attributes[0].id == after.attributes[0].id
     assert before.attributes[0].id == "chenmo.health_night_fear"
+    await NpcStore(store, branch_id="child").flush_tick(
+        [
+            health_event(tick=2, category="trauma", code="night_fear", severity=0.9, hidden=False),
+        ]
+    )
+    session.expire_all()
+    rows = (await session.scalars(select(NpcHealth).order_by(NpcHealth.branch_id))).all()
+    assert [(r.branch_id, r.hidden, r.severity) for r in rows] == [
+        ("child", False, 0.9),
+        ("main", True, 0.0),
+    ]
 
 
 def test_collapse_survivors_and_incapacitated_agent_get_health_but_dead_npc_does_not():
@@ -129,6 +151,7 @@ def test_collapse_survivors_and_incapacitated_agent_get_health_but_dead_npc_does
     loop.enqueue(ev.world_create_event(0, 42, ("chenmo", "survivor", "dead")))
     loop.drain_events()
     ledger = CombatLedger()
+    ledger._hp["survivor"] = 20  # 覆盖幸存分支；现行默认 HP=10、坍塌伤害=10。
     ledger.apply_damage("chenmo", 95)
     ledger.apply_damage("dead", 95)
     structure = StructureSnapshot(
@@ -148,37 +171,58 @@ def test_collapse_survivors_and_incapacitated_agent_get_health_but_dead_npc_does
     )
     health = [e for e in result if e.event_type.value == "npc.health.changed"]
     assert {e.payload["npc_id"] for e in health} == {"chenmo", "survivor"}
-    assert all(0 < e.payload["severity"] <= 1 and not e.payload["hidden"] for e in health)
+    assert all(
+        0 < ev.NpcHealthChangedPayload.model_validate(e.payload).severity <= 1
+        and not e.payload["hidden"]
+        for e in health
+    )
 
 
 async def test_seed_health_is_idempotent_and_actual_narration_triggers(store, session):
+    from sim.api.main import _fallback_map
     from sim.content import health
+    from sim.core.world import EntityState, WorldState
+    from sim.llm.prompts.banned_words import scan
     from sim.npc.hidden import evaluate_triggers, hidden_leak_scan
-    from sim.perception.frame import Channel, Observation, PerceptionFrame
+    from sim.perception.senses import rtoken_of, run_perception_step
 
     await seed_profiles(store)
     assert await health.seed_health(store.session_factory) == 6
     assert await health.seed_health(store.session_factory) == 0
     rows = (await session.scalars(select(NpcHealth))).all()
     assert sum(row.hidden for row in rows) == 4
+    assert all(
+        not scan(" ".join((row.label, row.descriptors, row.trigger_conditions))).hits
+        for row in rows
+    )
     states = await NpcStore(store).materialize_hidden()
     for npc_id, state in states.items():
-        calm = PerceptionFrame(observer=npc_id, tick=10).narrated()
+        assert state.profile is not None
+        world = WorldState(
+            world_seed=42,
+            tick=12 * 3600,
+            entities={
+                npc_id: EntityState(entity_id=npc_id, pos=(8, 16)),
+            },
+        )
+
+        def narration(tick, hp, world=world, npc_id=npc_id):
+            frames = run_perception_step(
+                world.model_copy(update={"tick": tick}),
+                _fallback_map(),
+                [],
+                include_time=True,
+                body_fraction_of=lambda _: hp,
+            )
+            return frames[rtoken_of(npc_id)].narrated()
+
+        calm = narration(12 * 3600, 1.0)
         assert not evaluate_triggers(state.profile, calm)
         assert not hidden_leak_scan(calm, state.profile, frozenset())
-        text = PerceptionFrame(
-            observer=npc_id,
-            tick=20,
-            observations=(
-                Observation(
-                    channel=Channel.INTEROCEPTION,
-                    subject=npc_id,
-                    description="伤处疼得厉害。天色暗下来了。夜深了。",
-                    strength=1.0,
-                ),
-            ),
-        ).narrated()
-        assert evaluate_triggers(state.profile, text)
+        assert any(
+            evaluate_triggers(state.profile, narration(tick, 0.4))
+            for tick in (18 * 3600, 23 * 3600)
+        )
 
 
 def test_execution_bridge_keeps_hidden_emergence():
@@ -188,8 +232,8 @@ def test_execution_bridge_keeps_hidden_emergence():
     from sim.npc.contract import HiddenState
     from sim.npc.hidden import HiddenAttribute, HiddenProfile
     from sim.npc.runtime import NpcRuntime
-    from sim.npc.utility import UtilityModel
     from sim.npc.sim_exec import npc_events_for_tick
+    from sim.npc.utility import UtilityModel
     from sim.world.pathfinding import Pathfinder
 
     npc_id = "villager_01"
@@ -234,3 +278,43 @@ async def test_combat_prompt_keeps_provider_perception():
     messages = str(llm.last_messages)
     assert "桥头有人招手" in messages
     assert "正在交手" in messages
+
+
+async def test_empty_branch_can_assemble_without_inventing_npcs(store):
+    from sim.npc.assemble import assemble_runtime
+
+    runtime, hidden = await assemble_runtime(NpcStore(store, branch_id="empty"))
+    assert runtime.profiles == {} and hidden == {}
+    assert runtime.tick(10) == []
+
+
+def test_l0_hidden_emergence_survives_no_active_decisions():
+    from dataclasses import replace
+
+    from sim.content.villagers import build_roster
+    from sim.npc.contract import HiddenState
+    from sim.npc.hidden import HiddenAttribute, HiddenProfile
+    from sim.npc.runtime import NpcRuntime
+    from sim.npc.utility import UtilityModel
+
+    profile = replace(build_roster()[0], lod=0)
+    states = {
+        profile.npc_id: HiddenState(
+            HiddenProfile(
+                npc_id=profile.npc_id,
+                attributes=(
+                    HiddenAttribute(
+                        id="villager_01.health_shoulder",
+                        category="old_injury",
+                        label="肩伤",
+                        descriptors=("肩伤",),
+                        triggers=("疼得厉害",),
+                    ),
+                ),
+            ),
+            frozenset(),
+        )
+    }
+    runtime = NpcRuntime(profiles={profile.npc_id: profile}, utility=UtilityModel(n_npc=1))
+    events = runtime.tick(10, hidden_states=states, context_of=lambda _: "伤处疼得厉害。")
+    assert [e.event_type for e in events] == [EventKind.NPC_HIDDEN_EMERGE]
