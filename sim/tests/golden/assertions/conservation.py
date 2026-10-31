@@ -1,6 +1,6 @@
 """物质/材料/结构守恒断言（裁 17-1：逐位相等，不给浮差）。
 
-三个面（对齐 `docs/arch/t5-golden-scaffold.md` §3.1）：
+三个面（`DESIGN.md` §16 T5「守恒成立」的落地判据，裁 17-1）：
 
 - **matter 存量**：事件流折叠终态 == 投影终态（`integrity` / `decay_rate` / `is_rubble` 逐位相等）；
   折叠复用 `npc_store.fold_matter_snapshot`（与 `_project_matter` 投影路径、

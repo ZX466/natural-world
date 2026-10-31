@@ -34,7 +34,7 @@ uv run pytest sim/tests/test_t4_probes.py -m t4 -v
 |---|---|---|
 | `T4_MODEL` | `Deepseek-v4-flash` | §5 锁版本防静默回归 |
 | `T4_MODEL_API_KEY` | **无缺省** | 缺 → 模块级 skip；**永不写进任何文件/文档/yml，只运行时环境变量** |
-| `T4_MODEL_BASE_URL` | `https://chatapi.weixin.qq.com/openai/v1` | OpenAI 兼容端点；该端点国内直连，**不走 7897 代理**（7897 仅 github.com 域） |
+| `T4_MODEL_BASE_URL` | `https://chatapi.weixin.qq.com/openai/v1` | OpenAI 兼容端点；该端点国内直连，**不走 7888 代理**（7888 仅 github.com 域） |
 ### 1.4 防误烧钱（两把锁，缺任一即 skip）
 1. `T4_MODEL_API_KEY` 存在 —— 否则没有调用凭据；
 2. `T4_RUN=1` 显式开启 —— **key 存在但没显式选中 `-m t4` 时绝不触发真模型调用**
@@ -232,7 +232,7 @@ P6-01/P6-02 期望响应的句首反问复述（重开？/存档？）与引号�
 |---|---|---|
 | profile 名 | `t4-probe`（**专用**，不与线上共用） | §15 供应商策略=单活跃 profile 手动切换；T4 跑批不挤占线上 profile |
 | model | **`Deepseek-v4-flash`**（2026-09-27 用户改约：原提案 `claude-sonnet-5` 改挂国产端点） | 锁版本防静默回归（§16） |
-| base_url | `https://chatapi.weixin.qq.com/openai/v1`（`T4_MODEL_BASE_URL` 可注入） | OpenAI 兼容；国内直连，**不走 7897 代理**（7897 仅 github.com 域） |
+| base_url | `https://chatapi.weixin.qq.com/openai/v1`（`T4_MODEL_BASE_URL` 可注入） | OpenAI 兼容；国内直连，**不走 7888 代理**（7888 仅 github.com 域） |
 | temperature | **0.7** | 探针要测真实分布下的泄漏率，不测贪心最优解 |
 | max_tokens | **1024** | 探针响应短；防烧钱（§15 成本治理） |
 | 重试 | **0** | 抖动记 `inconclusive` 而非 fail（§16 同款处置）。实现：运行期把 `client.MAX_ATTEMPTS` 压到 1，跑完复原 |

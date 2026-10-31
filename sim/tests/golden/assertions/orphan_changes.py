@@ -1,6 +1,6 @@
 """无孤儿变更断言（裁 17-1：**硬红**，不降级告警）。
 
-两个方向都查（对齐 `docs/arch/t5-golden-scaffold.md` §3.3）：
+两个方向都查（`DESIGN.md` §16 T5「无孤儿变更」的落地判据，裁 17-1）：
 
 - **方向 A（孤儿投影）**：投影里有、事件流里找不到来源——matter id 无任何 `matter.*` 事件 /
   structure id 无任何 `STRUCTURE_*` 事件 / `(ref, material_id)` 无任何 `MATERIAL_MOVED` 事件。

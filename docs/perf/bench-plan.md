@@ -84,7 +84,7 @@
 - **里程碑（M0/M1/M2）**：跑一次**正式基线**，黄金数字写进里程碑评审（对齐 §17 量化验收：决策延迟 P95<8s、单决策 <2k tok 属 LLM 侧，与 tick 侧分开呈现）；M2 另跑 **604,800 tick 完整自转**（环境门 `PI_M2_FULL_SOAK=1`，接法由 cline，见本文件 §0/§4）。
 - **回归处置**：谁改谁负责回退或证明阈值失效合理（性能域评审 + Claude（架构）复核）。
 
-## 4.1 baseline.json 建立流程（裁 4 执行件；M3-P1 落地 2026-09-23）
+## 4.1 基线建立流程（裁 4 执行件；M3-P1 落地 2026-09-23；产物现为 `baseline-epyc7763.json`）
 > **状态：已执行（2026-09-23，pi M3-P2②）**——首绿 run `35918283944`（main `372153a`，EPYC 7763/nproc4/py3.12.3）
 > 产物已建 `docs/perf/baseline-epyc7763.json`（21 benchmarks + `machine_info.baseline_meta`），
 > nightly「基线对比」step 已切 `--benchmark-compare=docs/perf/baseline-epyc7763.json --benchmark-compare-fail=median:25%`。
@@ -95,7 +95,7 @@
 > willingness / chunk_invalidation / fast_forward / tick_baseline / tick_overhead），**数据源＝nightly-bench run
 > `36494001567`（main `78ccdf1`）的 `bench-result` artifact 实测**，机型与本文件同档（AMD EPYC 7763 / nproc 4 /
 > py3.12.3）。**未覆盖** 2026-09-23 那 21 条原值——重定基线属性能域裁决，故当前产物是**两 run 混合基线**
-> （逐 run 登记见 `baseline.json` 的 `machine_info.baseline_meta.rows_provenance`）。
+> （逐 run 登记见 `baseline-epyc7763.json` 的 `machine_info.baseline_meta.rows_provenance`）。
 > **规范路径仍是下方八步的「首个全绿 run 整体重生成」**，本轮触发前提 2 未满足，已登记为 `baseline_meta.open_items`。
 >
 > **2026-09-29 M5-C4（CI advisory 缺陷修复，裁 28-E 授权）**：`nightly-bench.yml`「基线对比」step 已补

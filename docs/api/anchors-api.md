@@ -548,7 +548,8 @@ _attach("/api/anchors/{anchor_id}", "delete", ["404", "409"])    # 不存在 / �
 | 真源读入口 | `sim/core/persistence/store.py::SqlEventStore.current_branch_id`（`:181`）—— 谓词**只有** `is_current`，查不到 ⇒ 抛 `NoCurrentBranchError`（**禁**回退 `'main'`） | ✅ A5 已落（`1eeb294`） |
 | 数据面载体 | `sim/core/persistence/alembic/versions/0012_branches_current.py`：`is_current` 列 + 部分唯一索引 `ux_branches_current … WHERE is_current = 1` + `BACKFILL_SQL`（**仅唯一 active 置 1**，≥2 active ⇒ 一行都不置） | ✅ A5 已落 |
 | 开线闸收紧 | `CurrentBranchConflictError`（`InactiveBranchError` 子类）——「仅当无当前行才可开线」 | ✅ A5 已落（钉子 `test_m5_branch_current.py`） |
-| **待施工** | `sim/api/anchors.py`：`get_current_seq()`（`:264`，现 `WHERE branch_id = 'main'`）与 `create_anchor()`（`:345`，现 `branch_id="main"`）**两处同改**接真源 | ⏳ **Claude 域（R-4 施工单）** |
+| 接口侧施工 | `sim/api/anchors.py`：`get_current_seq()` 与 `_create_anchor()` **两处同改**接 `branches.is_current` 真源（禁 `'main'` 字面量兜底） | ✅ 已落（`04e4220`，2026-10-03；钉子 `test_m5_anchors_branch_source.py` 19 全绿） |
+| 分叉当前行交接 | `sim/core/persistence/fork.py`：head-fork 时「先清父 `is_current=0` → 再插子 `is_current=1`」；anchor-fork 不交接 | ✅ 已落（`04e4220`） |
 
 **fixture 约定**（本组钉子与 §5 既有 `client` fixture 不同，**必须真 branches/events 行**）：
 HTTP 壳沿用 §5 的 `client` 写法（`sim/tests/test_m2_openapi_rework.py:46-56`，`LZ_MASTER_KEY` + 临时 sqlite）；
@@ -669,7 +670,7 @@ K1 版 §1.2 曾写「`id` 由 sim 生成（建议 `anc_` 前缀 + 短随机，�
 | `agent_override` 不回传 | 已定型 | §0 出戏边界。§12 读档需要它，但载入走 WS `load_anchor`（服务端从库自取），**不经 HTTP**，客户端无需该字段 |
 | 档名禁词（Agent 词表） | **已定型（裁 29-A ③ / 裁 30-B①）** | 档名过 `scan()`，命中 422 `/errors/anchor-name-rejected`（§1.2 档名禁词小节）。**取舍已知**：戏外语义合法的「存档/读档/分支」类名字会被挡；**明确不接戏外词表钩子**（锚点 name 是跨界字段、有回灌路径，fail-closed 维持）。钩子本身已落集合（`BANNED_WORDS_META_SHELL` 8 词）+ 接线时机（空函数先行），归 codex 域 |
 | 列表排序 `updated_at` 降序 | **已定型（裁 29-A R-6「契约为准改实现」）** | K7 实现曾是升序，main `a50f903` 已改；钉子 `test_m5_api_anchors.py::TestSchemaMatchesSnapshot::test_list_is_newest_first` 防回退 |
-| 游标 `branch_id` 取当前活跃分支 | **契约 + 验收面已齐（§1.6 + §5.2），⏳ 取值施工在途（Claude 域）** | 数据面载体已由 A5 落地（0012 `is_current` + 部分唯一索引 + `store.py::current_branch_id`）。**剩余施工**＝`anchors.py` 取 seq（`:264`）与建档（`:345`）**两处同改**，验收面见 §5.2 六钉。另登记：`fork.py` 当前行交接未落（0012 docstring 自述）＝head-fork 后读档侧会报「无当前分支」，由同一施工单关闭（§5.2 钉 #5） |
+| 游标 `branch_id` 取当前活跃分支 | **已定型并已落地（§1.6 + §5.2，`04e4220`）** | 数据面载体 A5 落地（0012 `is_current` + 部分唯一索引 + `store.py::current_branch_id`）；接口侧 `anchors.py` 取 seq 与建档两处已同改接真源，`fork.py` 当前行交接同批关闭。验收面 §5.2 六钉，钉子 `test_m5_anchors_branch_source.py` 19 全绿 |
 | 无「删全部 / 批量」端点 | 已定型 | 玩家档数量级十位数（§6.2 同论证），不需要批量操作；也无 list 删除语义 |
 | `updated_at` 时间源 | 已定型 | `time.time()`（同 `PlayerAnchor.updated_at`，`models.py:107`）；只写一次（§1.4），不随改名推进 |
 

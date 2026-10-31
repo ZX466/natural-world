@@ -44,7 +44,7 @@
   - gitee  = https://gitee.com/ZX666X/natural-world.git
   - 只允许向远程推送 `main`、`develop/*`、`feature/*` 等非 agent 分支中的代码；`main` 与上游保持一致。
   - codex 只在本地 `codex` 分支提交，不推远程；收编和远程推送由主树负责。
-- GitHub 网络不通，走代理 `127.0.0.1:7897`（全局已按域名配置，仅 github.com 生效）。
+- GitHub 网络不通，走代理 `127.0.0.1:7888`（全局已按域名配置，仅 github.com 生效）。
 - **除 `.orca` 外，其他 `.` 开头的 agent 配置目录不进 git、不推远程，但本地必须存在**（.gitignore 已排除）：
   `.codegraph`、`.agents` 所有工作树都要有；`.claude`、`.opencode`、`.codex` 只在其对应 agent 树存在，主树全部保留；
   `.pi` 当前不创建（两树无 pi agent、注册表未启用），按需再补。

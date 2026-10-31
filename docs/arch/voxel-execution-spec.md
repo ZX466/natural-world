@@ -7,6 +7,13 @@
 > **本单 §0 的 A15-A18 是 2026-10-23 二次核实新增事实（结构图层/无视觉雾/建筑 tile=0/
 > 点击行号），优先级高于早前讨论稿。**
 > 单据日期：2026-10-23。范围：**仅 V0-V3**；V3.5/V4a/V4-3D 不在本单。
+>
+> **⚠ 状态：本单已收官（V0-V3 全部交付，收编点 `e7f6543`，2026-10-24 标记收官）。**
+> 本文自此为**历史执行真相源**——现行渲染架构以代码与 `DESIGN.md` v2.2 为准。
+> **§0 的 A1-A19 锚点行号是 2026-10-23 实测值，此后 `WorldScene.ts` 从 ~600 行涨到
+> 1118 行，行号已普遍漂移**（例：`TILE` 实为 `:53`、`redrawMap` 实为 `:268`、
+> `renderTileset` 实为 `:324`）。要定位请按符号名 grep，**不要信这里的行号**。
+> §7 交付清单的复选框是收官前的原始状态，未回填。
 
 ---
 
@@ -22,7 +29,7 @@
 | A6 | `VILLAGER_SHEET = {cols:4, framesPerRow:4, standCol:0}`（:61）；`CHENMO_SHEET 17 列`（:56） | client/src/game/render/actors.ts:56-61 |
 | A7 | 零依赖 PNG 编解码模块**已存在**（zlib+struct） | sim/content/png_codec.py |
 | A8 | 17 张古风 sprite 已入库 | client/public/assets/sprites/god_villager_*.png |
-| A9 | 63 个提交未推送（origin/gitee 均落后）；GitHub 走代理 127.0.0.1:7897 | git log origin/main..main |
+| A9 | 63 个提交未推送（origin/gitee 均落后）；GitHub 走代理 127.0.0.1:7888 | git log origin/main..main |
 | A10 | 前端 **149 passed / 27 files**（2026-10-23 亲跑 `npm run test` 实测）；后端 not-bench ~3000 | 各自门禁 |
 | A11 | **地图已是桃花源替换产物**：`MAP_W=140, MAP_H=100`（build_god_town.py:37-38）；tileset = `god-town-16.png`（2240×1600，140 列），前端 `TILESET_KEY='god-town-16'`、`TILESET_COLS=140`（WorldScene.ts:42-44） | sim/content/build_god_town.py |
 | A12 | **tileId 是整图切片序号，不是语义角色**：映射为 **`(id-1)%140` / `(id-1)//140`**（gid 1-based，0=空格哨兵），见 renderTileset :196-202。旧 sprout-palette.json **已不是运行时真相源** | WorldScene.ts:196-202 |
@@ -208,14 +215,14 @@ npm run typecheck && npm run lint && npm run format:check
 npm run gen:protocol:check            # EXIT 0 硬门禁
 ```
 
-## 7. 交付清单
+## 7. 交付清单（**收官后回填，2026-10-31**）
 
-- [ ] V0：63 提交推送双远端；DESIGN v2.2 两处最小修订；方案两文档入库
-- [ ] V1：iso.ts 纯函数+单测（注入式 mini 高度表）；`build_height_map.py` + 产物
-      `linhe-height.json` + **可视化抽查通过**；renderer 策略；矮块画布/高块对象混合分层
-- [ ] V2：billboard（effectiveHeight 脚底）/拾取（A18）/相机/遮挡；**结构图层等距化**；
-      实况走动；149 条测试适配后全绿
-- [ ] V3：气泡/结构阶段表现/图集管线/默认 iso；玩法全闭环；收官提交
+- [x] V0：提交推送双远端；DESIGN v2.2 修订登记；方案两文档入库
+- [x] V1：`iso.ts` 纯函数+单测；`build_height_map.py` + `linhe-height.json`；renderer 策略；
+      矮块画布/高块对象混合分层
+- [x] V2：billboard（`effectiveHeight` 脚底）/ 拾取 / 相机 / 遮挡；**结构图层等距化**；
+      实况走动；测试适配后全绿
+- [x] V3：气泡 / 结构阶段表现 / 图集管线（`build_block_atlas.py`）/ 默认 iso；收官 `e7f6543`
 - [ ] 全程：协议零漂移、sim 内核零改动、flat 保留可回退
 
 ## 8. 明确不做（本单外，防蔓延）

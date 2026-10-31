@@ -3,43 +3,95 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态
+## 0. 当前状态（2026-10-31 第十二轮收编后）
 
-- **main HEAD**：本卡所在提交（talking 精简 docs）；**代码收编点 `b0d4341`**
-  （移动操作收编 + 拾取回归修复）。
-- **codex HEAD**：`04e2175`，**已被主树收编**；落后 3 个提交（`b0d4341` 修复 +
-  收编 docs + 本卡 docs），**无分叉**，可 `merge --ff-only main` 同步。
-- **协议**：**`1.13`**（V4b 升级）；双落点已同改
-  （`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts::PROTOCOL_VERSION`）。
-  第八/九轮改动均未动协议字段（第九轮纯客户端）。
+- **main HEAD**：`7f89584`（第十二轮前端画面优化收编点）。
+- **codex HEAD**：`7f89584`，**与主树同步**，工作区干净，无在途任务。
+- **协议**：**`1.14`**（第十轮挖深字段升级）；双落点同改
+  （`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts::PROTOCOL_VERSION`
+  ↔ `sim/tests/test_protocol_version.py::EXPECTED_VERSION` + README 徽章 + `shared/openapi.json`）。
+  第十一/十二轮均未动协议字段（纯客户端渲染与 UI）。
 - **两棵树**：
   - 主树 `E:/zxdevelop/project7`（`main`）：拆单/架构/质量/收编复核/日常小改。
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex`（`codex`）：复杂/跨层实现、安全合规。
   - 只走各树 `.orca/talking.txt`；不直接对话。
+- **远程**：origin/gitee 停在 `2ad6606`，main 领先 **4 个提交未推**（推送由用户决定）。
 - **在飞**：无。**未派**：V3.5 内容包 / V4-3D。
-- **待人工验收**：① DA-07 失能/恢复真模型长局；② V3 画面观感。
-  **③ V4a 挖放观感已于 2026-10-28 由用户验收通过。**
-  **④ 走路是否还飘 / ⑤ V4b 三材料挖放观感——2026-10-29 已改（插值窗 250→200ms、
-  地形同源重建），需重新肉眼验收。**
-  **⑥ 地形可走面观感：可走 820→3947 格，房子/河/树是否还挡得住。**
-  **⑦ 移动操作手感（第九轮）：点击/长按/拖拽/键盘是否顺手——**必须先验这一条**，
-  因为 2026-10-29 曾因拾取器用错导致「完全动不了」，单测全绿但真机是死的。**
+- **待人工验收**（9 条，7/8/9 优先）：
+  1. DA-07 失能/恢复真模型长局
+  2. V3 画面观感
+  3. 走路是否还飘（`INTERP_MS` 200）
+  4. ~~V4a 挖放观感~~ — **2026-10-28 已通过**
+  5. V4b 三材料挖放观感（行囊土/石/木三行，为 0 不显示）
+  6. 地形可走面观感：可走 820→3947 格，房子/河/树是否还挡得住
+  7. **移动操作手感**：点击/长按/拖拽/键盘是否顺手——**必须先确认真机能走**
+     （2026-10-29 曾因拾取器用错导致「完全动不了」，单测全绿但真机是死的）
+  8. **土坎观感（第十一轮）**：1568 格隐形墙是否一眼可辨
+  9. **前端画面（第十二轮）**：侧栏收起是否顺手、小屏是否还挤压世界、
+     世界宽 872→1152 / 小屏 0→390 的实际观感——**codex 只截了图，主树没开浏览器**
 
-## 1. 门禁（2026-10-29 第九轮收编 + 拾取修复后主树独立实测）
+## 1. 门禁（2026-10-31 第十二轮收编后主树独立实测）
 
 | 项 | 结果 |
 |---|---|
-| pytest `-m "not bench"` | **2985 passed** / 121 skipped / **0 failed**（codex 自测 371.81s） |
-| ruff check / format | clean（365 files） |
-| pyright | 0 errors, 0 warnings |
+| pytest `-m "not bench"` | **2996 passed** / 0 failed（374.09s） |
+| ruff check / format | clean（366 files） |
+| pyright | 0 errors, 0 warnings, 0 infos |
 | client typecheck / lint / prettier | EXIT 0 |
-| client vitest | **295 passed / 41 files**（codex 交付时 290P/40F，主树修 P0 新增 5 条） |
-| gen:protocol:check | EXIT 0 |
-| build_height_map --check | CHECK OK，heights={0:1112, 1:5515, 2:4379, 3:2994} |
-| build_block_atlas --check | CHECK OK，counts 同上 |
+| client vitest | **321 passed / 44 files** |
+| gen:protocol:check | EXIT 0（协议 1.14） |
+| build_height_map --check | 逐字节一致 |
+| build_block_atlas --check | 逐字节一致 |
+| `tools/check_implementation_status.py` | 未发现缺口 |
 
-> 第九轮 `sim/**` 零改动（`git diff 0aa5d00..04e2175 -- sim/ shared/ tools/` 为空），
-> 故 pytest 数字为 codex 自报、主树未复跑；ruff/pyright/两资产 `--check` 主树实测通过。
+> 第十二轮纯 UI 变更（`sim/**`、`game/`、`shared/`、地图/资产/依赖零 diff），
+> 但主树仍按纪律复跑了全套。
+
+## 2-newest. 第十～十二轮（2026-10-29 → 10-31）—— 悬空 / 隐形墙 / 前端画面
+
+三轮都已 ff 收编，主树独立复核，无在飞任务。
+
+**第十轮｜悬空修复（`7b1d559` RED → `1895014`），协议 1.13→1.14**
+
+用户真机报「挖完建筑物悬空，人物悬在半空」。根因：服务端挖完发
+`tile_changed(gid = 静态 gid)` → 客户端判可走；客户端又本地推算渲染高度 −1。
+实测挖一次后 **4562 格**违反 `walkable ⇒ h==1`（2994 格可走却画 2 层高 = 悬空；
+1568 格可走却画 0 = 陷地下）。
+
+用户裁决：**服务端记挖深，挖到 h=1 才可走**；**跳跃不做**。落地：`VoxelEdit` 加
+`height`（结果高度 0..3 必需）、`VoxelEditedPayload.height` 可选（老事件回退推算）、
+`rebuild_tile_map` 重放 `VOXEL_EDITED` 跟踪高度、`walkable = (tile_id != 0 and height == 1)`。
+主树独立复核挖 0/1/2/3 轮：**3947 / 8326 / 11320 / 11320，0 违规**。
+
+**第十一轮｜土坎视觉区分（`46ce58e` RED → `6aa0528`）**
+
+用户报「地图仍有不可走的无障碍区域」。根因：`iso-terrain.ts` **完全不读
+`map.collision`**，只按高度画 → 阻挡但 h=1 的土坎与可走 h=1 地面渲染完全相同。
+实测 **1568 格隐形墙**，其中 269 格 4-邻接可走格（必撞）、91 格是「两片可走区之间的
+假通道」、真实出生点 (100,53) 31×31 内 135 格。
+
+**不能改成可走**：`_MATERIAL_BY_HEIGHT[1] = earth` 且 `place` 只对可走格生效
+（`voxel_exec.py:124`）—— earth 唯一来源就是「阻挡的 h=1 格」。改成可走 = earth 断源
+= 回到「只挖不放」（实测该方案仍留 142 格、土源 730→524）。**故只改渲染**。
+
+落地：`bank = (effectiveHeight == 1) && (collision == 0)` → 画三道明暗土色短斜纹
+（`#2c1b10` / `#f1d793`，亮度差 185.8，3.5x 下外纹 7px / 亮芯 3.5px），与「挖过的疤」
+（内嵌深色菱形）互斥；retained-set 池化，`changed == false` 的帧零重建。
+顺带把 `iso.ts::VoxelEdits` 与 `iso-terrain.ts::Edits` 两条类型路径收敛成
+`Pick<VoxelEdit, 'height' | 'action'>`。主树独立复核 **1568 全标 / 0 误标 / 0 漏标**。
+
+**第十二轮｜前端画面优化（用户直派，`bc6739c` RED → `7f89584`）**
+
+原双常驻侧栏压垮小屏、canvas 宽 0 且报 3 次 WebGL framebuffer 错误。改为单一可收起
+手札/存档侧栏（桌面默认手札、存档按需，小屏默认关闭、打开时覆盖而不挤压世界）。
+世界宽 1440×900 **872→1152（+32.11%）**、1024×768 **456→736（+61.40%）**、
+390×844 **0→390×688**。CanvasHost 补 ResizeObserver + `ready` 同步 + 卸载清理。
+
+> **坑（已进 §3）**：Phaser RESIZE 模式必须用 `game.scale.setParentSize`；
+> 只调 `scale.resize` 会在 refresh 时从旧 parentSize 回写，手机留下约 46px 底部空隙。
+
+**主树未复核项（诚实说明）**：第十二轮 codex 用真浏览器截的 4 张 PNG 与
+`verify-layout.cjs` 结论，主树只核对了 JSON 数值与源码 diff，**没有自己开浏览器**。
 
 ## 2-new. 第九轮（2026-10-29）移动操作重做 —— codex 交付 + **主树修掉一个 P0**
 
@@ -203,6 +255,16 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 - iso 覆盖层深度集中在 `ISO_DEPTH`（名牌 30 万+/气泡 31 万+/雨 40 万/夜幕 400001）。
 - **走环判据要按「是否在动」而不是「是否换格」**：插值期间不换格，但人在动。
 - **镜头目标必须与人物同一插值进度**：喂逻辑格 + 再叠缓动 = 双重滞后 = 飘。
+- **渲染层不读 `map.collision` 会造成「隐形墙」**：`iso-terrain.ts` 只按高度画，
+  阻挡 h=1 与可走 h=1 渲染完全相同（2026-10-30 实测 1568 格）。任何新增「地面长相」
+  的渲染都要问一句：这一格能不能走？不能走就得给标记。
+- **Phaser RESIZE 模式必须用 `game.scale.setParentSize`**，只调 `scale.resize` 会在
+  refresh 时从旧 parentSize 回写（手机留下约 46px 底部空隙）。容器尺寸走
+  ResizeObserver，`ready` 后补一次同步，卸载要 `disconnect()` + `off()` + `destroy(true)`。
+- **`VoxelEdits` 只有一条类型路径**：`Pick<VoxelEdit, 'height' | 'action'>`
+  （`iso.ts` 导出，`iso-terrain.ts` 直接复用）。曾出现 `iso.ts` 定义 `{height}`
+  而 `iso-terrain.ts` 走协议 `VoxelEdit`（带 `action`）两条路径，`tsc` 不报错但
+  「挖过的疤」判定会静默失效。
 
 **方法**
 - 查符号/调用链/影响面先用 `codegraph_explore`（显式 `projectPath`）。
@@ -238,21 +300,24 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 
 ## 6. ① Claude｜新对话恢复快照
 
-【2026-10-29 第九轮收编完成 + P0 修复 `b0d4341`｜无在途任务】codex 的移动操作重做
-（`f74f4af` 测试 + `04e2175` 实现）已 ff 收编零冲突；主树随即发现并修掉
-「人物完全无法移动」——移动拾取误用了编辑拾取器 `pickVoxel`，真实地图 19.3% 的可走格
-被判成阻挡格，本地预检全拒。新增 `pickGround` 后实测 100% 命中。协议仍 1.13。
+【2026-10-31 第十一 + 第十二轮收编完成 `7f89584`｜无在途任务】两轮 ff 收编零冲突：
+第十一轮土坎视觉区分（`46ce58e` RED → `6aa0528`），第十二轮前端画面优化
+（`bc6739c` RED → `7f89584`，用户直派）。主树独立复核 pytest 2996P/0F、
+vitest 321P/44F、土坎判定 1568/0/0。协议仍 1.14。
 
-- **开新对话只需知道**：① 两树同步无在飞任务，client 295P/41F 全绿；
-  ② 待**肉眼**验收：**移动操作手感（优先，真机必须先确认能走）** / 走路是否还飘 /
-  V4b 三材料行囊 / 地形可走面 / V3 画面 + DA-07 长局；
+- **开新对话只需知道**：① 两树同步 `7f89584`、无在飞任务、门禁全绿；
+  ② 待**肉眼**验收 9 条，**7/8/9 优先**（见 §0）；**主树全程没开浏览器**，
+  第十二轮的观感只有 codex 的截图证据；
   ③ **不变量必须单向**（`walkable ⇒ h==EARTH`），做成双向会立刻回归「只挖不放」；
-  ④ **移动拾取 ≠ 编辑拾取**，合成一个会在真实地图上死掉 19% 的可走格。
-- **未推送**：origin/gitee 停在 `2d7c4cf`；main 领先若干提交未推。推送是用户决定，不自动推。
+  ④ **移动拾取 ≠ 编辑拾取**，合成一个会在真实地图上死掉 19% 的可走格；
+  ⑤ **单测全绿 ≠ 真机能动**，改拾取/投影必须用真实地图实测命中率。
+- **未推送**：origin/gitee 停在 `2ad6606`，main 领先 4 提交未推。推送是用户决定，不自动推。
 - **配置目录**：维持用户 10-26 裁定「不进 git、不推远程、本地须存在」；主树不建 `.pi`。
 - **浏览器**：仅用户明确要求时用，路径 `C:\Users\zx198\AppData\Local\ms-playwright`。
-- **全局 git 邮箱**：`zx19836980213@outlook.com`。
-- 本轮教训已进 §3：`.orca/talking.txt` 必须保持未跟踪，否则 ff 会覆盖派单。
+- **全局 git 邮箱**：`zx19836980213@outlook.com`（2026-10-31 实测，`dev-workflow.md`
+  原记的 `223049848+ZX466@users.noreply.github.com` 已过期）。
+- 本轮教训已进 §3：`.orca/talking.txt` 必须保持未跟踪，否则 ff 会覆盖派单；
+  **派单里的坐标/数字必须来自代码实测，不能拿 `spawn_candidates` 当运行时出生点**。
 
 ## 7. ④ codex｜新对话恢复快照
 

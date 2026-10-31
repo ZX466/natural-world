@@ -14,6 +14,7 @@
 | 2 | `dev-workflow.md` | 环境、门禁命令、T1–T5、协议生成、Git 规范 |
 | 3 | 所在域的文档（下表） | 对接时只读接口/边界段 |
 | 4 | `../.orca/workflow.txt` + `../.orca/agent-registry.md` | 多 Agent 协作与域边界 |
+| 5 | `../.orca/memory.md` §0 | 当前 HEAD / 协议版本 / 门禁数字 / 待人工验收 |
 
 ## 2. 文档地图
 
@@ -65,6 +66,12 @@
 | `perf/llm-monitoring.md` | LLM 成本/延迟监控口径 |
 | `perf/baseline-epyc7763.json` | 定标机基线（**nightly 读取**） |
 | `perf/runner.txt` | 定标机档位（**nightly 读取**） |
+
+### 轮次审计（`../.orca/audits/`，入库）
+
+按轮次归档的施工证据（`plan.md` + `acceptance.json`，含真实地图探针数值与截图）。
+**不是设计真相源**——只用于复现某一轮的实测口径。最新两轮：
+`earth-bank-2026-10-30/`（土坎 1568/0/0）、`frontend-visual-2026-10-30/`（世界宽 872→1152）。
 
 ## 3. 文档纪律
 
