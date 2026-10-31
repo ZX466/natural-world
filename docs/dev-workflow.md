@@ -111,10 +111,16 @@ npm run gen:protocol:check   # 漂移检测，不一致非零退出（ci.yml 已
   - `origin` = `https://github.com/ZX466/natural-world.git`
   - `gitee` = `https://gitee.com/ZX666X/natural-world.git`
 - 推送：`git push origin main; git push gitee main`。
-  GitHub 走代理 `127.0.0.1:7888`（仅 github.com 域）。两个坑（2026-10-30 实测）：
+  **先试直连，失败再走代理**（2026-10-31 实测：代理未启动时 GitHub 直连可直接推送）：
+  ```powershell
+  git -c http.https://github.com.proxy="" push origin main   # 绕开代理直连
+  ```
+  代理在 `127.0.0.1:7888`（仅 github.com 域）时的两个坑（2026-10-30 实测）：
   - git 默认 TLS 后端 `schannel` 与该代理**握手必失败**；本仓库须设
     `git config --local http.sslBackend openssl`。
   - 代理本身间歇，`git push` 约 1/3 成功率，**带重试**；gitee 直连稳定无需代理。
+  - **代理端口不监听时不要盲重试**：先 `netstat -ano | findstr 7888` 看有没有
+    LISTENING；残留的 `FIN_WAIT_2` 连接不代表代理活着。
 - 除 `.orca` 外，点号目录一律不入 git、不推送。
 
 ## 6. 排障
