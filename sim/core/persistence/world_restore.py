@@ -16,6 +16,7 @@ from sim.core.events import CombatScaleChangePayload, EventKind, WorldEvent
 from sim.core.persistence.anchor_package import MaterializationHooks
 from sim.core.persistence.models import Branch, Snapshot
 from sim.core.persistence.npc_store import NpcStore
+from sim.core.persistence.snapshot_policy import prune_hot_snapshots
 from sim.core.persistence.store import SqlEventStore, decompress_snapshot
 from sim.core.tick import TickLoop
 from sim.core.world import TickContext, WorldState, build_default_bus
@@ -85,6 +86,7 @@ async def flush_world(
                 is_cold=False,
             )
         )
+        await prune_hot_snapshots(session, branch_id)
 
     await NpcStore(store, branch_id=branch_id).flush_tick(
         events, extra_projection=checkpoint_projection

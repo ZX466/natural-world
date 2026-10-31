@@ -93,13 +93,16 @@ LLM 输出 Intent
 
 ### 3.2 方案：快照 + 增量重放
 
-§12 已定义：每 1000 tick 一份全量快照。读取流程：
+**实现口径**：每次有事件的 flush（事件 + 检查点同事务）写一份，热保留最近 8 份 + 每日首份。
+`846a052` 为崩溃恢复将写入频率从 DESIGN §12 的每 1000 tick 改为每次 flush；
+冻结 DESIGN 不改，这里记录实现差异。每游戏日 86400 tick，日首份按 `(tick, seq)` 升序取一份；
+保留集合取并集，重合不重复计数。读取流程：
 
 ```
 定位 anchor → (branch_id, seq)
         │
         ▼
-  找最近快照（tick ≤ anchor.tick）
+  找最近快照（tick ≤ anchor.tick 且 seq ≤ anchor.seq）
         │
         ▼
   从快照恢复全量状态
@@ -134,7 +137,7 @@ class MaterializedWorld:
 
 **更新时机**：
 - 每次 `apply(event)` → `_apply_effects(event)` → 更新 MaterializedWorld
-- 每 1000 tick → 快照 = MaterializedWorld 序列化 + gzip
+- 每次有事件的 flush → 完整世界检查点序列化 + gzip，与事件同事务；随后同事务清理该分支旧热快照
 - 崩溃恢复 → 从最近快照 + 重放事件重建 MaterializedWorld
 
 ---
@@ -155,12 +158,13 @@ async def load_anchor(
     branch_id = anchor.branch_id
     target_seq = anchor.seq
 
-    # 2. 找最近快照（tick ≤ anchor.tick）
+    # 2. 两个上界都必须满足；同 tick 的未来 seq 不可读入旧锚点
     snapshot = await session.execute(
         select(Snapshot)
         .where(Snapshot.branch_id == branch_id)
         .where(Snapshot.tick <= anchor.tick)
-        .order_by(Snapshot.tick.desc())
+        .where(Snapshot.seq <= anchor.seq)
+        .order_by(Snapshot.tick.desc(), Snapshot.seq.desc())
         .limit(1)
     )
     snapshot = snapshot.scalar_one_or_none()
@@ -318,12 +322,17 @@ def replay_deterministic(
 
 | 条件 | 操作 |
 |------|------|
-| active 分支 + 最近 8 份热快照 | 保留 |
-| active 分支 + 更早的快照 | 标记 `is_cold=1` |
-| abandoned 分支 + 所有快照 | 整体冷归档（gzip + 移出主库） |
-| 事件日志超阈值 | 快照点以前的 events 整段转冷 |
+| active 分支 + 最近 8 份热快照 / 每日首份 | 保留并集（按 tick、seq 确定性排序） |
+| active 分支 + 保留集外的旧热快照 | 新检查点写入后同事务直接删行，只作用于该分支 |
+| `is_cold=1` 的快照 | 全部保留，不参与热删除 |
+| head-fork 新置 abandoned 的父分支 | 同事务整体标 `is_cold=1`，行数及已有 gzip 内容不变 |
+| abandoned 分支的任何快照 | 不删除，仍可读档；独立 SQLite 冷库留待另单 |
+| events | 本轮不移动、不删除任何行；阈值归档留待另单 |
 
-**主库目标稳态 <2GB**。
+清理保留缓存检查点，不销毁事件历史（C6）。旧检查点不在时从更早的合格快照重放，
+没有合格快照时全量重放；`latest_snapshot(max_seq=...)` 的窗口判据保持不变。
+当前只落实行级保留和冷标记，不自动迁移已有存档。
+**主库目标稳态 <2GB** 是 DESIGN 目标，物理冷库与事件归档未实现前不作已达成承诺。
 
 ---
 
@@ -340,7 +349,8 @@ def replay_deterministic(
   └── 不存在 → 从最近快照恢复 → 重放事件 → 重建
 ```
 
-**快照频率**：每 1000 tick（约 16.7 游戏分钟 @ 60 tick/s）。最坏情况丢失 1000 tick 的增量。
+**快照频率**：每次有事件的 flush 写入完整检查点，事件与检查点同事务；恢复点为最后一次成功提交，
+不再额外等待 1000 tick。提交后热保留最近 8 份与每日首份的并集，清理失败则整笔事务回滚。
 
 ---
 

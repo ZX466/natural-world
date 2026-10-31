@@ -12,6 +12,7 @@ from sim.core.clock import GameClock
 from sim.core.events import npc_death_event, tile_changed_event, world_create_event
 from sim.core.persistence import fork, world_restore
 from sim.core.persistence import store as store_module
+from sim.core.persistence.anchor_package import Materialization
 from sim.core.persistence.models import Branch, Event, Snapshot
 from sim.core.persistence.store import SqlEventStore
 from sim.core.persistence.world_restore import WorldCheckpoint, flush_world, restore_world
@@ -176,9 +177,49 @@ async def test_head_fork_marks_all_parent_snapshots_cold_without_deleting_histor
     assert all(row[2] for row in after)
     assert [(r[0], r[1], r[3]) for r in after] == [(r[0], r[1], r[3]) for r in before]
     assert await store.read_range("main", 0, 1000) == events
+    latest = await store.latest_snapshot("main", 10000, max_seq=events[-1]["seq"])
+    assert latest is not None and latest.data == before[-1][3]
     await write(store, loop, 101, branch="child")
     assert await snapshots(store) == after
     assert all(not row[2] for row in await snapshots(store, "child"))
+
+
+async def test_historical_anchor_fork_keeps_the_active_parent_hot(store):
+    loop = await seed(store)
+    await write(store, loop, 1)
+    rows = await snapshots(store)
+    events = await store.read_range("main", 0, 1000)
+    package = Materialization(
+        anchor_id="historical",
+        branch_id="main",
+        tick=1,
+        seq=events[-1]["seq"],
+        snapshot_seq=None,
+        snapshot_tick=None,
+        replay_from_seq=0,
+        payload={},
+        window=(),
+        fires={},
+        world=None,
+        corpus={},
+        rng_state="{}",
+        agent_override={},
+        state_hash=None,
+        steps=(),
+    )
+    await fork.fork_from_anchor(
+        store.session_factory,
+        parent_branch_id="main",
+        fork_seq=events[-1]["seq"],
+        fork_tick=1,
+        preflush=noop,
+        new_branch_id="historical-child",
+        kind="anchor",
+        package=package,
+    )
+    assert await snapshots(store) == rows
+    async with store.session_factory() as session:
+        assert (await session.get(Branch, "main")).status == "active"
 
 
 @pytest.mark.parametrize("writer", ["direct", "flush"])
@@ -202,9 +243,12 @@ async def test_retention_failure_rolls_back_new_snapshot_and_any_deletion(
     with pytest.raises(RuntimeError, match="retention failed"):
         await write(store, loop, 11, writer=writer)
     assert await snapshots(store) == before
-    # Direct write_snapshot has a separate event commit by contract; flush_world must roll both back.
+    # Direct write_snapshot has a separate event commit; flush_world rolls both back.
     after_events = await store.read_range("main", 0, 1000)
-    assert after_events == events if writer == "flush" else after_events[:-1] == events
+    if writer == "flush":
+        assert after_events == events
+    else:
+        assert after_events[:-1] == events
 
 
 async def test_cold_mark_failure_rolls_back_the_entire_fork(store, monkeypatch):

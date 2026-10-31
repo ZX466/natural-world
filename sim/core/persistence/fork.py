@@ -28,6 +28,7 @@ from sim.core.persistence.npc_store import (
     _structure_event_fields,
     fold_structure_snapshot,
 )
+from sim.core.persistence.snapshot_policy import mark_branch_snapshots_cold
 from sim.core.persistence.vector import clone_branch_vectors
 
 if TYPE_CHECKING:
@@ -589,6 +590,7 @@ async def fork_from_anchor(
                 ),
                 {"pid": parent_branch_id, "now": time.time()},
             )
+            await mark_branch_snapshots_cold(session, parent_branch_id)
 
         await session.execute(text("DROP TABLE IF EXISTS fork_mem"))
         await session.execute(text("DROP TABLE IF EXISTS fork_know"))

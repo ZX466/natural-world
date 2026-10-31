@@ -1,0 +1,78 @@
+{
+  "same_day_growth": [
+    {
+      "writes": 1,
+      "hot": 1,
+      "total": 1
+    },
+    {
+      "writes": 8,
+      "hot": 8,
+      "total": 8
+    },
+    {
+      "writes": 9,
+      "hot": 9,
+      "total": 9
+    },
+    {
+      "writes": 10,
+      "hot": 9,
+      "total": 9
+    },
+    {
+      "writes": 100,
+      "hot": 9,
+      "total": 9
+    },
+    {
+      "writes": 250,
+      "hot": 9,
+      "total": 9
+    },
+    {
+      "writes": 1000,
+      "hot": 9,
+      "total": 9
+    }
+  ],
+  "three_days": {
+    "writes": 1100,
+    "hot_rows": 11,
+    "daily_first_ticks": [
+      1,
+      86400,
+      172800
+    ],
+    "all_kept_ticks": [
+      1,
+      86400,
+      172800,
+      172842,
+      172843,
+      172844,
+      172845,
+      172846,
+      172847,
+      172848,
+      172849
+    ]
+  },
+  "abandoned": {
+    "rows_before": 11,
+    "rows_after": 11,
+    "all_cold": true,
+    "keys_and_gzip_sha256_equal": true,
+    "events_before": 1101,
+    "events_after": 1101,
+    "event_rows_equal": true
+  },
+  "recovery": {
+    "historical_checkpoint_json_equal": true,
+    "no_qualified_snapshot_json_equal": true,
+    "comparison": "WorldCheckpoint.capture(loop).model_dump_json(), including RNG/combat/chaos fields"
+  },
+  "latest_snapshot_ast_sha256": "5231459678c7d619174f0313e11f182725b712189c29aa3c62ed0b5fe76960f8",
+  "latest_snapshot_unchanged": true,
+  "conditions": "Production flush/fork paths in owned temporary SQLite files; no API/browser/model calls or production database writes. Per-flush checkpoint states are explicit deterministic fixtures."
+}

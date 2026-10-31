@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sim.core.persistence.event_validation import validate_store_row
 from sim.core.persistence.models import Branch, EntropyLog, Event, Snapshot
+from sim.core.persistence.snapshot_policy import prune_hot_snapshots
 
 # 快照 payload 结构版本（codex 建议项：schema_version，M5 前必须）
 SNAPSHOT_SCHEMA_VERSION = 1
@@ -109,6 +110,7 @@ class EventStore(Protocol):
 
         event_seq：快照点当前事件流的最大 events.seq，落库为 snapshots.seq，
         读档时 `start_seq = snapshot.seq` 直接衔接 `events.seq > start_seq`。
+        活动分支同事务保留最近 8 份热快照及每日首份；冷快照、废弃分支快照不删。
         """
         ...
 
@@ -350,6 +352,7 @@ class SqlEventStore:
 
         codex 必须项 #3：读档伪代码 `start_seq = snapshot.seq` 衔接
         `events.seq > start_seq`；若用表内自增会错位。
+        写入后同事务清理超出保留集的旧热快照；事件与冷快照不受影响。
         """
         compressed = gzip.compress(blob, compresslevel=6)
 
@@ -363,6 +366,7 @@ class SqlEventStore:
                 schema_version=SNAPSHOT_SCHEMA_VERSION,
             )
             session.add(snap)
+            await prune_hot_snapshots(session, branch_id)
             await session.commit()
 
     async def latest_snapshot(

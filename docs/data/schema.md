@@ -75,7 +75,17 @@
 
 ## 3. snapshots（快照 — 冷热分层）
 
-§12 v2.1：每 1000 tick 全量快照，gzip 压缩。同分支仅保留最近 8 份热快照 + 每日首快照；abandoned 分支整体冷归档。
+**实现口径**：每次有事件的 flush 写一份 gzip 全量检查点，事件与检查点同事务提交。
+`846a052` 为崩溃恢复将写入频率从 DESIGN §12 的每 1000 tick 改为每次 flush；
+DESIGN 是冻结基线，不在此修改。直接 `write_snapshot` 与 `flush_world` 共用以下保留策略：
+
+- 活动分支只保留最近 8 份热快照（按 tick、seq 降序）与每日首份的**并集**；
+  每游戏日为 86400 tick，首份按 `(tick, seq)` 升序取一份。同 tick 多份不重复保留。
+- 新快照写入后，在同一事务内直接删除超出保留集的旧热行（`is_cold=0`），仅作用于该分支。
+  两个保留集合可重合，故热行上界为 `8 + 已覆盖游戏日数`，不是始终严格相加；冷行另计。
+- head-fork 将父分支置为 abandoned 时，同事务把其快照整体置 `is_cold=1`，行数与压缩内容不变。
+  冷快照与 abandoned 分支不参与删除，读档仍可读取；历史 anchor-fork 不封存父线的语义保持不变。
+- **实现边界**：本轮只做标冷，不移出主库、不改压缩算法、不删除 events；既有存档不自动批量迁移。
 
 | 字段 | 类型 | 约束 | 说明 | 对齐 |
 |------|------|------|------|------|
@@ -83,7 +93,7 @@
 | `seq` | INTEGER | NOT NULL | 快照点的事件序列号 | §12 快照 |
 | `tick` | INTEGER | NOT NULL | 快照点的游戏 tick | §12 快照 |
 | `snapshot_data` | BLOB | NOT NULL | gzip 压缩的全量状态 JSON | §12 体积治理 |
-| `is_cold` | INTEGER | NOT NULL DEFAULT 0 | 0=热存储 1=冷归档 | §12 冷热分层 |
+| `is_cold` | INTEGER | NOT NULL DEFAULT 0 | 0=热快照，1=冷标记（本轮仍留主库） | §12 冷热分层 |
 | `created_at` | REAL | NOT NULL DEFAULT (unixepoch('now','subsec')) | — | — |
 
 **主键**：`(branch_id, seq)` — 每个快照点唯一。
@@ -104,7 +114,9 @@
 }
 ```
 
-**体积预估**（§12）：单份 ≤5MB（gzip 后），每 1000 tick → 每游戏日 86 份 → 约 430MB。治理后稳态 <2GB。
+**体积口径**：DESIGN §12 的单份 ≤5MB、每日 86 份/约 430MB 是每 1000 tick 写入时的估算，
+不再代表实际 flush 次数。活动热保留集受 `8 + 游戏日数` 约束，冷分支继续保留全部行；
+独立 SQLite 冷库与事件归档尚未实现，不能据此声称主库已达到 <2GB 的目标。
 
 ---
 
