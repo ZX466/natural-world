@@ -282,7 +282,7 @@ class MatterPayload(BaseModel):
 class HiddenEmergePayload(BaseModel):
     """隐藏属性浮现（M3 E1，m3-evidence-chain §3；裁 8）。
 
-    attr_ids 只装「新进触发窗口」的 delta（戏外主键 ``f"{npc_id}.health_{row.id}"``，
+    attr_ids 只装「新进触发窗口」的 delta（戏外主键 ``f"{npc_id}.health_{code}"``，
     非 descriptor/label 词面——X4 修订：词面永不入事件，extra=forbid 硬拒）。
     witnessed 装配在感知层（evidence.witnesses_of_emerge），不在 payload。
     """

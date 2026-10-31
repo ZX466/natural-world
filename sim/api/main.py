@@ -39,7 +39,7 @@ from sim.api.ws import (
     ws_auth_token,
 )
 from sim.core.events import EventKind, TileChangedPayload, tile_changed_event, world_create_event
-from sim.core.persistence.database import create_session_factory, init_database
+from sim.core.persistence.database import create_session_factory, ensure_schema, init_database
 from sim.core.persistence.store import SqlEventStore
 from sim.core.rng import RngRegistry
 from sim.core.tick import TickLoop
@@ -202,7 +202,10 @@ async def build_loop() -> tuple[TickLoop, Any]:
         f"sqlite+aiosqlite:///{WORLD_DB_PATH.as_posix()}",
         connect_args={"timeout": 10.0},  # sqlite3 busy_timeout（秒）
     )
-    await init_database(engine)  # 开发库快速起步；生产走 alembic upgrade head
+    await init_database(engine)  # 建缺失的表（不给已有表加列）
+    # 自愈：create_all 建出的老库（无 alembic_version）补齐新迁移引入的列。
+    # 没有这一步，`npc_health.code` 这类新列永远不会出现在既有存档上，启动即崩。
+    await ensure_schema(engine)
     # D20：WAL 日志模式（库级持久设置，一次即可）——读写并行、写锁等待
     # 而非硬炸；S2 已让同步存档写在线程池内闭环，避免阻塞 driver 的异步提交。
     from sqlalchemy import text

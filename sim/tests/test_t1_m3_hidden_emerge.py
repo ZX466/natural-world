@@ -14,7 +14,7 @@
 **X4 修订留痕（CR 已裁，裁 8）**：m3-preplan §3 X4 原文「attr ids 永不入 events」
 在 R5 证据链下修订为——**descriptors/label/triggered 全量集合仍永不入事件**；
 `npc.hidden_emerge` 仅承载「新进触发窗口」的 **attr_id 清单**（戏外主键
-``f"{npc_id}.health_{row.id}"``，非直陈词面；与 npc_id/matter_id 同戏外审计纪律）。
+``f"{npc_id}.health_{code}"``，非直陈词面；与 npc_id/matter_id 同戏外审计纪律）。
 
 契约锁定（m3-evidence-chain.md §3/§4/§8）：
 
@@ -58,7 +58,7 @@ from sim.core.persistence.database import init_database
 from sim.core.persistence.event_validation import EventValidationError, validate_store_row
 from sim.core.persistence.store import SqlEventStore
 
-ATTR_A = "chenmo.health_1"  # 戏外主键（npc_id.health_{row.id} 同构）
+ATTR_A = "chenmo.health_1"  # 戏外主键（npc_id.health_{code} 同构；此处 code 为 "1"）
 ATTR_B = "chenmo.health_2"
 
 
