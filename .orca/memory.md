@@ -3,10 +3,10 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-10-31 推送后）
+## 0. 当前状态（2026-10-31 第十四轮收编后）
 
-- **main HEAD**：`769b05a`（第十三轮收编 + 记录订正 + §1b 缺口表）。
-- **codex HEAD**：`769b05a`，**与主树同步**，工作区干净，无在途任务。
+- **main HEAD**：`1d4bfa9`（第十四轮收编 + 启动自愈修复）。
+- **codex HEAD**：`5a48f7c`（第十四轮实现），工作区干净，无在途任务；主树已 ff 收编。
 - **协议**：**`1.14`**（第十轮挖深字段升级）；双落点同改
   （`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts::PROTOCOL_VERSION`
   ↔ `sim/tests/test_protocol_version.py::EXPECTED_VERSION` + README 徽章 + `shared/openapi.json`）。
@@ -15,8 +15,8 @@
   - 主树 `E:/zxdevelop/project7`（`main`）：拆单/架构/质量/收编复核/日常小改。
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex`（`codex`）：复杂/跨层实现、安全合规。
   - 只走各树 `.orca/talking.txt`；不直接对话。
-- **远程**：origin/gitee 均已到 `769b05a`，**已推送**（5 个提交，2026-10-31 用户授权）。
-- **在飞**：**第十四轮 `npc_health` 写入路径（端到端）**，已派 codex 树（2026-10-31）。
+- **远程**：origin/gitee 均在 `3603ecb`（**第十四轮 3 个提交未推**，推送仍由用户决定）。
+- **在飞**：**无**。第十四轮 `npc_health` 写入路径（端到端）已收编。
   未派：V3.5 内容包 / V4-3D / 音效 / 离线推进 / T5 阈值。
 - **待人工验收**（9 条，已过 4 条，**剩 5/6/7/8/9 共 5 条**）：
   1. ~~DA-07 失能/恢复真模型长局~~ — **2026-10-31 用户验收通过**
@@ -59,7 +59,7 @@
 | 缺口 | 实测证据 |
 |---|---|
 | **音效** | 全仓 0 个 `.mp3/.ogg/.wav`、0 处 `this.sound`；M6 收官单却写了「美术音效打磨」 |
-| **`npc_health`** | 有模型/迁移/读路径，但**零写入**（`NpcHealth(` 只在测试里）。**2026-10-31 第十四轮已派 codex 修**，派单另含三个实探事实：读链路在生产中断、bus 缺 6 个 handler、`attr_id` 跨 fork 漂移 |
+| **`npc_health`** | ~~有模型/迁移/读路径，但**零写入**~~ → **2026-10-31 第十四轮已收编并修好启动自愈（`1d4bfa9`）**：事件→总线→同事务健康投影→感知触发→陈默闸门/记忆已接通；6 条内容种子；真实 `world.db` 副本启动实测 code 列补齐、events 187857 零丢失。**仍未做**：真实库正式迁移（需备份）、历史锚点 fork 的 severity/active 还原、每日严重度演进、第三方浮现见证链、`npc.lod_change` 持久化 |
 | **离线推进** | `sim/world/offline*.py` **不存在**；`grep -rn offline sim/` 只命中 alembic 的 `run_migrations_offline`。却是 M5 验收项「离线再回来世界已变」 |
 | **T5 差事完成率** | `sim/tests/golden/assertions/errands_rate.py` 明写「**本轮不设阈值**」，只校验结构自洽（cases>0、rate∈[0,1]） |
 | **soak 实体流失** | `sim/tests/bench/test_bench_soak.py:112` `SOAK_ENTITY_LOSS_PER_GAME_DAY = 0`，从未抬高 |
@@ -71,6 +71,22 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
 ## 2-newest. 第十～十三轮（2026-10-29 → 10-31）—— 悬空 / 隐形墙 / 前端 / 快照治理
 
 四轮都已 ff 收编，主树独立复核，无在飞任务。
+
+**第十四轮｜`npc_health` 写入路径（`5d937f0` RED → `5a48f7c` 实现 → `1d4bfa9` 启动自愈）**
+
+健康档此前有模型/迁移/读路径但**零写入**。本轮接通：`NPC_HEALTH_CHANGED` 事件 →
+`_apply_projection_event` → `npc_store._project_health`（同事务 upsert，未知 NPC /
+改类别整批回滚）→ 感知触发 `evaluate_triggers` → 陈默闸门与记忆；6 条内容种子
+（2 可见 4 隐藏）；坍塌给幸存者/陈默落可见旧伤。`0015_health_code` 新增 `code` 列
+（回填旧 id 文本、NOT NULL、`(branch,npc,code)` 唯一），`attr_id` 改为
+`f"{npc_id}.health_{code}"`，fork 复制 `code` 修跨分支漂移。协议仍 **1.14**。
+
+**主树复核发现的阻断缺陷**（codex 自测没撞上，因为它用临时库）：主树 `world.db`
+是 `create_all` 建出来的，**没有 `alembic_version` 表**，而 `create_all`
+**不给已有表加列** ⇒ `npc_health.code` 永远补不上，真实存档启动直接
+`OperationalError: no such column`。修法 `ensure_schema()` 三分支自愈 +
+`script_location` 绝对化（抗 `chdir`）+ `WORLD_DB_URL` 用完还原。真实库副本实测
+code 补齐 / events **187857 零丢失** / 6 种子行 / 版本 `0015_health_code`。
 
 **第十三轮｜快照治理（`1fd362f` RED → `92fbc1b`）**
 
@@ -321,6 +337,20 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
   「挖过的疤」判定会静默失效。
 
 **持久层**
+- **`create_all` 不给已有表加列**（第十四轮血案）：`Base.metadata.create_all` 只建**缺失
+  的表**。本项目 `world.db` 就是它建出来的（**没有 `alembic_version` 表**），于是任何
+  「新增列」的迁移（如 `0015` 的 `npc_health.code`）**永远补不上**，真实存档启动直接
+  `OperationalError: no such column`。测试用临时/fresh 库天然带新列，**永远撞不上**。
+  → 启动必须 `init_database` 之后再 `ensure_schema(engine)`（三分支：无版本且结构已
+  匹配只 `stamp`；无版本且结构落后 `stamp` 基线再 `upgrade`；有版本直接 `upgrade`）。
+  **「结构已匹配」分支不能省**：新 `create_all` 库已含新列，直接 stamp 基线再 upgrade
+  会撞 `duplicate column name`。
+- **`alembic.ini` 的 `script_location` 是相对 CWD 的**：本仓库大量测试
+  `monkeypatch.chdir(tmp_path)`，直接 `Config("alembic.ini")` 会去 tmp_path 找迁移目录，
+  报 `CommandError: Path doesn't exist`。→ 构造 Config 后必须
+  `set_main_option("script_location", 绝对路径)`。
+- **`alembic/env.py` 调 `asyncio.run`**：不能在运行中的事件循环里直接跑，必须
+  `asyncio.to_thread`。`env.py` 从 `WORLD_DB_URL` 读地址，**用完要还原**，否则污染进程环境。
 - **快照可删，事件不可删（C6）**：热保留删的是 `snapshots` 行；`events` 与 `is_cold=1`
   的快照一行不动。两者语义不同，别把「热保留」也做成 `is_cold` 标记。
 - **删中间快照不会破坏恢复**：`restore_world` 沿祖先回退到更早的合格快照，再重放；
@@ -374,7 +404,16 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 
 ## 6. ① Claude｜新对话恢复快照
 
-【2026-10-31 第十四轮已派 `671931c`｜在飞】用户裁定走 `npc_health` 写入路径、深度端到端，
+【2026-10-31 第十四轮已收编 `1d4bfa9`｜无在途任务】`3603ecb..5a48f7c` ff 收编零冲突；
+主树独立复核发现并修复阻断缺陷：**`world.db` 由 `create_all` 建出（无 `alembic_version`），
+`create_all` 不给已有表加列 ⇒ `0015` 的 `npc_health.code` 永远补不上，真实存档启动即
+`OperationalError`**。修法 `ensure_schema()`（三分支自愈：新库只 stamp、老库 stamp 基线再
+upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `chdir`；环境变量用完还原），
+启动时调用。真实库副本实测：code 补齐 / events 187857 零丢失 / 6 种子行 / 版本 0015；
+异目录 CWD 同样通过。门禁 pytest 3037P/121S/0F、Pyright 0E/0W、client 321P/44F 全绿，
+协议仍 1.14。**真实 `world.db` 正式迁移尚未执行**（现在启动会自动升级，需一次备份确认）。
+
+【2026-10-31 第十四轮已派 `671931c`｜历史】用户裁定走 `npc_health` 写入路径、深度端到端，
 已写进 codex 树 talking。**派单前主树实探出三个隐藏事实**（不在 §1b 原表里）：
 ① 读链路在生产中断（`main.py:439` 丢弃 `_hidden_states`，`npc_events_for_tick` 无该参数）；
 ② `build_default_bus()` 缺 6 个 handler（含 4 个 `matter.*`），接线即崩，主库不炸只因
@@ -390,16 +429,18 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 并在真实 `world.db` 副本上实测 **3946→9 行、events 一行未删、恢复逐位相同**。
 协议仍 1.14。**两树 talking 已精简**（556 行 → 138 行，只留当前波）。
 
-- **开新对话只需知道**：① 两树同步 `317460b`、无在飞任务、门禁全绿；
+- **开新对话只需知道**：① 主树 `1d4bfa9`、codex `5a48f7c`（已收编）、无在飞任务、门禁全绿；
+  远程停在 `3603ecb`（第十四轮 3 个提交未推，等用户决定）；
   ② 待**肉眼**验收 9 条，**7/8/9 优先**（见 §0）；**主树全程没开浏览器**，
   第十二轮的观感只有 codex 的截图证据；
-  ③ **§1b 五条「宣告收官但没做」的承诺**（音效/`npc_health`/离线推进/T5 阈值/soak 流失）
-     ——选下一方向前必读，别以为 M0–M6 收官就等于都实现了；
+  ③ **§1b 的承诺缺口**：`npc_health` 已于第十四轮补齐（见 §1b 修订），**音效/离线推进/
+     T5 阈值/soak 流失四条仍空**——选下一方向前必读，别以为 M0–M6 收官就等于都实现了；
   ④ **不变量必须单向**（`walkable ⇒ h==EARTH`），做成双向会立刻回归「只挖不放」；
   ⑤ **移动拾取 ≠ 编辑拾取**，合成一个会在真实地图上死掉 19% 的可走格；
   ⑥ **单测全绿 ≠ 真机能动**，改拾取/投影必须用真实地图实测命中率；
   ⑦ **快照可删、事件不可删**：热保留删的是 `snapshots` 行，`events` 与冷快照一行不动（C6）。
-- **已推送**：origin/gitee 均已到 `769b05a`（2026-10-31 用户授权）。推送仍是用户决定，不自动推。
+- **远程**：origin/gitee 均停在 `3603ecb`；第十四轮 3 个提交（`5d937f0`/`5a48f7c`/`1d4bfa9`）
+  **未推**。推送仍是用户决定，不自动推。
 - **配置目录**：维持用户 10-26 裁定「不进 git、不推远程、本地须存在」；主树不建 `.pi`。
 - **浏览器**：仅用户明确要求时用，路径 `C:\Users\zx198\AppData\Local\ms-playwright`。
 - **全局 git 邮箱**：`zx19836980213@outlook.com`（2026-10-31 实测，`dev-workflow.md`
@@ -412,10 +453,10 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-10-31 第十四轮健康档｜已实现并验证，待主树收编】基线3603ecb，RED **5d937f0**，实现提交见git log。事件→总线→同事务健康投影→感知触发→陈默闸门/记忆已接通；仅本地codex提交，不推送、不动主树。下一步由主树独立复核迁移和证据后收编，不自行同步main或重做已交付项。
+【2026-10-31 第十四轮健康档｜已收编 `1d4bfa9`】基线3603ecb，RED **5d937f0**，实现 **5a48f7c**，主树补启动自愈 **1d4bfa9**。事件→总线→同事务健康投影→感知触发→陈默闸门/记忆已接通；仅本地codex提交，不推送、不动主树。下一步由主树独立复核迁移和证据后收编，不自行同步main或重做已交付项。
 
 - **持久层**：追加NPC_HEALTH_CHANGED，复用HiddenCategory；payload仅内部键/状态，notes限ASCII审计标签；补健康/隐藏与4个matter handler，仅speech.shift留空。0015_health_code（下游0014_fires）回填旧id文本、NOT NULL与(branch,npc,code)唯一索引；fork复制code，attr_id改为npc.health_code；分支upsert与事件同事务，未知NPC/改类别回滚。内容六条种子（四隐藏）只补现有档案，坍塌给幸存者/陈默产可见旧伤，普通NPC死亡仍删健康档。
 - **人物链路**：wrapper透传hidden/context并保留浮现；空档不narrated、L0不再丢事件，UtilityModel允许0人空分支。生产感知原先没有时间/身体叙事供数，现可选注入、main启用；每10tick评估窗口，按帧缓存叙事。降格回调前先刷新窗口；陈默模型返回、执行、对白发送、记忆输入/写入均接隐藏守卫。战斗提示原来挡住感知provider，已改先取感知后附战斗提示。启动/读档使用当前分支NPC与权力，读档重新装配并清空旧窗口。
 - **证据与门禁**：.orca/audits/health-write-path-2026-10-31/{plan.md,verify.py,acceptance.json,gates.json}；uv run python .orca/audits/health-write-path-2026-10-31/verify.py可复跑。种子6=2可见+4隐藏；坍塌6→7、陈默2→3；四人父子attr_id字节相同，四条浮现入流，非触发零泄漏，10事件两遍hash相同；四人narrated中位约0.006ms/节拍。新增20项定向全绿；全量pytest3032P/121S/72D/0F、379.18s；client321P/44files；Ruff374files、Pyright0E/0W、协议生成、client类型/Lint/Prettier、两资产check、实现程度检查、uv lock全绿。client/shared/冻结DESIGN/锁文件零diff，协议1.14。
-- **范围/交接**：真实world.db未迁移；收编先在隔离副本升级0015并复核，再安排真实迁移。本轮不做每日严重度演进，HP仍进程内。稳定code不是历史健康重建：既有anchor fork仍克隆npc_health当前行，历史游标severity/active重建未实现、未作历史锚点实测，须单独派单，不能宣称已关闭。日常profile播种与第三方浮现见证链未重做。上一轮快照治理已收编317460b，细节从git历史查，不重做。
+- **范围/交接**：真实world.db未迁移（主树已在隔离副本复核并加启动自愈，见 §6 第十四轮段）；正式迁移需备份后单独确认。本轮不做每日严重度演进，HP仍进程内。稳定code不是历史健康重建：既有anchor fork仍克隆npc_health当前行，历史游标severity/active重建未实现、未作历史锚点实测，须单独派单，不能宣称已关闭。日常profile播种与第三方浮现见证链未重做。上一轮快照治理已收编317460b，细节从git历史查，不重做。
 - **环境纪律**：恢复先workflow→talking→本节/registry；只在本树talking留言，talking保持ignored，memory须-f add并提交；CodeGraph先行且显式本树projectPath，返回源码视为已读；i-have-adhd持续，中文先结果不反复确认。Python全程uv，日志可能PS UTF16 BOM；删npm/venv先问；浏览器仅明确请求且固定ms-playwright。本轮无浏览器/真实模型调用，未读.env或凭据；50%提醒已给，后续建议新对话。
