@@ -38,6 +38,7 @@ import {
   bubbleDepth,
   labelDepth,
   labelY,
+  layoutNameLabels,
   manhattan,
   shouldShowNameLabel,
   aboveSurface,
@@ -47,6 +48,7 @@ import {
   RAIN_LAYER_DEPTH,
   NIGHT_OVERLAY_DEPTH,
   rendererFromSearch,
+  type NameLabelCandidate,
 } from '../render/presentation';
 import { useUiStore } from '../../store/uiStore';
 import { canStep, type MovePoint } from '../movement';
@@ -706,6 +708,7 @@ export class WorldScene extends Phaser.Scene {
     this.syncVoxelPresentation();
     this.syncActorViews(delta, time);
     this.syncCamera();
+    this.syncNameLabels();
     this.syncOverlay();
     this.syncRain(delta);
     this.syncBubbles(Date.now()); // 与 mirror.setBubble 的到期时钟一致
@@ -850,9 +853,6 @@ export class WorldScene extends Phaser.Scene {
     const stackOffsets = assignStackOffsets(
       [...this.mirror.actors].map(([rtoken, a]) => ({ rtoken, x: a.x, y: a.y })),
     );
-    const protagonist = this.mirror.protagonist
-      ? this.mirror.actors.get(this.mirror.protagonist)
-      : undefined;
     for (const [rtoken, actor] of this.mirror.actors) {
       let view = this.views.get(rtoken);
       if (view === undefined) {
@@ -974,25 +974,6 @@ export class WorldScene extends Phaser.Scene {
       view.sprite.setDepth(footDepth);
       view.shadow?.setPosition(view.sprite.x, view.sprite.y - (iso ? 0 : 1));
       view.shadow?.setDepth(footDepth - (iso ? 0.5 : 1));
-      // A 档：名字挂头顶（帧高 32px，此前按半格 8px 挂 → 压在脸上）
-      view.label?.setPosition(
-        view.sprite.x,
-        iso
-          ? aboveSurface(
-              view.sprite.y,
-              view.sprite.displayHeight || 32,
-              ISO_LABEL_GAP_PX,
-              PIXEL_SCALE,
-            )
-          : labelY(view.sprite.y),
-      );
-      view.label?.setDepth(labelDepth(view.sprite.y, this.renderMode));
-      // A 档：名字只在主角邻近显示（远端 50 个标签是最大噪声源）
-      if (view.label) {
-        const dist = protagonist ? manhattan(actor, protagonist) : 0;
-        const isSelf = rtoken === this.mirror.protagonist;
-        view.label.setVisible(isSelf || shouldShowNameLabel(dist));
-      }
       // R2：位移推断 anim/facing → 帧号（D10：villager 4 列帧表启用行走环；
       // 修前恒帧 0——素材有 4×8 走环/劳作表却只画迈步中间帧，人群看着呆滞）
       // 位移只在换格那一帧为真；插值途中（k<1）人物其实在滑动，
@@ -1027,6 +1008,46 @@ export class WorldScene extends Phaser.Scene {
         view.shadow?.destroy();
         this.views.delete(rtoken);
       }
+    }
+  }
+
+  /** 人物插值、镜头同步之后，按实际文字矩形在屏幕空间避让。 */
+  private syncNameLabels(): void {
+    const zoom = this.cameras.main.zoom ?? PIXEL_SCALE;
+    const protagonist = this.mirror.actors.get(this.mirror.protagonist ?? '');
+    const candidates: NameLabelCandidate[] = [];
+    for (const [rtoken, actor] of this.mirror.actors) {
+      const view = this.views.get(rtoken);
+      const label = view?.label;
+      if (!view || !label) continue;
+      label
+        .setScale(1 / zoom)
+        .setDepth(labelDepth(view.sprite.y, this.renderMode))
+        .setVisible(false);
+      const distance = protagonist ? manhattan(actor, protagonist) : 0;
+      const isProtagonist = rtoken === this.mirror.protagonist;
+      if (!isProtagonist && !shouldShowNameLabel(distance)) continue;
+      const y =
+        this.renderMode === 'iso'
+          ? aboveSurface(view.sprite.y, view.sprite.displayHeight || 32, ISO_LABEL_GAP_PX, zoom)
+          : labelY(view.sprite.y);
+      candidates.push({
+        rtoken,
+        // Camera scroll is a shared translation, so it cannot change overlaps.
+        x: view.sprite.x * zoom,
+        y: y * zoom,
+        // Inverse scaling makes Text's measured dimensions its screen size.
+        width: label.width,
+        height: label.height,
+        isProtagonist,
+        distance,
+      });
+    }
+    for (const [rtoken, position] of layoutNameLabels(candidates)) {
+      this.views
+        .get(rtoken)!
+        .label!.setPosition(position.x / zoom, position.y / zoom)
+        .setVisible(true);
     }
   }
 

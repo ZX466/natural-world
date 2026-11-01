@@ -103,6 +103,7 @@ function setup(mode: 'flat' | 'iso') {
     views: Map<string, { sprite: Node; label: Node }>;
     bubbleTexts: Map<string, Node>;
     syncActorViews(delta: number, time: number): void;
+    syncNameLabels(): void;
     syncBubbles(now: number): void;
   };
   return { scene, internal, mirror };
@@ -129,6 +130,7 @@ describe.each(['flat', 'iso'] as const)('%s presentation', (mode) => {
   it('anchors readable names and bubbles above the actor at the right depth', () => {
     const { internal, mirror } = setup(mode);
     internal.syncActorViews(0, 1000);
+    internal.syncNameLabels();
     mirror.setBubble('陈默', '先去集市看看。', 4000, 0);
     internal.syncBubbles(1);
     const view = internal.views.get('hero')!,

@@ -34,7 +34,10 @@ class Observation(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     channel: Channel
-    subject: str  # rtoken（行为主体，戏外唯一标识；绝不 entity_id）
+    # 行为主体的**戏内词面**：视觉/听觉由 senses 填显示名（叙事要人话），
+    # 内感受填观察者自身 rtoken。戏外装配（如 witnesses）须经 display_name_of
+    # 反查回 entity_id——它**不是** rtoken，旧注释曾误标为 rtoken。
+    subject: str
     description: str  # 世界内语言（已叙事化）
     strength: float  # 显著性 0..1（不进 prompt 文本，仅供装配排序）
 

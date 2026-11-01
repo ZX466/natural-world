@@ -9,6 +9,7 @@
  *
  * 本模块只做纯计算，便于单测；Phaser 对象操作留在 WorldScene。
  */
+import { placeBubble } from './bubbles';
 
 export const TILE = 16;
 
@@ -101,6 +102,42 @@ export function bubbleDepth(footY: number, renderer: 'flat' | 'iso' = 'flat'): n
 /** 是否显示名字标签（主角邻近才显示，消 50 个常显标签的噪声）。 */
 export function shouldShowNameLabel(distance: number, radius: number = NAME_LABEL_RADIUS): boolean {
   return distance <= radius;
+}
+
+/** 屏幕像素；有限上移后仍放不下就隐藏，避免名字远离所属人物。 */
+const NAME_LABEL_MAX_RISE_PX = 36;
+const NAME_LABEL_GAP_PX = 3;
+
+export interface NameLabelCandidate {
+  rtoken: string;
+  /** 屏幕空间的居中、底对齐锚点，与 Text origin(0.5, 1) 一致。 */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isProtagonist: boolean;
+  distance: number;
+}
+
+/** 同格及相邻格统一避让；主角优先，其余按距离、稳定 token 排序。 */
+export function layoutNameLabels(
+  candidates: Iterable<NameLabelCandidate>,
+): Map<string, { x: number; y: number }> {
+  const ordered = [...candidates].sort(
+    (a, b) =>
+      Number(b.isProtagonist) - Number(a.isProtagonist) ||
+      a.distance - b.distance ||
+      (a.rtoken < b.rtoken ? -1 : a.rtoken > b.rtoken ? 1 : 0),
+  );
+  const placed: { x: number; y: number; width: number; height: number }[] = [];
+  const positions = new Map<string, { x: number; y: number }>();
+  for (const candidate of ordered) {
+    const box = placeBubble(candidate, placed, NAME_LABEL_GAP_PX);
+    if (candidate.y - box.y > NAME_LABEL_MAX_RISE_PX) continue;
+    placed.push(box);
+    positions.set(candidate.rtoken, { x: box.x, y: box.y });
+  }
+  return positions;
 }
 
 /** 逻辑格曼哈顿距离。 */

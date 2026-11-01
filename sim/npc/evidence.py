@@ -30,6 +30,16 @@ SELF_DISCLOSURE_CONFIDENCE = 0.9
 WITNESSING_CHANNELS = frozenset({"vision", "hearing", "touch"})
 
 
+def can_hold_knowledge(species: str) -> bool:
+    """Only humans hold narrative facts; unknown species fail closed.
+
+    Animal witnesses remain on emergence events: observing is a fact, while
+    acquiring and retelling human knowledge is a separate species capability.
+    Call this at event assembly, before generating a knowledge event.
+    """
+    return species == "human"
+
+
 @dataclass(frozen=True)
 class EvidenceVerdict:
     """结构化判定结果（E.拒绝纪律：reason 不含 LLM 原文/词面）。"""
@@ -111,34 +121,75 @@ def judge_third_party_hidden(
     return _deny("unknown_source")
 
 
-def witnesses_of_emerge(frames: dict[str, object], *, subject: str) -> list[str]:
-    """E1 见证人装配：该 tick 感知帧含主体观测的观察者 id（排除主体自身）。
+def _witnesses_matching(
+    frames: Mapping[str, object], *, subject_label: str, exclude: str | None = None
+) -> list[str]:
+    """帧里「看到/听到/碰到 subject_label」的观察者。
 
-    嗅觉通道不计入（narrate_smell 无来源归属——闻到 ≠ 目击）。
-    frames: observer_id -> 感知帧（鸭子类型：须有 observations 可迭代，元素为
-    (channel, subject, strength) 三元组或等价有 channel/subject 属性的对象）。
+    嗅觉不计入（narrate_smell 无来源归属——闻到 ≠ 目击）。
+    排除主体自身有两种口径：纯函数层按 `subject_label`（帧键就是 rtoken 且主体
+    以 rtoken 传参），戏外边界按 rtoken 显式给 `exclude`（帧键是 rtoken、标签是
+    显示名，二者不可比）。
     """
     witnesses: list[str] = []
     for observer_id, frame in frames.items():
-        if observer_id == subject:
+        if observer_id in (subject_label, exclude):
             continue
         for obs in getattr(frame, "observations", []) or []:
             channel = obs[0] if isinstance(obs, tuple) else getattr(obs, "channel", None)
             obs_subject = obs[1] if isinstance(obs, tuple) else getattr(obs, "subject", None)
-            if obs_subject != subject:
+            if obs_subject != subject_label:
                 continue
             if channel in WITNESSING_CHANNELS and observer_id not in witnesses:
                 witnesses.append(observer_id)
     return witnesses
 
 
+def witnesses_of_emerge(frames: dict[str, object], *, subject: str) -> list[str]:
+    """E1 见证人装配：该 tick 感知帧含主体观测的观察者 id（排除主体自身）。
+
+    嗅觉通道不计入（narrate_smell 无来源归属——闻到 ≠ 目击）。
+    frames: observer_id -> 感知帧（鸭子类型：须有 observations 可迭代，元素为
+    (channel, subject, strength) 三元组或等价有 channel/subject 属性的对象）。
+    此处按 **rtoken** 比较（纯函数层契约，测试用手造帧走这条）。
+    """
+    return _witnesses_matching(frames, subject_label=subject)
+
+
 def witnesses_of_entity_emerge(
-    frames: Mapping[str, object], *, subject: str, entity_ids: list[str], tick: int
+    frames: Mapping[str, object],
+    *,
+    subject: str,
+    entity_ids: list[str],
+    tick: int,
+    display_name_of: Mapping[str, str] | None = None,
 ) -> tuple[list[str], int | None]:
-    """Translate perception tokens at the boundary; use the latest completed frame only."""
+    """Translate perception tokens at the boundary; use the latest completed frame only.
+
+    `Observation.subject` 在生产里是**戏内显示名**（`senses.py` 的 `label`——叙事要
+    说人话），不是 rtoken。故装配必须在戏外边界用 `display_name_of`（entity_id →
+    戏内名）反查，否则恒不匹配、witnesses 恒空。
+
+    显示名不唯一（重名）时 **fail-closed** 返回 `([], None)`：宁可不装配，也不把
+    别人的目击记到另一个同名者头上。未传 `display_name_of` 时按 rtoken 语义比较
+    （兼容纯函数契约测试）。
+    """
     from sim.perception.senses import rtoken_of
 
     ids_by_token = {rtoken_of(entity_id): entity_id for entity_id in entity_ids}
+    if display_name_of is None:
+        subject_label = rtoken_of(subject)
+    else:
+        # 无显示名的实体，senses 用 rtoken 作词面（`display_name_of.get` 的默认分支）；
+        # 此时词面天然唯一，不需要重名校验。
+        named = display_name_of.get(subject)
+        subject_label = named if named is not None else rtoken_of(subject)
+        owners = [
+            eid for eid in entity_ids if display_name_of.get(eid, rtoken_of(eid)) == subject_label
+        ]
+        if len(owners) != 1 or owners[0] != subject:
+            # 重名 ⇒ 无法从词面反推是谁 ⇒ 不装配（宁缺勿错）。
+            return [], None
     previous = {
         token: frame
         for token, frame in frames.items()
@@ -154,5 +205,5 @@ def witnesses_of_entity_emerge(
         for token, frame in previous.items()
         if getattr(frame, "tick", -1) == observed_tick
     }
-    tokens = witnesses_of_emerge(latest, subject=rtoken_of(subject))
+    tokens = _witnesses_matching(latest, subject_label=subject_label, exclude=rtoken_of(subject))
     return sorted(ids_by_token[token] for token in tokens), observed_tick

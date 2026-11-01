@@ -119,11 +119,17 @@ async def project_knowledge(session, sessions, branch_id, events, seq_by_index):
         )
 
 
-async def prepare_retell_events(sessions, branch_id, events, *, hidden_states=None):
-    """At flush boundary, turn a conversation into an explicit evidence-bearing retelling."""
+async def prepare_retell_events(
+    sessions, branch_id, events, *, hidden_states=None, species_of=None
+):
+    """Assemble retellings only for knowledge-capable speakers and listeners.
+
+    Species come from runtime profiles; implicit humans follow perception's default.
+    Legacy animal knowledge is retained as history but cannot seed new retellings.
+    """
     from sim.core.events import KnowledgeLearnedPayload
     from sim.core.persistence.knowledge_store import KnowledgeStore
-    from sim.npc.evidence import TOLD_CONFIDENCE_FLOOR, TOLD_DECAY
+    from sim.npc.evidence import TOLD_CONFIDENCE_FLOOR, TOLD_DECAY, can_hold_knowledge
 
     store = KnowledgeStore(sessions, branch_id=branch_id)
     prepared = []
@@ -133,6 +139,11 @@ async def prepare_retell_events(sessions, branch_id, events, *, hidden_states=No
             continue
         speaker = str(event.payload["npc_id"])
         listener = str(event.payload["to_id"])
+        if not all(
+            can_hold_knowledge((species_of or {}).get(npc_id, "human"))
+            for npc_id in (speaker, listener)
+        ):
+            continue
         existing = await store.iter_valid(listener)
         known = {(row.subject_npc_id, row.subject_attr_id) for row in existing}
         for row in await store.iter_valid(speaker):

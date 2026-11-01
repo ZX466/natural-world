@@ -85,6 +85,7 @@ function setup(mode: 'flat' | 'iso' = 'iso') {
   const internal = scene as unknown as {
     views: Map<string, ActorView>;
     syncActorViews(delta: number, time: number): void;
+    syncNameLabels(): void;
     syncCamera(): void;
     handlePointer(pointer: { worldX: number; worldY: number }): void;
   };
@@ -96,6 +97,7 @@ beforeEach(() => useUiStore.setState({ speed: 1 }));
 it('spawns billboard feet at the effective top with a shared depth and contact shadow', () => {
   const { internal } = setup();
   internal.syncActorViews(0, 0);
+  internal.syncNameLabels();
   const { sprite, shadow, label } = internal.views.get('hero')!;
   const top = isoProject(2, 1, 3, screenBounds(4, 4));
   expect({ x: sprite.x, y: sprite.y }).toEqual({ x: top.sx, y: top.sy });
@@ -312,6 +314,7 @@ it('preserves flat sprite, shadow, and camera formulas', () => {
   const { internal, camera } = setup('flat');
   internal.syncActorViews(0, 1000);
   internal.syncCamera();
+  internal.syncNameLabels();
   const { sprite, shadow } = internal.views.get('hero')!;
   expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 40, y: 24 });
   expect(sprite.setDepth).toHaveBeenLastCalledWith(actorDepth(24));
