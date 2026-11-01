@@ -3,22 +3,26 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-10-31 第十四轮收编后）
+## 0. 当前状态（2026-11-01 第十五轮收编后）
 
-- **main HEAD**：`1d4bfa9`（第十四轮收编 + 启动自愈修复）。
-- **codex HEAD**：`5a48f7c`（第十四轮实现），工作区干净，无在途任务；主树已 ff 收编。
+- **main HEAD**：`28e8ac9`（第十五轮合并提交，双父 `17b4c94` + `47f9e80`）。
+- **codex HEAD**：`47f9e80`（第十五轮实现），工作区干净，**无在途任务**。
 - **协议**：**`1.14`**（第十轮挖深字段升级）；双落点同改
   （`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts::PROTOCOL_VERSION`
   ↔ `sim/tests/test_protocol_version.py::EXPECTED_VERSION` + README 徽章 + `shared/openapi.json`）。
-  第十一/十二/十三轮均未动协议字段（渲染、UI、持久层内部）。
+  第十一～十五轮均未动协议字段（渲染、UI、持久层、音效、离线内部）。
 - **两棵树**：
   - 主树 `E:/zxdevelop/project7`（`main`）：拆单/架构/质量/收编复核/日常小改。
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex`（`codex`）：复杂/跨层实现、安全合规。
   - 只走各树 `.orca/talking.txt`；不直接对话。
-- **远程**：origin/gitee 均在 `3603ecb`（**第十四轮 3 个提交未推**，推送仍由用户决定）。
-- **在飞**：**第十五轮已派 codex（2026-11-01）**：① 离线推进（重难·跨层）
-  ② 音效（重难·跨端）③ T5 阈值取证 ④ soak 流失取证。③④ **只取证不定线**。
+- **远程**：origin/gitee 均在 `3603ecb`（**主树领先 7 提交未推**，推送仍由用户决定）。
+- **在飞**：**无**。第十五轮已收编（`28e8ac9`）。
   未派：V3.5 内容包 / V4-3D。
+- **第十五轮留给用户的四件事**（不是 codex 欠账，是**用户保留项**）：
+  1. 音效主观听感（codex 明确没验，`manual_listening: pending user`）
+  2. T5 完成率阈值定线（基线 1.0，**没设阈值**）
+  3. soak 流失阈值定线（对照 0 / 危险 4.0，**常量仍是 0**）
+  4. 真实 `world.db` 正式迁移（须先备份）
 - **待人工验收**（9 条，已过 4 条，**剩 5/6/7/8/9 共 5 条**）：
   1. ~~DA-07 失能/恢复真模型长局~~ — **2026-10-31 用户验收通过**
   2. ~~V3 画面观感~~ — **2026-10-31 用户验收通过**
@@ -34,36 +38,55 @@
 > **记录订正**：用户 2026-10-31 先发「1 2 3观感已验收」、随后「3都已验收」，
 > 均指验收清单**第 1/2/3 条**。我最初误记为第 8/9 条，已改回。第 8/9 条**尚未验收**。
 
-## 1. 门禁（2026-10-31 第十三轮收编后主树独立实测）
+## 1. 门禁（2026-11-01 第十五轮收编后主树独立实测）
 
 | 项 | 结果 |
 |---|---|
-| pytest `-m "not bench"` | **3012 passed** / 0 failed / 121 skipped（362.72s） |
-| ruff check / format | clean（368 files） |
+| pytest `-m "not bench"` | **3061 passed** / 0 failed / 121 skipped（400.34s） |
+| ruff check / format | clean（379 files） |
 | pyright | 0 errors, 0 warnings, 0 infos |
 | client typecheck / lint / prettier | EXIT 0 |
-| client vitest | **321 passed / 44 files** |
+| client vitest | **337 passed / 47 files** |
 | gen:protocol:check | EXIT 0（协议 1.14） |
 | build_height_map --check | 逐字节一致 |
 | build_block_atlas --check | 逐字节一致 |
 | `tools/check_implementation_status.py` | 未发现缺口 |
-| `uv lock --check` | 53 packages，一致 |
+| `uv lock --check` | 一致 |
 
-> 第十三轮动的是 `sim/core/persistence/`，故 pytest 全套必跑（3012P 比第十二轮
-> 多 16 条 = codex 新增保留策略测试）。客户端零 diff，但仍复跑。
+> 第十五轮动的是 `sim/world/offline.py`（新）+ `sim/core/persistence/` + `sim/api/main.py`
+> + 整个 `client/src/game/audio/`，故两侧全套必跑。
+> 3061 − codex 自测 3056 = 5 条 = 主树第十四轮的 `test_schema_self_heal.py`（codex 分支不含那笔提交）。
+
+## 1d. 收编复核纪律的一条实证（2026-11-01）
+
+**codex 的交付回执会说谎，而且是无意的。** 第十五轮回执写「tsc、eslint、prettier 全过」，
+主树复跑 `npm run typecheck` 实为 **EXIT 2**：
+
+```
+src/game/audio/__tests__/world-audio.test.ts(48,18): error TS2345:
+  Argument of type '{ unlock: Mock<Procedure | Constructable>; ... }'
+  is not assignable to parameter of type 'AudioBackend'.
+```
+
+修法按仓库既有约定（`client/src/game/__tests__/runtime-map.test.ts:14,18` 的
+`vi.fn<签名>()`）给每个 mock 显式签名 + `import type { EffectId }`。复跑 EXIT 0。
+
+**教训**：`npm run typecheck 2>&1 | tail -3; echo $?` 报的是 **tail 的退出码**，
+不是 npm 的。必须 `cmd > log 2>&1; echo "EXIT:$?"`。这条对任何管道都一样。
 
 ## 1b. 已关闭但代码不支撑的承诺（主树 2026-10-31 审计，**新对话先读**）
 
-六里程碑 2026-10-05 宣告收官（`abbe765`），但下列五条实测是空的。**这些不是 bug，
-是「宣告了但没做」**，任何新方向裁定前必须知道：
+六里程碑 2026-10-05 宣告收官（`abbe765`），下列五条实测当时是空的。**这些不是 bug，
+是「宣告了但没做」**，任何新方向裁定前必须知道。**2026-11-01 第十五轮后：四条已有实现
+或取证，只剩残余项**（音效主观听感、T5/soak 阈值定线、真实库迁移仍归用户）。
 
 | 缺口 | 实测证据 |
 |---|---|
-| **音效** | 全仓 0 个 `.mp3/.ogg/.wav`、0 处 `this.sound`；M6 收官单却写了「美术音效打磨」。**2026-11-01 第十五轮已派 codex**（Phaser 3.87 自带 WebAudio ⇒ 零新依赖可行） |
+| **音效** | ~~全仓 0 个 `.mp3/.ogg/.wav`、0 处 `this.sound`~~ → **2026-11-01 第十五轮已收编（`28e8ac9`）**：Phaser 3.87 内置 WebAudio，`client/src/game/audio/{synth,world-audio,index}.ts`；零新 npm 依赖、零资产文件、协议不变。默认静音 25% 音量、8 音轨上限、8 格衰减、120ms 节流；只消费可观测的 `voxel_edits`/actor 位移/`combat_event`/`lights`，不碰独白。**仍未做**：用户亲听验收；真实火场音效外发（用户裁定为独立缺口） |
 | **`npc_health`** | ~~有模型/迁移/读路径，但**零写入**~~ → **2026-10-31 第十四轮已收编并修好启动自愈（`1d4bfa9`）**：事件→总线→同事务健康投影→感知触发→陈默闸门/记忆已接通；6 条内容种子；真实 `world.db` 副本启动实测 code 列补齐、events 187857 零丢失。**仍未做**：真实库正式迁移（需备份）、历史锚点 fork 的 severity/active 还原、每日严重度演进、第三方浮现见证链、`npc.lod_change` 持久化 |
-| **离线推进** | `sim/world/offline*.py` **不存在**；`grep -rn offline sim/` 只命中 alembic 的 `run_migrations_offline`。却是 M5 验收项「离线再回来世界已变」。**2026-11-01 第十五轮已派 codex**。实测补充：世界在**无客户端**时已在跑（`run_world_driver` 不查 `manager.count`），缺的是「服务端关了不推进」+「无停机补偿验收面」；`snapshots/branches.created_at` 是墙钟且不进事件流 ⇒ 算离线时长不违反 C5 |
-| **T5 差事完成率** | `sim/tests/golden/assertions/errands_rate.py` 明写「**本轮不设阈值**」，只校验结构自洽（cases>0、rate∈[0,1]）。**2026-11-01 第十五轮已派取证**（`ERRAND_CHAINS` 已有 4 条跨日链，该文件的「D 批未做」注释已过时）|
-| **soak 实体流失** | `sim/tests/bench/test_bench_soak.py:112` `SOAK_ENTITY_LOSS_PER_GAME_DAY = 0`，从未抬高。**2026-11-01 第十五轮已派取证**；实测**阶段 B 前提已落地**（`_apply_npc_death` 已从 entities 移除实体），但真实库 `npc.death` 0 条 ⇒ 代码成立、数据未验证 |
+| **离线推进** | ~~`sim/world/offline*.py` 不存在~~ → **2026-11-01 第十五轮已收编（`28e8ac9`）**：`sim/world/offline.py::advance_offline` 复用现有 `TickLoop`；墙钟只在启动边界采样一次（`_offline_wall_time`）；水位取 `snapshots/branches.created_at`（控制元数据，不进事件流与 `state_hash` ⇒ **C5 安全**）；批上限 240 tick、`MAX_CATCHUP_REAL_SECONDS=4.0`、上限 1 游戏日（`TICKS_PER_GAME_DAY=86400`，超限记 `offline.capped`）；同墙钟重启零补跑。主树实测：60s→3600 tick、30 天→86400 tick 且丢弃 2590560s、两遍重放 hash 相同、玩家档零写。**仍未做**：真实 `world.db` 上跑一次真实停机补偿（需备份） |
+| **T5 差事完成率** | ~~`errands_rate.py` 明写「本轮不设阈值」~~ → **2026-11-01 第十五轮已取证（`28e8ac9`）**：10 seed × 4 用例 = 40/40 通过，完成率 **1.0**（中位与最差都是 1.0），确定性复测相等，全套 123.82s。**阈值仍未设** —— 定线是用户的事，`errands_rate.py` 仍无硬阈值。基线 `.orca/audits/t5-baseline-2026-11-01/baseline.json` |
+| **soak 实体流失** | ~~`SOAK_ENTITY_LOSS_PER_GAME_DAY = 0`，从未抬高~~ → **2026-11-01 第十五轮已取证（`28e8ac9`）**：对照场景 3 游戏日 **0 流失**，危险场景（每小时真实 `CombatLedger` 结算 + `npc.death`）**4.0 实体/游戏日**（12 死 / 3 天），确定性复测相同。**常量仍是 0** —— 定线是用户的事。数据 `.orca/audits/soak-loss-2026-11-01/measurement.json` |
 
 **另一个口径缺口**（不算未实现，但要注意）：战斗表现层协议有 `Hit`/`Projectile`
 schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数——
@@ -90,9 +113,29 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
   DESIGN 是历史契约，不随裁决改；真相在 `docs/api/versioning.md` 的 1.8 行。
   真实库 `world.db` 里 `fog.reveal` 事件 **0 条**（生产从没发过）。
 
-## 2-newest. 第十～十三轮（2026-10-29 → 10-31）—— 悬空 / 隐形墙 / 前端 / 快照治理
+## 2-newest. 第十～十五轮（2026-10-29 → 11-01）
 
-四轮都已 ff 收编，主树独立复核，无在飞任务。
+全部已收编，主树独立复核，**无在飞任务**。
+
+**第十五轮｜音效 / 离线推进 / T5 基线 / soak 取证（`47f9e80` codex → `28e8ac9` 合并）**
+
+四条「宣告收官但没做」的缺口，本轮补齐可验证部分：
+
+- **音效**（`client/src/game/audio/`）：Phaser 3.87 自带 WebAudio，零新 npm 依赖、
+  零资产文件。`synth.ts` 用确定性 xorshift 噪声合成 5 种效果（step/dig/place/combat/
+  collapse）+ fire 循环氛围；`world-audio.ts` 默认 `muted: true, volume: 0.25`、
+  8 音轨上限、8 格距离衰减 `1/(1+d*0.45)`、120ms 节流、`generation` 守卫迟到解锁、
+  `audible` 门（connected && hasSnapshot && unlocked && !muted）。只消费
+  `voxel_edits`/actor 位移（≤4 格）/`combat_event`（按 rtoken+exchange+posture 去重）/
+  `mirror.lights kind==='fire'`；**明确不消费独白/thoughts/tasks**（C3 沉浸规则）。
+  `SettingsPage` 加「世界音效」开关；`WorldScene` 在 pointerdown/键盘解锁、blur 暂停。
+- **离线推进**（`sim/world/offline.py`）：见 §1b 行内详情。关键设计是**墙钟只采样一次**
+  且**水位存在控制元数据里**（`snapshots/branches.created_at`），因此不进事件流、
+  不进 `state_hash` —— 这是它能在 C5 下成立的原因。
+- **T5 / soak**：只取证不定线，见 §1b。
+
+**主树复核发现**：codex 回执称 tsc 全过，实测 `EXIT 2`（详见 §1d）。已修并复跑。
+自写 16 条不变量探针（`.orca/audits/round15-2026-11-01/main-tree-probe.py`）16/16 通过。
 
 **第十四轮｜`npc_health` 写入路径（`5d937f0` RED → `5a48f7c` 实现 → `1d4bfa9` 启动自愈）**
 
@@ -391,6 +434,25 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 - **清理开销实测 +0.76ms/flush**（带清理 4.31ms vs 不带 3.55ms，60 tick/s 下可忽略）。
   若将来 flush 频率再涨，可考虑「仅在行数超阈值时才跑」——本轮**未改**。
 
+**离线推进 / 收编纪律（第十五轮）**
+- **墙钟只能存控制元数据**：`snapshots.created_at` / `branches.created_at` 是墙钟，
+  但它们**不进事件流、不进 `state_hash`** ⇒ 用它算离线时长不破 C5。反过来，任何墙钟
+  值一旦写进 event payload，C5 立刻破。离线路径**只在启动边界采样一次**（`_offline_wall_time`），
+  循环里不再取时间。
+- **离线推进必须复用 `TickLoop` 的既有节奏**，不要另写一套推进器：批上限
+  `_MAX_TICKS_PER_FRAME=240`、`MAX_CATCHUP_REAL_SECONDS=4.0`、1x=60 tick/秒、
+  战斗尺度 1 tick/秒；每批之间 `await asyncio.sleep(0)` 让出事件循环。
+- **cap 是 1 游戏日（`TICKS_PER_GAME_DAY=86400`）**，超限记 `offline.capped` 并丢弃秒数。
+- **重启幂等靠水位**：`last_recorded_at` 读最新 `Snapshot.created_at`，回退到
+  `Branch.created_at`。同墙钟再启动 ⇒ `offline_seconds=0` ⇒ 零补跑（主树实测）。
+- **`advance_offline` 会强制切到 1x 再还原**，所以调用前必须记下当前倍速。
+- **收编合并可能不能用 ff**：codex 从旧基线开分支时，主树的新提交它没有 ⇒
+  用 `git merge --no-commit --no-ff` 并逐个解冲突。解完**必须复查主树侧新增章节
+  还在**（本轮 §1c 就在解冲突后仍被误判为丢失，实际是没 stage）。
+- **管道里的 `$?` 是管道最后一个命令的**：`cmd 2>&1 | tail -3; echo $?` 拿到的是
+  `tail` 的退出码。要判真实结果必须 `cmd > log 2>&1; echo "EXIT:$?"`。
+  **本轮就是靠这条抓到 codex 回执误报的 tsc 失败。**
+
 **方法**
 - 查符号/调用链/影响面先用 `codegraph_explore`（显式 `projectPath`）。
 - 门禁数字同场实测，不引用旧读数；**收编后主树必须独立复跑**。
@@ -427,7 +489,18 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 
 ## 6. ① Claude｜新对话恢复快照
 
-【2026-10-31 第十四轮已收编 `1d4bfa9`｜无在途任务】`3603ecb..5a48f7c` ff 收编零冲突；
+【2026-11-01 第十五轮已收编 `28e8ac9`｜无在途任务】codex `47f9e80` 以
+`--no-ff` 合并（codex 分支不含主树第十四轮 4 个提交，ff 不可用），仅
+`.orca/memory.md` §7 一处冲突。主树独立复核：pytest **3061P/0F/121S**（400.34s，
+= codex 自测 3056 + 主树自愈测试 5）、ruff 379 files、pyright 0/0、client
+tsc/eslint/prettier EXIT 0、vitest **337P/47F**、两资产 `--check` 逐字节一致、
+`uv lock --check` ok、`gen:protocol:check` ok、`check_implementation_status.py` 无缺口。
+**发现 codex 回执误报**：`npm run typecheck` 实际 `EXIT 2`（`world-audio.test.ts:48`
+TS2345），已按仓库 `vi.fn<签名>()` 约定修复。自写 16 条不变量探针 16/16 通过。
+复跑 codex 两份取证脚本数字一致（T5 40/40 率 1.0；soak 对照 0 / 危险 4.0）。
+**留给用户**：音效亲听、T5 与 soak 阈值定线、真实 `world.db` 正式迁移（需备份）。
+
+【2026-10-31 第十四轮已收编 `1d4bfa9`｜历史】`3603ecb..5a48f7c` ff 收编零冲突；
 主树独立复核发现并修复阻断缺陷：**`world.db` 由 `create_all` 建出（无 `alembic_version`），
 `create_all` 不给已有表加列 ⇒ `0015` 的 `npc_health.code` 永远补不上，真实存档启动即
 `OperationalError`**。修法 `ensure_schema()`（三分支自愈：新库只 stamp、老库 stamp 基线再
@@ -452,17 +525,20 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 并在真实 `world.db` 副本上实测 **3946→9 行、events 一行未删、恢复逐位相同**。
 协议仍 1.14。**两树 talking 已精简**（556 行 → 138 行，只留当前波）。
 
-- **开新对话只需知道**：① 主树 `1d4bfa9`、codex `5a48f7c`（已收编）、无在飞任务、门禁全绿；
-  远程停在 `3603ecb`（第十四轮 3 个提交未推，等用户决定）；
+- **开新对话只需知道**：① 主树 `28e8ac9`、codex `47f9e80`（已收编）、无在飞任务、门禁全绿；
+  远程停在 `3603ecb`（主树领先 7 提交未推，等用户决定）；
   ② 待**肉眼**验收 9 条，**7/8/9 优先**（见 §0）；**主树全程没开浏览器**，
   第十二轮的观感只有 codex 的截图证据；
-  ③ **§1b 的承诺缺口**：`npc_health` 已于第十四轮补齐（见 §1b 修订），**音效/离线推进/
-     T5 阈值/soak 流失四条仍空**——选下一方向前必读，别以为 M0–M6 收官就等于都实现了；
+  ③ **§1b 的承诺缺口**：`npc_health`（第十四轮）、音效/离线推进（第十五轮）已有实现；
+  **T5 与 soak 只取证、阈值仍空**（第十五轮）；音效**未亲听**——别以为 M0–M6 收官
+  就等于都实现了；
   ④ **不变量必须单向**（`walkable ⇒ h==EARTH`），做成双向会立刻回归「只挖不放」；
   ⑤ **移动拾取 ≠ 编辑拾取**，合成一个会在真实地图上死掉 19% 的可走格；
   ⑥ **单测全绿 ≠ 真机能动**，改拾取/投影必须用真实地图实测命中率；
-  ⑦ **快照可删、事件不可删**：热保留删的是 `snapshots` 行，`events` 与冷快照一行不动（C6）。
-- **远程**：origin/gitee 均停在 `3603ecb`；第十四轮 3 个提交（`5d937f0`/`5a48f7c`/`1d4bfa9`）
+  ⑦ **快照可删、事件不可删**：热保留删的是 `snapshots` 行，`events` 与冷快照一行不动（C6）；
+  ⑧ **墙钟只能存在控制元数据里**：离线时长靠 `snapshots/branches.created_at`，
+     绝不进事件 payload / `state_hash`，否则 C5 立刻破（第十五轮的设计前提）。
+- **远程**：origin/gitee 均停在 `3603ecb`；主树领先 **7 个提交**（第十四轮 3 + 第十五轮 4）
   **未推**。推送仍是用户决定，不自动推。
 - **配置目录**：维持用户 10-26 裁定「不进 git、不推远程、本地须存在」；主树不建 `.pi`。
 - **浏览器**：仅用户明确要求时用，路径 `C:\Users\zx198\AppData\Local\ms-playwright`。
