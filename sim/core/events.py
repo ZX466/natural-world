@@ -51,6 +51,8 @@ class EventKind(StrEnum):
     # ---- 批次 E（E1 玩法接线）----
     #: 面对面聊天记录（E1）：行为记录面（谁对谁说了一句什么）——
     #: **零归因键**（关系/记忆效应归进程内 runtime），line 过 banned 终扫。
+    NPC_RELATIONSHIP_RETELL = "npc.relationship_retell"
+    NPC_KNOWLEDGE_LEARNED = "npc.knowledge_learned"
     NPC_CHAT = "npc.chat"
     #: 铜钱入账/出账（E3）：账单面（余额归 runtime CoinLedger，账单即真相——
     #: 事件流可重放重建余额）。零归因键（note 记事非归因）。
@@ -291,6 +293,7 @@ class HiddenEmergePayload(BaseModel):
 
     npc_id: str
     attr_ids: tuple[str, ...]
+    observed_tick: int | None = Field(default=None, ge=0)
 
 
 _ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
@@ -921,7 +924,7 @@ def hidden_emerge_event(
         branch_id=branch_id,
         tick=tick,
         event_type=EventKind.NPC_HIDDEN_EMERGE,
-        payload=p.model_dump(mode="json"),
+        payload=p.model_dump(mode="json", exclude_none=True),
         witnesses=list(witnesses or []),
     )
 
@@ -1172,4 +1175,49 @@ def npc_death_event(
         tick=tick,
         event_type=EventKind.NPC_DEATH,
         payload=p.model_dump(mode="json"),
+    )
+
+
+class KnowledgeLearnedPayload(BaseModel):
+    """Internal event; immutable narrative and evidence, never a WS frame."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    holder_id: str
+    subject_id: str
+    attr_id: str
+    fact: str = Field(min_length=1)
+    source: Literal["witnessed", "told"]
+    observed_tick: int | None = Field(default=None, ge=0)
+    evidence_tick: int | None = Field(default=None, ge=0)
+    source_knowledge_id: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode="after")
+    def require_evidence(self) -> KnowledgeLearnedPayload:
+        if self.source == "witnessed" and (
+            self.observed_tick is None or self.evidence_tick is None
+        ):
+            raise ValueError("witnessed evidence required")
+        if self.source == "told" and self.source_knowledge_id is None:
+            raise ValueError("told source required")
+        from sim.llm.memory_scan import MemoryWritePipeline
+
+        if not MemoryWritePipeline().scan_fact(self.fact).admitted:
+            raise ValueError("knowledge fact rejected")
+        return self
+
+
+class RelationshipRetellPayload(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    npc_id: str
+    to_id: str
+
+
+def relationship_retell_event(tick: int, npc_id: str, to_id: str) -> WorldEvent:
+    payload = RelationshipRetellPayload(npc_id=npc_id, to_id=to_id)
+    return WorldEvent(
+        tick=tick,
+        actor_id=npc_id,
+        target_id=to_id,
+        event_type=EventKind.NPC_RELATIONSHIP_RETELL,
+        payload=payload.model_dump(mode="json"),
     )

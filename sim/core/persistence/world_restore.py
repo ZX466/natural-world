@@ -113,6 +113,10 @@ async def flush_world(
     async def checkpoint_projection(
         session: AsyncSession, seq_by_index: dict[int, int], _events: Sequence[WorldEvent]
     ) -> None:
+        from sim.core.persistence.social_projection import project_knowledge, project_relationships
+
+        await project_relationships(session, branch_id, _events)
+        await project_knowledge(session, store.session_factory, branch_id, _events, seq_by_index)
         snapshot = Snapshot(
             branch_id=branch_id,
             seq=max(seq_by_index.values()),

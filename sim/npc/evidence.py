@@ -15,6 +15,7 @@ witnesses_of_emerge：E1 事件的见证人装配 = 该 tick 感知帧含主体�
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 #: witnessed 基准置信（§3：目击浮现时刻 = 最强证据）。
@@ -78,7 +79,7 @@ def judge_third_party_hidden(
                 continue
             if attr_id not in (payload.get("attr_ids") or []):
                 continue
-            if row.get("tick") != observed_tick:
+            if payload.get("observed_tick", row.get("tick")) != observed_tick:
                 continue
             if holder_id not in (row.get("witnesses") or []):
                 continue
@@ -129,3 +130,29 @@ def witnesses_of_emerge(frames: dict[str, object], *, subject: str) -> list[str]
             if channel in WITNESSING_CHANNELS and observer_id not in witnesses:
                 witnesses.append(observer_id)
     return witnesses
+
+
+def witnesses_of_entity_emerge(
+    frames: Mapping[str, object], *, subject: str, entity_ids: list[str], tick: int
+) -> tuple[list[str], int | None]:
+    """Translate perception tokens at the boundary; use the latest completed frame only."""
+    from sim.perception.senses import rtoken_of
+
+    ids_by_token = {rtoken_of(entity_id): entity_id for entity_id in entity_ids}
+    previous = {
+        token: frame
+        for token, frame in frames.items()
+        if token in ids_by_token
+        and isinstance(getattr(frame, "tick", None), int)
+        and 0 <= getattr(frame, "tick", -1) < tick
+    }
+    observed_tick = max((getattr(frame, "tick", -1) for frame in previous.values()), default=None)
+    if observed_tick is None:
+        return [], None
+    latest = {
+        token: frame
+        for token, frame in previous.items()
+        if getattr(frame, "tick", -1) == observed_tick
+    }
+    tokens = witnesses_of_emerge(latest, subject=rtoken_of(subject))
+    return sorted(ids_by_token[token] for token in tokens), observed_tick
