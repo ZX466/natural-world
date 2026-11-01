@@ -412,7 +412,7 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-11-01 第十五轮｜四项技术交付完成，待主树复核；听感待用户】本轮基线5a48f7c；RED ffe590f，离线实现4769418，音效实现5b35f29，取证提交见git log。不同步main、不推远程；主树收编时保留其ensure_schema修复1d4bfa9（本树未重复实现）。每条提交均带派单指定Co-Authored-By。当前无新开发任务，自行开始下一轮前重读talking。
+【2026-11-01 新对话交接｜第十五轮技术交付完成，当前无在途开发】用户明确要求保存记忆后开启新对话。本轮基线5a48f7c；RED ffe590f，离线4769418，音效5b35f29，取证7e97a6f。恢复先workflow→talking→本节/registry→git status/log，以最新派单为准；已交付部分不重做、不无故复跑门禁。当前只待主树复核收编、用户亲听与后续定线裁决。不同步main、不推远程；收编保留主树ensure_schema修复1d4bfa9（本树未重复实现）。提交均带派单指定Co-Authored-By。
 
 - **①离线**：sim/world/offline.py只接显式时长；墙钟仅main._offline_wall_time采样一次，offline_store读当前分支checkpoint.created_at（epoch/ISO兼容，旧无时区ISO按UTC）。全确定性钩子装配后、两后台任务之前补跑；固定1x，普通60tick/实秒、战斗1tick/实秒，最多86400tick，每批≤4实秒/240tick。flush_world带checkpoint_at/force_checkpoint，无事件尾部也持久化游标；中间水位按已处理时长、末批置本次墙钟，超限offline.capped丢弃；不写玩家档、不调LLM、不复用WS快进。临时SQLite实测一分钟tick60→3660、events59→18391、玩家档不变；两遍事件重放hash相同、再启动零补跑；30天只86400tick。脚本/JSON在.orca/audits/offline-progress-2026-11-01。
 - **②音效**：client/src/game/audio与audioStore，Phaser context自有节点通道，默认每次页面静音/25%；设置明确启用后在场景点击/按键解锁。附近脚步、确认挖放、可见combat_event、rubble转变，8格衰减、120ms节流、最多8音源；断线/静音/失焦/销毁清理，generation守卫拦晚解锁，不close Phaser context。ActorDelta更新省略op，不是update。默认快照/心声/任务提示不发声。无npm依赖/资产文件，固定xorshift噪声可复现。客户端337P/47files、tsc/eslint/prettier/gen:protocol均绿，docs/arch/audio.md说明入口；技术验收不代表用户亲听通过。
