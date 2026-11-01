@@ -16,8 +16,9 @@
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex`（`codex`）：复杂/跨层实现、安全合规。
   - 只走各树 `.orca/talking.txt`；不直接对话。
 - **远程**：origin/gitee 均在 `3603ecb`（**第十四轮 3 个提交未推**，推送仍由用户决定）。
-- **在飞**：**无**。第十四轮 `npc_health` 写入路径（端到端）已收编。
-  未派：V3.5 内容包 / V4-3D / 音效 / 离线推进 / T5 阈值。
+- **在飞**：**第十五轮已派 codex（2026-11-01）**：① 离线推进（重难·跨层）
+  ② 音效（重难·跨端）③ T5 阈值取证 ④ soak 流失取证。③④ **只取证不定线**。
+  未派：V3.5 内容包 / V4-3D。
 - **待人工验收**（9 条，已过 4 条，**剩 5/6/7/8/9 共 5 条**）：
   1. ~~DA-07 失能/恢复真模型长局~~ — **2026-10-31 用户验收通过**
   2. ~~V3 画面观感~~ — **2026-10-31 用户验收通过**
@@ -58,11 +59,11 @@
 
 | 缺口 | 实测证据 |
 |---|---|
-| **音效** | 全仓 0 个 `.mp3/.ogg/.wav`、0 处 `this.sound`；M6 收官单却写了「美术音效打磨」 |
+| **音效** | 全仓 0 个 `.mp3/.ogg/.wav`、0 处 `this.sound`；M6 收官单却写了「美术音效打磨」。**2026-11-01 第十五轮已派 codex**（Phaser 3.87 自带 WebAudio ⇒ 零新依赖可行） |
 | **`npc_health`** | ~~有模型/迁移/读路径，但**零写入**~~ → **2026-10-31 第十四轮已收编并修好启动自愈（`1d4bfa9`）**：事件→总线→同事务健康投影→感知触发→陈默闸门/记忆已接通；6 条内容种子；真实 `world.db` 副本启动实测 code 列补齐、events 187857 零丢失。**仍未做**：真实库正式迁移（需备份）、历史锚点 fork 的 severity/active 还原、每日严重度演进、第三方浮现见证链、`npc.lod_change` 持久化 |
-| **离线推进** | `sim/world/offline*.py` **不存在**；`grep -rn offline sim/` 只命中 alembic 的 `run_migrations_offline`。却是 M5 验收项「离线再回来世界已变」 |
-| **T5 差事完成率** | `sim/tests/golden/assertions/errands_rate.py` 明写「**本轮不设阈值**」，只校验结构自洽（cases>0、rate∈[0,1]） |
-| **soak 实体流失** | `sim/tests/bench/test_bench_soak.py:112` `SOAK_ENTITY_LOSS_PER_GAME_DAY = 0`，从未抬高 |
+| **离线推进** | `sim/world/offline*.py` **不存在**；`grep -rn offline sim/` 只命中 alembic 的 `run_migrations_offline`。却是 M5 验收项「离线再回来世界已变」。**2026-11-01 第十五轮已派 codex**。实测补充：世界在**无客户端**时已在跑（`run_world_driver` 不查 `manager.count`），缺的是「服务端关了不推进」+「无停机补偿验收面」；`snapshots/branches.created_at` 是墙钟且不进事件流 ⇒ 算离线时长不违反 C5 |
+| **T5 差事完成率** | `sim/tests/golden/assertions/errands_rate.py` 明写「**本轮不设阈值**」，只校验结构自洽（cases>0、rate∈[0,1]）。**2026-11-01 第十五轮已派取证**（`ERRAND_CHAINS` 已有 4 条跨日链，该文件的「D 批未做」注释已过时）|
+| **soak 实体流失** | `sim/tests/bench/test_bench_soak.py:112` `SOAK_ENTITY_LOSS_PER_GAME_DAY = 0`，从未抬高。**2026-11-01 第十五轮已派取证**；实测**阶段 B 前提已落地**（`_apply_npc_death` 已从 entities 移除实体），但真实库 `npc.death` 0 条 ⇒ 代码成立、数据未验证 |
 
 **另一个口径缺口**（不算未实现，但要注意）：战斗表现层协议有 `Hit`/`Projectile`
 schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数——
