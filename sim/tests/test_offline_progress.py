@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sim.core.clock import GameClock, TimeScale
 from sim.core.events import npc_monologue_event, world_create_event
 from sim.core.persistence.models import Event, Snapshot
-from sim.core.persistence.world_restore import flush_world, restore_world
+from sim.core.persistence.world_restore import expand_world, flush_world, restore_world
 from sim.core.tick import TickLoop
 from sim.core.world import WorldState, build_default_bus
 
@@ -46,7 +46,10 @@ async def test_one_minute_uses_existing_normal_scale_and_restores_speed(speed):
     assert decisions and len(decisions) == 360
     assert batches[-1][1:] == (60, True)
     assert all(
-        b - a <= 240 for a, b in zip([start, *[r[0] for r in batches]], [r[0] for r in batches])
+        b - a <= 240
+        for a, b in zip(
+            [start, *[r[0] for r in batches[:-1]]], [r[0] for r in batches], strict=True
+        )
     )
 
 
@@ -98,6 +101,7 @@ async def test_checkpoint_watermark_is_control_metadata_and_idle_tail_is_durable
     loop = make_loop()
     await flush_world(store, "main", loop, loop.drain_events(), checkpoint_at=1000.0)
     initial_rows = (await session.scalars(select(Event))).all()
+    initial_payloads = [row.payload for row in initial_rows]
     initial_count = len(initial_rows)
     start = loop.state.tick
 
@@ -115,7 +119,7 @@ async def test_checkpoint_watermark_is_control_metadata_and_idle_tail_is_durable
     assert await session.scalar(select(func.count()).select_from(Event)) == initial_count
     snapshot = await session.scalar(select(Snapshot))
     assert snapshot.created_at == 1000.1
-    assert all("offline" not in row.payload and "1000" not in row.payload for row in initial_rows)
+    assert all("offline" not in payload and "1000" not in payload for payload in initial_payloads)
 
 
 async def test_real_hook_events_are_appended_and_replay_is_identical(store, session):
@@ -137,3 +141,25 @@ async def test_real_hook_events_are_appended_and_replay_is_identical(store, sess
     first = await restore_world(store, "main")
     second = await restore_world(store, "main")
     assert first.state.state_hash() == second.state.state_hash() == loop.state.state_hash()
+    history = await store.read_branch_history("main")
+    for _ in range(2):
+        replay = expand_world({}, history)
+        replay.replay_until(loop.state.tick)
+        assert replay.state.state_hash() == loop.state.state_hash()
+
+
+async def test_flush_failure_stops_progress_and_restores_speed():
+    loop = make_loop()
+    loop.clock.set_speed(16)
+    start = loop.state.tick
+    calls = []
+
+    async def fail(events, consumed, final):
+        calls.append(consumed)
+        raise RuntimeError("simulated disk failure")
+
+    with pytest.raises(RuntimeError, match="disk failure"):
+        await advance_offline()(loop, offline_seconds=60, flush=fail)
+    assert calls == [4]
+    assert loop.state.tick == start + 240
+    assert loop.clock.speed == 16

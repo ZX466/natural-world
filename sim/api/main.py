@@ -283,6 +283,13 @@ def _active_profile_snapshot_provider():
     return _provider
 
 
+def _offline_wall_time() -> float:
+    """唯一启动墙钟入口；可注入测试值，不进入 tick/事件/世界哈希。"""
+    import time
+
+    return time.time()
+
+
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     import asyncio
@@ -299,6 +306,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sim.core.persistence.npc_store import NpcStore
 
     current_branch = await store.current_branch_id_or_none()
+    from sim.core.persistence.offline_store import checkpoint_epoch, last_recorded_at
+
+    offline_now = checkpoint_epoch(_offline_wall_time())
+    offline_from = (
+        await last_recorded_at(store, current_branch) if current_branch is not None else offline_now
+    )
     tile_map = await rebuild_tile_map(
         NpcStore(store, branch_id=current_branch) if current_branch is not None else None
     )
@@ -335,7 +348,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
     )
 
-    async def on_flush(events: list[Any]) -> None:
+    async def on_flush(
+        events: list[Any], *, checkpoint_at: float | None = None, force_checkpoint: bool = False
+    ) -> None:
         nonlocal tile_map, world_revision
 
         from sim.core.persistence.world_restore import flush_world
@@ -352,7 +367,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # 失能前已在途的 LLM 结果不能在醒来后继续执行旧计划。
             world_revision += 1
             driver.reset_combat()
-        await flush_world(store, branch_id, loop, events)
+        await flush_world(
+            store,
+            branch_id,
+            loop,
+            events,
+            checkpoint_at=checkpoint_at,
+            force_checkpoint=force_checkpoint,
+        )
         if any(
             event.event_type in {EventKind.NPC_HEALTH_CHANGED, EventKind.NPC_DEATH}
             for event in events
@@ -885,8 +907,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     continue
                 driver.execute_pending(loop, pathfinder=pathfinder)
 
-    app.state.chenmo_task = asyncio.create_task(_chenmo_loop())
-
     # 批次 A 接线（M6 补施工）：rng 状态捕获缝——锚点存档时 capture_rng_state 的
     # 真实实现（registry 由 world_seed 纯函数重建 + 抽签 cache 在 TickContext）。
     # anchors.py 的 `_rng_state_or_none` 经 `app.state.rng_capture` 零改动接上。
@@ -1124,6 +1144,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     voxel_gateway.set_voxel_runtime(voxel_runtime)
     # Maintenance receives the tick being processed; editing uses completed-tick time.
     loop.attach_maintenance(lambda state, tick: voxel_runtime.tick(state, tick + 1))
+    # 全部确定性钩子已就位；后台模型和 WS 驱动尚未启动，离线期间只有 L1/引擎运行。
+    if source_ready and current_branch is not None and offline_now > offline_from:
+        from sim.world.offline import advance_offline
+
+        async def _offline_flush(events: list[Any], consumed: float, final: bool) -> None:
+            # 中断后从已提交水位续跑；末批标记本次墙钟，封存 cap 丢弃的超额部分。
+            await on_flush(
+                events,
+                checkpoint_at=offline_now if final else offline_from + consumed,
+                force_checkpoint=final,
+            )
+
+        try:
+            app.state.offline_result = await advance_offline(
+                loop, offline_seconds=offline_now - offline_from, flush=_offline_flush
+            )
+        except BaseException:
+            await store.session_factory.kw["bind"].dispose()
+            raise
+    app.state.chenmo_task = asyncio.create_task(_chenmo_loop())
     app.state.driver = asyncio.create_task(
         run_world_driver(
             loop,

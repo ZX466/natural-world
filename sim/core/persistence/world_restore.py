@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 import gzip
+import math
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sim.core.clock import GameClock
 from sim.core.events import CombatScaleChangePayload, EventKind, WorldEvent
 from sim.core.persistence.anchor_package import MaterializationHooks
-from sim.core.persistence.models import Branch, Snapshot
+from sim.core.persistence.models import Branch, Event, Snapshot
 from sim.core.persistence.npc_store import NpcStore
 from sim.core.persistence.snapshot_policy import prune_hot_snapshots
 from sim.core.persistence.store import SqlEventStore, decompress_snapshot
@@ -65,27 +66,64 @@ class WorldCheckpoint(BaseModel):
 
 
 async def flush_world(
-    store: SqlEventStore, branch_id: str, loop: TickLoop, events: Sequence[WorldEvent]
+    store: SqlEventStore,
+    branch_id: str,
+    loop: TickLoop,
+    events: Sequence[WorldEvent],
+    *,
+    checkpoint_at: float | None = None,
+    force_checkpoint: bool = False,
 ) -> None:
     """事件和完整世界检查点同事务提交；保存的是本批结束状态。"""
-    if not events:
+    if checkpoint_at is not None and (
+        isinstance(checkpoint_at, bool) or not math.isfinite(checkpoint_at) or checkpoint_at < 0
+    ):
+        raise ValueError("invalid checkpoint wall time")
+    if not events and not force_checkpoint:
         return
     checkpoint = WorldCheckpoint.capture(loop)
     blob = gzip.compress(checkpoint.model_dump_json().encode(), compresslevel=6)
 
+    if not events:
+        from sim.core.persistence.store import InactiveBranchError
+
+        async with store.session_factory.begin() as session:
+            branch = await session.get(Branch, branch_id)
+            if branch is None or branch.status != "active" or not branch.is_current:
+                raise InactiveBranchError("checkpoint requires the current active branch")
+            seq = (
+                await session.scalar(
+                    select(func.max(Event.seq)).where(Event.branch_id == branch_id)
+                )
+                or 0
+            )
+            row = await session.get(Snapshot, {"branch_id": branch_id, "seq": seq})
+            if row is None:
+                row = Snapshot(branch_id=branch_id, seq=seq)
+                session.add(row)
+            row.tick = checkpoint.state.tick
+            row.snapshot_data = blob
+            row.schema_version = 1
+            row.is_cold = False
+            if checkpoint_at is not None:
+                row.created_at = checkpoint_at
+            await prune_hot_snapshots(session, branch_id)
+        return
+
     async def checkpoint_projection(
         session: AsyncSession, seq_by_index: dict[int, int], _events: Sequence[WorldEvent]
     ) -> None:
-        session.add(
-            Snapshot(
-                branch_id=branch_id,
-                seq=max(seq_by_index.values()),
-                tick=checkpoint.state.tick,
-                snapshot_data=blob,
-                schema_version=1,
-                is_cold=False,
-            )
+        snapshot = Snapshot(
+            branch_id=branch_id,
+            seq=max(seq_by_index.values()),
+            tick=checkpoint.state.tick,
+            snapshot_data=blob,
+            schema_version=1,
+            is_cold=False,
         )
+        if checkpoint_at is not None:
+            snapshot.created_at = checkpoint_at
+        session.add(snapshot)
         await prune_hot_snapshots(session, branch_id)
 
     await NpcStore(store, branch_id=branch_id).flush_tick(

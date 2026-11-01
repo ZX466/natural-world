@@ -1,0 +1,28 @@
+{
+  "status": "pass",
+  "database": "temporary SQLite",
+  "real_offline_seconds": 60,
+  "normal_ticks_per_real_second": 60,
+  "start_tick": 60,
+  "end_tick": 3660,
+  "advanced_ticks": 3600,
+  "events_before": 59,
+  "events_after": 18391,
+  "events_deleted": 0,
+  "player_anchor_unchanged": true,
+  "wall_time_fields_in_payload": false,
+  "replay_hashes": [
+    "16566ac8118033cdec371a2a0c69b2b2f812ff6dc88be1a08d8e0d8aae732de3",
+    "16566ac8118033cdec371a2a0c69b2b2f812ff6dc88be1a08d8e0d8aae732de3"
+  ],
+  "restart_again_at_same_wall_time_repeated_ticks": 0,
+  "cap": {
+    "requested_seconds": 2592000,
+    "advanced_ticks": 86400,
+    "consumed_seconds": 1440.0,
+    "discarded_seconds": 2590560.0,
+    "offline_capped_logged": true
+  },
+  "llm_calls": 0,
+  "protocol": "1.14"
+}
