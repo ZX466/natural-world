@@ -666,8 +666,9 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 
 - **开新对话只需知道**：① 主树 `0d29b16`、codex `47f9e80`（已收编）、**第十六轮在飞**、门禁全绿；
   远程停在 `3603ecb`（主树领先未推，现测 `git rev-list --count origin/main..main`，等用户决定）；
-  ② 待**肉眼**验收 9 条，**7/8/9 优先**（见 §0）；**主树全程没开浏览器**，
-  第十二轮的观感只有 codex 的截图证据；
+  ② 待**肉眼**验收 9 条，**7/8/9 优先**（见 §0）；主树 2026-11-01 第十六轮
+  **开过一次**浏览器（用户明确授权，验社会层接线实机效果，**不是**观感验收）；
+  那 5 条观感**仍未验收**，第十二轮的观感只有 codex 的截图证据；
   ③ **§1b 的承诺缺口**：`npc_health`（第十四轮 + 真实库已迁移）、音效/离线推进
   （第十五轮）、T5 与 soak **已定线**（`d64464d`）；**只剩音效未亲听**——
   别以为 M0–M6 收官就等于都实现了，也别以为已实现就等于用户已验收；
@@ -680,7 +681,19 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 - **远程**：origin/gitee 均停在 `3603ecb`；主树领先若干提交（**不记数字**，
   `git log origin/main..main` 查全表）**未推**。推送仍是用户决定，不自动推。
 - **配置目录**：维持用户 10-26 裁定「不进 git、不推远程、本地须存在」；主树不建 `.pi`。
-- **浏览器**：仅用户明确要求时用，路径 `C:\Users\zx198\AppData\Local\ms-playwright`。
+- **浏览器**：仅用户明确要求时用。**实测实情（2026-11-01 核对）**：
+  - `.claude/mcp.json` 是 `npx -y @playwright/mcp --browser chrome`；`chrome` 是
+    **channel 不是目录**（README 原文 "browser **or chrome channel**"），解析到
+    **已安装的** `C:\Program Files\Google\Chrome\Application\chrome.exe`。
+    铁证：MCP profile 的 `Last Browser` 就是这条路径。
+  - `C:\Users\zx198\AppData\Local\ms-playwright` → `/d/develop/hermes/chrome`，
+    只有 `chromium-1248`(156.0.8078.4) / `chromium_headless_shell` / `ffmpeg` / `winldd`，
+    **无用户数据**。系统 Chrome 是 156.0.8078.80——两个不同二进制。
+  - **但用户数据零共享**：MCP 用独立 profile `ms-playwright-mcp/mcp-chrome-7b87ffd/`
+    （History 仅 `http://127.0.0.1:5173/` 1 行，无 Bookmarks，无登录态）。
+    实测同期用户 profile 仅 1 个 `BrowserMetrics-*.pma` 写入（用户自己 Chrome 在跑）。
+  - ⇒ 规则「不干扰用户浏览器」**实质满足**；「只用 ms-playwright 里的二进制」**字面未满足**。
+    若要字面合规，把 `--browser chrome` 改 `--browser chromium`（改前须问用户，别擅自动 mcp.json）。
 - **全局 git 邮箱**：`zx19836980213@outlook.com`（2026-10-31 实测，`dev-workflow.md`
   原记的 `223049848+ZX466@users.noreply.github.com` 已过期）。
 - 本轮教训已进 §3：`.orca/talking.txt` 必须保持未跟踪，否则 ff 会覆盖派单；
