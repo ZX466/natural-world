@@ -15,7 +15,8 @@
   - 主树 `E:/zxdevelop/project7`（`main`）：拆单/架构/质量/收编复核/日常小改。
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex`（`codex`）：复杂/跨层实现、安全合规。
   - 只走各树 `.orca/talking.txt`；不直接对话。
-- **远程**：origin/gitee 均在 `3603ecb`（**主树领先 17 提交未推**，推送仍由用户决定）。
+- **远程**：origin/gitee 均在 `3603ecb`（**主树领先未推**，推送仍由用户决定）。
+  现测：`git rev-list --count origin/main..main`——**不要记数字**，每提交一次它就变。
 - **在飞**：**第十六轮已派 codex（2026-11-01）**——M3 社会层接线
   （`knowledge`/`relationships`/`norms`/`propagation` 共 884 行、63 测试，0 生产调用点）。
   派单见两树 talking；三个结构性阻断（witnesses 零调用者 / RelationshipStore 跨驱动 /
@@ -563,7 +564,7 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 协议仍 1.14。**两树 talking 已精简**（556 行 → 138 行，只留当前波）。
 
 - **开新对话只需知道**：① 主树 `0d29b16`、codex `47f9e80`（已收编）、**第十六轮在飞**、门禁全绿；
-  远程停在 `3603ecb`（主树领先 17 提交未推，等用户决定）；
+  远程停在 `3603ecb`（主树领先未推，现测 `git rev-list --count origin/main..main`，等用户决定）；
   ② 待**肉眼**验收 9 条，**7/8/9 优先**（见 §0）；**主树全程没开浏览器**，
   第十二轮的观感只有 codex 的截图证据；
   ③ **§1b 的承诺缺口**：`npc_health`（第十四轮 + 真实库已迁移）、音效/离线推进
@@ -575,8 +576,8 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
   ⑦ **快照可删、事件不可删**：热保留删的是 `snapshots` 行，`events` 与冷快照一行不动（C6）；
   ⑧ **墙钟只能存在控制元数据里**：离线时长靠 `snapshots/branches.created_at`，
      绝不进事件 payload / `state_hash`，否则 C5 立刻破（第十五轮的设计前提）。
-- **远程**：origin/gitee 均停在 `3603ecb`；主树领先 **17 个提交**（`git log origin/main..main` 可查全表，
-  含第十四/十五轮实现 + 收编 + 定线迁移 + 第十六轮派单）**未推**。推送仍是用户决定，不自动推。
+- **远程**：origin/gitee 均停在 `3603ecb`；主树领先若干提交（**不记数字**，
+  `git log origin/main..main` 查全表）**未推**。推送仍是用户决定，不自动推。
 - **配置目录**：维持用户 10-26 裁定「不进 git、不推远程、本地须存在」；主树不建 `.pi`。
 - **浏览器**：仅用户明确要求时用，路径 `C:\Users\zx198\AppData\Local\ms-playwright`。
 - **全局 git 邮箱**：`zx19836980213@outlook.com`（2026-10-31 实测，`dev-workflow.md`
