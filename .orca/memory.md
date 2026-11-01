@@ -412,11 +412,11 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-11-01 第十五轮｜①离线已实现并验证，②音效实现中，③④待取证】本轮基线5a48f7c，RED ffe590f；实现提交见git log。主树已收编第十四轮并另修ensure_schema(1d4bfa9)，本树依派单**不同步main**、不重做该修复。只在codex本地提交，不推送；每条提交附Co-Authored-By: Claude Code <noreply@anthropic.com>。完整当前计划在.orca/audits/round15-2026-11-01/plan.md，派单在本树talking末段。
+【2026-11-01 第十五轮｜①②已交付技术实现，③④取证中】本轮基线5a48f7c，RED ffe590f；实现提交见git log。主树已收编第十四轮并另修ensure_schema(1d4bfa9)，本树依派单**不同步main**、不重做该修复。只在codex本地提交，不推送；每条提交附Co-Authored-By: Claude Code <noreply@anthropic.com>。完整当前计划在.orca/audits/round15-2026-11-01/plan.md，派单在本树talking末段。
 
 - **①离线**：sim/world/offline.py仅接受显式时长；墙钟在main._offline_wall_time采样一次，经offline_store读取当前分支检查点created_at（epoch/ISO兼容，旧无时区ISO按UTC）。全部确定性钩子装配后、两个后台任务创建前补跑，固定1x但保留普通/战斗时间尺，最多86400tick、每批≤4实秒且≤240tick。flush_world支持checkpoint_at/force_checkpoint，无事件尾部更新世界检查点，末批水位置本次墙钟；中断按已提交中间水位续跑，超额记offline.capped后丢弃；不写玩家档、不复用WS快进、不调模型。
 - **①证据/差异**：真实1x是60tick/实秒，并非派单隐含1:1；一分钟补3600tick。临时SQLite真实lifespan实测tick60→3660、events59→18391、玩家档不变，两遍事件重放hash相同，重复启动零新增tick；30天仅86400tick，丢2590560实秒并有日志。脚本与acceptance在.orca/audits/offline-progress-2026-11-01；目标/E1/快照41P；全量3056P/121S/72D/0F、400.84s，5warnings（4旧弃用+旧test_m4c_llm_driver种子夹具engine未dispose的线程警告）；Ruff/Pyright0E。完整客户端/资产门禁等②完成后统一跑。
-- **②音效**：新增client/game/audio确定性WebAudio合成+WorldAudio适配，Runtime/Scene/Settings接线已写。默认每次页面静音、25%，仅场景点击/按键解锁；断线/失焦/静音/销毁清理，异步晚解锁有generation守卫，Phaser持有context，禁止本通道close。现有ActorDelta的更新**省略op**，不是update。初快照不出短音；附近挖放/移动/战斗/坍塌声，8格衰减、120ms节流、最多8音源。已有14项定向通过、tsc0E；尚需格式/Lint/完整客户端门禁与文档/样式收尾。
+- **②音效**：新增client/game/audio确定性WebAudio合成+WorldAudio适配，Runtime/Scene/Settings接线已写。默认每次页面静音、25%，仅场景点击/按键解锁；断线/失焦/静音/销毁清理，异步晚解锁有generation守卫，Phaser持有context，禁止本通道close。现有ActorDelta的更新**省略op**，不是update。初快照不出短音；附近挖放/移动/战斗/坍塌声，8格衰减、120ms节流、最多8音源。已有14项定向通过、tsc0E；客户端337P/47files，协议生成/tsc/eslint/prettier全绿，文档和样式已完；听感待用户。
 - **②用户裁定**：本树发现snapshot_payload始终lights=[]且没有fire.ignited出站，用户明确答复“先交付脚步、挖放、战斗；火声映射做好，真实火场接线另列缺口”。不得为火声改协议/后端。fire Light映射和合成已有单测，但不可宣称真实火场已通；听感必须用户亲听。docs/arch/audio.md已写；无npm新依赖/音频文件。WorldScene派单44.6K行实为1039行/45654字节，记录单位差异。
-- **③④下一步**：①②交付后做T5与soak取证。T5先一个种子、重跑一致再估十种子；派单允许跑不动时先交单种子+估算，不阻塞1.5h全量。仅改过时注释，不写阈值。soak核查npc.death已移出entities阶段B，构造确定性真实死亡场景测X人/N日=Y；不改SOAK_ENTITY_LOSS_PER_GAME_DAY=0。悬空perf文档只报告，不修。协议1.14、迷雾登记不动、真实world.db完全不碰、无浏览器/付费模型调用。
+- **③④下一步**：①实现4769418；②实现见git log。T5已有10种子×10日全绿、123.97s（远低于派单1.5h），首种子7已另跑一次用于C5；汇总和soak在取证中。soak运行会话7029。T5先一个种子、重跑一致再估十种子；派单允许跑不动时先交单种子+估算，不阻塞1.5h全量。仅改过时注释，不写阈值。soak核查npc.death已移出entities阶段B，构造确定性真实死亡场景测X人/N日=Y；不改SOAK_ENTITY_LOSS_PER_GAME_DAY=0。悬空perf文档只报告，不修。协议1.14、迷雾登记不动、真实world.db完全不碰、无浏览器/付费模型调用。
 - **恢复纪律**：workflow→talking→本节/registry；CodeGraph显式本树projectPath先行；其他agent只通过本树talking间接协调。Python用uv与UTF8，PowerShell脚本含中文要同时设OutputEncoding=UTF8，日志重定向可能UTF16；talking ignored不add，memory -f add后提交。第十四轮历史健康重建/LOD持久化等仍未派，禁止顺手展开。i-have-adhd持续，中文简洁分步，不反复确认。

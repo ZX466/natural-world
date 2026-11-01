@@ -6,6 +6,7 @@
  * 指数退避重连；戏内通道收到的未知消息类型静默忽略（versioning.md 铁律）。
  */
 import type {
+  CombatEventMessage,
   ControlAckMessage,
   FullSnapshotMessage,
   ImpulseFeedbackMessage,
@@ -52,6 +53,7 @@ const PROTOCOL_VERSION = '1.14';
 export type WsStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
 
 export interface WsCallbacks {
+  onCombatEvent?: (msg: CombatEventMessage) => void;
   onVoxelState?: (msg: VoxelStateMessage) => void;
   onStatus: (status: WsStatus) => void;
   onSnapshot: (msg: FullSnapshotMessage) => void;
@@ -215,6 +217,7 @@ export class WsClient {
         break;
       case 'combat_event':
         useUiStore.getState().recordCombatEvent();
+        this.cb.onCombatEvent?.(msg);
         break;
       case 'monologue':
         this.cb.onMonologue?.(msg as MonologueMessage);

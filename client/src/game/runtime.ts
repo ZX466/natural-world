@@ -13,6 +13,7 @@ import { useUiStore, type Speed } from '../store/uiStore';
 import { rendererFromSearch } from './render/presentation';
 import type { VoxelRequestMessage } from '../net/protocol';
 import { movementFailure } from './movement';
+import { worldAudio } from './audio';
 
 export const worldMirror = new WorldMirror();
 
@@ -30,6 +31,7 @@ class Runtime {
   start(): void {
     this.ws = new WsClient(SIM_WS_URL, worldMirror, {
       onStatus: (status: WsStatus) => {
+        worldAudio.status(status);
         useUiStore.getState().setWsStatus(status);
         if (status !== 'open') {
           worldMirror.voxelDig = null;
@@ -42,6 +44,7 @@ class Runtime {
         }
       },
       onSnapshot: () => {
+        worldAudio.snapshot(worldMirror);
         useUiStore.getState().setWsStatus('open');
         // HTTP is authoritative for unedited cells after a branch switch too.
         void this.loadWorldMap();
@@ -50,7 +53,9 @@ class Runtime {
       onDelta: (msg) => {
         // 批次 A：计划看板（delta 即全量替换语义，sim 侧 PlanDelta[] 无增删协议）
         if (msg.plan) useUiStore.getState().setPlans([...msg.plan]);
+        worldAudio.delta(msg, worldMirror);
       },
+      onCombatEvent: (msg) => worldAudio.combat(msg, worldMirror),
       onMonologue: (msg) => {
         // 批次 D10 分流：bubble = 村民的公开嘟囔 → 街谈巷议 + 头顶气泡（D14）；
         // thought/plan = 陈默的心声 → 心之声面板。

@@ -30,9 +30,9 @@
 - 测试 sim/tests/test_offline_progress.py：分钟补跑、cap、暂停/倍速/战斗、无事件末批、
   事务回滚、重复启动、参数/时钟偏移、分支隔离、两遍重放与玩家档不变。
 
-- [ ] RED 单测及启动集成测试，记录与派单事实差异。
-- [ ] 实现纯推进/持久化水位，跑目标测试及 E-1 白盒钉。
-- [ ] 文档与数字证据归档，独立提交。
+- [x] RED 单测及启动集成测试，记录与派单事实差异（ffe590f）。
+- [x] 实现纯推进/持久化水位，目标/E-1/快照 41P，全量 3056P。
+- [x] 文档与数字证据归档，独立提交 4769418。
 
 ## 2. 音效（依次执行）
 
@@ -41,10 +41,13 @@
 不制造音频帧；只消费已有 voxel、combat、actors/tile/fire 表现信息，按主角听觉范围过滤，
 不对首次快照、内心活动、任务提示或隐藏状态发声。不合成人声/BGM。
 
-- [ ] CodeGraph 定位 scene/runtime/store/settings；确认现有帧实际能提供的音源，差异写回执。
-- [ ] RED：voxel/fire/footstep/combat 映射、首快照静默、静音/解锁/范围/销毁、假 AudioContext。
-- [ ] 实现 client/src/game/audio 下的适配与合成，接场景和设置；不加依赖。
-- [ ] docs/arch/audio.md 说明默认行为、可听内容、确定性与用户亲听入口；客户端门禁与提交。
+- [x] CodeGraph 定位 scene/runtime/store/settings；确认帧能提供的音源。
+- [x] RED：voxel/fire/footstep/combat 映射、首快照静默、静音/解锁/范围/销毁、假 AudioContext。
+- [x] 实现 client/src/game/audio 下的适配与合成，接场景和设置；不加依赖。
+- [x] docs/arch/audio.md 已说明默认行为/亲听入口；客户端 337P、类型/Lint/格式/协议全绿。
+
+Ruling（用户明确答复）：服务端 lights=[] 且无 fire.ignited 出站；本轮只交付脚步/挖放/
+战斗，火声客户端映射做好，真实火场另列缺口。不得为火声改后端或协议。
 
 ## 3. T5 取证
 
