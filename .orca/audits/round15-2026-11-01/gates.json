@@ -1,0 +1,72 @@
+{
+  "backend": {
+    "passed": 3056,
+    "failed": 0,
+    "skipped": 121,
+    "deselected": 72,
+    "warnings": 5,
+    "seconds": 400.84,
+    "log": "pytest-offline.log",
+    "focused_offline_snapshot_e1_passed": 41
+  },
+  "warnings_note": "Four existing deprecations plus an unclosed-engine worker warning in the existing test_m4c_llm_driver seed fixture; not changed in this task.",
+  "ruff": {
+    "check": "pass",
+    "format_files": 378,
+    "audit_scripts": 3
+  },
+  "pyright": {
+    "errors": 0,
+    "warnings": 0
+  },
+  "client": {
+    "vitest_passed": 337,
+    "files": 47,
+    "protocol_generation": "pass",
+    "typecheck": "pass",
+    "lint": "pass",
+    "prettier": "pass",
+    "new_dependencies": 0
+  },
+  "assets": {
+    "height_map": "byte-identical",
+    "block_atlas": "byte-identical"
+  },
+  "implementation_status": "pass",
+  "uv_lock": "pass",
+  "protocol": "1.14",
+  "t5_full": {
+    "PI_T5_FULL": true,
+    "seeds": 10,
+    "days_per_seed": 10,
+    "passed": 10,
+    "seconds": 123.97,
+    "case_passed": 40,
+    "cases": 40,
+    "repeat_seed": 7
+  },
+  "soak": {
+    "contract_zero_guard": "pass",
+    "control_days": 3,
+    "control_loss": 0,
+    "hazard_days": 3,
+    "hazard_loss": 12,
+    "hazard_loss_per_day": 4.0,
+    "repeat_identical": true,
+    "unchanged_threshold": 0
+  },
+  "unmodified": [
+    "shared protocol",
+    "client/package.json",
+    "client/package-lock.json",
+    "DESIGN.md",
+    "uv.lock",
+    "agent registry",
+    "fog event registration"
+  ],
+  "manual_listening": "pending user",
+  "production_fire_audio": "deferred by explicit user choice",
+  "production_database_accessed": false,
+  "browser_or_paid_model_used": false,
+  "data_scope": "T5 four scripted chains on 10-entity mock final state; soak controlled hourly combat fixture, not a natural population rate. No threshold calibration."
+}

@@ -106,9 +106,9 @@ def _build_loop_with_perception() -> TickLoop:
 # 体例对照 `CASCADE_EVENT_BUDGET_PER_FRAME`（代码契约常量，**非** thresholds 红线）：
 #   规模侧由本常量/派生式硬约束，耗时侧仍由 `SOAK_*` 红线覆盖，两者不混。
 # **阶段 A 值 = 0** ⇒ 净减上界 0 ⇒ 与旧断言（`end == start`）**语义等价**、零行为变化。
-# **阶段 B**（M6「生命始终」落点 a = 移出 `WorldState.entities` 落地时**同 CR**）才提值：
-#   由生命面给「每游戏日可接受净减上界」；本域只提供派生式（不按档硬编码，防双真相源）。
-# 契约钉：`test_soak_entity_loss_bound_is_zero_in_phase_a`（阶段 B 须同步更新）。
+# **阶段 B 前提已落地**：_apply_npc_death 已从 WorldState.entities 移除死者。
+#   2026-11-01 本轮仅取证，常量仍为 0；须由用户查看受控危害实测后裁定可接受上界。
+# 契约钉保留历史名称 test_soak_entity_loss_bound_is_zero_in_phase_a，不据观察值自动提线。
 SOAK_ENTITY_LOSS_PER_GAME_DAY = 0
 
 
@@ -329,9 +329,9 @@ def test_m2_acceptance_tick_constant_is_7_days() -> None:
 def test_soak_entity_loss_bound_is_zero_in_phase_a() -> None:
     """契约钉（体例同 `test_cascade_frame_budget_is_100_nodes`）：阶段 A 净减上界 = 0。
 
-    **阶段 B**（M6「生命始终」落点 a 落地同 CR）本钉须随之更新为「= 生命面给定值」，
-    并同步更新 `docs/perf/m6-soak-contract-preplan.md` §7 提案值表。
-    阶段 A 断言 `== 0` ⇒ `_entity_loss_bound` 恒 0 ⇒ 与旧断言（`end == start`）语义等价。
+    阶段 B 的死亡移除已实现；本轮受控场景仅取证，数值仍等用户裁决。
+    历史测试名与零值断言暂留，默认无伤害 feeder 继续按零流失守卫；不自动把观察值定为阈值。
+    原方案 `docs/perf/m6-soak-contract-preplan.md` §7 仍悬空，按后续派单处理。
     """
     assert SOAK_ENTITY_LOSS_PER_GAME_DAY == 0
     assert _entity_loss_bound(0) == 0

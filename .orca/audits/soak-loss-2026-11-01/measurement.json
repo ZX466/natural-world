@@ -1,0 +1,1372 @@
+{
+  "status": "pass",
+  "stage_b_removes_entities": true,
+  "scenario": "50 actors, 8x8 moving arena; once per game hour choose an in-range pair by seeded SHA-256; real CombatLedger settlement then enqueue npc.death",
+  "control": {
+    "seed": 7,
+    "days": 3,
+    "ticks": 259200,
+    "entities_start": 50,
+    "entities_end": 50,
+    "deaths": 0,
+    "births": 0,
+    "net_loss": 0,
+    "net_loss_per_game_day": 0.0,
+    "derivation": "0 deaths / 3 game days = 0.0 entities/game-day",
+    "attacks": [],
+    "death_trace": [],
+    "state_hash": "20a864be3a98c87f44371fe02134ff2f500581b6adb5ed902eead339e98c9bc5",
+    "wall_seconds": 10.922964199999114,
+    "pending_peak": 54,
+    "windows": [
+      {
+        "start_tick": 0,
+        "ticks": 86400,
+        "mean_tick_ms": 0.02081940963425613,
+        "p99_tick_ms": 0.05099998088553548
+      },
+      {
+        "start_tick": 86400,
+        "ticks": 86400,
+        "mean_tick_ms": 0.028834779039715177,
+        "p99_tick_ms": 0.06880000000819564
+      },
+      {
+        "start_tick": 172800,
+        "ticks": 86400,
+        "mean_tick_ms": 0.026616165508770523,
+        "p99_tick_ms": 0.06429999484680593
+      }
+    ]
+  },
+  "lethal": {
+    "seed": 7,
+    "days": 3,
+    "ticks": 259200,
+    "entities_start": 50,
+    "entities_end": 38,
+    "deaths": 12,
+    "births": 0,
+    "net_loss": 12,
+    "net_loss_per_game_day": 4.0,
+    "derivation": "12 deaths / 3 game days = 4.0 entities/game-day",
+    "attacks": [
+      {
+        "tick": 0,
+        "attacker": "e042",
+        "target": "e035",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 3600,
+        "attacker": "e047",
+        "target": "e007",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 7200,
+        "attacker": "e013",
+        "target": "e038",
+        "outcome": "hit",
+        "damage": 8,
+        "target_hp": 2
+      },
+      {
+        "tick": 10800,
+        "attacker": "e026",
+        "target": "e042",
+        "outcome": "hit",
+        "damage": 8,
+        "target_hp": 2
+      },
+      {
+        "tick": 14400,
+        "attacker": "e023",
+        "target": "e034",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 18000,
+        "attacker": "e031",
+        "target": "e008",
+        "outcome": "hit",
+        "damage": 3,
+        "target_hp": 7
+      },
+      {
+        "tick": 21600,
+        "attacker": "e034",
+        "target": "e018",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 25200,
+        "attacker": "e023",
+        "target": "e041",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 6
+      },
+      {
+        "tick": 28800,
+        "attacker": "e026",
+        "target": "e041",
+        "outcome": "kill",
+        "damage": 8,
+        "target_hp": 0
+      },
+      {
+        "tick": 32400,
+        "attacker": "e011",
+        "target": "e038",
+        "outcome": "kill",
+        "damage": 2,
+        "target_hp": 0
+      },
+      {
+        "tick": 36000,
+        "attacker": "e039",
+        "target": "e005",
+        "outcome": "hit",
+        "damage": 3,
+        "target_hp": 7
+      },
+      {
+        "tick": 39600,
+        "attacker": "e036",
+        "target": "e034",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 43200,
+        "attacker": "e022",
+        "target": "e044",
+        "outcome": "hit",
+        "damage": 3,
+        "target_hp": 7
+      },
+      {
+        "tick": 46800,
+        "attacker": "e018",
+        "target": "e034",
+        "outcome": "kill",
+        "damage": 9,
+        "target_hp": 0
+      },
+      {
+        "tick": 50400,
+        "attacker": "e047",
+        "target": "e009",
+        "outcome": "hit",
+        "damage": 6,
+        "target_hp": 4
+      },
+      {
+        "tick": 54000,
+        "attacker": "e024",
+        "target": "e012",
+        "outcome": "hit",
+        "damage": 9,
+        "target_hp": 1
+      },
+      {
+        "tick": 57600,
+        "attacker": "e027",
+        "target": "e048",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 61200,
+        "attacker": "e008",
+        "target": "e018",
+        "outcome": "hit",
+        "damage": 8,
+        "target_hp": 2
+      },
+      {
+        "tick": 64800,
+        "attacker": "e023",
+        "target": "e032",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 68400,
+        "attacker": "e033",
+        "target": "e049",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 72000,
+        "attacker": "e035",
+        "target": "e033",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 6
+      },
+      {
+        "tick": 75600,
+        "attacker": "e026",
+        "target": "e013",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 6
+      },
+      {
+        "tick": 79200,
+        "attacker": "e044",
+        "target": "e012",
+        "outcome": "kill",
+        "damage": 2,
+        "target_hp": 0
+      },
+      {
+        "tick": 82800,
+        "attacker": "e049",
+        "target": "e028",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 86400,
+        "attacker": "e046",
+        "target": "e013",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 90000,
+        "attacker": "e028",
+        "target": "e011",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 6
+      },
+      {
+        "tick": 93600,
+        "attacker": "e033",
+        "target": "e007",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 97200,
+        "attacker": "e037",
+        "target": "e040",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 6
+      },
+      {
+        "tick": 100800,
+        "attacker": "e048",
+        "target": "e049",
+        "outcome": "hit",
+        "damage": 7,
+        "target_hp": 1
+      },
+      {
+        "tick": 104400,
+        "attacker": "e023",
+        "target": "e007",
+        "outcome": "kill",
+        "damage": 8,
+        "target_hp": 0
+      },
+      {
+        "tick": 108000,
+        "attacker": "e042",
+        "target": "e025",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 111600,
+        "attacker": "e035",
+        "target": "e028",
+        "outcome": "hit",
+        "damage": 9,
+        "target_hp": 1
+      },
+      {
+        "tick": 115200,
+        "attacker": "e006",
+        "target": "e042",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 118800,
+        "attacker": "e022",
+        "target": "e008",
+        "outcome": "hit",
+        "damage": 3,
+        "target_hp": 4
+      },
+      {
+        "tick": 122400,
+        "attacker": "e043",
+        "target": "e006",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 126000,
+        "attacker": "e017",
+        "target": "e042",
+        "outcome": "kill",
+        "damage": 2,
+        "target_hp": 0
+      },
+      {
+        "tick": 129600,
+        "attacker": "e047",
+        "target": "e030",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 6
+      },
+      {
+        "tick": 133200,
+        "attacker": "e006",
+        "target": "e047",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 136800,
+        "attacker": "e021",
+        "target": "e001",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 140400,
+        "attacker": "e021",
+        "target": "e011",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 144000,
+        "attacker": "e014",
+        "target": "e000",
+        "outcome": "hit",
+        "damage": 3,
+        "target_hp": 7
+      },
+      {
+        "tick": 147600,
+        "attacker": "e031",
+        "target": "e025",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 4
+      },
+      {
+        "tick": 151200,
+        "attacker": "e032",
+        "target": "e036",
+        "outcome": "hit",
+        "damage": 8,
+        "target_hp": 2
+      },
+      {
+        "tick": 154800,
+        "attacker": "e002",
+        "target": "e045",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 158400,
+        "attacker": "e002",
+        "target": "e045",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 162000,
+        "attacker": "e032",
+        "target": "e044",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 165600,
+        "attacker": "e014",
+        "target": "e044",
+        "outcome": "hit",
+        "damage": 3,
+        "target_hp": 4
+      },
+      {
+        "tick": 169200,
+        "attacker": "e036",
+        "target": "e031",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 172800,
+        "attacker": "e039",
+        "target": "e029",
+        "outcome": "hit",
+        "damage": 7,
+        "target_hp": 3
+      },
+      {
+        "tick": 176400,
+        "attacker": "e010",
+        "target": "e039",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 6
+      },
+      {
+        "tick": 180000,
+        "attacker": "e031",
+        "target": "e047",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 183600,
+        "attacker": "e000",
+        "target": "e047",
+        "outcome": "kill",
+        "damage": 9,
+        "target_hp": 0
+      },
+      {
+        "tick": 187200,
+        "attacker": "e021",
+        "target": "e011",
+        "outcome": "kill",
+        "damage": 8,
+        "target_hp": 0
+      },
+      {
+        "tick": 190800,
+        "attacker": "e040",
+        "target": "e019",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 194400,
+        "attacker": "e029",
+        "target": "e013",
+        "outcome": "kill",
+        "damage": 9,
+        "target_hp": 0
+      },
+      {
+        "tick": 198000,
+        "attacker": "e035",
+        "target": "e015",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 201600,
+        "attacker": "e045",
+        "target": "e035",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 205200,
+        "attacker": "e019",
+        "target": "e037",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 208800,
+        "attacker": "e016",
+        "target": "e048",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 212400,
+        "attacker": "e018",
+        "target": "e009",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 2
+      },
+      {
+        "tick": 216000,
+        "attacker": "e035",
+        "target": "e005",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 5
+      },
+      {
+        "tick": 219600,
+        "attacker": "e023",
+        "target": "e045",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 6
+      },
+      {
+        "tick": 223200,
+        "attacker": "e019",
+        "target": "e009",
+        "outcome": "kill",
+        "damage": 8,
+        "target_hp": 0
+      },
+      {
+        "tick": 226800,
+        "attacker": "e036",
+        "target": "e032",
+        "outcome": "kill",
+        "damage": 9,
+        "target_hp": 0
+      },
+      {
+        "tick": 230400,
+        "attacker": "e031",
+        "target": "e045",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 2
+      },
+      {
+        "tick": 234000,
+        "attacker": "e006",
+        "target": "e004",
+        "outcome": "hit",
+        "damage": 8,
+        "target_hp": 2
+      },
+      {
+        "tick": 237600,
+        "attacker": "e037",
+        "target": "e025",
+        "outcome": "kill",
+        "damage": 7,
+        "target_hp": 0
+      },
+      {
+        "tick": 241200,
+        "attacker": "e000",
+        "target": "e017",
+        "outcome": "hit",
+        "damage": 7,
+        "target_hp": 3
+      },
+      {
+        "tick": 244800,
+        "attacker": "e049",
+        "target": "e006",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 248400,
+        "attacker": "e030",
+        "target": "e040",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 252000,
+        "attacker": "e036",
+        "target": "e002",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 255600,
+        "attacker": "e035",
+        "target": "e026",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      }
+    ],
+    "death_trace": [
+      {
+        "tick": 28800,
+        "entity_id": "e041"
+      },
+      {
+        "tick": 32400,
+        "entity_id": "e038"
+      },
+      {
+        "tick": 46800,
+        "entity_id": "e034"
+      },
+      {
+        "tick": 79200,
+        "entity_id": "e012"
+      },
+      {
+        "tick": 104400,
+        "entity_id": "e007"
+      },
+      {
+        "tick": 126000,
+        "entity_id": "e042"
+      },
+      {
+        "tick": 183600,
+        "entity_id": "e047"
+      },
+      {
+        "tick": 187200,
+        "entity_id": "e011"
+      },
+      {
+        "tick": 194400,
+        "entity_id": "e013"
+      },
+      {
+        "tick": 223200,
+        "entity_id": "e009"
+      },
+      {
+        "tick": 226800,
+        "entity_id": "e032"
+      },
+      {
+        "tick": 237600,
+        "entity_id": "e025"
+      }
+    ],
+    "state_hash": "693e41090fa479324dd312265c1f55b5fbbfbbb0f6b2f7a55bc49eec8f3d0286",
+    "wall_seconds": 10.03379230000428,
+    "pending_peak": 54,
+    "windows": [
+      {
+        "start_tick": 0,
+        "ticks": 86400,
+        "mean_tick_ms": 0.026516187500857522,
+        "p99_tick_ms": 0.06369999027810991
+      },
+      {
+        "start_tick": 86400,
+        "ticks": 86400,
+        "mean_tick_ms": 0.02335111565621951,
+        "p99_tick_ms": 0.05509998300112784
+      },
+      {
+        "start_tick": 172800,
+        "ticks": 86400,
+        "mean_tick_ms": 0.020759082158797862,
+        "p99_tick_ms": 0.04859999171458185
+      }
+    ]
+  },
+  "repeated": {
+    "seed": 7,
+    "days": 3,
+    "ticks": 259200,
+    "entities_start": 50,
+    "entities_end": 38,
+    "deaths": 12,
+    "births": 0,
+    "net_loss": 12,
+    "net_loss_per_game_day": 4.0,
+    "derivation": "12 deaths / 3 game days = 4.0 entities/game-day",
+    "attacks": [
+      {
+        "tick": 0,
+        "attacker": "e042",
+        "target": "e035",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 3600,
+        "attacker": "e047",
+        "target": "e007",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 7200,
+        "attacker": "e013",
+        "target": "e038",
+        "outcome": "hit",
+        "damage": 8,
+        "target_hp": 2
+      },
+      {
+        "tick": 10800,
+        "attacker": "e026",
+        "target": "e042",
+        "outcome": "hit",
+        "damage": 8,
+        "target_hp": 2
+      },
+      {
+        "tick": 14400,
+        "attacker": "e023",
+        "target": "e034",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 18000,
+        "attacker": "e031",
+        "target": "e008",
+        "outcome": "hit",
+        "damage": 3,
+        "target_hp": 7
+      },
+      {
+        "tick": 21600,
+        "attacker": "e034",
+        "target": "e018",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 25200,
+        "attacker": "e023",
+        "target": "e041",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 6
+      },
+      {
+        "tick": 28800,
+        "attacker": "e026",
+        "target": "e041",
+        "outcome": "kill",
+        "damage": 8,
+        "target_hp": 0
+      },
+      {
+        "tick": 32400,
+        "attacker": "e011",
+        "target": "e038",
+        "outcome": "kill",
+        "damage": 2,
+        "target_hp": 0
+      },
+      {
+        "tick": 36000,
+        "attacker": "e039",
+        "target": "e005",
+        "outcome": "hit",
+        "damage": 3,
+        "target_hp": 7
+      },
+      {
+        "tick": 39600,
+        "attacker": "e036",
+        "target": "e034",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 43200,
+        "attacker": "e022",
+        "target": "e044",
+        "outcome": "hit",
+        "damage": 3,
+        "target_hp": 7
+      },
+      {
+        "tick": 46800,
+        "attacker": "e018",
+        "target": "e034",
+        "outcome": "kill",
+        "damage": 9,
+        "target_hp": 0
+      },
+      {
+        "tick": 50400,
+        "attacker": "e047",
+        "target": "e009",
+        "outcome": "hit",
+        "damage": 6,
+        "target_hp": 4
+      },
+      {
+        "tick": 54000,
+        "attacker": "e024",
+        "target": "e012",
+        "outcome": "hit",
+        "damage": 9,
+        "target_hp": 1
+      },
+      {
+        "tick": 57600,
+        "attacker": "e027",
+        "target": "e048",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 61200,
+        "attacker": "e008",
+        "target": "e018",
+        "outcome": "hit",
+        "damage": 8,
+        "target_hp": 2
+      },
+      {
+        "tick": 64800,
+        "attacker": "e023",
+        "target": "e032",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 68400,
+        "attacker": "e033",
+        "target": "e049",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 72000,
+        "attacker": "e035",
+        "target": "e033",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 6
+      },
+      {
+        "tick": 75600,
+        "attacker": "e026",
+        "target": "e013",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 6
+      },
+      {
+        "tick": 79200,
+        "attacker": "e044",
+        "target": "e012",
+        "outcome": "kill",
+        "damage": 2,
+        "target_hp": 0
+      },
+      {
+        "tick": 82800,
+        "attacker": "e049",
+        "target": "e028",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 86400,
+        "attacker": "e046",
+        "target": "e013",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 90000,
+        "attacker": "e028",
+        "target": "e011",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 6
+      },
+      {
+        "tick": 93600,
+        "attacker": "e033",
+        "target": "e007",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 97200,
+        "attacker": "e037",
+        "target": "e040",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 6
+      },
+      {
+        "tick": 100800,
+        "attacker": "e048",
+        "target": "e049",
+        "outcome": "hit",
+        "damage": 7,
+        "target_hp": 1
+      },
+      {
+        "tick": 104400,
+        "attacker": "e023",
+        "target": "e007",
+        "outcome": "kill",
+        "damage": 8,
+        "target_hp": 0
+      },
+      {
+        "tick": 108000,
+        "attacker": "e042",
+        "target": "e025",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 111600,
+        "attacker": "e035",
+        "target": "e028",
+        "outcome": "hit",
+        "damage": 9,
+        "target_hp": 1
+      },
+      {
+        "tick": 115200,
+        "attacker": "e006",
+        "target": "e042",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 118800,
+        "attacker": "e022",
+        "target": "e008",
+        "outcome": "hit",
+        "damage": 3,
+        "target_hp": 4
+      },
+      {
+        "tick": 122400,
+        "attacker": "e043",
+        "target": "e006",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 126000,
+        "attacker": "e017",
+        "target": "e042",
+        "outcome": "kill",
+        "damage": 2,
+        "target_hp": 0
+      },
+      {
+        "tick": 129600,
+        "attacker": "e047",
+        "target": "e030",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 6
+      },
+      {
+        "tick": 133200,
+        "attacker": "e006",
+        "target": "e047",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 136800,
+        "attacker": "e021",
+        "target": "e001",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 140400,
+        "attacker": "e021",
+        "target": "e011",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 144000,
+        "attacker": "e014",
+        "target": "e000",
+        "outcome": "hit",
+        "damage": 3,
+        "target_hp": 7
+      },
+      {
+        "tick": 147600,
+        "attacker": "e031",
+        "target": "e025",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 4
+      },
+      {
+        "tick": 151200,
+        "attacker": "e032",
+        "target": "e036",
+        "outcome": "hit",
+        "damage": 8,
+        "target_hp": 2
+      },
+      {
+        "tick": 154800,
+        "attacker": "e002",
+        "target": "e045",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 158400,
+        "attacker": "e002",
+        "target": "e045",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 162000,
+        "attacker": "e032",
+        "target": "e044",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 165600,
+        "attacker": "e014",
+        "target": "e044",
+        "outcome": "hit",
+        "damage": 3,
+        "target_hp": 4
+      },
+      {
+        "tick": 169200,
+        "attacker": "e036",
+        "target": "e031",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 172800,
+        "attacker": "e039",
+        "target": "e029",
+        "outcome": "hit",
+        "damage": 7,
+        "target_hp": 3
+      },
+      {
+        "tick": 176400,
+        "attacker": "e010",
+        "target": "e039",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 6
+      },
+      {
+        "tick": 180000,
+        "attacker": "e031",
+        "target": "e047",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 183600,
+        "attacker": "e000",
+        "target": "e047",
+        "outcome": "kill",
+        "damage": 9,
+        "target_hp": 0
+      },
+      {
+        "tick": 187200,
+        "attacker": "e021",
+        "target": "e011",
+        "outcome": "kill",
+        "damage": 8,
+        "target_hp": 0
+      },
+      {
+        "tick": 190800,
+        "attacker": "e040",
+        "target": "e019",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 194400,
+        "attacker": "e029",
+        "target": "e013",
+        "outcome": "kill",
+        "damage": 9,
+        "target_hp": 0
+      },
+      {
+        "tick": 198000,
+        "attacker": "e035",
+        "target": "e015",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 201600,
+        "attacker": "e045",
+        "target": "e035",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 205200,
+        "attacker": "e019",
+        "target": "e037",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 208800,
+        "attacker": "e016",
+        "target": "e048",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 212400,
+        "attacker": "e018",
+        "target": "e009",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 2
+      },
+      {
+        "tick": 216000,
+        "attacker": "e035",
+        "target": "e005",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 5
+      },
+      {
+        "tick": 219600,
+        "attacker": "e023",
+        "target": "e045",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 6
+      },
+      {
+        "tick": 223200,
+        "attacker": "e019",
+        "target": "e009",
+        "outcome": "kill",
+        "damage": 8,
+        "target_hp": 0
+      },
+      {
+        "tick": 226800,
+        "attacker": "e036",
+        "target": "e032",
+        "outcome": "kill",
+        "damage": 9,
+        "target_hp": 0
+      },
+      {
+        "tick": 230400,
+        "attacker": "e031",
+        "target": "e045",
+        "outcome": "hit",
+        "damage": 4,
+        "target_hp": 2
+      },
+      {
+        "tick": 234000,
+        "attacker": "e006",
+        "target": "e004",
+        "outcome": "hit",
+        "damage": 8,
+        "target_hp": 2
+      },
+      {
+        "tick": 237600,
+        "attacker": "e037",
+        "target": "e025",
+        "outcome": "kill",
+        "damage": 7,
+        "target_hp": 0
+      },
+      {
+        "tick": 241200,
+        "attacker": "e000",
+        "target": "e017",
+        "outcome": "hit",
+        "damage": 7,
+        "target_hp": 3
+      },
+      {
+        "tick": 244800,
+        "attacker": "e049",
+        "target": "e006",
+        "outcome": "hit",
+        "damage": 2,
+        "target_hp": 8
+      },
+      {
+        "tick": 248400,
+        "attacker": "e030",
+        "target": "e040",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 252000,
+        "attacker": "e036",
+        "target": "e002",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      },
+      {
+        "tick": 255600,
+        "attacker": "e035",
+        "target": "e026",
+        "outcome": "miss",
+        "damage": 0,
+        "target_hp": 10
+      }
+    ],
+    "death_trace": [
+      {
+        "tick": 28800,
+        "entity_id": "e041"
+      },
+      {
+        "tick": 32400,
+        "entity_id": "e038"
+      },
+      {
+        "tick": 46800,
+        "entity_id": "e034"
+      },
+      {
+        "tick": 79200,
+        "entity_id": "e012"
+      },
+      {
+        "tick": 104400,
+        "entity_id": "e007"
+      },
+      {
+        "tick": 126000,
+        "entity_id": "e042"
+      },
+      {
+        "tick": 183600,
+        "entity_id": "e047"
+      },
+      {
+        "tick": 187200,
+        "entity_id": "e011"
+      },
+      {
+        "tick": 194400,
+        "entity_id": "e013"
+      },
+      {
+        "tick": 223200,
+        "entity_id": "e009"
+      },
+      {
+        "tick": 226800,
+        "entity_id": "e032"
+      },
+      {
+        "tick": 237600,
+        "entity_id": "e025"
+      }
+    ],
+    "state_hash": "693e41090fa479324dd312265c1f55b5fbbfbbb0f6b2f7a55bc49eec8f3d0286",
+    "wall_seconds": 10.112302499997895,
+    "pending_peak": 54,
+    "windows": [
+      {
+        "start_tick": 0,
+        "ticks": 86400,
+        "mean_tick_ms": 0.02464744101484097,
+        "p99_tick_ms": 0.05810000584460795
+      },
+      {
+        "start_tick": 86400,
+        "ticks": 86400,
+        "mean_tick_ms": 0.023277408511906593,
+        "p99_tick_ms": 0.055100012104958296
+      },
+      {
+        "start_tick": 172800,
+        "ticks": 86400,
+        "mean_tick_ms": 0.0230774872434941,
+        "p99_tick_ms": 0.05780000356025994
+      }
+    ]
+  },
+  "same_seed_repeated_semantics_equal": true,
+  "threshold_unchanged": 0,
+  "threshold_decision": "pending user; intentionally no new numeric assertion bound",
+  "limitations": "Controlled hazard fixture; not a natural population loss estimate. Existing soak in-memory simulation, no SQLite/development database, no LLM or browser."
+}
