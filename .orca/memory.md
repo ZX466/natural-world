@@ -3,27 +3,37 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-01 第十六轮交付但**复核未过**）
+## 0. 当前状态（2026-11-01 第十六轮**已收编 + 根因已修**）
 
 - **main HEAD**：`git log -1 --oneline` 现测（**别记哈希**，记录本身就会产生新提交）。
-- **codex HEAD**：`820c653`（第十六轮交付），工作区干净，**已交付但未收编**。
-- **第十六轮复核结论：不可收编**——`witnesses` 恒空 ⇒ `knowledge` 表恒 0 行。
-  根因：`sim/perception/senses.py:271` 把 `Observation.subject` 设成**中文显示名**，
-  而 `witnesses_of_entity_emerge` 拿 `rtoken_of(subject)` 去比，永不匹配。
-  证据与探针：`.orca/audits/round16-review-2026-11-01/`（`review.md` / `probe.py` / `review.json`）。
+  第十六轮收编 + 修复 = `ffa74bd`。
+- **codex HEAD**：`820c653`（第十六轮交付，**已由主树收编并修好根因**）；
+  工作区干净，**第十七轮派单已写入本树 `.orca/talking.txt` 顶部**。
+- **第十六轮：已收编 + 生产已通**。原判「不可收编」的根因是
+  `witnesses` 恒空 ⇒ `knowledge` 恒 0；修法见 §1e 尾段（`display_name_of` 反查 +
+  重名 fail-closed + 真跑 `lifespan` 的集成测试）。
+  **Playwright 实机验证（隔离库）**：`knowledge` 22 行 / `relationships` 116 行 /
+  `hidden_emerge.witnesses` 有内容；挖掘、放置、移动、昼夜循环全链路正常。
+- **真实 `world.db` 已回滚**（2026-11-01 19:47）：本轮我的手写探针曾绕过 `conftest`
+  直写真实库（+741567 events / knowledge +27）。已用备份
+  `world.db.bak-20261101-150615` 覆盖，`seq 1..187857` SHA256 与备份逐字节一致
+  （`a39c046c…`），`knowledge`/`relationships` 归零，无伪造脏数据。
+  污染态另存 `world.db.polluted-20261101-194706`（已 gitignore，供取证）。
+- **第十七轮（在飞，已派 codex）**：两项主树已复现、需跨层改动的缺口——
+  **A. 动物在积累人类式知识**（`cat_grey`/`dog_black`/`raven` 有 `knowledge` 行，
+  `DESIGN.md:389` 要求物种级 profile、属 M6）；
+  **B. 名牌重叠**（同格多人时名字糊成一团，验收项 ⑨）。
 - **协议**：**`1.14`**（第十轮挖深字段升级）；双落点同改
   （`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts::PROTOCOL_VERSION`
   ↔ `sim/tests/test_protocol_version.py::EXPECTED_VERSION` + README 徽章 + `shared/openapi.json`）。
-  第十一～十五轮均未动协议字段（渲染、UI、持久层、音效、离线内部）。
+  第十一～十七轮均未动协议字段（渲染、UI、持久层、音效、离线、社会层内部）。
 - **两棵树**：
   - 主树 `E:/zxdevelop/project7`（`main`）：拆单/架构/质量/收编复核/日常小改。
   - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex`（`codex`）：复杂/跨层实现、安全合规。
   - 只走各树 `.orca/talking.txt`；不直接对话。
 - **远程**：origin/gitee 均在 `3603ecb`（**主树领先未推**，推送仍由用户决定）。
   现测：`git rev-list --count origin/main..main`——**不要记数字**，每提交一次它就变。
-- **在飞**：**第十六轮待重派**——M3 社会层接线已交付但生产不通（见上）。
-  下一轮只需修**标识错配**（显示名 → entity_id 反查）+ 补一条**真跑 `lifespan`** 的集成测试。
-  验收面第 1 条的判定标准不变：实况跑起来后 `knowledge` 表**有行**。
+- **在飞**：**第十七轮已派 codex**（动物知识门 + 名牌重叠，见上）。主树这边无在途。
   未派：V3.5 内容包 / V4-3D。
 - **第十五轮留给用户的四件事 → 2026-11-01 已完成三件**：
   1. ~~T5 完成率阈值定线~~ → **已定 1.0**（用户裁定，见 §1b）
