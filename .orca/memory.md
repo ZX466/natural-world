@@ -3,12 +3,17 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-01 第十六轮**已收编 + 根因已修**）
+## 0. 当前状态（2026-11-01 第十七轮**已交付待收编**）
 
 - **main HEAD**：`git log -1 --oneline` 现测（**别记哈希**，记录本身就会产生新提交）。
   第十六轮收编 + 修复 = `ffa74bd`。
-- **codex HEAD**：`820c653`（第十六轮交付，**已由主树收编并修好根因**）；
-  工作区干净，**第十七轮派单已写入本树 `.orca/talking.txt` 顶部**。
+- **codex HEAD**：`16b7eae`（**第十七轮已交付，主树独立复跑已过，待收编**）。
+- **第十七轮：已交付，待收编**（物种知识门 + 名牌重叠）。
+  - 主树独立复跑（**不采信自测**）：`test_species_knowledge.py` +
+    `test_m3_social_wiring.py` → **31P**；`name-labels.test.ts` → **16P**。
+  - **收编有 3 处冲突**，其中 `sim/api/main.py` 必须**保留主树的 `ensure_schema`**
+    （codex 从 `820c653` 起分支不含它，丢掉则真实库启动即崩）。
+  - 详见主树 `.orca/talking.txt`。
 - **第十六轮：已收编 + 生产已通**。原判「不可收编」的根因是
   `witnesses` 恒空 ⇒ `knowledge` 恒 0；修法见 §1e 尾段（`display_name_of` 反查 +
   重名 fail-closed + 真跑 `lifespan` 的集成测试）。
@@ -19,10 +24,6 @@
   `world.db.bak-20261101-150615` 覆盖，`seq 1..187857` SHA256 与备份逐字节一致
   （`a39c046c…`），`knowledge`/`relationships` 归零，无伪造脏数据。
   污染态另存 `world.db.polluted-20261101-194706`（已 gitignore，供取证）。
-- **第十七轮（在飞，已派 codex）**：两项主树已复现、需跨层改动的缺口——
-  **A. 动物在积累人类式知识**（`cat_grey`/`dog_black`/`raven` 有 `knowledge` 行，
-  `DESIGN.md:389` 要求物种级 profile、属 M6）；
-  **B. 名牌重叠**（同格多人时名字糊成一团，验收项 ⑨）。
 - **协议**：**`1.14`**（第十轮挖深字段升级）；双落点同改
   （`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts::PROTOCOL_VERSION`
   ↔ `sim/tests/test_protocol_version.py::EXPECTED_VERSION` + README 徽章 + `shared/openapi.json`）。
@@ -33,7 +34,7 @@
   - 只走各树 `.orca/talking.txt`；不直接对话。
 - **远程**：origin/gitee 均在 `3603ecb`（**主树领先未推**，推送仍由用户决定）。
   现测：`git rev-list --count origin/main..main`——**不要记数字**，每提交一次它就变。
-- **在飞**：**第十七轮已派 codex**（动物知识门 + 名牌重叠，见上）。主树这边无在途。
+- **在飞**：**第十七轮待收编**（见上）。主树这边无其他在途。
   未派：V3.5 内容包 / V4-3D。
 - **第十五轮留给用户的四件事 → 2026-11-01 已完成三件**：
   1. ~~T5 完成率阈值定线~~ → **已定 1.0**（用户裁定，见 §1b）
@@ -164,7 +165,7 @@ player_anchor` **全为 0** ⇒ **未丢用户操作**。但追加段含我伪�
 | 缺口 | 实测证据 |
 |---|---|
 | **音效**（**待验收**） | ~~全仓 0 个 `.mp3/.ogg/.wav`、0 处 `this.sound`~~ → **2026-11-01 第十五轮已收编（`28e8ac9`）**：Phaser 3.87 内置 WebAudio，`client/src/game/audio/{synth,world-audio,index}.ts`；零新 npm 依赖、零资产文件、协议不变。默认静音 25% 音量、8 音轨上限、8 格衰减、120ms 节流；只消费可观测的 `voxel_edits`/actor 位移/`combat_event`/`lights`，不碰独白。**仍未做**：用户亲听验收；真实火场音效外发（用户裁定为独立缺口） |
-| **M3 社会层** | ~~0 生产调用点~~ → **2026-11-01 第十六轮已交付（`820c653`），但复核未过**：关系通了（真实库副本 0→37 行），**知识仍 0 行**——`Observation.subject` 是中文显示名，`witnesses` 装配拿 rtoken 去比 ⇒ 恒空 ⇒ `knowledge_learned` 零产生。详见 **§1e**。下一轮只修标识错配 + 补真跑 `lifespan` 的集成测试 |
+| **M3 社会层** | ~~0 生产调用点~~ → **2026-11-01 第十六轮 `ffa74bd` 已收编并修好根因**：关系真实库副本 0→37 行，知识 22 行（隔离库 Playwright 实测）。根因是 `Observation.subject` 为中文显示名而装配拿 rtoken 去比 ⇒ 恒空；修法 `display_name_of` 反查 + 重名 fail-closed（§1e）。**第十七轮 `16b7eae` 待收编**：物种知识门（`can_hold_knowledge`）+ 名牌重叠 |
 | **`npc_health`** | ~~有模型/迁移/读路径，但**零写入**~~ → **2026-10-31 第十四轮已收编并修好启动自愈（`1d4bfa9`）**：事件→总线→同事务健康投影→感知触发→陈默闸门/记忆已接通；6 条内容种子。**2026-11-01 真实库已正式迁移（`d64464d`）**：备份 `world.db.bak-20261101-150615`（先副本演练再动真库），版本 `0015_health_code`、`code` 列补齐，events **187857** / snapshots **3946** / max seq 187857 **零丢失**，存档副本启动成功（tick 36001 / 54 实体）。**仍未做**：历史锚点 fork 的 severity/active 还原、每日严重度演进、第三方浮现见证链。**锚点 fork 有真 bug**：`fork.py:559` 走 `_clone_bounded`（复制父分支**当前**值），而 structures/materials 走 `_clone_*_at_cursor` ⇒ 回退旧档拿到父分支「未来」健康态；`anchor_package.CORPUS_TABLES` 也不含 `npc_health` |
 | **`npc.lod_change` 持久化** | **已完成**（`runtime.py:223` 发射 + `npc_store._project_lod_change` 双键投影）。此前记忆卡写「仍未做」是过时记录，2026-11-01 已订正 |
 | **离线推进** | ~~`sim/world/offline*.py` 不存在~~ → **2026-11-01 第十五轮已收编（`28e8ac9`）**：`sim/world/offline.py::advance_offline` 复用现有 `TickLoop`；墙钟只在启动边界采样一次（`_offline_wall_time`）；水位取 `snapshots/branches.created_at`（控制元数据，不进事件流与 `state_hash` ⇒ **C5 安全**）；批上限 240 tick、`MAX_CATCHUP_REAL_SECONDS=4.0`、上限 1 游戏日（`TICKS_PER_GAME_DAY=86400`，超限记 `offline.capped`）；同墙钟重启零补跑。主树实测：60s→3600 tick、30 天→86400 tick 且丢弃 2590560s、两遍重放 hash 相同、玩家档零写。**仍未做**：真实 `world.db` 上跑一次真实停机补偿（需备份） |
@@ -664,7 +665,7 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 并在真实 `world.db` 副本上实测 **3946→9 行、events 一行未删、恢复逐位相同**。
 协议仍 1.14。**两树 talking 已精简**（556 行 → 138 行，只留当前波）。
 
-- **开新对话只需知道**：① 主树 `0d29b16`、codex `47f9e80`（已收编）、**第十六轮在飞**、门禁全绿；
+- **开新对话只需知道**：① codex `16b7eae`（**第十七轮已交付待收编**）、主树收编后门禁需重跑；
   远程停在 `3603ecb`（主树领先未推，现测 `git rev-list --count origin/main..main`，等用户决定）；
   ② 待**肉眼**验收 9 条，**7/8/9 优先**（见 §0）；主树 2026-11-01 第十六轮
   **开过一次**浏览器（用户明确授权，验社会层接线实机效果，**不是**观感验收）；
