@@ -3,10 +3,14 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-01 第十五轮收编 + 定线 + 第十六轮派单后）
+## 0. 当前状态（2026-11-01 第十六轮交付但**复核未过**）
 
-- **main HEAD**：`0d29b16`（第十六轮派单文档；前序 `d64464d` 定线 + 真实库迁移）。
-- **codex HEAD**：`47f9e80`（第十五轮实现），工作区干净，**第十六轮在飞**（未提交）。
+- **main HEAD**：`git log -1 --oneline` 现测（**别记哈希**，记录本身就会产生新提交）。
+- **codex HEAD**：`820c653`（第十六轮交付），工作区干净，**已交付但未收编**。
+- **第十六轮复核结论：不可收编**——`witnesses` 恒空 ⇒ `knowledge` 表恒 0 行。
+  根因：`sim/perception/senses.py:271` 把 `Observation.subject` 设成**中文显示名**，
+  而 `witnesses_of_entity_emerge` 拿 `rtoken_of(subject)` 去比，永不匹配。
+  证据与探针：`.orca/audits/round16-review-2026-11-01/`（`review.md` / `probe.py` / `review.json`）。
 - **协议**：**`1.14`**（第十轮挖深字段升级）；双落点同改
   （`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts::PROTOCOL_VERSION`
   ↔ `sim/tests/test_protocol_version.py::EXPECTED_VERSION` + README 徽章 + `shared/openapi.json`）。
@@ -17,10 +21,9 @@
   - 只走各树 `.orca/talking.txt`；不直接对话。
 - **远程**：origin/gitee 均在 `3603ecb`（**主树领先未推**，推送仍由用户决定）。
   现测：`git rev-list --count origin/main..main`——**不要记数字**，每提交一次它就变。
-- **在飞**：**第十六轮已派 codex（2026-11-01）**——M3 社会层接线
-  （`knowledge`/`relationships`/`norms`/`propagation` 共 884 行、63 测试，0 生产调用点）。
-  派单见两树 talking；三个结构性阻断（witnesses 零调用者 / RelationshipStore 跨驱动 /
-  knowledge evidence_seq 投影缝）已写进派单。
+- **在飞**：**第十六轮待重派**——M3 社会层接线已交付但生产不通（见上）。
+  下一轮只需修**标识错配**（显示名 → entity_id 反查）+ 补一条**真跑 `lifespan`** 的集成测试。
+  验收面第 1 条的判定标准不变：实况跑起来后 `knowledge` 表**有行**。
   未派：V3.5 内容包 / V4-3D。
 - **第十五轮留给用户的四件事 → 2026-11-01 已完成三件**：
   1. ~~T5 完成率阈值定线~~ → **已定 1.0**（用户裁定，见 §1b）
@@ -43,7 +46,14 @@
 > **记录订正**：用户 2026-10-31 先发「1 2 3观感已验收」、随后「3都已验收」，
 > 均指验收清单**第 1/2/3 条**。我最初误记为第 8/9 条，已改回。第 8/9 条**尚未验收**。
 
-## 1. 门禁（2026-11-01 第十五轮收编后主树独立实测）
+## 1. 门禁（2026-11-01 第十五轮收编后主树独立实测；第十六轮复核见 §1e）
+
+> **第十六轮在 codex 树实测（独立复跑，非采信自测）**：
+> pytest `-m "not bench"` **3074 passed / 0 failed / 121 skipped**（394.51s）·
+> ruff/format EXIT 0 · pyright 0E/0W · 协议仍 1.14 · client/shared/uv.lock/DESIGN 零 diff。
+> bench **2F 属既有基线**：主树**无本轮代码**同样 2F（`test_perception_sound_50npc`
+> 与 `test_retrieval_full_scan_degraded_sentinel`），且两条单跑均通过 ⇒ 抖动，非回归。
+> 回执称「sound baseline passes」是错的。
 
 | 项 | 结果 |
 |---|---|
@@ -80,6 +90,37 @@ src/game/audio/__tests__/world-audio.test.ts(48,18): error TS2345:
 **教训**：`npm run typecheck 2>&1 | tail -3; echo $?` 报的是 **tail 的退出码**，
 不是 npm 的。必须 `cmd > log 2>&1; echo "EXIT:$?"`。这条对任何管道都一样。
 
+## 1e. 第十六轮复核：测试全绿但生产不通（2026-11-01）
+
+**这是 §1d 那条教训的升级版**：不是回执说谎，是**测试根本没跑生产路径**。
+
+codex 交付 `820c653`（+886 行，18 条新测试），门禁全绿，但：
+
+```
+真实 lifespan 600 tick：events 0→3775，relationships 0→25 ✅，knowledge 0→0 ❌
+主树真实库副本：        events 187857→191674，relationships 0→37 ✅，knowledge 0→0 ❌
+```
+
+**根因一条**：`sim/perception/senses.py:271` 把 `Observation.subject` 设成**中文显示名**
+（同一个 `label` 既作叙事文本又作 subject），而 `witnesses_of_entity_emerge`
+（`evidence.py:157`）拿 `rtoken_of(subject)` 去比 ⇒ **永不匹配** ⇒ `witnesses` 恒空
+⇒ `npc.knowledge_learned` 零产生 ⇒ `knowledge` 表恒 0。`told` 路以 knowledge 行为源，
+同根因被堵死。`frame.py:37` 的 `subject: str  # rtoken` 注释是**过时的**。
+
+**为什么 18 条测试没抓到**：全部手造 `PerceptionFrame`（`subject=rtoken_of(...)`），
+**没有一条跑真实 `lifespan`**。测试用的帧形态与生产形态不同 ⇒ 测的是另一个世界。
+
+**教训（写进纪律）**：验收面凡写「实况跑起来后 X 表有行」，
+就**必须有一条真跑 `lifespan` 的集成测试**；纯函数单测证明不了接线通。
+
+**bench 2F 的真相**：主树**无本轮代码**同样 2F（`test_perception_sound_50npc` /
+`test_retrieval_full_scan_degraded_sentinel`），两条单跑均通过 ⇒ 抖动，非回归。
+回执里「sound baseline passes」是错的。
+
+**codex 树 `world.db` 是坏的**：有 **83 个 `world.create`**，而 `restore_world`
+（`world_restore.py:166`）要求恰好 1 个 ⇒ 该树真实库**无法恢复**。主树库健康
+（1 genesis / 187857 events / tick 36001 可恢复）。两树库是不同文件，别互用结论。
+
 ## 1b. 已关闭但代码不支撑的承诺（主树 2026-10-31 审计，**新对话先读**）
 
 六里程碑 2026-10-05 宣告收官（`abbe765`），下列五条实测当时是空的。**这些不是 bug，
@@ -89,7 +130,7 @@ src/game/audio/__tests__/world-audio.test.ts(48,18): error TS2345:
 | 缺口 | 实测证据 |
 |---|---|
 | **音效**（**待验收**） | ~~全仓 0 个 `.mp3/.ogg/.wav`、0 处 `this.sound`~~ → **2026-11-01 第十五轮已收编（`28e8ac9`）**：Phaser 3.87 内置 WebAudio，`client/src/game/audio/{synth,world-audio,index}.ts`；零新 npm 依赖、零资产文件、协议不变。默认静音 25% 音量、8 音轨上限、8 格衰减、120ms 节流；只消费可观测的 `voxel_edits`/actor 位移/`combat_event`/`lights`，不碰独白。**仍未做**：用户亲听验收；真实火场音效外发（用户裁定为独立缺口） |
-| **M3 社会层（已建未接）** | `knowledge`/`relationships`/`npc_power` 真实库 **0 行**；884 行、63 测试、**0 生产调用点**。`witnesses_of_emerge` 零调用者 ⇒ `witnessed` 路恒 deny；`RelationshipStore` 是 sync sqlite3 与实况 aiosqlite 跨驱动；`knowledge.evidence_seq` 只能经 `flush_world` 的 `extra_projection` 回填。**2026-11-01 第十六轮已派 codex** |
+| **M3 社会层** | ~~0 生产调用点~~ → **2026-11-01 第十六轮已交付（`820c653`），但复核未过**：关系通了（真实库副本 0→37 行），**知识仍 0 行**——`Observation.subject` 是中文显示名，`witnesses` 装配拿 rtoken 去比 ⇒ 恒空 ⇒ `knowledge_learned` 零产生。详见 **§1e**。下一轮只修标识错配 + 补真跑 `lifespan` 的集成测试 |
 | **`npc_health`** | ~~有模型/迁移/读路径，但**零写入**~~ → **2026-10-31 第十四轮已收编并修好启动自愈（`1d4bfa9`）**：事件→总线→同事务健康投影→感知触发→陈默闸门/记忆已接通；6 条内容种子。**2026-11-01 真实库已正式迁移（`d64464d`）**：备份 `world.db.bak-20261101-150615`（先副本演练再动真库），版本 `0015_health_code`、`code` 列补齐，events **187857** / snapshots **3946** / max seq 187857 **零丢失**，存档副本启动成功（tick 36001 / 54 实体）。**仍未做**：历史锚点 fork 的 severity/active 还原、每日严重度演进、第三方浮现见证链。**锚点 fork 有真 bug**：`fork.py:559` 走 `_clone_bounded`（复制父分支**当前**值），而 structures/materials 走 `_clone_*_at_cursor` ⇒ 回退旧档拿到父分支「未来」健康态；`anchor_package.CORPUS_TABLES` 也不含 `npc_health` |
 | **`npc.lod_change` 持久化** | **已完成**（`runtime.py:223` 发射 + `npc_store._project_lod_change` 双键投影）。此前记忆卡写「仍未做」是过时记录，2026-11-01 已订正 |
 | **离线推进** | ~~`sim/world/offline*.py` 不存在~~ → **2026-11-01 第十五轮已收编（`28e8ac9`）**：`sim/world/offline.py::advance_offline` 复用现有 `TickLoop`；墙钟只在启动边界采样一次（`_offline_wall_time`）；水位取 `snapshots/branches.created_at`（控制元数据，不进事件流与 `state_hash` ⇒ **C5 安全**）；批上限 240 tick、`MAX_CATCHUP_REAL_SECONDS=4.0`、上限 1 游戏日（`TICKS_PER_GAME_DAY=86400`，超限记 `offline.capped`）；同墙钟重启零补跑。主树实测：60s→3600 tick、30 天→86400 tick 且丢弃 2590560s、两遍重放 hash 相同、玩家档零写。**仍未做**：真实 `world.db` 上跑一次真实停机补偿（需备份） |
@@ -362,6 +403,17 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
   （不含同格错位偏移），并去掉 0.12 跟随缓动（双重滞后）。
 
 ## 3. 踩坑（逐条有效）
+
+**测试**
+- **纯函数单测证明不了接线通**（第十六轮实证）。18 条测试全绿，生产 0 行。
+  凡验收面写「实况跑起来后 X 表有行」，必须有一条**真跑 `lifespan`** 的集成测试。
+  手造 `PerceptionFrame` 与生产帧形态不同时，测的是另一个世界。
+- **`Observation.subject` 是中文显示名，不是 rtoken**（`senses.py:271`，同一个 `label`
+  既作叙事又作 subject）。`frame.py:37` 的注释是过时的。任何按 rtoken 匹配 subject 的
+  代码都会静默失效——fail-closed，不报错，只是恒空。
+- **`flush_for_anchor()` 读 `loop.pending_events`**：先 `drain_events()` 再调它 = 刷空列表，
+  探针会假绿（我第一版就这么写的）。
+- **`advance_frame(1/60)` 推不动 tick**：时钟累积器吃小数会一直是 0；喂 ≥1 实秒才动。
 
 **代码**
 - `WorldEvent.payload` 是 dict；`StructureSnapshot` 用 `phase`；`collision=True` 表示可走。
