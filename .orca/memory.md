@@ -39,7 +39,7 @@
   - 只走各树 `.orca/talking.txt`；不直接对话。
 - **远程**：origin/gitee 均在 `3603ecb`（**主树领先未推**，推送仍由用户决定）。
   现测：`git rev-list --count origin/main..main`——**不要记数字**，每提交一次它就变。
-- **在飞**：**无**（第十七轮已收编，见上）。
+- **在飞**：**第十八轮已派 codex**（`npc_profiles` 锚点读档 bug，见 §1f）。
   未派：V3.5 内容包 / V4-3D。
 - **第十五轮留给用户的四件事 → 2026-11-01 已完成三件**：
   1. ~~T5 完成率阈值定线~~ → **已定 1.0**（用户裁定，见 §1b）
@@ -163,6 +163,50 @@ player_anchor` **全为 0** ⇒ **未丢用户操作**。但追加段含我伪�
 **回滚待用户裁定**（备份是迁移前形态，缺 `npc_health.code`，需 `ensure_schema` 自愈）。
 **纪律**：任何起 `lifespan` 的脚本必须自己把 `main.WORLD_DB_PATH` 指到临时库，
 或干脆写成 pytest 用例走 `conftest` 夹具。
+
+## 1f. 锚点读档「复制父分支未来态」根因族（2026-11-01，**第十八轮派单依据**）
+
+**一个根因，两处受害。** `fork.py` 的 `kind="anchor"` 分支里，`_BOUNDED_TABLES`
+各表靠一串 `if table == ...` 特判；**没被特判的表落到 `_clone_bounded`**——
+`INSERT … SELECT … WHERE p.branch_id = :pid`，复制父分支**当前 head 行**，
+完全不看锚点游标。锚点之后父分支若继续推进，子分支读档就拿到「未来」。
+
+已特判的表（正确）：`fires:533`、`structures:540`、`npc_health:547`（本轮新加）、
+`material_balances:555`、`relationships:562`（跳过，按包写）。
+**未特判而受害**：`npc_profiles`（`fork.py:53` 起，26 列宽表）。
+
+**✅ 已修（主树，`02e3b10`，TDD 红→绿）**：`npc_health`。
+
+- RED 实测：锚点 tick=1 处 severity=0.2，父 head（tick=5）处 0.8 ⇒ 子分支拿到 **0.8**。
+- 修法 `_clone_health_at_cursor`（`fork.py:789`）：按 seq 重放 `npc.health_changed`
+  （复用 `_project_health`，折叠规则单一来源）+ 补齐无事件源的创世种子行
+  （判据 `created_at_tick <= fork_tick`）。
+- **踩到的坑（写进纪律）**：`npc_health` 是**混合表**——创世种子
+  （`content/health.py::seed_health`）直接 INSERT、**无事件源**，事件投影只增量改行。
+  我第一版只重放事件 ⇒ 丢掉全部种子行，被既有
+  `test_m6_death_profiles_contract::test_fork_does_not_clone_dead_health_row` 抓出。
+  **别照抄 `structures` 的纯重放写法**。
+
+**⚠️ 未修（已派 codex 第十八轮）**：`npc_profiles`，后果比健康表重——**丢整个 NPC**。
+
+主树对照实验（临时内存库，唯一变量 = 锚点后父分支是否推进）：
+
+```
+A 锚点 tick=1，tick=5 死亡  → child=[('a',2)]              ← 'd' 凭空消失
+B 锚点 tick=1，tick=5 lod 1→2 → child=[('a',2),('d',1)]    ← 'a' 的 lod 是未来值
+对照（锚点后不推进）        → child=[('a',1),('d',1)]      ← 正确
+```
+
+**生产可触达**：玩家读档 → `main.py:1056 orchestrate_materialized_load_anchor`
+→ `fork_orchestration.py:228 kind="anchor"`。
+
+`npc_profiles` 写入面（已查实，**只有两条事件**）：`NPC_LOD_CHANGE`（改 `lod`+
+`updated_at_tick`）、`NPC_DEATH`（**删行**）。其余 24 列无运行时写入路径，只由种子直插。
+
+**顺带发现（只报未修）**：`seed_villagers`（`villagers.py:320`）幂等判据
+`select(NpcProfile.id)` **无 branch 过滤**，`_profile_row` **硬编码 `branch_id="main"`**
+（`villagers.py:291`、`protagonist.py:37`）。实测：两分支存在时 50 行全落 `main`。
+是否影响子分支种子补齐未定论，**别当已修**。
 
 ## 1b. 已关闭但代码不支撑的承诺（主树 2026-10-31 审计，**新对话先读**）
 
