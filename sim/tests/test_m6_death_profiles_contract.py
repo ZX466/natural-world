@@ -265,7 +265,7 @@ class TestDeathProjectsProfileDeletion:
     async def test_child_rows_equal_anchor_time_rows(
         self, session: AsyncSession, store: SqlEventStore
     ) -> None:
-        """子分支花名册 = **锚点时刻**父分支花名册（整表克隆的现语义，逐 id 比对）。
+        """子分支花名册 = **锚点时刻**父分支花名册（先播种，再保存该时刻）。
 
         判别力：这条把「不对称」的机制钉死——子分支拿的是**父分支锚点时刻的行集**，
         所以「死者行会不会被带回来」完全取决于投影有没有在锚点前删掉它（上一条）。
@@ -275,10 +275,10 @@ class TestDeathProjectsProfileDeletion:
         session.add(Branch(id=PARENT, status="active", is_current=True))
         await session.commit()
         await store.append(PARENT, [_seed_event(1)])
-        await _seed_package(session, store, seq=1, tick=1)
         session.add(NpcProfile(id="alive-1", name="生者", branch_id=PARENT, lod=1))
         session.add(NpcProfile(id="alive-2", name="生者二", branch_id=PARENT, lod=1))
         await session.commit()
+        await _seed_package(session, store, seq=1, tick=1)
         package = await _materialize(store)
 
         await fork_from_anchor(

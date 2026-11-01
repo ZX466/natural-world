@@ -132,6 +132,27 @@ async def test_invalid_rng_leaves_live_world_and_current_branch_untouched(saved_
     assert parent_rows[-1]["seq"] == parent_head
 
 
+async def test_historical_load_restores_npc_profile_and_runtime_after_later_death(saved_world):
+    """Exercise the actual synchronous save and queued player-load path together."""
+    from sim.core.persistence.npc_store import NpcStore
+
+    app, anchor_id, _, _, _ = saved_world
+    ws.handle_client_message(
+        {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id},
+        app.state.loop,
+        app.state.pathfinder,
+        ws.ControlState(),
+    )
+    await app.state.drain_pending_loads()
+    assert app.state.load_outcomes[-1] == (anchor_id, True)
+    branch = await app.state.store.current_branch_id()
+    profiles = await NpcStore(app.state.store, branch_id=branch).materialize()
+    assert "villager_01" in app.state.loop.state.entities
+    assert "villager_01" in profiles
+    assert "villager_01" in app.state.npc_runtime.profiles
+    assert profiles["villager_01"].name == "赵铁"
+
+
 async def test_decision_started_before_load_cannot_execute_in_restored_world(
     saved_world, monkeypatch
 ):
@@ -193,7 +214,7 @@ async def test_fork_failure_rolls_back_world_selection_checkpoint_and_anchor(
     from sqlalchemy import func, select
 
     from sim.core.persistence import fork
-    from sim.core.persistence.models import Branch, PlayerAnchor, Snapshot
+    from sim.core.persistence.models import Branch, NpcProfile, PlayerAnchor, Snapshot
 
     app, anchor_id, _, _, frames = saved_world
     state_before = app.state.loop.state.state_hash()
@@ -214,6 +235,12 @@ async def test_fork_failure_rolls_back_world_selection_checkpoint_and_anchor(
     assert await app.state.store.current_branch_id() == "main"
     async with app.state.store.session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(Branch)) == 1
+        assert (
+            await session.scalar(
+                select(func.count()).select_from(NpcProfile).where(NpcProfile.branch_id != "main")
+            )
+            == 0
+        )
         assert (
             await session.scalar(
                 select(func.count()).select_from(Snapshot).where(Snapshot.branch_id != "main")

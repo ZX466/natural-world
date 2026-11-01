@@ -1102,8 +1102,9 @@ handler 归架构/Claude 域（红线 A：新增 kind 需授权）；**本节只
 1. `npc_profiles` 是 agent 层的 **NPC 花名册**——`NpcStore.materialize()` 读它装配决策输入，
    `lod` 列驱动升降格与 `runtime.py:103` 的 L1 参与集 ⇒ 只删内存会让**死者继续被决策、
    继续进 LOD 统计**（人还在、名字册上还在，只有位置字典里没了）。
-2. `npc_profiles` 在 `fork.py::_BOUNDED_TABLES` 内 ⇒ **整表克隆**。历史点读档（`kind="anchor"`）
-   会把死者行原样克隆进子分支 ⇒ 子分支出现「**库里有、内存无**」的 NPC。
+2. `npc_profiles` 在 `fork.py::_BOUNDED_TABLES` 内，`kind="head"` 复制当前行；历史点读档
+   （`kind="anchor"`）恢复锚点包中的完整档案行。若死亡只删内存，存档仍会包含死者档案，
+   子分支就会出现「**库里有、内存无**」的 NPC。
    ⚠️ `WorldState.entities` **不在**有界表清单里（内存态不参与克隆）⇒ 内存的删除**不会**随
    fork 传导，两侧就此分叉。
 3. 分叉后果不止读档：`state_hash()` 哈希整个内存状态（含 `entities`），而投影表是快照/重放的
@@ -1128,6 +1129,13 @@ handler 归架构/Claude 域（红线 A：新增 kind 需授权）；**本节只
 
 即「**库里有、内存无**」的行数为 **0**。钉子落在
 `sim/tests/test_m6_death_profiles_contract.py`（落点 a 未落时 skip-locked，落即转绿）。
+
+**第十八轮时刻语义**：锚点前死亡者不恢复；锚点后死亡者在该锚点时刻仍活着，必须恢复。
+`npc.death` 只有 ID，无法重建已删档案的 26 列；两种存档写面在同一事务内将完整
+`npc_profiles` 行固化到 `corpus_blob` 的独立 `npc_profiles` 段（原三张语料白名单不变）。
+历史分叉只复制包内行，保留全部列及原时间戳，不从父分支未来行补齐，也不向包内状态
+重复应用 LOD/死亡。空数组表示该时刻无人；缺段的旧包无法证明完整，诊断为
+`corpus_mismatch`，在调用读档钩子之前拒绝。重存新档只能保留当前时点，不能补回丢失的旧档案。
 
 ### 24.3 现状（2026-10-04 落点 a 已落地，本节取代「落地前」登记）
 

@@ -364,6 +364,7 @@ def _anchor_package(branch_id: str, seq: int, tick: int) -> Any:
         agent_override={},
         state_hash=None,
         steps=(),
+        profile_rows=(),  # This fixture has no NPC profiles at the saved cursor.
     )
 
 

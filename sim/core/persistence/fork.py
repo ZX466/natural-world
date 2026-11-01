@@ -390,6 +390,8 @@ async def fork_from_anchor(
                     f"{parent_branch_id!r}）。历史点分叉的语料/关系没有事件源，包是"
                     "唯一权威——缺包就 fail-closed，不用近似重置治理列糊"
                 )
+            if package.profile_rows is None:
+                raise ForkError("anchor lacks a complete NPC profile baseline")
             if (
                 package.branch_id != parent_branch_id
                 or int(package.seq) != fork_seq
@@ -526,6 +528,12 @@ async def fork_from_anchor(
 
         cloned: dict[str, int] = {}
         for table, columns in _BOUNDED_TABLES:
+            if kind == "anchor" and table == "npc_profiles":
+                assert package is not None and package.profile_rows is not None
+                cloned[table] = await _clone_profiles_from_rows(
+                    session, package.profile_rows, package.branch_id, package.tick, child_id
+                )
+                continue
             if kind == "anchor" and table == _POWER_TABLE:
                 # 批次 E 裁决：权力态**不进包** ⇒ 历史点读档不克隆（子分支该表零行 =
                 # 「未表态兜底 0」，读档不报错）。克隆父分支当前值等于拿未来糊过去。
@@ -835,6 +843,40 @@ async def _clone_relationships_from_rows(
         "SELECT COUNT(*) FROM relationships WHERE branch_id = :cid",
         {"cid": child_id},
     )
+
+
+async def _clone_profiles_from_rows(
+    session: AsyncSession,
+    rows: Sequence[Mapping[str, object]],
+    parent_branch_id: str,
+    fork_tick: int,
+    child_id: str,
+) -> int:
+    """Clone the complete saved roster, including profiles deleted after the anchor.
+
+    No death/LOD replay can recover deleted seed columns: neither event contains
+    that baseline. The package already represents the exact cursor, so replaying
+    changes onto it or supplementing from the parent head would introduce future
+    rows. Head forks retain _clone_bounded and its column list unchanged.
+    """
+    from sim.core.persistence.models import NpcProfile
+
+    columns = set(NpcProfile.__table__.columns.keys())
+    seen: set[str] = set()
+    for row in rows:
+        if set(row) != columns or row.get("branch_id") != parent_branch_id:
+            raise ForkError("incomplete or cross-branch NPC profile baseline")
+        npc_id = row["id"]
+        if not isinstance(npc_id, str) or not npc_id or npc_id in seen:
+            raise ForkError("invalid or duplicate NPC profile baseline ID")
+        for key in ("created_at_tick", "updated_at_tick"):
+            value = row[key]
+            if type(value) is not int or not 0 <= value <= fork_tick:
+                raise ForkError("NPC profile baseline cursor mismatch")
+        seen.add(npc_id)
+    session.add_all(NpcProfile(**{**row, "branch_id": child_id}) for row in rows)
+    await session.flush()
+    return len(rows)
 
 
 async def _clone_bounded(

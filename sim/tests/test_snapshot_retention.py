@@ -206,6 +206,7 @@ async def test_historical_anchor_fork_keeps_the_active_parent_hot(store):
         agent_override={},
         state_hash=None,
         steps=(),
+        profile_rows=(),  # Snapshot-retention fixture has an empty NPC roster.
     )
     await fork.fork_from_anchor(
         store.session_factory,

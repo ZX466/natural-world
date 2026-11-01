@@ -412,10 +412,10 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-11-01 第十七轮｜A/B 已实现、指定门禁全绿】本轮基线820c653。动物知识能力按species设门（human=True，其余/未知=False），在目击和转述事件生成前过滤；动物仍保留witnesses事实，历史知识不删。真实lifespan测试直接用播种陈默夜间健康与生产感知，证明动物无知识事件/行、人类有行。名牌按实际Text尺寸在屏幕空间避让，主角优先、距离/token稳定序、最多上移36屏幕像素，溢出隐藏；每帧插值/镜头同步后重新布局。下一步主树独立复跑收编。
+【2026-11-01 第十八轮｜npc_profiles 锚点历史态修复，指定门禁全绿】基线16b7eae。死亡事件仅ID且删除完整seed行，单靠死亡/LOD重放不能还原26列，因此采用存档时完整profile快照：两种包writer同事务SELECT *，在既有corpus_blob独立npc_profiles段保存；原三张语料白名单/输出不变。anchor按包精确恢复全部列/时间戳；head与_BOUNDED_TABLES实际列清单不变。锚点后死亡复活，前死亡不复活，后LOD/后插入/同tick后seq不泄漏，空快照权威无人。下一步主树独立复跑收编。
 
-- **前置/收编**：本树未同步main，仅复用主树已完成ffa74bd的evidence显示名反查、main传参、frame注释与相应5条测试，未重做或导入其他main变更；收编保留主树ensure_schema与既有witnesses修复。不要把复用片段当本轮重新发现。
-- **证据**：pytest非bench3087P/121S/72D/4旧warnings，416.99s、EXIT0；后端定向34P；Pyright0E0W、ruff check/format381文件、client353P/48files/typecheck/lint/prettier、两资产byte-identical、gen:protocol:check、uv lock --check全EXIT0。独立审查无Critical/Important；minor隐藏→分离恢复测试已补。完整命令/RED/GREEN/回执在.orca/audits/round17-2026-11-01/{plan.md,gates.json,review.md}及对应日志。
-- **边界**：协议1.14；shared/package+lock/DESIGN/registry/迷雾登记/iso数学未改。只pytest临时库，损坏world.db未访问；无浏览器/付费模型。本轮未要求bench，不冒称性能或视觉验收。仅本地codex提交，不推送/同步main；talking永不add。
-- **历史**：第十六轮820c653的旧取证含手写帧，生产witnesses恒空根因由主树ffa74bd修正，详见本树talking复核与git；第十五轮47f9e80/7e97a6f保存离线、音效、T5、soak细节。旧快照用git log --oneline -- .orca/memory.md恢复。
-- **恢复纪律**：workflow→talking→本节/registry→Git status/log；CodeGraph显式本树projectPath先行并核实源码。Python用uv/UTF8；保存原命令退出码再读日志尾，禁止把tail退出码当门禁。不要访问原world.db；删npm/venv先问；i-have-adhd持续。
+- **兼容边界**：旧包缺完整档案段统一corpus_mismatch，在diagnose/materialize的hooks前拒绝；不能从未来行/内容默认值编造死者档案。重存新档只保留当前时点，无法补回旧历史数据。直接手造Materialization缺段也拒绝。主树需明确接受此旧包可用性变化；没有通用无损旧包恢复路径。
+- **验证**：RED5F/3P；分叉回归217P/1S；全量非bench3103P/121S/72D/4旧warnings，370.68s EXIT0。Pyright0E0W、ruff check/format382文件、client353P/48files/typecheck/lint/prettier、两资产byte-identical、gen:protocol:check、uv lock --check全EXIT0。真实玩家load恢复NPC profile及runtime，失败事务不留子档案；同步/异步writer对齐。独立审查0Critical/0Important/0Minor。证据.orca/audits/round18-2026-11-01/{plan.md,gates.json,review.md,seed-probe.json}及日志。
+- **种子只报未修**：seed_villagers按全库id幂等，_profile_row硬编码main。内存库实测(main0,child49)播种后(main1,child49)；(main50,child49)新增0、child仍49。确实不补子分支缺失内容行，但缺行也可能合法死亡，不能盲目补齐；交主树单独评估。死亡契约旧夹具“先save后seed”改为先seed再save，前死亡不克隆契约保留。
+- **边界/收编**：协议1.14；shared/client/package+lock/DESIGN/registry/迷雾登记/seed实现均不动。仅pytest临时库与显式:memory:探针，坏world.db未访问；无浏览器/付费模型。不同步main、不推远程；主树保留自己的02e3b10健康修复和ensure_schema。本树未导入或重做这些改动。talking永不add。
+- **历史/恢复**：第十七轮16b7eae物种知识门+名牌避让已由主树85dd39d收编；第十六轮820c653由主树ffa74bd修witness显示名反查；详情走git log --oneline -- .orca/memory.md。恢复workflow→talking→本节/registry→Git，CodeGraph显式本树projectPath先行。Python用uv/UTF8，保存原命令退出码再读日志尾；删npm/venv先问；i-have-adhd持续。
