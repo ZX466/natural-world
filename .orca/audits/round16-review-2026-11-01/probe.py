@@ -21,10 +21,11 @@ from pathlib import Path
 from sqlalchemy import func, select
 
 from sim.api import main
+from sim.core.events import EventKind
 from sim.core.persistence.models import Event, Knowledge, Relationship
+from sim.npc.evidence import witnesses_of_emerge, witnesses_of_entity_emerge
 from sim.perception.frame import Channel, Observation, PerceptionFrame
 from sim.perception.senses import rtoken_of
-from sim.npc.evidence import witnesses_of_emerge, witnesses_of_entity_emerge
 
 AUDIT = Path(__file__).resolve().parent
 
@@ -96,8 +97,9 @@ async def run_live(db_source: Path | None, ticks: int) -> dict[str, object]:
 
         async def counts() -> dict[str, int]:
             async with store.session_factory() as session:
+                total_events = await session.scalar(select(func.count()).select_from(Event))
                 return {
-                    "events": int(await session.scalar(select(func.count()).select_from(Event)) or 0),
+                    "events": int(total_events or 0),
                     "knowledge": int(
                         await session.scalar(
                             select(func.count())
@@ -125,25 +127,21 @@ async def run_live(db_source: Path | None, ticks: int) -> dict[str, object]:
                 await main.app.state.flush_for_anchor()
         after = await counts()
 
+        emerge_kind = EventKind.NPC_HIDDEN_EMERGE.value
+        learned_kind = EventKind.NPC_KNOWLEDGE_LEARNED.value
         async with store.session_factory() as session:
             emerges = (
-                (await session.execute(select(Event).where(Event.event_type == "npc.hidden_emerge")))
+                (await session.execute(select(Event).where(Event.event_type == emerge_kind)))
                 .scalars()
                 .all()
             )
             learned = (
-                (
-                    await session.execute(
-                        select(Event).where(Event.event_type == "npc.knowledge_learned")
-                    )
-                )
+                (await session.execute(select(Event).where(Event.event_type == learned_kind)))
                 .scalars()
                 .all()
             )
 
-        witnesses_nonempty = sum(
-            1 for row in emerges if row.witnesses and row.witnesses != "[]"
-        )
+        witnesses_nonempty = sum(1 for row in emerges if row.witnesses and row.witnesses != "[]")
         return {
             "db": str(db),
             "db_source": None if db_source is None else str(db_source),
@@ -162,7 +160,7 @@ async def main_() -> None:
     result: dict[str, object] = {"A_subject_format": check_subject_format()}
     result["B_fresh_db"] = await run_live(None, ticks=600)
     main_db = Path("E:/zxdevelop/project7/world.db")
-    if main_db.exists():
+    if main_db.exists():  # noqa: ASYNC240 — 审计脚本，启动前一次性探测
         result["C_real_db_copy"] = await run_live(main_db, ticks=600)
     out = AUDIT / "review.json"
     out.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
