@@ -3,17 +3,22 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-01 第十七轮**已交付待收编**）
+## 0. 当前状态（2026-11-01 第十七轮**已收编**）
 
 - **main HEAD**：`git log -1 --oneline` 现测（**别记哈希**，记录本身就会产生新提交）。
-  第十六轮收编 + 修复 = `ffa74bd`。
-- **codex HEAD**：`16b7eae`（**第十七轮已交付，主树独立复跑已过，待收编**）。
-- **第十七轮：已交付，待收编**（物种知识门 + 名牌重叠）。
+  第十七轮收编 = 本文件本次提交的父提交（`--no-ff` 合并 `16b7eae`）。
+- **codex HEAD**：`16b7eae`（第十七轮已交付并已收编；codex 树尚未同步 main）。
+- **第十七轮：已收编**（物种知识门 + 名牌重叠）。
+  - 收编为 `--no-ff` 合并，**3 处冲突**按预定口径解决：
+    1. `sim/api/main.py` —— 取 codex 侧后**补回主树的 `ensure_schema`**（`main.py:42,208`）。
+       codex 分支自 `820c653` 起不含该提交，丢掉则真实库启动即崩。
+    2. `sim/core/persistence/social_projection.py` —— add/add，取 codex 侧（主树侧为纯子集）。
+    3. `.orca/memory.md` —— 取主树版本（codex 侧停在 10-31 旧状态），本节即补记。
+  - **自动合并未静默丢主树修复**：已核对 `evidence.py` 的 `display_name_of` 反查 +
+    重名 fail-closed、`frame.py` 过时注释订正、`main.py:346,649,668` 三处传参全部在。
   - 主树独立复跑（**不采信自测**）：`test_species_knowledge.py` +
-    `test_m3_social_wiring.py` → **31P**；`name-labels.test.ts` → **16P**。
-  - **收编有 3 处冲突**，其中 `sim/api/main.py` 必须**保留主树的 `ensure_schema`**
-    （codex 从 `820c653` 起分支不含它，丢掉则真实库启动即崩）。
-  - 详见主树 `.orca/talking.txt`。
+    `test_m3_social_wiring.py` → **31P**；`name-labels.test.ts` → **16P**；
+    新增数对得上：pytest 3069→**3100**（+31）、vitest 337→**353**（+16）。
 - **第十六轮：已收编 + 生产已通**。原判「不可收编」的根因是
   `witnesses` 恒空 ⇒ `knowledge` 恒 0；修法见 §1e 尾段（`display_name_of` 反查 +
   重名 fail-closed + 真跑 `lifespan` 的集成测试）。
@@ -34,7 +39,7 @@
   - 只走各树 `.orca/talking.txt`；不直接对话。
 - **远程**：origin/gitee 均在 `3603ecb`（**主树领先未推**，推送仍由用户决定）。
   现测：`git rev-list --count origin/main..main`——**不要记数字**，每提交一次它就变。
-- **在飞**：**第十七轮待收编**（见上）。主树这边无其他在途。
+- **在飞**：**无**（第十七轮已收编，见上）。
   未派：V3.5 内容包 / V4-3D。
 - **第十五轮留给用户的四件事 → 2026-11-01 已完成三件**：
   1. ~~T5 完成率阈值定线~~ → **已定 1.0**（用户裁定，见 §1b）
@@ -66,23 +71,25 @@
 > 与 `test_retrieval_full_scan_degraded_sentinel`），且两条单跑均通过 ⇒ 抖动，非回归。
 > 回执称「sound baseline passes」是错的。
 
-| 项 | 结果 |
+| 项 | 第十七轮收编后实测 |
 |---|---|
-| pytest `-m "not bench"` | **3069 passed** / 0 failed / 121 skipped（391.73s） |
-| ruff check / format | clean（380 files） |
+| pytest `-m "not bench"` | **3100 passed** / 0 failed / 121 skipped（405.23s） |
+| ruff check / format | clean（383 files） |
 | pyright | 0 errors, 0 warnings, 0 infos |
-| client typecheck / lint / prettier | EXIT 0 |
-| client vitest | **337 passed / 47 files** |
-| gen:protocol:check | EXIT 0（协议 1.14） |
+| client gen:protocol:check / typecheck / lint / prettier | EXIT 0 |
+| client vitest | **353 passed / 48 files** |
 | build_height_map --check | 逐字节一致 |
 | build_block_atlas --check | 逐字节一致 |
 | `tools/check_implementation_status.py` | 未发现缺口 |
 | `uv lock --check` | 一致 |
+| 协议 | **1.14**（双落点同值） |
 
 > 第十五轮动的是 `sim/world/offline.py`（新）+ `sim/core/persistence/` + `sim/api/main.py`
 > + 整个 `client/src/game/audio/`，故两侧全套必跑。
 > 3069 − 3061 = 8 条 = 定线新增（5 条 soak 契约 + 3 条 T5 阈值）。
 > 3061 − codex 自测 3056 = 5 条 = 主树第十四轮的 `test_schema_self_heal.py`（codex 分支不含那笔提交）。
+> **第十七轮：3100 − 3069 = 31 条**（`test_species_knowledge.py` 6 + `test_m3_social_wiring.py` 25）；
+> vitest 353 − 337 = **16 条**（`name-labels.test.ts`）。两边新增数与主树复跑读数逐条对上。
 
 ## 1d. 收编复核纪律的一条实证（2026-11-01）
 
@@ -165,7 +172,7 @@ player_anchor` **全为 0** ⇒ **未丢用户操作**。但追加段含我伪�
 | 缺口 | 实测证据 |
 |---|---|
 | **音效**（**待验收**） | ~~全仓 0 个 `.mp3/.ogg/.wav`、0 处 `this.sound`~~ → **2026-11-01 第十五轮已收编（`28e8ac9`）**：Phaser 3.87 内置 WebAudio，`client/src/game/audio/{synth,world-audio,index}.ts`；零新 npm 依赖、零资产文件、协议不变。默认静音 25% 音量、8 音轨上限、8 格衰减、120ms 节流；只消费可观测的 `voxel_edits`/actor 位移/`combat_event`/`lights`，不碰独白。**仍未做**：用户亲听验收；真实火场音效外发（用户裁定为独立缺口） |
-| **M3 社会层** | ~~0 生产调用点~~ → **2026-11-01 第十六轮 `ffa74bd` 已收编并修好根因**：关系真实库副本 0→37 行，知识 22 行（隔离库 Playwright 实测）。根因是 `Observation.subject` 为中文显示名而装配拿 rtoken 去比 ⇒ 恒空；修法 `display_name_of` 反查 + 重名 fail-closed（§1e）。**第十七轮 `16b7eae` 待收编**：物种知识门（`can_hold_knowledge`）+ 名牌重叠 |
+| **M3 社会层** | ~~0 生产调用点~~ → **2026-11-01 第十六轮 `ffa74bd` 已收编并修好根因**：关系真实库副本 0→37 行，知识 22 行（隔离库 Playwright 实测）。根因是 `Observation.subject` 为中文显示名而装配拿 rtoken 去比 ⇒ 恒空；修法 `display_name_of` 反查 + 重名 fail-closed（§1e）。**第十七轮 `16b7eae` 已收编**：物种知识门（`can_hold_knowledge`，仅 human 持有/转述，未知 fail-closed；目击仍留在 `hidden_emerge.witnesses`）+ 名牌屏幕空间避让 |
 | **`npc_health`** | ~~有模型/迁移/读路径，但**零写入**~~ → **2026-10-31 第十四轮已收编并修好启动自愈（`1d4bfa9`）**：事件→总线→同事务健康投影→感知触发→陈默闸门/记忆已接通；6 条内容种子。**2026-11-01 真实库已正式迁移（`d64464d`）**：备份 `world.db.bak-20261101-150615`（先副本演练再动真库），版本 `0015_health_code`、`code` 列补齐，events **187857** / snapshots **3946** / max seq 187857 **零丢失**，存档副本启动成功（tick 36001 / 54 实体）。**仍未做**：历史锚点 fork 的 severity/active 还原、每日严重度演进、第三方浮现见证链。**锚点 fork 有真 bug**：`fork.py:559` 走 `_clone_bounded`（复制父分支**当前**值），而 structures/materials 走 `_clone_*_at_cursor` ⇒ 回退旧档拿到父分支「未来」健康态；`anchor_package.CORPUS_TABLES` 也不含 `npc_health` |
 | **`npc.lod_change` 持久化** | **已完成**（`runtime.py:223` 发射 + `npc_store._project_lod_change` 双键投影）。此前记忆卡写「仍未做」是过时记录，2026-11-01 已订正 |
 | **离线推进** | ~~`sim/world/offline*.py` 不存在~~ → **2026-11-01 第十五轮已收编（`28e8ac9`）**：`sim/world/offline.py::advance_offline` 复用现有 `TickLoop`；墙钟只在启动边界采样一次（`_offline_wall_time`）；水位取 `snapshots/branches.created_at`（控制元数据，不进事件流与 `state_hash` ⇒ **C5 安全**）；批上限 240 tick、`MAX_CATCHUP_REAL_SECONDS=4.0`、上限 1 游戏日（`TICKS_PER_GAME_DAY=86400`，超限记 `offline.capped`）；同墙钟重启零补跑。主树实测：60s→3600 tick、30 天→86400 tick 且丢弃 2590560s、两遍重放 hash 相同、玩家档零写。**仍未做**：真实 `world.db` 上跑一次真实停机补偿（需备份） |
@@ -709,6 +716,21 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
   自测结论不能互相冒用。
 
 ## 7. ④ codex｜新对话恢复快照
+
+【2026-11-01 Round17｜已收编】物种知识门 + 名牌重叠，提交 `16b7eae`，主树 `--no-ff` 收编。
+- **A 物种知识门**：`sim/npc/evidence.py::can_hold_knowledge(species)` 仅 `"human"` True，
+  猫/犬/渡鸦/未知显式物种 False（未知 fail-closed）。目击与 told 两条路径都在知识事件
+  生成**之前**检查 runtime profile；told 同时检查来源与接收者。动物保留
+  `hidden_emerge.witnesses`——目击是事实，持有/转述是能力，投影不丢弃已发事件。
+- **B 名牌重叠**：标签在屏幕空间按实际 Text 矩形避让（复用 `bubbles.ts::placeBubble`），
+  主角优先、其余按距离 + token 稳定序，最多上移 36 屏幕像素后隐藏。
+  **未动 `isoProject`/`isoUnproject` 数学**。
+- **收编冲突 3 处**：`main.py` 取 codex 侧后补回主树 `ensure_schema`；`social_projection.py`
+  add/add 取 codex 侧（主树侧为纯子集）；`memory.md` 取主树版本（本树副本停在 10-31）。
+- **主树独立复跑**：pytest **3100P/0F/121S**（405.23s）、ruff 383 files、pyright 0/0、
+  client 全套 EXIT 0、vitest **353P/48F**、两资产 + protocol + lock + impl 全过；协议 1.14。
+  新增 31 + 16 条与两树复跑读数逐条对上。
+- **提醒下一轮**：本树 `world.db` 仍是坏的（83 个 `world.create`），别在上面做实验。
 
 [2026-11-01 Round16 | implementation delivered with acceptance limits] M3 witness assembly uses latest completed perception frame and token/entity translation; internal knowledge_learned event holds scanned fact/evidence, flush_world projects knowledge and relationships in one transaction. told validates source holder/branch/content/confidence and receiver own-hidden gate before event generation; per-batch dedup. NormSlice connected to both existing Chenmo prompts (ordinary villagers have utility/templates, no LLM prompt path). relationship_retell event preserves trust drift; hydrate on start/branch load. Real fork test confirms child told links remapped child source. Restore retains/clones knowledge tables; does not reconstruct auto IDs by historical event re-projection. Tests: nonbench3072P/121S; latest security84P/new18P; Pyright0E0W/Ruff/format; client337P/typecheck pass. Bench remains2F (sound50NPC/retrieval degraded sentinel); parent baseline also fails retrieval but sound baseline passes, so no blanket pre-existing claim. Production lifespan fresh persistent rehearsal events0->116,knowledge2,relationships2,witnessseq60/toldparent1. Original world.db copied backup fails startup unique-genesis check; no repair/write; original+backup10033events identical SHA256. Evidence .orca/audits/round16-2026-11-01/{progress.md,gates.json,verify_live.py,live3.log,original-preservation.json}. No push/main sync/shared/lock/DESIGN/registry/fog changes; no browser/paid LLM. Next main review/integration, resolve performance and original-save compatibility separately.
 
