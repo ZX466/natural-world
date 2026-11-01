@@ -9,7 +9,9 @@ const library = fs.readdirSync(links).map(name => fs.readFileSync(path.join(link
   .find(dir => fs.existsSync(path.join(dir, 'package.json')) && require(dir).chromium);
 assert(library, 'No existing linked Playwright library');
 const playwright = require(library);
-const executable = path.join(browserRoot, 'chromium-1248/chrome-win64/chrome.exe');
+// Resolve from the linked library's own registry so the pinned revision never goes
+// stale when `playwright install` swaps browser builds (1248 -> 1252 on 2026-11-01).
+const executable = playwright.chromium.executablePath();
 assert(path.resolve(executable).toLowerCase().startsWith(path.resolve(browserRoot).toLowerCase() + path.sep));
 const baseline = process.argv.includes('--baseline');
 const label = baseline ? 'red' : 'after';

@@ -6,6 +6,12 @@
 ## Observed baseline (real browser)
 
 - Approved Chromium executable: `C:/Users/zx198/AppData/Local/ms-playwright/chromium-1248/chrome-win64/chrome.exe`. Reused linked playwright-core 1.64.1, no dependency installation.
+  > **Historical record (2026-10-30).** `chromium-1248` was removed on 2026-11-01 when
+  > `playwright install chromium` upgraded the bundle to `chromium-1252`
+  > (Chrome 157.0.8103.15). `verify-layout.cjs` now resolves the executable via
+  > `playwright.chromium.executablePath()` instead of a hard-coded revision, so the
+  > reproduction still works. The readings above are unchanged — they describe the
+  > binary actually used that day.
 - Isolated backend uses its own `.orca/tmp/frontend-visual-2026-10-30/world.db` and a static real-world preview with the model driver disabled. Only local preview processes/browser contexts are owned by this task.
 - 1440×900: canvas 872px wide; 1280×720: 712px; 1024×768: 456px; 390×844: **0px**. Two permanently visible fixed-width sidebars occupy 568px. Screenshot evidence: before-1440.png / before-1280.png / before-1024.png / before-390.png.
 - Empty save list takes a whole column. Empty narrative panels stretch into large blank sheets. The impulse bar contains a narrow decorative seal that resembles a broken control.

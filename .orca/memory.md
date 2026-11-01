@@ -681,21 +681,24 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 - **远程**：origin/gitee 均停在 `3603ecb`；主树领先若干提交（**不记数字**，
   `git log origin/main..main` 查全表）**未推**。推送仍是用户决定，不自动推。
 - **配置目录**：维持用户 10-26 裁定「不进 git、不推远程、本地须存在」；主树不建 `.pi`。
-- **浏览器**：仅用户明确要求时用。**已改为钉死 `ms-playwright` 打包版（2026-11-01）**：
-  - 现状：`.claude/mcp.json` = `@playwright/mcp --browser chromium --executable-path
-    C:\Users\zx198\AppData\Local\ms-playwright\chromium-1248\chrome-win64\chrome.exe`。
+- **浏览器**：仅用户明确要求时用。**已改为 `--browser chromium` + 升级打包版（2026-11-01）**：
+  - 现状：`.claude/mcp.json` = `@playwright/mcp --browser chromium`；
+    `ms-playwright` 内为 `chromium-1252`（Chrome **157.0.8103.15**）。
   - 为什么改：原先是 `--browser chrome`，而 `chrome` 是 **channel 语义不是目录**
     （README 原文 "browser **or chrome channel**"），解析到**已安装的**
     `C:\Program Files\Google\Chrome`。铁证：旧 MCP profile 的 `Last Browser` 就是那条路径。
-    系统 Chrome 156.0.8078.80 vs 打包 chromium-1248 的 156.0.8078.4——两个不同二进制。
-  - **不能只写 `--browser chromium`**：playwright-core 1.65 的 `browsers.json` 要
-    revision **1252**（157.0.8103.15），本机只有 **1248** ⇒ 会直接找不到浏览器。
-    必须配 `--executable-path` 显式钉死；实测 1.65 驱动 1248 可正常 `LAUNCH_OK`。
-  - **用户数据零共享**（改前实测）：MCP 独立 profile `ms-playwright-mcp/`（History 仅
-    `http://127.0.0.1:5173/` 1 行、无 Bookmarks、无登录态）；同期用户 profile 仅 1 个
-    `BrowserMetrics-*.pma` 写入（用户自己 Chrome 在跑）。
-  - 规则已同步：`.orca/workflow.txt` §5 与 `docs/dev-workflow.md` 均写明
-    「必须钉死 `--executable-path`，不得用 `--browser chrome`」。
+    实测对比：`--browser chrome` → `Program Files\...\chrome.exe`；
+    `--browser chromium` → `ms-playwright\chromium-1252\...\chrome.exe`。
+  - **升级方式**：`playwright install chromium`。直连 `cdn.playwright.dev` 被掐断
+    （ECONNREFUSED / server closed connection），**必须**带
+    `PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright`
+    （npmmirror 镜像实测可用）。install 会**清理旧 revision**（1248 被删）。
+  - **不要在 `mcp.json` 硬编码 revision**：install 换版后硬编码立刻失效。
+    `.orca/audits/frontend-visual-2026-10-30/verify-layout.cjs` 已改为
+    `playwright.chromium.executablePath()` 动态解析。
+  - **用户数据零共享**（实测）：MCP 独立 profile `ms-playwright-mcp/`（History 仅
+    `http://127.0.0.1:5173/` 1 行、无 Bookmarks、无登录态）；用户 `User Data` 零写入。
+  - 规则已同步：`.orca/workflow.txt` §5 与 `docs/dev-workflow.md`。
 - **全局 git 邮箱**：`zx19836980213@outlook.com`（2026-10-31 实测，`dev-workflow.md`
   原记的 `223049848+ZX466@users.noreply.github.com` 已过期）。
 - 本轮教训已进 §3：`.orca/talking.txt` 必须保持未跟踪，否则 ff 会覆盖派单；

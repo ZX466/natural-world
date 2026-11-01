@@ -4,8 +4,9 @@
 >
 > 环境硬约束：Python 一律用 **uv** 建虚拟环境；**只有用户明确要求时才用浏览器自动化/渲染验证**，
 > Playwright 只用 `C:\Users\zx198\AppData\Local\ms-playwright` 内的浏览器，不干扰用户自己的浏览器
-> （**必须钉死 `--executable-path` 到该目录内的打包版，不得用 `--browser chrome`**——
-> 那是 channel 语义，会解析到系统安装的 Chrome；MCP 自带独立 profile，不得指向用户 `User Data`）；
+> （**用 `--browser chromium` 走该目录内的打包版，不得用 `--browser chrome`**——
+> 那是 channel 语义，会解析到系统安装的 Chrome；升级用 `playwright install chromium`，
+> 不要硬编码 revision；MCP 自带独立 profile，不得指向用户 `User Data`）；
 > **删除 npm 包或 venv 前必须先问用户**；点号开头的 agent 配置目录（`.agent/.agents/.claude/.codex/.kiro/.opencode/.codegraph`）
 > **不进 git、不推远程，但本地必须存在**（`.codegraph`、`.agents` 所有工作树都有；`.claude/.opencode/.codex`
 > 只在对应 agent 树；`.pi` 当前不创建，按需再补）。`.orca` 例外：`workflow.txt` / `agent-registry.md` /

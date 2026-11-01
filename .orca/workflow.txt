@@ -55,11 +55,15 @@
 - **只有用户明确要求时，才使用浏览器自动化或渲染验证。**
 - Agent 用 Playwright 调浏览器时只用 `C:\Users\zx198\AppData\Local\ms-playwright` 里的，
   不访问其他浏览器，不干扰用户正在使用的浏览器。
-  - **二进制口径（2026-11-01 实测裁定）**：`.claude/mcp.json` 的 playwright 必须钉死
-    `--executable-path` 到 `ms-playwright` 内的打包版
-    （当前 `chromium-1248\chrome-win64\chrome.exe`），**不得**用 `--browser chrome`——
-    后者是 **channel 语义**，解析到系统安装的 `C:\Program Files\Google\Chrome`，
-    字面违反本条规则（实测曾因此跑错二进制）。
+  - **二进制口径（2026-11-01 实测裁定）**：`.claude/mcp.json` 的 playwright 用
+    `--browser chromium`（走 `ms-playwright` 内由 `playwright install` 维护的打包版，
+    当前 `chromium-1252\chrome-win64\chrome.exe` / Chrome 157.0.8103.15），
+    **不得**用 `--browser chrome`——后者是 **channel 语义**，解析到系统安装的
+    `C:\Program Files\Google\Chrome`，字面违反本条规则（实测证：两条命令拉起的
+    二进制不同）。升级浏览器一律用 `playwright install chromium`（带
+    `PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright`，
+    直连 CDN 会被掐断），**不要**在 `mcp.json` 里硬编码 revision 号——
+    install 换版时硬编码会失效。
   - **profile 口径**：MCP 自带独立 profile（`AppData\Local\ms-playwright-mcp\`），
     与用户 Chrome 的 `User Data` 零共享；不得用 `--user-data-dir` 指向用户 profile。
 - npm 包和 venv 的删除需要先询问用户。
