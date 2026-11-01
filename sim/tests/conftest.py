@@ -18,6 +18,8 @@ def isolated_world_database(tmp_path, monkeypatch):
 
     monkeypatch.setattr(main, "WORLD_DB_PATH", tmp_path / "world.db")
     monkeypatch.setattr(main, "_active_profile_snapshot_provider", lambda: lambda: None)
+    # 停服时间由测试显式注入，已有恢复/读档夹具不依赖测试运行耗时。
+    monkeypatch.setattr(main, "_offline_wall_time", lambda: 0.0)
 
 
 @pytest.fixture

@@ -1,0 +1,48 @@
+{
+  "status": "technical checks passed",
+  "vitest": {
+    "passed": 337,
+    "files": 47
+  },
+  "protocol": "1.14",
+  "gen_protocol_check": "pass",
+  "typecheck": "pass",
+  "lint": "pass",
+  "prettier": "pass",
+  "new_dependencies": 0,
+  "package_json_changed": false,
+  "package_lock_changed": false,
+  "shared_protocol_changed": false,
+  "audio_files_added": 0,
+  "procedural_noise": "fixed xorshift32 seeds; byte-identical same seed/length",
+  "default": {
+    "muted": true,
+    "volume": 0.25,
+    "unlock": "explicit enable then game click/key",
+    "persist_enabled": false
+  },
+  "wired_effects": [
+    "nearby movement",
+    "confirmed voxel dig/place",
+    "visible combat_event",
+    "structure rubble transition"
+  ],
+  "guards": [
+    "no snapshot/thought/task sounds",
+    "8-tile listener range",
+    "120ms per-effect throttle",
+    "max 8 sources",
+    "mute/disconnect/blur/shutdown cleanup",
+    "late unlock generation guard"
+  ],
+  "fire": {
+    "client_mapping_tested": true,
+    "production_producer": false,
+    "deferred_by_explicit_user_choice": true
+  },
+  "manual_listening": {
+    "status": "pending user",
+    "entry": "Settings > World audio > enable 25% > return to scene > click > walk/dig/place"
+  },
+  "browser_automation_used": false
+}

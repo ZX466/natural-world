@@ -32,3 +32,25 @@ it('dispatches combat frames into observable store state', () => {
   dispatch({ type: 'timescale', channel: 'control', mode: 'normal', active: false });
   expect(useUiStore.getState().combatActive).toBe(false);
 });
+
+it('forwards the existing combat frame to an optional presentation observer', () => {
+  const onCombatEvent = vi.fn();
+  const client = new WsClient('ws://test', new WorldMirror(), {
+    onStatus: vi.fn(),
+    onSnapshot: vi.fn(),
+    onDelta: vi.fn(),
+    onCombatEvent,
+  });
+  const frame = {
+    type: 'combat_event',
+    channel: 'render',
+    v: '1.14',
+    ws_seq: 2,
+    exchange: 1,
+    rtoken: 'hero',
+    posture_visual: 'attack',
+    exchange_resolved: true,
+  };
+  (client as unknown as { dispatch(raw: string): void }).dispatch(JSON.stringify(frame));
+  expect(onCombatEvent).toHaveBeenCalledWith(frame);
+});

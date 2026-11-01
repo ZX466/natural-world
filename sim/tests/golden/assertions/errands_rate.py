@@ -2,14 +2,15 @@
 
 **本轮不设阈值**——按纪律「不写断言组本体里没有依据的数」：M1 的 80% 是**单决策**口径
 （`sim/tests/fixtures/errands.py` 20 条脚本差事，单场景单决策），而 T5 是 10 日长跑口径；
-跨日多决策续接 fixture 属 D 批（裁 17-③）任务。故本模块只做两件事：
+现有 ERRAND_CHAINS 已含四条跨日多决策续接脚本；全量测试在 10 日 mock 驱动末态上
+执行 run_all_chains，产物仍是脚本完成率，不能当作生产 NPC 自主行为完成率。本模块只做两件事：
 
 1. `measure_baseline()`：**基线实测**——把本轮 outcomes 折成 `{cases, passed, rate}` 记录，
    供 `golden-nightly` 归档（每种子一份），作为 10 日重定标的输入；
 2. `assert_baseline_recorded()`：**只校验结构**（样本数 > 0、rate ∈ [0,1]、rate 与
-   passed/cases 自洽），**不对 rate 本身设阈值**——定线由 D 批交付时附实测基线后再裁。
+   passed/cases 自洽），**不对 rate 本身设阈值**——待用户查看归档基线后裁定。
 
-若将来要启用硬阈值，唯一正确的做法是把 D 批交付的实测基线写成常量并显式标注来源，
+若将来要启用硬阈值，须经用户裁定后引用实测基线并显式标注来源，
 不得沿用 M1 的 80%（口径不同）。
 """
 
@@ -65,4 +66,4 @@ def assert_baseline_recorded(baseline: ErrandBaseline) -> None:
     assert baseline.rate == expected, (
         f"基线自相矛盾：rate={baseline.rate!r} != passed/cases={expected!r}"
     )
-    # 裁 17-1：此处**刻意不设完成率阈值**——M1 80% 是单决策口径；10 日线待 D 批实测基线后重定标。
+    # 裁 17-1：不设完成率阈值；四条续接脚本已落地，10 日归档基线仍待用户裁定。

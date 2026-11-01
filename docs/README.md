@@ -34,6 +34,8 @@
 |---|---|
 | `arch/voxel-execution-spec.md` | 等距体素 V0–V3 施工规格 + 决策链（**现行唯一真相源**） |
 | `arch/m7-render-art.md` | 渲染美术面（星露谷调性落地） |
+| `arch/offline-progress.md` | 停服补跑的时间口径、上限、持久化与可复跑证据 |
+| `arch/audio.md` | 世界音效的默认静音、交互解锁、事件映射与亲听入口 |
 
 ### 数据
 

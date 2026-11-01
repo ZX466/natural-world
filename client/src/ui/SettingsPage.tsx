@@ -6,6 +6,7 @@
  * 版式：暗木墨色 shell，与戏内宣纸面板分层（见 ui.css）。
  */
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { useAudioStore } from '../store/audioStore';
 import type { ProfileCreate, ProfileListItem } from '../net/protocol';
 import {
   SettingsApiError,
@@ -61,6 +62,7 @@ function errorText(e: unknown): string {
 }
 
 export function SettingsPage({ onClose }: { onClose: () => void }): ReactElement {
+  const { muted, volume, setMuted, setVolume } = useAudioStore();
   const [profiles, setProfiles] = useState<ProfileListItem[]>([]);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
@@ -190,6 +192,33 @@ export function SettingsPage({ onClose }: { onClose: () => void }): ReactElement
           返回
         </button>
       </header>
+
+      <section className="od-audio" aria-labelledby="audio-title">
+        <h2 id="audio-title" className="od-section-title">
+          世界音效
+        </h2>
+        <label>
+          <input
+            type="checkbox"
+            checked={!muted}
+            onChange={(event) => setMuted(!event.target.checked)}
+          />{' '}
+          开启音效
+        </label>
+        <label className="od-audio__volume">
+          音量
+          <input
+            type="range"
+            aria-label="音效音量"
+            min="0"
+            max="100"
+            value={Math.round(volume * 100)}
+            onChange={(event) => setVolume(Number(event.target.value) / 100)}
+          />
+          <output>{Math.round(volume * 100)}%</output>
+        </label>
+        <p className="od-help">默认关闭。开启后，回到场景点击或按键开始；离开窗口时暂停声音。</p>
+      </section>
 
       {error !== null && <div className="od-error">{error}</div>}
 

@@ -1,0 +1,86 @@
+{
+  "seed": 1009,
+  "ticks_run": 864000,
+  "days_covered": 10,
+  "total_events": 115307,
+  "total_tiles_changed": 0,
+  "wall_s": 12.512,
+  "mean_tick_ms": 0.0145,
+  "windows": [
+    {
+      "day": 1,
+      "start_tick": 0,
+      "end_tick": 86400,
+      "n_events": 11542,
+      "mean_tick_ms": 0.008356869301240766
+    },
+    {
+      "day": 2,
+      "start_tick": 86400,
+      "end_tick": 172800,
+      "n_events": 11529,
+      "mean_tick_ms": 0.00851487266758071
+    },
+    {
+      "day": 3,
+      "start_tick": 172800,
+      "end_tick": 259200,
+      "n_events": 11530,
+      "mean_tick_ms": 0.008248747755917267
+    },
+    {
+      "day": 4,
+      "start_tick": 259200,
+      "end_tick": 345600,
+      "n_events": 11529,
+      "mean_tick_ms": 0.008833578737081823
+    },
+    {
+      "day": 5,
+      "start_tick": 345600,
+      "end_tick": 432000,
+      "n_events": 11530,
+      "mean_tick_ms": 0.00825177781061265
+    },
+    {
+      "day": 6,
+      "start_tick": 432000,
+      "end_tick": 518400,
+      "n_events": 11529,
+      "mean_tick_ms": 0.008872969908258744
+    },
+    {
+      "day": 7,
+      "start_tick": 518400,
+      "end_tick": 604800,
+      "n_events": 11529,
+      "mean_tick_ms": 0.009151277753416152
+    },
+    {
+      "day": 8,
+      "start_tick": 604800,
+      "end_tick": 691200,
+      "n_events": 11530,
+      "mean_tick_ms": 0.008583129616386874
+    },
+    {
+      "day": 9,
+      "start_tick": 691200,
+      "end_tick": 777600,
+      "n_events": 11529,
+      "mean_tick_ms": 0.008904008037562663
+    },
+    {
+      "day": 10,
+      "start_tick": 777600,
+      "end_tick": 864000,
+      "n_events": 11530,
+      "mean_tick_ms": 0.00876898489541081
+    }
+  ],
+  "errands_baseline": {
+    "cases": 4,
+    "passed": 4,
+    "rate": 1.0
+  }
+}

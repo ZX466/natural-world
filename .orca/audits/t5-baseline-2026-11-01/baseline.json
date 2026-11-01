@@ -1,0 +1,146 @@
+{
+  "status": "pass",
+  "PI_T5_FULL": true,
+  "source": "original sim/tests/golden/test_golden_full.py, all three assertion groups",
+  "per_seed": [
+    {
+      "seed": 7,
+      "cases": 4,
+      "passed": 4,
+      "rate": 1.0,
+      "ticks_run": 864000,
+      "days": 10,
+      "total_events": 115307,
+      "wall_seconds": 11.984,
+      "report": "full/golden-7.json"
+    },
+    {
+      "seed": 11,
+      "cases": 4,
+      "passed": 4,
+      "rate": 1.0,
+      "ticks_run": 864000,
+      "days": 10,
+      "total_events": 115307,
+      "wall_seconds": 12.58,
+      "report": "full/golden-11.json"
+    },
+    {
+      "seed": 101,
+      "cases": 4,
+      "passed": 4,
+      "rate": 1.0,
+      "ticks_run": 864000,
+      "days": 10,
+      "total_events": 115307,
+      "wall_seconds": 12.428,
+      "report": "full/golden-101.json"
+    },
+    {
+      "seed": 1009,
+      "cases": 4,
+      "passed": 4,
+      "rate": 1.0,
+      "ticks_run": 864000,
+      "days": 10,
+      "total_events": 115307,
+      "wall_seconds": 12.512,
+      "report": "full/golden-1009.json"
+    },
+    {
+      "seed": 2003,
+      "cases": 4,
+      "passed": 4,
+      "rate": 1.0,
+      "ticks_run": 864000,
+      "days": 10,
+      "total_events": 115307,
+      "wall_seconds": 12.846,
+      "report": "full/golden-2003.json"
+    },
+    {
+      "seed": 3001,
+      "cases": 4,
+      "passed": 4,
+      "rate": 1.0,
+      "ticks_run": 864000,
+      "days": 10,
+      "total_events": 115307,
+      "wall_seconds": 12.195,
+      "report": "full/golden-3001.json"
+    },
+    {
+      "seed": 4001,
+      "cases": 4,
+      "passed": 4,
+      "rate": 1.0,
+      "ticks_run": 864000,
+      "days": 10,
+      "total_events": 115307,
+      "wall_seconds": 11.277,
+      "report": "full/golden-4001.json"
+    },
+    {
+      "seed": 5003,
+      "cases": 4,
+      "passed": 4,
+      "rate": 1.0,
+      "ticks_run": 864000,
+      "days": 10,
+      "total_events": 115307,
+      "wall_seconds": 12.256,
+      "report": "full/golden-5003.json"
+    },
+    {
+      "seed": 6007,
+      "cases": 4,
+      "passed": 4,
+      "rate": 1.0,
+      "ticks_run": 864000,
+      "days": 10,
+      "total_events": 115307,
+      "wall_seconds": 11.752,
+      "report": "full/golden-6007.json"
+    },
+    {
+      "seed": 7001,
+      "cases": 4,
+      "passed": 4,
+      "rate": 1.0,
+      "ticks_run": 864000,
+      "days": 10,
+      "total_events": 115307,
+      "wall_seconds": 12.077,
+      "report": "full/golden-7001.json"
+    }
+  ],
+  "summary": {
+    "seeds": 10,
+    "cases": 40,
+    "passed": 40,
+    "median_rate": 1.0,
+    "worst_rate": 1.0
+  },
+  "determinism": {
+    "seed": 7,
+    "first_baseline": {
+      "cases": 4,
+      "passed": 4,
+      "rate": 1.0
+    },
+    "repeat_baseline": {
+      "cases": 4,
+      "passed": 4,
+      "rate": 1.0
+    },
+    "equal": true,
+    "event_counts_equal": true
+  },
+  "timing": {
+    "observed_full_suite_seconds": 123.82,
+    "dispatch_estimate_seconds": 5400,
+    "logging": "WARNING as in bench harness"
+  },
+  "thresholds_changed": false,
+  "limitations": "10-entity deterministic mock-movement golden fixture; four scripted cross-day chains run on the final state. Not a live 50-NPC/LLM autonomous errand-completion rate."
+}

@@ -727,6 +727,39 @@
   color: var(--od-menu-text);
   font-family: var(--od-ui);
 }
+.od-audio {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1.2rem;
+  margin-bottom: 1rem;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--od-menu-line);
+}
+.od-audio .od-section-title {
+  margin: 0;
+}
+.od-audio__volume {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.od-audio__volume input {
+  width: clamp(6rem, 20vw, 12rem);
+  accent-color: var(--od-paper-edge);
+}
+.od-audio__volume output {
+  min-width: 3em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.od-audio .od-help {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.78rem;
+  opacity: 0.72;
+}
+
 .od-sheet__head {
   display: flex;
   flex-shrink: 0;

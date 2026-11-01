@@ -5,6 +5,8 @@
  * + 昼夜色罩（读 uiStore 的 phase）。Phaser 侧不 import React 组件。
  */
 import Phaser from 'phaser';
+import { worldAudio } from '../audio';
+import { WebAudioSynth } from '../audio/synth';
 import { createFaunaTextures } from '../render/fauna';
 import {
   ISO,
@@ -196,6 +198,13 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create(): void {
+    const audio = new WebAudioSynth(() => {
+      if (!this.sound || !('context' in this.sound)) return null;
+      const manager = this.sound as Phaser.Sound.WebAudioSoundManager;
+      return { context: manager.context, destination: manager.masterVolumeNode };
+    });
+    worldAudio.attach(audio);
+    this.events.once('shutdown', () => worldAudio.detach(audio));
     if (this.renderMode === 'iso') {
       this.heightAt = createHeightLookup(this.cache.json.get('linhe-height'));
       this.isoTerrain = new IsoTerrain(this, this.heightAt);
@@ -225,9 +234,10 @@ export class WorldScene extends Phaser.Scene {
     if (this.renderMode === 'flat') this.structureLayer = this.add.graphics().setDepth(14);
 
     this.input.mouse?.disableContextMenu();
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) =>
-      this.handlePointerDown(pointer),
-    );
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      void worldAudio.unlock();
+      this.handlePointerDown(pointer);
+    });
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.handlePointerUp(pointer));
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) =>
       this.handlePointerMove(pointer),
@@ -236,9 +246,15 @@ export class WorldScene extends Phaser.Scene {
     this.input.on('gameout', () => {
       if (this.voxelPress) this.cancelMovement();
     });
-    const keyDown = (event: KeyboardEvent) => this.handleMovementKeyDown(event);
+    const keyDown = (event: KeyboardEvent) => {
+      if (!this.typingMovement() && !event.repeat) void worldAudio.unlock();
+      this.handleMovementKeyDown(event);
+    };
     const keyUp = (event: KeyboardEvent) => this.handleMovementKeyUp(event);
-    const blur = () => this.cancelMovement();
+    const blur = () => {
+      this.cancelMovement();
+      worldAudio.suspend();
+    };
     // Capture only in our handler, after checking text focus. Global captures
     // would also swallow the arrows used to edit ImpulseBar's text.
     this.input.keyboard?.on('keydown', keyDown);
