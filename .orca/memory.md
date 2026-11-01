@@ -46,8 +46,9 @@
   2. ~~soak 流失阈值定线~~ → **已裁定：良性保 0 + 「流失须被死亡解释」契约**（见 §1b）
   3. ~~真实 `world.db` 正式迁移~~ → **已迁移**（备份 `world.db.bak-20261101-150615`，
      版本 `0015_health_code`，events 187857 / snapshots 3946 零丢失）
-  4. **音效主观听感 —— 状态：待验收**（用户 2026-11-01 标记；唯一剩余的人工验收项）
-- **待人工验收**（9 条，已过 4 条，**剩 5/6/7/8/9 共 5 条**）：
+  4. ~~音效主观听感~~ → **2026-11-01 用户验收通过**（「音效已可以」）。至此第十五轮
+     留的四件事**全部关闭**。
+- **待人工验收**（9 条，已过 4 条，**剩 5/6/7/8/9 共 5 条**；音效另计已过）：
   1. ~~DA-07 失能/恢复真模型长局~~ — **2026-10-31 用户验收通过**
   2. ~~V3 画面观感~~ — **2026-10-31 用户验收通过**
   3. ~~走路是否还飘（`INTERP_MS` 200）~~ — **2026-10-31 用户验收通过**
@@ -171,7 +172,7 @@ player_anchor` **全为 0** ⇒ **未丢用户操作**。但追加段含我伪�
 
 | 缺口 | 实测证据 |
 |---|---|
-| **音效**（**待验收**） | ~~全仓 0 个 `.mp3/.ogg/.wav`、0 处 `this.sound`~~ → **2026-11-01 第十五轮已收编（`28e8ac9`）**：Phaser 3.87 内置 WebAudio，`client/src/game/audio/{synth,world-audio,index}.ts`；零新 npm 依赖、零资产文件、协议不变。默认静音 25% 音量、8 音轨上限、8 格衰减、120ms 节流；只消费可观测的 `voxel_edits`/actor 位移/`combat_event`/`lights`，不碰独白。**仍未做**：用户亲听验收；真实火场音效外发（用户裁定为独立缺口） |
+| **音效**（**已验收**） | ~~全仓 0 个 `.mp3/.ogg/.wav`、0 处 `this.sound`~~ → **2026-11-01 第十五轮已收编（`28e8ac9`）**：Phaser 3.87 内置 WebAudio，`client/src/game/audio/{synth,world-audio,index}.ts`；零新 npm 依赖、零资产文件、协议不变。默认静音 25% 音量、8 音轨上限、8 格衰减、120ms 节流；只消费可观测的 `voxel_edits`/actor 位移/`combat_event`/`lights`，不碰独白。**2026-11-01 用户亲听验收通过**（5 短音 step/dig/place/combat/collapse + fire 循环）。**仍未做**：真实火场音效外发（用户裁定为独立缺口） |
 | **M3 社会层** | ~~0 生产调用点~~ → **2026-11-01 第十六轮 `ffa74bd` 已收编并修好根因**：关系真实库副本 0→37 行，知识 22 行（隔离库 Playwright 实测）。根因是 `Observation.subject` 为中文显示名而装配拿 rtoken 去比 ⇒ 恒空；修法 `display_name_of` 反查 + 重名 fail-closed（§1e）。**第十七轮 `16b7eae` 已收编**：物种知识门（`can_hold_knowledge`，仅 human 持有/转述，未知 fail-closed；目击仍留在 `hidden_emerge.witnesses`）+ 名牌屏幕空间避让 |
 | **`npc_health`** | ~~有模型/迁移/读路径，但**零写入**~~ → **2026-10-31 第十四轮已收编并修好启动自愈（`1d4bfa9`）**：事件→总线→同事务健康投影→感知触发→陈默闸门/记忆已接通；6 条内容种子。**2026-11-01 真实库已正式迁移（`d64464d`）**：备份 `world.db.bak-20261101-150615`（先副本演练再动真库），版本 `0015_health_code`、`code` 列补齐，events **187857** / snapshots **3946** / max seq 187857 **零丢失**，存档副本启动成功（tick 36001 / 54 实体）。**仍未做**：历史锚点 fork 的 severity/active 还原、每日严重度演进、第三方浮现见证链。**锚点 fork 有真 bug**：`fork.py:559` 走 `_clone_bounded`（复制父分支**当前**值），而 structures/materials 走 `_clone_*_at_cursor` ⇒ 回退旧档拿到父分支「未来」健康态；`anchor_package.CORPUS_TABLES` 也不含 `npc_health` |
 | **`npc.lod_change` 持久化** | **已完成**（`runtime.py:223` 发射 + `npc_store._project_lod_change` 双键投影）。此前记忆卡写「仍未做」是过时记录，2026-11-01 已订正 |
