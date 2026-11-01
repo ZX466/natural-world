@@ -53,7 +53,15 @@
 
 - **Python 项目必须用 uv 构建虚拟环境**，在虚拟环境中构建（用 uv 是必要的）。
 - **只有用户明确要求时，才使用浏览器自动化或渲染验证。**
-- Agent 用 Playwright 调浏览器时只用 `C:\Users\zx198\AppData\Local\ms-playwright` 里的，不访问其他浏览器，不干扰用户正在使用的浏览器。
+- Agent 用 Playwright 调浏览器时只用 `C:\Users\zx198\AppData\Local\ms-playwright` 里的，
+  不访问其他浏览器，不干扰用户正在使用的浏览器。
+  - **二进制口径（2026-11-01 实测裁定）**：`.claude/mcp.json` 的 playwright 必须钉死
+    `--executable-path` 到 `ms-playwright` 内的打包版
+    （当前 `chromium-1248\chrome-win64\chrome.exe`），**不得**用 `--browser chrome`——
+    后者是 **channel 语义**，解析到系统安装的 `C:\Program Files\Google\Chrome`，
+    字面违反本条规则（实测曾因此跑错二进制）。
+  - **profile 口径**：MCP 自带独立 profile（`AppData\Local\ms-playwright-mcp\`），
+    与用户 Chrome 的 `User Data` 零共享；不得用 `--user-data-dir` 指向用户 profile。
 - npm 包和 venv 的删除需要先询问用户。
 
 ## 6. Context 管理
