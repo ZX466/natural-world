@@ -373,7 +373,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from sim.core.persistence.social_projection import prepare_retell_events
 
         for retelling in await prepare_retell_events(
-            store.session_factory, branch_id, events, hidden_states=hidden_states
+            store.session_factory,
+            branch_id,
+            events,
+            hidden_states=hidden_states,
+            species_of={nid: profile.species for nid, profile in npc_runtime.profiles.items()},
         ):
             loop.enqueue(retelling)
             loop.pending_events.pop()
@@ -683,6 +687,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     set_action_anim(npc_id, anim_of_action(str(event.payload.get("action", ""))))
         from sim.core.events import HiddenEmergePayload, KnowledgeLearnedPayload, WorldEvent
         from sim.llm.memory_scan import MemoryWritePipeline
+        from sim.npc.evidence import can_hold_knowledge
 
         learned = []
         for event in batch:
@@ -700,6 +705,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 name = _display_names.get(subject, "那个人")
                 fact = f"{name}: {attr.label}"
                 for holder in event.witnesses:
+                    profile = npc_runtime.profiles.get(holder)
+                    # As in perception, externally controlled actors without a runtime
+                    # profile are human. Registered species always use their profile.
+                    if not can_hold_knowledge(profile.species if profile is not None else "human"):
+                        continue
                     own = hidden_states.get(holder, HiddenState.empty())
                     decision = MemoryWritePipeline().scan_fact(fact, **own.memory_kwargs())
                     if not decision.admitted:

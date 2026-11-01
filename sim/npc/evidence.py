@@ -30,6 +30,16 @@ SELF_DISCLOSURE_CONFIDENCE = 0.9
 WITNESSING_CHANNELS = frozenset({"vision", "hearing", "touch"})
 
 
+def can_hold_knowledge(species: str) -> bool:
+    """Only humans hold narrative facts; unknown species fail closed.
+
+    Animal witnesses remain on emergence events: observing is a fact, while
+    acquiring and retelling human knowledge is a separate species capability.
+    Call this at event assembly, before generating a knowledge event.
+    """
+    return species == "human"
+
+
 @dataclass(frozen=True)
 class EvidenceVerdict:
     """结构化判定结果（E.拒绝纪律：reason 不含 LLM 原文/词面）。"""
