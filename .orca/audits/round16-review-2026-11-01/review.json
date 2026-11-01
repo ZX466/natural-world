@@ -1,0 +1,55 @@
+{
+  "A_subject_format": {
+    "production_form": [
+      [],
+      9
+    ],
+    "codex_test_form": [
+      [
+        "villager_01"
+      ],
+      9
+    ],
+    "legacy_fn_on_production": []
+  },
+  "B_fresh_db": {
+    "db": "C:\\Users\\zx198\\AppData\\Local\\Temp\\r16-review-s6mjqzs5\\fresh.db",
+    "db_source": null,
+    "start_tick": 60,
+    "end_tick": 780,
+    "before": {
+      "events": 0,
+      "knowledge": 0,
+      "relationships": 0
+    },
+    "after": {
+      "events": 3775,
+      "knowledge": 0,
+      "relationships": 25
+    },
+    "event_delta": 3775,
+    "hidden_emerge": 2,
+    "hidden_emerge_with_witnesses": 0,
+    "knowledge_learned_events": 0
+  },
+  "C_real_db_copy": {
+    "db": "C:\\Users\\zx198\\AppData\\Local\\Temp\\r16-review-0oodrbz4\\world.db",
+    "db_source": "E:\\zxdevelop\\project7\\world.db",
+    "start_tick": 36001,
+    "end_tick": 36721,
+    "before": {
+      "events": 187857,
+      "knowledge": 0,
+      "relationships": 0
+    },
+    "after": {
+      "events": 191674,
+      "knowledge": 0,
+      "relationships": 37
+    },
+    "event_delta": 3817,
+    "hidden_emerge": 0,
+    "hidden_emerge_with_witnesses": 0,
+    "knowledge_learned_events": 0
+  }
+}
