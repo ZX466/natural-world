@@ -48,9 +48,11 @@ from sim.core.events import (
     WorldEvent,
     material_moved_event,
     matter_event,
+    npc_health_changed_event,
     npc_lod_change_event,
     structure_started_event,
 )
+from sim.core.persistence.anchor_package import Materialization
 from sim.core.persistence.database import init_database
 from sim.core.persistence.fork import fork_from_anchor
 from sim.core.persistence.fork_replay import (
@@ -66,6 +68,7 @@ from sim.core.persistence.models import (
     Knowledge,
     MaterialBalance,
     MatterState,
+    NpcHealth,
     NpcMemory,
     NpcProfile,
     Structure,
@@ -90,6 +93,32 @@ VEC_DIM = 8
 
 async def _noop_preflush() -> None:
     return None
+
+
+def _minimal_package(branch_id: str, seq: int, tick: int) -> Materialization:
+    """最小物化包：只为过 `fork.py` 的逐项校验（语料/火场留空 ⇒ 子线无附加写入）。
+
+    用真 ``Materialization`` 而非 Mock——被测语义是「anchor-fork 走真实 fork 路径」，
+    Mock 会把校验与交接两段都绕过去。
+    """
+    return Materialization(
+        anchor_id=f"anc-{branch_id}-{seq}",
+        branch_id=branch_id,
+        tick=tick,
+        seq=seq,
+        snapshot_seq=None,
+        snapshot_tick=None,
+        replay_from_seq=seq,
+        payload={},
+        window=(),
+        fires={},
+        world=None,
+        corpus={},
+        rng_state="",
+        agent_override={},
+        state_hash=None,
+        steps=(),
+    )
 
 
 def _lod(tick: int, npc_id: str = "chenmo", *, to_lod: int = 2) -> WorldEvent:
@@ -244,6 +273,66 @@ class TestR2SeamConsistency:
         assert await child.materialize_structures() == await parent.materialize_structures_replay()
         assert await child.materialize_material_balances() == (
             await parent.materialize_material_balances_replay()
+        )
+
+    async def test_A_health_seam_equal(self, store, session: AsyncSession) -> None:
+        """A：``npc_health`` 也必须按锚点游标折叠，不能复制父分支「未来」健康态。
+
+        父分支在锚点（seq=6）之后继续恶化同一处旧伤：锚点处 severity=0.2，
+        父 head 处 0.8。子分支从锚点读档必须拿到 **0.2**——复制 head 值就是拿未来糊过去。
+
+        对照：`structures` / `material_balances` 在 `kind="anchor"` 时都走
+        `_clone_*_at_cursor`（按 seq 折叠事件流）；`npc_health` 没有该分支，
+        落到 `_clone_bounded`（复制父分支当前 head 整表行）。
+        """
+        await _seed_world(store, session)
+        parent = NpcStore(store, branch_id=PARENT)
+        # 锚点之前：旧伤 0.2（seq=7）。
+        await parent.flush_tick(
+            [
+                npc_health_changed_event(
+                    7,
+                    npc_id="chenmo",
+                    category="old_injury",
+                    code="wrist_strain",
+                    severity=0.2,
+                )
+            ]
+        )
+        # **锚点之后**父分支继续恶化（seq=8，severity 0.8）——这发生在 fork **之前**，
+        # 所以父分支的投影行此刻已经是 0.8。历史点读档必须回到 seq=7 的 0.2。
+        await parent.flush_tick(
+            [
+                npc_health_changed_event(
+                    20,
+                    npc_id="chenmo",
+                    category="old_injury",
+                    code="wrist_strain",
+                    severity=0.8,
+                )
+            ]
+        )
+        anchor_seq = 7
+        await fork_from_anchor(
+            store.session_factory,
+            parent_branch_id=PARENT,
+            fork_seq=anchor_seq,
+            fork_tick=anchor_seq,
+            new_branch_id=CHILD,
+            preflush=_noop_preflush,
+            kind="anchor",
+            package=_minimal_package(PARENT, anchor_seq, anchor_seq),
+        )
+
+        child_rows = (
+            (await session.execute(select(NpcHealth).where(NpcHealth.branch_id == CHILD)))
+            .scalars()
+            .all()
+        )
+        assert [r.code for r in child_rows] == ["wrist_strain"], "健康行集不等"
+        assert child_rows[0].severity == pytest.approx(0.2), (
+            "子分支拿到了父分支锚点之后的未来健康态（severity 应为 0.2，实为 "
+            f"{child_rows[0].severity}）"
         )
 
     async def test_A_corpus_rows_equal_by_comparable_fields(

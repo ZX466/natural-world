@@ -544,6 +544,14 @@ async def fork_from_anchor(
                     session, package.branch_id, package.seq, child_id
                 )
                 continue
+            if kind == "anchor" and table == "npc_health":
+                # 健康行是**可折叠族**：父 head 行可能是锚点之后的值，
+                # 必须按 seq 重放，不能复制当前投影（对照 structures/materials）。
+                assert package is not None
+                cloned[table] = await _clone_health_at_cursor(
+                    session, package.branch_id, package.seq, package.tick, child_id
+                )
+                continue
             if kind == "anchor" and table == "material_balances":
                 # V4a: stock at an old cursor cannot be copied from the parent's future head.
                 assert package is not None
@@ -776,6 +784,85 @@ async def _clone_structures_at_cursor(
     )
     await session.flush()
     return len(structures)
+
+
+async def _clone_health_at_cursor(
+    session: AsyncSession, branch_id: str, seq: int, fork_tick: int, child_id: str
+) -> int:
+    """按游标重建 ``npc_health``，不从父 head 行近似。
+
+    与 ``structures``/``material_balances`` 同一理由：历史点读档时父分支可能已跑到
+    更晚的 tick，其 ``npc_health`` 投影行是**锚点之后**的值。直接 ``_clone_bounded``
+    复制会把「未来」的 severity/active/notes 带进子线。
+
+    ``npc_health`` 是**混合表**（与纯事件源表不同，别照抄 structures 的写法）：
+    1. **创世种子** ``sim/content/health.py::seed_health`` 直接 INSERT，**无事件源**；
+    2. **事件投影** ``_project_health`` 按 ``npc.health_changed`` 增量改行。
+
+    故重建 = 先按游标重放事件（拿到锚点时刻的值），再补齐「从没被事件碰过」的种子行。
+    补齐判据用 ``created_at_tick <= fork_tick``：锚点之后才由事件产生的行不会混进来；
+    而死者在锚点前已删行（``_project_npc_death`` 连带删健康行），父 head 已无该行，
+    天然不会复制（与既有的「死者不克隆」契约一致）。
+    """
+    from sim.core.persistence.models import NpcHealth
+    from sim.core.persistence.npc_store import _project_health
+
+    rows = await _projection_events_at_cursor(
+        session,
+        branch_id,
+        seq,
+        event_kinds=(EventKind.NPC_HEALTH_CHANGED.value,),
+        projection="health",
+    )
+    for row in rows:
+        event = WorldEvent(
+            branch_id=row.branch_id,
+            tick=row.tick,
+            event_type=EventKind(row.event_type),
+            payload=json.loads(row.payload),
+        )
+        await _project_health(session, child_id, event)
+    await session.flush()
+
+    # 补齐无事件源的种子行：重放没造出来的行，且确实存在于锚点时刻。
+    child_keys = {
+        (r.npc_id, r.code)
+        for r in (await session.execute(select(NpcHealth).where(NpcHealth.branch_id == child_id)))
+        .scalars()
+        .all()
+    }
+    parent_rows = (
+        (await session.execute(select(NpcHealth).where(NpcHealth.branch_id == branch_id)))
+        .scalars()
+        .all()
+    )
+    for row in parent_rows:
+        if (row.npc_id, row.code) in child_keys:
+            continue  # 事件重放已覆盖（值来自锚点时刻）
+        if row.created_at_tick > fork_tick:
+            continue  # 锚点之后才产生，不属于该时刻
+        session.add(
+            NpcHealth(
+                branch_id=child_id,
+                npc_id=row.npc_id,
+                code=row.code,
+                category=row.category,
+                label=row.label,
+                severity=row.severity,
+                active=row.active,
+                hidden=row.hidden,
+                descriptors=row.descriptors,
+                trigger_conditions=row.trigger_conditions,
+                notes=row.notes,
+                created_at_tick=row.created_at_tick,
+            )
+        )
+    await session.flush()
+    return await _scalar_int(
+        session,
+        "SELECT COUNT(*) FROM npc_health WHERE branch_id = :cid",
+        {"cid": child_id},
+    )
 
 
 async def _clone_fires_from_rows(
