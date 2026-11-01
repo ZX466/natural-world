@@ -121,6 +121,30 @@ codex 交付 `820c653`（+886 行，18 条新测试），门禁全绿，但：
 （`world_restore.py:166`）要求恰好 1 个 ⇒ 该树真实库**无法恢复**。主树库健康
 （1 genesis / 187857 events / tick 36001 可恢复）。两树库是不同文件，别互用结论。
 
+**✅ 已修（主树 2026-11-01，TDD 红→绿→重构）**：
+- `witnesses_of_entity_emerge` 新增 `display_name_of` 形参，在**戏外边界**用
+  entity_id→显示名 反查；`Observation.subject` 语义**未动**（叙事仍说人话）。
+- **重名 fail-closed**：显示名不唯一 → 返回 `([], None)`，宁缺勿错；无显示名的
+  实体按 rtoken 作词面（`senses` 同一默认分支），不误判歧义。
+- 调用点 `main.py:664` 传入 `_display_names`；`frame.py:37` 过时注释已改正。
+- **真跑 `lifespan` 的集成测试**已补（`test_lifespan_witnesses_knowledge_from_real_perception`），
+  且**照抄生产执行序**（先 `_run_npc_runtime` 后 `_run_perception`，`tick.py:94-96`）
+  ——我第一版写反了，会把当帧帧喂给 `frame.tick < tick` 过滤器而必然全拒。
+- 实测（零注入，真实地图）：`witnesses` 9 人 / `knowledge` 落库带 `evidence_seq` / `conf=0.9`。
+- 门禁：pytest **3091P/0F/121S**（404.88s）、ruff 0、format 0、pyright 0/0、
+  client tsc/lint/prettier 0、vitest 337P、两资产 + protocol + lock + impl 全过。
+
+**⚠️ 同一会话的事故（须记）**：手写探针 `import sim.api.main` 起 `lifespan` 时**绕过
+`conftest` 的 `WORLD_DB_PATH` 重定向**，直接写了主树真实 `world.db`：events
+187857→929424、max tick 36000→178270（`offline.capped` 补推 86400）、knowledge 0→27、
+relationships 0→591。已核：`seq 1..187857` 的 payload/witnesses SHA256 与备份**逐字节一致**；
+备份里用户操作事件仅 `tile_changed: 30`，追加段内 `tile_changed/structure_*/npc.death/
+player_anchor` **全为 0** ⇒ **未丢用户操作**。但追加段含我伪造的 9 行
+`fact="小满: 肩头旧伤"`（attr_id 却挂真实 `health_night_fear`）= 脏数据。
+**回滚待用户裁定**（备份是迁移前形态，缺 `npc_health.code`，需 `ensure_schema` 自愈）。
+**纪律**：任何起 `lifespan` 的脚本必须自己把 `main.WORLD_DB_PATH` 指到临时库，
+或干脆写成 pytest 用例走 `conftest` 夹具。
+
 ## 1b. 已关闭但代码不支撑的承诺（主树 2026-10-31 审计，**新对话先读**）
 
 六里程碑 2026-10-05 宣告收官（`abbe765`），下列五条实测当时是空的。**这些不是 bug，
@@ -513,6 +537,21 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
   `tail` 的退出码。要判真实结果必须 `cmd > log 2>&1; echo "EXIT:$?"`。
   **本轮就是靠这条抓到 codex 回执误报的 tsc 失败。**
 
+**第十六轮修根因（2026-11-01）**
+- **感知帧的 `subject` 是戏内词面，不是 rtoken**。`senses.py` 视觉/听觉填显示名
+  （叙事要人话），内感受填自身 rtoken。任何戏外装配（witnesses / 统计 / 回指）
+  **必须经 `display_name_of` 反查**，直接拿 rtoken 比会静默恒空。
+- **重名必须 fail-closed**：显示名不唯一时无法从词面反推是谁，返回 `([], None)`。
+  注意区分「**没**显示名」（按 rtoken 词面，天然唯一，**不是**歧义）与「**多个**同显示名」。
+- **手写探针起 `lifespan` 会写真实库**：`conftest.py:15` 的 autouse 夹具只对 pytest 生效。
+  脚本里 `import sim.api.main` 直接用默认 `WORLD_DB_PATH=Path("world.db")`，且启动即跑
+  `advance_offline`（会补推最多 1 游戏日）。**要么显式改 `main.WORLD_DB_PATH` 到临时库，
+  要么写成 pytest 用例。** 2026-11-01 本轮就踩了：真实库 +741567 events / knowledge +27。
+- **集成测试必须照抄生产执行序**：`_tick_once` 是 `npc_runtime → maintenance → perception`
+  （`tick.py:94-96`），emerge 只能拿**上一帧**。先跑 perception 再跑 npc_runtime 的写法
+  会把当帧帧喂给 `frame.tick < tick` 过滤器 ⇒ 永远 `([], None)`，看着像功能没实现。
+- **`model_copy` 的字段要走 `update={...}`**：`model_copy(pos=(x,y))` 是 TypeError。
+
 **定线（2026-11-01）**
 - **取证值 ≠ 可用的阈值**。soak 的危害夹具实测 4.0 实体/游戏日，但那来自「每小时强制
   一对近身互殴」的人工死亡源；现有 soak 用 `make_mock_feeder` **没有死亡源**，实体结构性
@@ -641,6 +680,8 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
   自测结论不能互相冒用。
 
 ## 7. ④ codex｜新对话恢复快照
+
+[2026-11-01 Round16 | implementation delivered with acceptance limits] M3 witness assembly uses latest completed perception frame and token/entity translation; internal knowledge_learned event holds scanned fact/evidence, flush_world projects knowledge and relationships in one transaction. told validates source holder/branch/content/confidence and receiver own-hidden gate before event generation; per-batch dedup. NormSlice connected to both existing Chenmo prompts (ordinary villagers have utility/templates, no LLM prompt path). relationship_retell event preserves trust drift; hydrate on start/branch load. Real fork test confirms child told links remapped child source. Restore retains/clones knowledge tables; does not reconstruct auto IDs by historical event re-projection. Tests: nonbench3072P/121S; latest security84P/new18P; Pyright0E0W/Ruff/format; client337P/typecheck pass. Bench remains2F (sound50NPC/retrieval degraded sentinel); parent baseline also fails retrieval but sound baseline passes, so no blanket pre-existing claim. Production lifespan fresh persistent rehearsal events0->116,knowledge2,relationships2,witnessseq60/toldparent1. Original world.db copied backup fails startup unique-genesis check; no repair/write; original+backup10033events identical SHA256. Evidence .orca/audits/round16-2026-11-01/{progress.md,gates.json,verify_live.py,live3.log,original-preservation.json}. No push/main sync/shared/lock/DESIGN/registry/fog changes; no browser/paid LLM. Next main review/integration, resolve performance and original-save compatibility separately.
 
 【2026-11-01 新对话交接｜第十五轮技术交付完成，当前无在途开发】用户明确要求保存记忆后开启新对话。本轮基线5a48f7c；RED ffe590f，离线4769418，音效5b35f29，取证7e97a6f。恢复先workflow→talking→本节/registry→git status/log，以最新派单为准；已交付部分不重做、不无故复跑门禁。当前只待主树复核收编、用户亲听与后续定线裁决。不同步main、不推远程；收编保留主树ensure_schema修复1d4bfa9（本树未重复实现）。提交均带派单指定Co-Authored-By。
 

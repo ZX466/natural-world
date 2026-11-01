@@ -1,12 +1,9 @@
-"""sim.npc.chat_ledger — 聊天驱动的关系/记忆进程内账本（批次 E2）。
+"""Runtime conversation mirror.
 
-**禁第二 SQL 驱动**（Global Constraints）：RelationshipStore 是 sync sqlite3，
-与实况 aiosqlite 单写者共库=跨驱动锁风险（chenmo_memory docstring 同口径）。
-关系/记忆是 runtime 内存态（needs/火场同口径）——**效应**经 npc.chat /
-npc.monologue 事件表达，账本本身不进重放面（C4：世界真相仍是事件流）。
-
-常量对齐 sim/npc/society.py（CHAT_AFFECTION_DELTA / RETELL_TRUST_DELTA）；
-值域 [0,1] clamp 与 society/RelationshipStore 同约定。
+Relationships are derived from npc.chat and npc.relationship_retell events in
+flush_world's transaction and hydrated on startup/branch change. The bounded
+conversation text buffer remains process-local; durable third-party knowledge
+uses npc.knowledge_learned and the knowledge projection.
 """
 
 from __future__ import annotations
@@ -58,6 +55,13 @@ class ChatLedger:
 
     def __len__(self) -> int:
         return len(self._relations)
+
+    def restore_relations(self, relations: dict[str, dict[str, dict[str, float]]]) -> None:
+        """Replace the branch-local mirror from committed event projections."""
+        self._relations = {
+            owner: {other: dict(values) for other, values in others.items()}
+            for owner, others in relations.items()
+        }
 
     def reset(self) -> None:
         """清空关系与记忆（读档=分叉：账本是本分支投影，分叉即失效——review I2）。"""

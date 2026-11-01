@@ -360,6 +360,8 @@ def build_default_bus() -> EventBus:
     for kind in (
         EventKind.NPC_HEALTH_CHANGED,
         EventKind.NPC_HIDDEN_EMERGE,
+        EventKind.NPC_KNOWLEDGE_LEARNED,
+        EventKind.NPC_RELATIONSHIP_RETELL,
         EventKind.MATTER_BUILD,
         EventKind.MATTER_COLLAPSE,
         EventKind.MATTER_DECAY,

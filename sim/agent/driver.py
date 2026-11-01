@@ -133,6 +133,7 @@ class ChenmoDriver:
         perception_text: str = "",
         interoception_text: str = "",
         landmarks_text: str = "",
+        norms_entries: tuple[str, ...] = (),
     ) -> bool:
         """一轮决策：prompt → LLM → 解析 → 闸门 → pending。
 
@@ -167,9 +168,12 @@ class ChenmoDriver:
             state, display_names=display_names, actor_id=self._anchor.entity_id
         )
         people_text = f"你认得这些人：{'、'.join(people)}。" if people else ""
+        from sim.llm.prompts.assembler import NormSlice
+
         prompt = assemble_prompt(
             anchor=self._anchor,
             memory=MemorySlice(entries=memory_entries),
+            norms=NormSlice(entries=norms_entries),
             situation=SituationSlice(
                 perception_text=perception_text,
                 interoception_text=interoception_text,
@@ -230,18 +234,25 @@ class ChenmoDriver:
             return True
         if intent.action == "talk_to" and intent.target_id is not None:
             self._chat_lines[id(intent)] = await self._dialogue_line(
-                profile, intent.target_id, intent.reason, tick
+                profile, intent.target_id, intent.reason, tick, norms_entries=norms_entries
             )
         self._pending.append(intent)
         return True
 
     async def _dialogue_line(
-        self, profile: ProfileSnapshot, target_id: str, context: str, tick: int
+        self,
+        profile: ProfileSnapshot,
+        target_id: str,
+        context: str,
+        tick: int,
+        *,
+        norms_entries: tuple[str, ...] = (),
     ) -> str:
         from sim.agent.dialogue import template_line
         from sim.llm.prompts.assembler import (
             InputSlice,
             MemorySlice,
+            NormSlice,
             PlanSlice,
             SituationSlice,
             assemble_prompt,
@@ -255,6 +266,7 @@ class ChenmoDriver:
         prompt = assemble_prompt(
             anchor=self._anchor,
             memory=MemorySlice(),
+            norms=NormSlice(entries=norms_entries),
             situation=SituationSlice(),
             plan=PlanSlice(),
             user_input=InputSlice(

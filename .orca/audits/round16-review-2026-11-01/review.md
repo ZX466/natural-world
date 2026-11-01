@@ -85,10 +85,12 @@ knowledge:     0 → 0            ❌
    这是有意（配 `reserved` 去重），但 docstring 没写。
 3. `KnowledgeLearnedPayload.require_evidence` 在 validator 里跑 `MemoryWritePipeline().scan_fact`
    ——校验器里做业务判定，且每次构造 payload 都重建 pipeline。
-4. `main.py:711-718` 构造的 `WorldEvent` **没传 `branch_id`**，而 `WorldEvent.branch_id`
-   默认是 `"main"`（`events.py:611`）⇒ 在子分支上会把知识行写进 `main` 分支。
-   当前因 witnesses 恒空而未触发；修好根因后这条会立刻暴露。
-   （对比 `prepare_retell_events` 里是显式传了 `branch_id=branch_id` 的。）
+4. ~~`main.py:711-718` 构造的 `WorldEvent` 没传 `branch_id` ⇒ 子分支会把知识行写进 `main`。~~
+   **本条已撤回（2026-11-01，主树实测证伪）**：落库分支由 `EventStore.append(branch_id, ...)`
+   的**参数**决定（`store.py:219-231` 直接 `branch_id=branch_id` 建行），
+   `WorldEvent.to_store_dict()`（`events.py:624-636`）**根本不含** `branch_id` 键。
+   实测：`WorldEvent.branch_id == "main"` 的对象经 `append("child", ...)` 落库得 `('child', 1)`。
+   知识行同理，投影的 branch 来自 flush 时传入的分支，与事件对象字段无关。
 
 ## 六、修法建议（下一轮派单）
 

@@ -736,6 +736,9 @@ def npc_events_for_tick(
                                     )
                                 )
                                 chat_ledger.adjust(npc_id, target_id, kind="retell")
+                                from sim.core.events import relationship_retell_event
+
+                                events.append(relationship_retell_event(tick, npc_id, target_id))
         mv = plan_npc_move(
             state,
             npc_id,

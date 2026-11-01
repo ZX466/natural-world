@@ -370,6 +370,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # 失能前已在途的 LLM 结果不能在醒来后继续执行旧计划。
             world_revision += 1
             driver.reset_combat()
+        from sim.core.persistence.social_projection import prepare_retell_events
+
+        for retelling in await prepare_retell_events(
+            store.session_factory, branch_id, events, hidden_states=hidden_states
+        ):
+            loop.enqueue(retelling)
+            loop.pending_events.pop()
+            events.append(retelling)
         await flush_world(
             store,
             branch_id,
@@ -526,6 +534,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sim.npc.chat_ledger import ChatLedger
 
     chat_ledger = ChatLedger()
+    from sim.core.persistence.social_projection import hydrate_relationships
+
+    async with store.session_factory() as session:
+        await hydrate_relationships(
+            session, await store.current_branch_id_or_none() or "main", chat_ledger
+        )
     app.state.chat_ledger = chat_ledger
     chat_last: dict[str, int] = {}
     retell_last: dict[str, int] = {}  # 批次 E2：学舌冷却账本（调用方持有）
@@ -638,6 +652,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             context_of=_hidden_context,
         )
         batch[:0] = emerged
+        from sim.npc.evidence import witnesses_of_entity_emerge
+
+        for index, event in enumerate(batch):
+            if event.event_type is EventKind.NPC_HIDDEN_EMERGE:
+                witnesses, observed_tick = witnesses_of_entity_emerge(
+                    dict(loop.perception_frames),
+                    subject=str(event.payload["npc_id"]),
+                    entity_ids=list(state.entities),
+                    tick=tick,
+                    display_name_of=_display_names,
+                )
+                batch[index] = event.model_copy(
+                    update={
+                        "witnesses": witnesses,
+                        "payload": {**event.payload, "observed_tick": observed_tick},
+                    }
+                )
         # 批次 D14：npc.act → 动作姿势账本（快照/delta 的 anim 字段供数）。
         from sim.api.ws import set_action_anim
         from sim.npc.sim_exec import anim_of_action
@@ -650,6 +681,47 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 npc_id = str(event.payload.get("npc_id", ""))
                 if npc_id:
                     set_action_anim(npc_id, anim_of_action(str(event.payload.get("action", ""))))
+        from sim.core.events import HiddenEmergePayload, KnowledgeLearnedPayload, WorldEvent
+        from sim.llm.memory_scan import MemoryWritePipeline
+
+        learned = []
+        for event in batch:
+            if event.event_type is not EventKind.NPC_HIDDEN_EMERGE:
+                continue
+            emergence = HiddenEmergePayload.model_validate(event.payload)
+            subject = emergence.npc_id
+            hidden = hidden_states.get(subject)
+            if hidden is None or hidden.profile is None:
+                continue
+            for attr_id in emergence.attr_ids:
+                attr = hidden.profile.by_id(str(attr_id))
+                if attr is None:
+                    continue
+                name = _display_names.get(subject, "那个人")
+                fact = f"{name}: {attr.label}"
+                for holder in event.witnesses:
+                    own = hidden_states.get(holder, HiddenState.empty())
+                    decision = MemoryWritePipeline().scan_fact(fact, **own.memory_kwargs())
+                    if not decision.admitted:
+                        continue
+                    payload = KnowledgeLearnedPayload(
+                        holder_id=holder,
+                        subject_id=subject,
+                        attr_id=str(attr_id),
+                        fact=decision.content,
+                        source="witnessed",
+                        observed_tick=emergence.observed_tick,
+                        evidence_tick=event.tick,
+                    )
+                    learned.append(
+                        WorldEvent(
+                            tick=tick,
+                            event_type=EventKind.NPC_KNOWLEDGE_LEARNED,
+                            actor_id=holder,
+                            payload=payload.model_dump(mode="json"),
+                        )
+                    )
+        batch.extend(learned)
         return batch or None
 
     role_last: dict[str, int] = {}
@@ -888,10 +960,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 "桃门（15,18）、溪桥（66,19）、梯田（122,19）、客栈院（44,53）。"
                 "想去哪就 move_to 它的坐标。"
             )
+            from sim.core.persistence.knowledge_store import KnowledgeStore
+            from sim.npc.norms import select_norms
+
+            branch = await store.current_branch_id_or_none() or "main"
+            norm_rows = await KnowledgeStore(store.session_factory, branch_id=branch).iter_valid(
+                CHENMO_ID
+            )
+            norm_entries = tuple(row.fact for row in select_norms(norm_rows, holder_id=CHENMO_ID))
             decision_revision = world_revision
             await driver.decide_once(
                 loop.state,
                 loop.state.tick,
+                norms_entries=norm_entries,
                 memory_entries=merge_ledger_entries(
                     _mem_recall(
                         memory_pipeline,
@@ -1016,6 +1097,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 branch_id = await store.current_branch_id_or_none()
                 if branch_id is None:
                     raise RuntimeError("fork completed without an active branch")
+                async with store.session_factory() as session:
+                    await hydrate_relationships(session, branch_id, chat_ledger)
                 branch_store = NpcStore(store, branch_id=branch_id)
                 npc_runtime, _ = await assemble_runtime(
                     branch_store, external_controller_ids=frozenset({CHENMO_ID})
