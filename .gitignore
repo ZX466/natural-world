@@ -49,6 +49,8 @@ logs/
 *.db-shm
 *.db-wal
 *.sqlite
+# 真实库备份（`world.db.bak-YYYYMMDD-HHMMSS`）永不入库
+*.db.bak-*
 
 # Dot-folders: per user rule #4 ALL dot-prefixed folders stay out of git EXCEPT .orca.
 # If the repo was seeded before this rule, untrack with: git rm -r --cached <dir>

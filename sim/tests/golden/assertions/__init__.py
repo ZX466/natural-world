@@ -5,7 +5,9 @@
 1. **守恒 = 逐位相等**——不给浮点容差。可成立的前提是「事件流折叠」与「投影」**同源同序**
    （§19.3：两入口共用 `npc_store.fold_*` 单一折叠规则），故精确相等是有效判据。
 2. **差事完成率 = 10 日重定标**——M1 的 80% 是**单决策**口径；跨日续接 fixture 落地后先测
-   基线再定线。本轮只落**基线实测壳**（`errands_rate`），**不设阈值**。
+   基线再定线。**2026-11-01 用户裁定启用硬阈值 1.0**（实测 40/40，来源
+   `.orca/audits/t5-baseline-2026-11-01/baseline.json`；确定性脚本链无抖动，
+   不留缓冲）。
 3. **无孤儿变更 = 硬红**——不降级告警；方向 B 必须排除 `entropy_inject`（熵只进事件流、
    world state 永不留痕，裁 14-5 + 脚手架 §3.3 写死的坑）。
 
@@ -28,6 +30,7 @@ from .conservation import (
     fold_structure_phases,
 )
 from .errands_rate import (
+    ERRAND_COMPLETION_RATE_MIN,
     ErrandBaseline,
     ErrandOutcome,
     assert_baseline_recorded,
@@ -41,6 +44,7 @@ from .orphan_changes import (
 )
 
 __all__ = [
+    "ERRAND_COMPLETION_RATE_MIN",
     "ErrandBaseline",
     "ErrandOutcome",
     "MaterialBalanceRow",

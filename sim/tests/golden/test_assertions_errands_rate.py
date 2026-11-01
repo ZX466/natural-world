@@ -1,10 +1,19 @@
-"""差事完成率壳的最小单元测试（M4-C4）——**验证它不设阈值**（裁 17-1：10 日重定标）。"""
+"""差事完成率断言（M4-C4 + 裁 17-1 定线）。
+
+**2026-11-01 用户裁定启用硬阈值 1.0**（来源：`.orca/audits/t5-baseline-2026-11-01/baseline.json`，
+10 seed × 4 链 = 40/40，中位与最差都是 1.0）。口径是**确定性脚本链**
+（`chain_runner` 固定 fixture + `parse_intent` + `IntentGate`，零 LLM、零网络、零随机）⇒
+无抖动来源 ⇒ 任何一条链失败都是真实回退，必须红。**不沿用 M1 的 80%**（那是单决策口径）。
+
+阈值低于 1.0 只会掩盖真实回退，不会吸收抖动——这是本文件写死 1.0 的理由。
+"""
 
 from __future__ import annotations
 
 import pytest
 
 from sim.tests.golden.assertions import (
+    ERRAND_COMPLETION_RATE_MIN,
     ErrandBaseline,
     ErrandOutcome,
     assert_baseline_recorded,
@@ -37,16 +46,35 @@ def test_empty_sample_is_error_not_zero() -> None:
 
 
 def test_measure_baseline_records() -> None:
+    """`measure_baseline` 只折算，不判定——0.7 也能记录（判定归 `assert_baseline_recorded`）。"""
     baseline = measure_baseline(_outcomes(14))
     assert (baseline.cases, baseline.passed) == (20, 14)
     assert baseline.rate == 0.7
-    assert_baseline_recorded(baseline)
 
 
-def test_shell_does_not_threshold_low_rate() -> None:
-    """**裁 17-1 的关键行为**：完成率再低也不红（阈值待 10 日重定标）。"""
-    assert_baseline_recorded(measure_baseline(_outcomes(1)))  # 5% 也放过
-    assert_baseline_recorded(measure_baseline(_outcomes(0)))  # 0% 也放过
+def test_assert_returns_baseline_for_archiving() -> None:
+    """定线后断言返回基线本身，调用方归档免二次取用。"""
+    baseline = measure_baseline(_outcomes(20))
+    assert assert_baseline_recorded(baseline) is baseline
+
+
+def test_threshold_is_one_from_measured_baseline() -> None:
+    """阈值 = 实测基线 1.0（不是拍脑袋、不是 M1 的 80%）。"""
+    assert ERRAND_COMPLETION_RATE_MIN == 1.0
+
+
+def test_full_completion_passes() -> None:
+    assert_baseline_recorded(measure_baseline(_outcomes(20)))
+
+
+def test_any_single_failure_is_red() -> None:
+    """**定线的关键行为**：少一条就红（确定性夹具无抖动，失败即真实回退）。"""
+    with pytest.raises(AssertionError, match="完成率"):
+        assert_baseline_recorded(measure_baseline(_outcomes(19)))
+    with pytest.raises(AssertionError, match="完成率"):
+        assert_baseline_recorded(measure_baseline(_outcomes(1)))
+    with pytest.raises(AssertionError, match="完成率"):
+        assert_baseline_recorded(measure_baseline(_outcomes(0)))
 
 
 def test_shell_only_checks_structure() -> None:

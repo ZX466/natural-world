@@ -16,7 +16,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from sim.agent.combat_exec import CombatLedger
 from sim.core.events import npc_death_event
 from sim.tests.bench.soak import TICKS_PER_GAME_DAY, make_mock_feeder, run_soak
-from sim.tests.bench.test_bench_soak import SOAK_ENTITY_LOSS_PER_GAME_DAY
+from sim.tests.bench.test_bench_soak import (
+    SOAK_ENTITY_LOSS_PER_GAME_DAY,
+    _assert_entity_stable,
+)
 from sim.tests.golden.driver import smoke_loop
 
 
@@ -82,7 +85,14 @@ def simulate(*, seed: int, days: int, lethal: bool) -> dict:
     wall_seconds = time.perf_counter() - start
     net_loss = result.entity_count_start - result.entity_count_end
     assert result.total_ticks == days * TICKS_PER_GAME_DAY
-    assert net_loss == len(deaths)
+    # 2026-11-01 用户裁定：走正式契约，而非这里自写一句等价断言——
+    # 「净流失 − 已记录死亡 = 无解释流失」必须为 0。良性场景 explained_deaths=0
+    # 时等价于旧的零容忍口径，所以同一判据两侧都成立。
+    _assert_entity_stable(
+        result,
+        label=f"soak 危害取证 seed={seed} days={days}",
+        explained_deaths=len(deaths),
+    )
     return {
         "seed": seed,
         "days": days,

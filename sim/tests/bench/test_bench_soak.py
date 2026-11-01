@@ -107,7 +107,14 @@ def _build_loop_with_perception() -> TickLoop:
 #   规模侧由本常量/派生式硬约束，耗时侧仍由 `SOAK_*` 红线覆盖，两者不混。
 # **阶段 A 值 = 0** ⇒ 净减上界 0 ⇒ 与旧断言（`end == start`）**语义等价**、零行为变化。
 # **阶段 B 前提已落地**：_apply_npc_death 已从 WorldState.entities 移除死者。
-#   2026-11-01 本轮仅取证，常量仍为 0；须由用户查看受控危害实测后裁定可接受上界。
+#
+# **2026-11-01 用户裁定：良性场景上界保持 0，另立「流失须被死亡解释」契约。**
+#   不按受控危害实测值（4.0/游戏日，见 .orca/audits/soak-loss-2026-11-01/measurement.json）
+#   抬线——那是每小时强制一对近身互殴的**夹具**，不是自然人口流失率；现有 soak 用
+#   `make_mock_feeder`，**没有死亡源**，实体结构性守恒。抬到 4.0 会在 604,800 tick 的
+#   里程碑跑里允许 28 个实体凭空消失而不报红，等于把泄漏检测变成瞎子。
+#   正确形式化：`净流失 - 已记录 npc.death = 无解释流失`，后者必须为 0
+#   （`_assert_entity_stable(..., explained_deaths=...)`，测试见 test_soak_loss_contract.py）。
 # 契约钉保留历史名称 test_soak_entity_loss_bound_is_zero_in_phase_a，不据观察值自动提线。
 SOAK_ENTITY_LOSS_PER_GAME_DAY = 0
 
@@ -122,7 +129,13 @@ def _entity_loss_bound(ticks: int) -> int:
     return math.ceil(SOAK_ENTITY_LOSS_PER_GAME_DAY * ticks / TICKS_PER_GAME_DAY)
 
 
-def _assert_entity_stable(result, *, label: str, profile_ids: set[str] | None = None) -> None:
+def _assert_entity_stable(
+    result,
+    *,
+    label: str,
+    profile_ids: set[str] | None = None,
+    explained_deaths: int | None = None,
+) -> None:
     """实体守恒（**结构量**判据，两处断言共用，防双真相源）。
 
     四侧判据（M6-P1 阶段 A，方案见 `docs/perf/m6-soak-contract-preplan.md` §2.1/§3）：
@@ -132,14 +145,32 @@ def _assert_entity_stable(result, *, label: str, profile_ids: set[str] | None = 
       ④ 映射一致（传 `profile_ids` 时）：实体集 ↔ `runtime.profiles` 同名（`soak.py`
          接线契约）——「只删一半」会留下幽灵 NPC（A12/M6-A1 实证：`entities` 不参与
          fork 克隆而 `npc_profiles` 整表克隆 ⇒ 不对称风险）。
+
+    **⑤ 流失须被死亡解释**（2026-11-01 用户裁定，`explained_deaths` 非 None 时生效）：
+    `净流失 - 已记录 npc.death = 无解释流失`，后者必须为 0。良性场景的上界仍是 0
+    （不按受控危害实测的 4.0/游戏日抬线，理由见 `test_soak_loss_contract.py` 模块
+    docstring）；本条让**有死亡源的 run** 也能被正确判——流失只允许来自真实落地的事件。
+
     与机器速度**无关**（结构量非计时量）⇒ 调用方应把它排在降频探针门**之前**。
     """
     start, end = result.entity_count_start, result.entity_count_end
-    bound = _entity_loss_bound(result.total_ticks)
+    net_loss = start - end
     assert end <= start, f"{label}: 实体净增（疑似泄漏/失控 spawn）{start} → {end}"
-    assert start - end <= bound, (
-        f"{label}: 实体净减 {start - end} 超界（上界 {bound}，{start} → {end}）"
-    )
+    if explained_deaths is not None:
+        # ⑤ 先判「无解释流失」——它是比上界更具体的诊断，且已涵盖上界
+        #    （无解释流失为 0 ⇒ net_loss == explained_deaths ≤ bound）。
+        unexplained = net_loss - explained_deaths
+        assert unexplained == 0, (
+            f"{label}: 无解释流失 {unexplained}（净流失 {net_loss} - 已记录死亡 "
+            f"{explained_deaths}）。良性场景上界为 0；有死亡源的 run 只允许"
+            f"流失来自真实落地的 npc.death 事件"
+        )
+    else:
+        # 未提供死亡账本 ⇒ 沿用旧的零容忍口径（现有 mock feeder 形态，无死亡源）。
+        bound = _entity_loss_bound(result.total_ticks)
+        assert net_loss <= bound, (
+            f"{label}: 实体净减 {net_loss} 超界（上界 {bound}，{start} → {end}）"
+        )
     if result.entity_ids_start:
         new_ids = set(result.entity_ids_end) - set(result.entity_ids_start)
         assert not new_ids, f"{label}: 出现新实体 id（{sorted(new_ids)[:5]}…）"
@@ -327,11 +358,12 @@ def test_m2_acceptance_tick_constant_is_7_days() -> None:
 
 
 def test_soak_entity_loss_bound_is_zero_in_phase_a() -> None:
-    """契约钉（体例同 `test_cascade_frame_budget_is_100_nodes`）：阶段 A 净减上界 = 0。
+    """契约钉（体例同 `test_cascade_frame_budget_is_100_nodes`）：良性净减上界 = 0。
 
-    阶段 B 的死亡移除已实现；本轮受控场景仅取证，数值仍等用户裁决。
-    历史测试名与零值断言暂留，默认无伤害 feeder 继续按零流失守卫；不自动把观察值定为阈值。
-    原方案 `docs/perf/m6-soak-contract-preplan.md` §7 仍悬空，按后续派单处理。
+    **2026-11-01 用户裁定**：不按受控危害实测值（4.0/游戏日）抬线，良性场景恒 0；
+    有死亡源的 run 改由「流失须被死亡解释」契约判定
+    （`_assert_entity_stable(..., explained_deaths=...)`，见 test_soak_loss_contract.py）。
+    历史测试名保留，防止有人据观察值自动提线。
     """
     assert SOAK_ENTITY_LOSS_PER_GAME_DAY == 0
     assert _entity_loss_bound(0) == 0

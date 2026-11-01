@@ -16,26 +16,26 @@
     "attacks": [],
     "death_trace": [],
     "state_hash": "20a864be3a98c87f44371fe02134ff2f500581b6adb5ed902eead339e98c9bc5",
-    "wall_seconds": 10.421500800002832,
+    "wall_seconds": 11.258751600020332,
     "pending_peak": 54,
     "windows": [
       {
         "start_tick": 0,
         "ticks": 86400,
-        "mean_tick_ms": 0.02339778235081111,
-        "p99_tick_ms": 0.05470000905916095
+        "mean_tick_ms": 0.024889236116939207,
+        "p99_tick_ms": 0.06700001540593803
       },
       {
         "start_tick": 86400,
         "ticks": 86400,
-        "mean_tick_ms": 0.02319038427702725,
-        "p99_tick_ms": 0.04579999949783087
+        "mean_tick_ms": 0.024012797465628764,
+        "p99_tick_ms": 0.05569998756982386
       },
       {
         "start_tick": 172800,
         "ticks": 86400,
-        "mean_tick_ms": 0.02586008102500475,
-        "p99_tick_ms": 0.06130000110715628
+        "mean_tick_ms": 0.028489467635558364,
+        "p99_tick_ms": 0.06829999620094895
       }
     ]
   },
@@ -679,26 +679,26 @@
       }
     ],
     "state_hash": "693e41090fa479324dd312265c1f55b5fbbfbbb0f6b2f7a55bc49eec8f3d0286",
-    "wall_seconds": 9.71821320001618,
+    "wall_seconds": 11.63479089998873,
     "pending_peak": 54,
     "windows": [
       {
         "start_tick": 0,
         "ticks": 86400,
-        "mean_tick_ms": 0.02549185639475548,
-        "p99_tick_ms": 0.06350001785904169
+        "mean_tick_ms": 0.02700204399708902,
+        "p99_tick_ms": 0.06779999239370227
       },
       {
         "start_tick": 86400,
         "ticks": 86400,
-        "mean_tick_ms": 0.022468378463397838,
-        "p99_tick_ms": 0.054100004490464926
+        "mean_tick_ms": 0.02870551969021175,
+        "p99_tick_ms": 0.07509998977184296
       },
       {
         "start_tick": 172800,
         "ticks": 86400,
-        "mean_tick_ms": 0.02002020144202645,
-        "p99_tick_ms": 0.041799998143687844
+        "mean_tick_ms": 0.024835042796203872,
+        "p99_tick_ms": 0.06739998934790492
       }
     ]
   },
@@ -1342,26 +1342,26 @@
       }
     ],
     "state_hash": "693e41090fa479324dd312265c1f55b5fbbfbbb0f6b2f7a55bc49eec8f3d0286",
-    "wall_seconds": 9.184709200024372,
+    "wall_seconds": 10.511266000015894,
     "pending_peak": 54,
     "windows": [
       {
         "start_tick": 0,
         "ticks": 86400,
-        "mean_tick_ms": 0.02302278232828367,
-        "p99_tick_ms": 0.05189998773857951
+        "mean_tick_ms": 0.02522522336793945,
+        "p99_tick_ms": 0.06899997242726386
       },
       {
         "start_tick": 86400,
         "ticks": 86400,
-        "mean_tick_ms": 0.021117630712305307,
-        "p99_tick_ms": 0.042400002712383866
+        "mean_tick_ms": 0.024055317205946065,
+        "p99_tick_ms": 0.06920000305399299
       },
       {
         "start_tick": 172800,
         "ticks": 86400,
-        "mean_tick_ms": 0.02047282983059833,
-        "p99_tick_ms": 0.04689997876994312
+        "mean_tick_ms": 0.024002045175721933,
+        "p99_tick_ms": 0.0641999940853566
       }
     ]
   },
