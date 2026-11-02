@@ -325,10 +325,14 @@ B 锚点 tick=1，tick=5 lod 1→2 → child=[('a',2),('d',1)]    ← 'a' 的 lo
 `npc_profiles` 写入面（已查实，**只有两条事件**）：`NPC_LOD_CHANGE`（改 `lod`+
 `updated_at_tick`）、`NPC_DEATH`（**删行**）。其余 24 列无运行时写入路径，只由种子直插。
 
-**顺带发现（只报未修）**：`seed_villagers`（`villagers.py:320`）幂等判据
-`select(NpcProfile.id)` **无 branch 过滤**，`_profile_row` **硬编码 `branch_id="main"`**
-（`villagers.py:291`、`protagonist.py:37`）。实测：两分支存在时 50 行全落 `main`。
-是否影响子分支种子补齐未定论，**别当已修**。
+**顺带发现（主树 2026-11-02 已复跑定性；已派第二十轮任务 B，主树未修）**：
+`seed_villagers`（`villagers.py:320`）幂等判据 `select(NpcProfile.id)` **无 branch 过滤**，
+`_profile_row` **硬编码 `branch_id="main"`**（`villagers.py:291`、`protagonist.py:37`）。
+主树 5 组临时内存库实测：**(main0,child0)→main50；(main0,child50)→新增0；(main0,child49)
+→main1/child49；(main50,child49)→新增0；(main50,child50)→新增0** ⇒ **只补 main，
+子分支永远补不上**。难点：缺行可能是**合法死亡**（`_project_npc_death` 锚点前删行），
+不能盲目按 id 补齐。派单要求按 `(branch_id, id)` 判存在 + 查该分支 `npc.death` 排除死者 +
+`seed_protagonist` 一并修。**别当已修**。
 
 ## 1b. 已关闭但代码不支撑的承诺（主树 2026-10-31 审计，**新对话先读**）
 
@@ -347,9 +351,11 @@ B 锚点 tick=1，tick=5 lod 1→2 → child=[('a',2),('d',1)]    ← 'a' 的 lo
   ② **第三方浮现见证链：已通**——真实库 `npc.hidden_emerge` 2 条带完整 `witnesses` 列，
      `knowledge` 32 行（`witnessed` 18 / `told` 14），`main.py:672` 的
      `witnesses_of_entity_emerge` + 物种知识门在链上。
-  ③ **每日严重度演进：仍是真缺口**——`sim/content/health.py` 无日切钩子，
-     真实库 `npc.health_changed` **0 条**、6 条种子全 `active=1` 且 severity 不变
-     （伤既不好也不恶化）。见「单列未派」。
+  ③ **每日严重度演进：仍是真缺口，已派第二十轮（codex）**——`sim/content/health.py`
+     无日切钩子，真实库 `npc.health_changed` **0 条**、6 条种子全 `active=1` 且
+     severity 不变（伤既不好也不恶化）。派单要求：复用 `run_world_driver(on_day_switch=)`
+     缝、确定性演进（禁墙钟/RNG）、**只发 `npc.health_changed` 事件不改行**（C4）、
+     规则数值表写进 docstring、补「锚点前演进不进子分支」的钉子。见「单列未派」。
   > `anchor_package.CORPUS_TABLES` 仍不含 `npc_health`（设计如此：健康是**可折叠族**，
   > 走 `_clone_health_at_cursor` 重放，不进包——第十八轮也只在包里加了 `npc_profiles`）。 |
 | **`npc.lod_change` 持久化** | **已完成**（`runtime.py:223` 发射 + `npc_store._project_lod_change` 双键投影）。此前记忆卡写「仍未做」是过时记录，2026-11-01 已订正 |
