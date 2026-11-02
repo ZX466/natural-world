@@ -412,10 +412,10 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-11-01 第十八轮｜npc_profiles 锚点历史态修复，指定门禁全绿】基线16b7eae。死亡事件仅ID且删除完整seed行，单靠死亡/LOD重放不能还原26列，因此采用存档时完整profile快照：两种包writer同事务SELECT *，在既有corpus_blob独立npc_profiles段保存；原三张语料白名单/输出不变。anchor按包精确恢复全部列/时间戳；head与_BOUNDED_TABLES实际列清单不变。锚点后死亡复活，前死亡不复活，后LOD/后插入/同tick后seq不泄漏，空快照权威无人。下一步主树独立复跑收编。
+【2026-11-02 第十九轮｜基础L2真实调用路径接齐，指定门禁全绿】基线8b6b702。NpcProfileData读既有identity_anchor；NpcL2Service用稳定身份前缀、本人感知/记忆/规矩/已听对话生成有限单步动作+成品thought/line。异步coordinator锁外等模型，下拍经原sim_exec落NPC_ACT/MOVE/NPC_MONOLOGUE/NPC_CHAT；无新kind/协议字段。等待L2时近身模板发言暂缓，L1维持行动/生理；模型失效走原模板。世界/LOD轮次/身份/距离/存活/隐藏窗口/听者变化丢弃旧结果。下一步主树独立复跑收编。
 
-- **兼容边界**：旧包缺完整档案段统一corpus_mismatch，在diagnose/materialize的hooks前拒绝；不能从未来行/内容默认值编造死者档案。重存新档只保留当前时点，无法补回旧历史数据。直接手造Materialization缺段也拒绝。主树需明确接受此旧包可用性变化；没有通用无损旧包恢复路径。
-- **验证**：RED5F/3P；分叉回归217P/1S；全量非bench3103P/121S/72D/4旧warnings，370.68s EXIT0。Pyright0E0W、ruff check/format382文件、client353P/48files/typecheck/lint/prettier、两资产byte-identical、gen:protocol:check、uv lock --check全EXIT0。真实玩家load恢复NPC profile及runtime，失败事务不留子档案；同步/异步writer对齐。独立审查0Critical/0Important/0Minor。证据.orca/audits/round18-2026-11-01/{plan.md,gates.json,review.md,seed-probe.json}及日志。
-- **种子只报未修**：seed_villagers按全库id幂等，_profile_row硬编码main。内存库实测(main0,child49)播种后(main1,child49)；(main50,child49)新增0、child仍49。确实不补子分支缺失内容行，但缺行也可能合法死亡，不能盲目补齐；交主树单独评估。死亡契约旧夹具“先save后seed”改为先seed再save，前死亡不克隆契约保留。
-- **边界/收编**：协议1.14；shared/client/package+lock/DESIGN/registry/迷雾登记/seed实现均不动。仅pytest临时库与显式:memory:探针，坏world.db未访问；无浏览器/付费模型。不同步main、不推远程；主树保留自己的02e3b10健康修复和ensure_schema。本树未导入或重做这些改动。talking永不add。
-- **历史/恢复**：第十七轮16b7eae物种知识门+名牌避让已由主树85dd39d收编；第十六轮820c653由主树ffa74bd修witness显示名反查；详情走git log --oneline -- .orca/memory.md。恢复workflow→talking→本节/registry→Git，CodeGraph显式本树projectPath先行。Python用uv/UTF8，保存原命令退出码再读日志尾；删npm/venv先问；i-have-adhd持续。
+- **成本/降格**：新增村民池默认同NPC60真实秒、全村滑动60秒最多4次、单并发、8秒超时、192输出tokens、单HTTP尝试；环境NPC_L2_MIN_INTERVAL_SECONDS、NPC_L2_CALLS_PER_MINUTE、NPC_L2_TIMEOUT_SECONDS可配，预算0关闭新增L2，失败照计、读档不重置。无active profile/解密失败/缺身份锚保持L1。离开3格且最后对话结束30游戏秒后降格，最近已发模型结论去重/长度压缩，经MemoryWritePipeline当前隐藏闸写reason，无额外模型调用。不是多步骤规划器；固定委托脚本台词保留。
+- **验证/审查**：最终pytest非bench3253P/121S/72D/4旧warnings、403.86s EXIT0；最新L2边界127P；Ruff check/format390文件、Pyright0E0W；client353P/48files及typecheck/lint/prettier/protocol、两资产byte-identical、uv lock全EXIT0。真实lifespan、事件两次重放和真实WS队列读档验证，回放/离线/暂停零模型调用。两项Important均RED→GREEN关闭：中文/Unicode/大小写全角Roman数字闸、故障启动恢复后L2动态就绪。双独立审查无剩余阻断。全部FakeLLM/MockTransport，无付费模型质量验收。
+- **主树收编/只报评估**：d77a2a4的A social及D历史视角修复不在本树，未重复实现。L2复用同一成功开口块，controller/summary不写social，因此不新增重复扣减；合入保留主树单次apply_remedy块和D历史过滤，连同本树L2台词选择/note_dialogue一并复跑。ChenmoDriver、needs.py、villager种子、WS语义、fork/_BOUNDED_TABLES均未改；默认陈默重试仍2次，新村民专用client只1次并在停服aclose。
+- **证据/边界**：.orca/audits/round19-2026-11-02/{plan.md,progress.md,gates.json,review.md}及RED/GREEN/各门禁日志；配置与行为docs/perf/llm-monitoring.md §8。协议1.14，shared/client/package+lock/DESIGN/registry/迷雾登记不动，只pytest临时库；坏world.db未访问，无浏览器/真模型。不推送、不同步main；talking永不add。
+- **历史/恢复**：第十八轮8b6b702仍待主树收编，继承其完整profile包与旧包缺段corpus_mismatch边界，本轮未改fork；第十七轮16b7eae由主树85dd39d收编。保留主树ensure_schema、02e3b10健康等先行修复。详情git log --oneline -- .orca/memory.md。恢复workflow→talking→本节/registry→Git，CodeGraph显式本树projectPath先行；Python用uv/UTF8，保存原退出码后读日志尾；删npm/venv先问，i-have-adhd持续。

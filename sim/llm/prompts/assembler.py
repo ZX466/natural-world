@@ -138,6 +138,7 @@ def assemble_prompt(
     norms: NormSlice | None = None,
     *,
     speech_context: SpeechContext | None = None,
+    output_requirements: str | None = None,
 ) -> AssembledPrompt:
     """六段装配 → 禁词终扫 → messages。装配失败抛 PromptAssemblyError。
 
@@ -145,6 +146,7 @@ def assemble_prompt(
     必命中）；其余五段合并为 messages[1]（每决策变化）。
     norms（M3 批次 D1）：[规矩] 段，[记忆] 之后 [处境] 之前；None/空 = 段省略
     （兼容既有调用形）。
+    output_requirements：可选的调用方输出契约，仍经出站终扫；None 保留原契约。
     """
     sections: list[str] = []
     if speech_context is not None:
@@ -192,7 +194,7 @@ def assemble_prompt(
     if input_parts:
         sections.append("\n".join(input_parts))
 
-    sections.append(_REQUIREMENTS_TEXT)
+    sections.append(_REQUIREMENTS_TEXT if output_requirements is None else output_requirements)
     # 因果未知措辞（M4 批次 A 补件，preaudit §2 缺口关闭）：固定尾段，勿动段序。
     sections.append(_CAUSAL_UNKNOWN_TEXT)
 

@@ -106,3 +106,33 @@ degraded: bool          # 是否降级为 numpy/本地兜底（embed_error 时 T
 - 每次调用都记；`batch_size` 决定 latency 归属（单条 vs 整批），日汇总按 `batch_size=1` 分组看单条 P95、其余看批量 P95。
 - 与 chat 共用 §4 日汇总管线（按 profile_name 分组 sum/mean/P50/P95/max），但**分表**（`embed_*` 不进 chat 表）。
 - `llm.embed_error` 的 `error_kind` 沿用 §4 枚举（timeout/connection/http_4xx/http_5xx/rate_limit），`error_hint` 同规则不落堆栈全文。
+
+## 8. 村民 L2 接线与成本闸（2026-11-02）
+
+`NpcProfileData.identity_anchor` 读取既有持久身份锚，装入 `assemble_prompt` 的稳定首消息；
+处境、本人记忆、已听到的直接对话和有效规矩放在后续消息。人类村民进入主角三格内，
+且存在可用模型配置与身份锚时升 L2；后台任务异步生成有限的单步选择
+（eat/rest/work/wander/request_chat）、心声及对白，由下一决策节拍沿既有执行面落成事件。
+这不是多步任务规划器；固定委托系统仍保留脚本台词。
+
+| 环境变量 | 默认值 | 口径 |
+|---|---:|---|
+| `NPC_L2_MIN_INTERVAL_SECONDS` | 60 | 同村民两次请求间隔，真实秒；环境值下限 5 秒 |
+| `NPC_L2_CALLS_PER_MINUTE` | 4 | 全村民共享的滑动 60 真实秒请求上限；0 关闭新增村民 L2 |
+| `NPC_L2_TIMEOUT_SECONDS` | 8 | 单次异步请求等待上限，真实秒 |
+
+新增村民请求最多一个在途，每次最多 192 输出 tokens 且只发一次 HTTP 尝试；失败也占预算，
+读档不会重置预算。上述池与陈默的既有独立节拍分开。没有 active profile、解密失败或关闭
+村民预算时继续 L1；模型失败/超时/非法成品使用已有模板兜底。L2 等待期间由 L1 维持行动与
+生理循环，近身发言交给已完成结果，避免模板抢先耗掉聊天冷却。
+
+网络等待不持世界写锁；完成后再次检查当前世界版本、runtime、L2 轮次、位置、存活、身份、
+隐藏窗口和听者。过期结果丢弃。成品先过现有台词闸与隐藏属性扫描，再拒绝数字、档号和
+内部标识；原始模型文本不入事件或日志。只复用 NPC_ACT/NPC_MONOLOGUE/NPC_CHAT，
+心声仍走 thought 的本人投递面，公开对白走 chat。
+
+离开三格且最后一句对话结束满 30 游戏秒才降回 L1。最近已实际发出的模型心声/对白经
+去重、最近三项与长度预算压缩，再交 MemoryWritePipeline 复扫落 reason 记忆；此压缩不增加
+模型调用，也不绕过隐藏信息拒写。离线补跑在后台模型任务启动前完成，重放只读事件。
+生产接线与降级/重放证明见 `sim/tests/test_npc_l2_live.py`，预算和出戏边界见
+`sim/tests/test_npc_l2_service.py`。

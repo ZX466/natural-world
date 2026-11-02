@@ -110,5 +110,7 @@ def test_lod_demotion_writes_compacted_memory_once():
     )
     runtime.update_lod(npc.npc_id, in_interaction=False, tick=10)
     runtime.update_lod(npc.npc_id, in_interaction=False, tick=20)
+    assert recorded == []
+    runtime.update_lod(npc.npc_id, in_interaction=False, tick=40)
     assert recorded == [npc.npc_id]
-    assert any(e.event_type.value == "npc.lod_change" for e in runtime.tick(30))
+    assert any(e.event_type.value == "npc.lod_change" for e in runtime.tick(40))

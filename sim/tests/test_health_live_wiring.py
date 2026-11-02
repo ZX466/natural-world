@@ -9,9 +9,14 @@ from sim.core.persistence.models import Event, NpcProfile
 
 
 async def stop_background(app):
-    for name in ("driver", "chenmo_task"):
-        getattr(app.state, name).cancel()
-    await asyncio.gather(app.state.driver, app.state.chenmo_task, return_exceptions=True)
+    tasks = [
+        task
+        for name in ("driver", "chenmo_task", "npc_l2_task")
+        if (task := getattr(app.state, name, None)) is not None
+    ]
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
     app.state.loop.clock.set_speed(0)
 
 

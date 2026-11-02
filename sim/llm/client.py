@@ -85,9 +85,20 @@ class DecisionTracker:
 class LlmClient:
     """异步 LLM 客户端。单实例复用底层 httpx 连接池。"""
 
-    def __init__(self) -> None:
+    def __init__(self, *, max_attempts: int = MAX_ATTEMPTS) -> None:
+        if not isinstance(max_attempts, int) or isinstance(max_attempts, bool) or max_attempts < 1:
+            raise ValueError("max_attempts 必须为正整数")
+        self._max_attempts = max_attempts
         self._client: AsyncOpenAI | None = None
         self._client_profile: str | None = None
+
+    async def aclose(self) -> None:
+        """关闭持有的连接池并清引用；允许尚未建池或重复关闭。"""
+        client = self._client
+        self._client = None
+        self._client_profile = None
+        if client is not None:
+            await client.close()
 
     def _ensure_client(self, profile: ProfileSnapshot) -> AsyncOpenAI:
         """按 profile 复用客户端（base_url/key 变化才重建）。"""
@@ -109,12 +120,12 @@ class LlmClient:
         *,
         max_tokens_override: int | None = None,
     ) -> LlmCallResult:
-        """单次补全调用：监控事件 + 重试一次 + 结构化错误。"""
+        """单次补全调用：监控事件 + 有界重试 + 结构化错误。"""
         client = self._ensure_client(profile)
         cache_hit = _prefix_cache_probe(profile.profile_name, messages)
         last_error: tuple[str, str] | None = None
 
-        for attempt in range(1, MAX_ATTEMPTS + 1):
+        for attempt in range(1, self._max_attempts + 1):
             request_id = f"{decision.chain_id}-r{attempt}" if decision else uuid.uuid4().hex[:12]
             logger.info(
                 "llm.request",

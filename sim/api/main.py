@@ -387,6 +387,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             checkpoint_at=checkpoint_at,
             force_checkpoint=force_checkpoint,
         )
+        npc_l2.observe(events)
         if any(
             event.event_type in {EventKind.NPC_HEALTH_CHANGED, EventKind.NPC_DEATH}
             for event in events
@@ -624,6 +625,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             if event is not None:
                 emerged.append(event)
         chenmo = state.entities.get(CHENMO_ID)
+        l2_controlled: set[str] = set()
         if chenmo is not None:
             for npc_id, _profile in npc_runtime.profiles.items():
                 if _profile.species != "human":
@@ -633,7 +635,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     entity is not None
                     and abs(entity.pos[0] - chenmo.pos[0]) + abs(entity.pos[1] - chenmo.pos[1]) <= 3
                 )
-                npc_runtime.update_lod(npc_id, in_interaction=nearby, tick=tick)
+                npc_runtime.update_lod(
+                    npc_id,
+                    in_interaction=nearby,
+                    tick=tick,
+                    allow_l2=npc_l2.available and bool(_profile.identity_anchor.strip()),
+                )
+                if nearby and npc_l2.available and npc_runtime.profiles[npc_id].lod == 2:
+                    l2_controlled.add(npc_id)
+        l2_decisions = npc_l2.take_ready()
         batch = npc_events_for_tick(
             npc_runtime,
             state,
@@ -651,7 +661,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             build_runtime=build_runtime,
             hidden_states=hidden_states,
             context_of=_hidden_context,
+            l2_decisions=l2_decisions,
+            l2_controlled=frozenset(l2_controlled),
         )
+        npc_l2.record(l2_decisions, batch)
         batch[:0] = emerged
         from sim.npc.evidence import witnesses_of_entity_emerge
 
@@ -736,6 +749,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     def _role_tick(state: Any, tick: int) -> list[Any]:
         events: list[Any] = []
         for npc_id in ROLES:
+            role_profile = npc_runtime.profiles.get(npc_id)
+            if npc_l2.available and role_profile is not None and role_profile.lod == 2:
+                continue  # A promoted role speaks/thinks through the same L2 producer.
             if npc_id not in state.entities or tick - role_last.get(npc_id, -600) < 600:
                 continue
             frame = loop.perception_frames.get(rtoken_of(npc_id))
@@ -832,12 +848,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     memory_pipeline = MemoryWritePipeline(store=memory_store)
 
     def _writeback_downgrade(npc_id: str) -> None:
+        summary = npc_l2.take_summary(npc_id)
         memories = chat_ledger.memories_of(npc_id)
-        if not memories:
+        if not summary and not memories:
             return
         memory_pipeline.write(
             npc_id=npc_id,
-            content=memories[-1][1],
+            content=summary or memories[-1][1],
             source="reason",
             event_seq=None,
             importance=0.5,
@@ -919,6 +936,61 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     set_impulse_trigger(driver.request_decision)
 
     world_revision = 0
+
+    # Villager model work is asynchronous and separate from Chenmo's validated driver.
+    # This flag stays false until deterministic offline catch-up has finished.
+    from sim.agent.npc_l2 import L2Policy, NpcL2Service
+    from sim.agent.npc_l2_runtime import NpcL2Coordinator
+
+    npc_l2_live = False
+    npc_l2_client = LlmClient(max_attempts=1)
+    npc_l2_provider = _active_profile_snapshot_provider()
+    npc_l2_policy = L2Policy.from_environment()
+
+    async def _npc_norms(npc_id: str) -> tuple[str, ...]:
+        from sim.core.persistence.knowledge_store import KnowledgeStore
+        from sim.npc.norms import select_norms
+
+        branch = await store.current_branch_id_or_none() or "main"
+        rows = await KnowledgeStore(store.session_factory, branch_id=branch).iter_valid(npc_id)
+        return tuple(row.fact for row in select_norms(rows, holder_id=npc_id))
+
+    def _npc_memories(npc_id: str) -> tuple[str, ...]:
+        persisted = [entry.content for entry in memory_pipeline.iter_visible(npc_id)][-3:]
+        spoken = [text for _, text in chat_ledger.memories_of(npc_id)[-3:]]
+        return tuple(dict.fromkeys(persisted + spoken))[-4:]
+
+    npc_l2 = NpcL2Coordinator(
+        service=NpcL2Service(
+            llm=npc_l2_client, profile_provider=npc_l2_provider, policy=npc_l2_policy
+        ),
+        profile_provider=npc_l2_provider,
+        runtime=lambda: npc_runtime,
+        state=lambda: loop.state,
+        revision=lambda: world_revision,
+        is_live=lambda: (
+            npc_l2_live
+            and npc_l2_policy.max_calls_per_minute > 0
+            and getattr(app.state, "world_source_ready", False)
+            and loop.clock.speed > 0
+        ),
+        context_of=_hidden_context,
+        hidden_of=lambda nid: hidden_states.get(nid, HiddenState.empty()),
+        memory_of=_npc_memories,
+        norms_of=_npc_norms,
+        names=_display_names,
+        write_lock=world_write_lock,
+    )
+    app.state.npc_l2 = npc_l2
+
+    async def _npc_l2_loop() -> None:
+        while True:
+            await asyncio.sleep(0.5)
+            try:
+                await npc_l2.step()
+            except Exception as exc:
+                # World progress never depends on model or read-side availability.
+                logger.warning("npc_l2.unavailable", error_kind=type(exc).__name__)
 
     async def _chenmo_loop() -> None:
         """决策循环：impulse 置位或节拍到期 → 决策 + 同拍执行（与世界 driver 平行）。
@@ -1073,6 +1145,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 loop.pending_combat_visuals.clear()
                 loop.perception_frames = {}
                 world_revision += 1
+                npc_l2.reset()
                 for control in manager.controls():
                     control.cancel_fast_forward()
                 changed = True
@@ -1256,6 +1329,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except BaseException:
             await store.session_factory.kw["bind"].dispose()
             raise
+    # Startup catch-up is finished. Source readiness remains a dynamic gate so a
+    # later successful world recovery can enable L2 without restarting the server.
+    npc_l2_live = True
+    app.state.npc_l2_task = asyncio.create_task(_npc_l2_loop())
     app.state.chenmo_task = asyncio.create_task(_chenmo_loop())
     app.state.driver = asyncio.create_task(
         run_world_driver(
@@ -1273,13 +1350,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        npc_l2_live = False
         app.state.flush_for_anchor = None
         app.state.pathfinder = None
         delattr(app.state, "world_source_ready")
-        tasks = (app.state.chenmo_task, app.state.driver)
+        tasks = (app.state.chenmo_task, app.state.driver, app.state.npc_l2_task)
         for task in tasks:
             task.cancel()
         results = await asyncio.gather(*tasks, return_exceptions=True)
+        await npc_l2_client.aclose()
         voxel_gateway.set_voxel_runtime(None)
         voxel_gateway.reset_voxel_edits()
         await store.session_factory.kw["bind"].dispose()
