@@ -15,7 +15,7 @@ frozen 态：tick 只产出事件与新 profile dict；hidden_states 的窗口�
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 
 from sim.agent.will import WillingnessVerdict, willingness_expression
@@ -66,6 +66,9 @@ class NpcRuntime:
     on_downgrade: Callable[[str], None] | None = None
     _order: list[str] = field(default_factory=list, init=False)
     _lod_events: list[WorldEvent] = field(default_factory=list, init=False, repr=False)
+    _outside_since: dict[str, int] = field(default_factory=dict, init=False, repr=False)
+    _last_dialogue: dict[str, int] = field(default_factory=dict, init=False, repr=False)
+    lod_revisions: dict[str, int] = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self) -> None:
         # 固定 NPC 序（dict 序可能因物化顺序漂移；排序保证 C5 确定性）
@@ -82,6 +85,7 @@ class NpcRuntime:
         hidden_states: dict[str, HiddenState] | None = None,
         context_of: Callable[[str], str] | None = None,
         chat_cooldown_until: dict[str, int] | None = None,
+        action_overrides: Mapping[str, str] | None = None,
     ) -> list[WorldEvent]:
         """推进一 tick：隐藏档重估(+E1 浮现事件) → 需求 → 效用 → 事件批次（顺序固定，可重放）。
 
@@ -159,6 +163,15 @@ class NpcRuntime:
 
         # 3. 事件产出：params 只带白名单键（eat/rest/wander/move 无参数动作 → 空 params）
         for nid, d in zip(active_ids, decisions, strict=True):
+            model_action = (action_overrides or {}).get(nid)
+            if (
+                advanced[nid].lod == 2
+                and advanced[nid].species == "human"
+                and model_action in {"eat", "rest", "work", "wander", "request_chat"}
+            ):
+                # Only a completed, bounded L2 decision replaces this beat's utility
+                # result. All other NPCs and waiting/failed requests retain L1 behavior.
+                d = replace(d, action=model_action, target="", scores={})
             allowed = ACTION_PAYLOAD_KEYS[d.action]
             params = {k: str(v) for k, v in d.scores.items() if k in allowed}
             events.append(
@@ -206,19 +219,41 @@ class NpcRuntime:
         self.profiles = advanced
         return events
 
-    def update_lod(self, npc_id: str, *, in_interaction: bool, tick: int) -> None:
-        """Promote nearby NPCs to L2, demote idle L2 to L1 through events."""
+    def note_dialogue(self, npc_id: str, *, tick: int) -> None:
+        """The final spoken event restarts the thirty-game-second downgrade grace."""
+        if npc_id in self.profiles:
+            self._last_dialogue[npc_id] = max(tick, self._last_dialogue.get(npc_id, tick))
+
+    def update_lod(
+        self, npc_id: str, *, in_interaction: bool, tick: int, allow_l2: bool = True
+    ) -> None:
+        """Promote nearby NPCs; demote after range/dialogue grace, or when unavailable."""
         profile = self.profiles.get(npc_id)
         if profile is None:
             return
-        target = 2 if in_interaction else (1 if profile.lod == 2 else profile.lod)
+        if not allow_l2:
+            target = 1 if profile.lod == 2 else profile.lod
+        elif in_interaction:
+            self._outside_since.pop(npc_id, None)
+            target = 2
+        elif profile.lod == 2:
+            since = self._outside_since.setdefault(npc_id, tick)
+            if tick - max(since, self._last_dialogue.get(npc_id, since)) < 30:
+                return
+            target = 1
+        else:
+            target = profile.lod
         if target == profile.lod:
             return
         from sim.core.events import npc_lod_change_event
 
         if profile.lod == 2 and target == 1 and self.on_downgrade is not None:
             self.on_downgrade(npc_id)
+        if target != 2:
+            self._outside_since.pop(npc_id, None)
+            self._last_dialogue.pop(npc_id, None)
         self.profiles[npc_id] = profile.with_lod(target)
+        self.lod_revisions[npc_id] = self.lod_revisions.get(npc_id, 0) + 1
         self._lod_events.append(
             npc_lod_change_event(
                 tick=tick,

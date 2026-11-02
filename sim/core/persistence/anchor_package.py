@@ -24,6 +24,7 @@ alembic 双路径一致性由 A4 的 8 钉钉死。本单**不需要任何新列
 | RNG 状态包 | `rng_state` | **本设计的核心**：anchor 时刻捕获（A3 §1.3） |
 | agent 覆盖副本 | `agent_override` | 包自足，读档不 JOIN |
 | 语料行值 | `corpus_blob` | **3 张**无事件源表的行值（gzip JSON） |
+| NPC 档案副本 | `corpus_blob.npc_profiles` | 同事务保存完整行，死亡删行后仍可恢复 |
 | 对账基线 | `state_hash` | 展开后 `WorldState.state_hash`（R-2 回归基线） |
 
 **不进包的那一张**：批次 C 的权力态（无事件源 ⇒ 事件重放永远重建不出锚点时刻的值）。
@@ -84,6 +85,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import text
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -93,6 +95,8 @@ from sim.core.persistence.store import SnapshotData, SqlEventStore, decompress_s
 #: 包内语料白名单：3 张**无事件源**表的行值（批次 C 的权力态按 S10 §2.3 裁决**不在此列**）。
 #: 这是**构造性**边界——解码只认这张表，任何别的表键（含被硬塞进来的）一律丢弃。
 CORPUS_TABLES: tuple[str, ...] = ("npc_memories", "knowledge", "relationships")
+
+_PROFILE_SELECT = "SELECT * FROM npc_profiles WHERE branch_id = :bid ORDER BY id"
 
 #: 每张语料表的确定性行序（无 `id` 的表按复合主键排）⇒ 同一世界态编出**同一份** blob。
 _CORPUS_ORDER_BY: Mapping[str, str] = {
@@ -244,6 +248,64 @@ def decode_corpus_blob(blob: bytes | None) -> dict[str, list[dict[str, Any]]]:
     return out
 
 
+def _with_profile_snapshot(blob: bytes | None, rows: Sequence[RowMapping]) -> bytes | None:
+    """Keep profile baselines outside the three-table corpus allowlist.
+
+    The writer remains opaque to malformed corpus blobs; materialization rejects
+    them as before, rather than silently replacing damaged data with an empty blob.
+    """
+    try:
+        body = (
+            {"schema_version": _BLOB_SCHEMA_VERSION, "tables": {}}
+            if blob is None
+            else json.loads(gzip.decompress(blob))
+        )
+    except (OSError, ValueError, TypeError):
+        return blob
+    if not isinstance(body, dict) or not isinstance(body.get("tables"), Mapping):
+        return blob
+    body["npc_profiles"] = [dict(row) for row in rows]
+    return gzip.compress(
+        json.dumps(body, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+        mtime=0,
+    )
+
+
+def _profile_snapshot(package: MaterializationPackage) -> tuple[dict[str, Any], ...]:
+    """Require a complete, branch-bound baseline before invoking any load hooks.
+
+    Death events only contain an ID, so absent old baselines cannot be recreated
+    losslessly from the current roster or content defaults. An empty saved roster
+    is authoritative; a legacy blob without this section is unavailable.
+    """
+    from sim.core.persistence.models import NpcProfile
+
+    decode_corpus_blob(package.corpus_blob)
+    body = {} if package.corpus_blob is None else json.loads(gzip.decompress(package.corpus_blob))
+    rows = body.get("npc_profiles")
+    if not isinstance(rows, list):
+        raise AnchorMaterializationError(
+            "corpus_mismatch", "anchor lacks a complete NPC profile baseline"
+        )
+    columns = set(NpcProfile.__table__.columns.keys())
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != columns:
+            raise AnchorMaterializationError("corpus_mismatch", "incomplete NPC profile row")
+        npc_id = row["id"]
+        if not isinstance(npc_id, str) or not npc_id or npc_id in seen:
+            raise AnchorMaterializationError(
+                "corpus_mismatch", "invalid or duplicate NPC profile ID"
+            )
+        if row["branch_id"] != package.branch_id:
+            raise AnchorMaterializationError("corpus_mismatch", "NPC profile branch mismatch")
+        for key in ("created_at_tick", "updated_at_tick"):
+            if type(row[key]) is not int or not 0 <= row[key] <= package.tick:
+                raise AnchorMaterializationError("corpus_mismatch", "NPC profile cursor mismatch")
+        seen.add(npc_id)
+    return tuple(rows)
+
+
 def _corpus_select(table: str) -> str:
     """语料采集 SQL（**编解码两侧共用**的单真源；表名/排序列来自白名单常量）。"""
     return f"SELECT * FROM {table} WHERE branch_id = :bid ORDER BY {_CORPUS_ORDER_BY[table]}"
@@ -333,6 +395,8 @@ async def write_anchor_package(
     - ``agent_override`` 原样落库（包自足，读档不 JOIN 档面）。
     - 幂等：同一 ``anchor_id`` 重复存档 ⇒ 覆盖为最新（``ON CONFLICT``），不留半包。
     """
+    await session.flush()
+    profiles = (await session.execute(text(_PROFILE_SELECT), {"bid": branch_id})).mappings().all()
     await session.execute(
         text(_PACKAGE_UPSERT_SQL),
         _package_upsert_params(
@@ -342,7 +406,7 @@ async def write_anchor_package(
             seq=seq,
             rng_state=rng_state,
             agent_override=agent_override,
-            corpus_blob=corpus_blob,
+            corpus_blob=_with_profile_snapshot(corpus_blob, profiles),
             state_hash=state_hash,
             snapshot=None if snapshot is None else (int(snapshot.seq), int(snapshot.tick)),
         ),
@@ -396,6 +460,8 @@ def write_anchor_package_sync(
     同步面存在的**唯一**理由：玩家档落库是同步事务（``threading.Lock`` + 同步 Session），
     包必须与「写档行 + 清其余 protected」**同事务**，跨引擎就跨事务了。
     """
+    session.flush()
+    profiles = session.execute(text(_PROFILE_SELECT), {"bid": branch_id}).mappings().all()
     session.execute(
         text(_PACKAGE_UPSERT_SQL),
         _package_upsert_params(
@@ -405,7 +471,7 @@ def write_anchor_package_sync(
             seq=seq,
             rng_state=rng_state,
             agent_override=agent_override,
-            corpus_blob=corpus_blob,
+            corpus_blob=_with_profile_snapshot(corpus_blob, profiles),
             state_hash=state_hash,
             snapshot=snapshot,
         ),
@@ -479,6 +545,8 @@ class Materialization:
     state_hash: str | None
     #: 实际执行序（次序铁律的观测面，钉子断言它）。
     steps: tuple[str, ...]
+    #: Full saved roster; None denotes a legacy package, () an authoritative empty roster.
+    profile_rows: tuple[Mapping[str, Any], ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -556,6 +624,7 @@ async def _resolve_package(
     replay_from = await _resolve_replay_start(
         session, package.branch_id, seq=int(package.seq), snapshot=snapshot
     )
+    _profile_snapshot(package)
     return package, snapshot, replay_from
 
 
@@ -603,6 +672,7 @@ async def materialize_anchor(
             upto_seq=seq
         )
         override = _load_override(package.agent_override)
+        profiles = _profile_snapshot(package)
 
     steps: list[str] = []
     world = await hooks.expand_world(payload, window)
@@ -632,6 +702,7 @@ async def materialize_anchor(
         agent_override=override,
         state_hash=package.state_hash,
         steps=tuple(steps),
+        profile_rows=profiles,
     )
 
 

@@ -3,8 +3,19 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-02 第十九轮**已修**：心声/街巷 A+D）
+## 0. 当前状态（2026-11-02 第十八+十九轮**已收编**：锚点档案 + L2 真接线）
 
+- **第十八+十九轮（codex，2026-11-02）：已 `--no-ff` 收编 `e28e144`**。
+  第十八轮 = 锚点读档按游标重建 `npc_profiles`（独立 profile 快照段）；
+  第十九轮 = **L2 真实调用路径接齐**（有限单步，不是多步规划器）。详见 §7 与 §1。
+  - ⚠️ **可用性变化（须知会用户）**：缺 profile 副本的**旧锚点包**现在统一
+    `corpus_mismatch`、在 hooks 前拒绝 ⇒ **旧存档读不出来**。属 fail-closed 取舍
+    （`npc.death` 只有 ID，重建不出已删的 26 列），已登记 `docs/data/schema.md §24.2`。
+    本树实测 `world.db` 里 `anchor_packages` **0 行**，所以实际影响面为零——但
+    codex 树/别的副本若有旧包会读不出来。
+  - **L2 只在「人在主角 3 格内 + 有可用模型配置 + 有身份锚」时升格**；默认 60 真实秒
+    / 每 NPC、全村 4 次/60 秒、单并发、8 秒超时、192 输出 token、单 HTTP 尝试。
+    `NPC_L2_CALLS_PER_MINUTE=0` 可一键关。**暂停/离线/历史回放零模型调用**。
 - **第十九轮（主树，2026-11-02）：A social 需求闭环 + D 心声历史私密面**。
   用户问「模型能控制人物吗 / 心声和街巷太乱」，实测结论见 §1g；本轮只修
   两条**真缺陷**（用户裁定 A+D，B 真接 L2 与 C 扩池未动）。
@@ -27,11 +38,27 @@
   > pytest 3100 → 3114 = **+14** = 第十九轮 13 条 + `02e3b10` 的
   > `test_A_health_seam_equal` 1 条（3100 是第十七轮收编时的读数，
   > 早于 `npc_health` 修复那笔提交）。vitest 不变（353）——本轮零前端改动。
-
+- **收编后门禁（主树独立实测，2026-11-02）**：pytest **3280 passed / 0 failed / 121 skipped**
+  （419.73s）· ruff/format **394 files** · pyright 0/0 · client 四件 EXIT 0 ·
+  vitest **353 passed / 48 files** · 两资产 `--check` 逐字节一致 · `uv lock --check` 一致 ·
+  协议 **1.14**。完整表见 §1。
 
 - **main HEAD**：`git log -1 --oneline` 现测（**别记哈希**，记录本身就会产生新提交）。
-  第十七轮收编 = 本文件本次提交的父提交（`--no-ff` 合并 `16b7eae`）。
-- **codex HEAD**：`16b7eae`（第十七轮已交付并已收编；codex 树尚未同步 main）。
+  第十八+十九轮收编 = 本文件本次提交的父提交（`--no-ff` 合并 `e28e144`）。
+- **codex HEAD**：`e28e144`（第十九轮；含第十八轮 `8b6b702`）。**两轮均已收编**；
+  codex 树仍未同步 main。
+- **第十八+十九轮：已收编**（`--no-ff` 合并 `e28e144`，merge-base `16b7eae`）。
+  - **2 处冲突**（预测 4 处；`main.py`/`fork.py` 自动合并，已复查主树修复仍在）：
+    1. `sim/npc/sim_exec.py` —— **两边都保留**：先 codex 的 `note_dialogue`（L2 降格判据），
+       再主树单次 `apply_remedy(..., "request_chat")`。codex 回执 §4 明确要求如此；
+       L2 服务侧不写 social ⇒ 不会重复扣账。
+    2. `.orca/memory.md` —— 取主树版本后补记（本节 + §7）。
+  - **自动合并后复查（第十七轮活例）**：`main.py::ensure_schema`（`:42,208`）在；
+    `fork.py::_clone_health_at_cursor`（`:559` 调用 / `:797` 定义，`02e3b10`）在；
+    `ws.py` D 的 `_MONO_HISTORY` 视角过滤（`:578,597,617`）在。三处均未丢。
+  - **收编后首跑 1 红，已修**：`test_m5_fork_replay.py::test_A_health_seam_equal`
+    （主树 `02e3b10` 钉子，codex 分支不含那笔提交 ⇒ codex 不知道这个手搓夹具）。
+    修法见 §1 注。修后 **3280P**。
 - **第十七轮：已收编**（物种知识门 + 名牌重叠）。
   - 收编为 `--no-ff` 合并，**3 处冲突**按预定口径解决：
     1. `sim/api/main.py` —— 取 codex 侧后**补回主树的 `ensure_schema`**（`main.py:42,208`）。
@@ -99,11 +126,15 @@
 > 10. **心声/街巷是否还乱**：A 修后街巷从 75.2 → 56.5 条/分钟、换屏 6.4→8.5 秒，
 >     心之声面板不再被别人的内心话冲掉（D 修）。**但句库仍是 2 句 + 19 句**，
 >     C（扩池 + 动作语境）没做——这一条很可能仍不过，见 §1g。
+> 11. **L2 是否真的「有脑子」**（第十八+十九轮收编后新增）：现在主角 3 格内的村民
+>     会走模型。看两点：①升格村民的心声/对白是否明显比模板有人味；
+>     ②模型失败/超时是否干净退回模板（不卡顿、不空窗、不重复说同一句）。
+>     **默认预算很紧**（每 NPC 60 秒一次、全村 4 次/分钟），观察需要耐心。
 
 > **记录订正**：用户 2026-10-31 先发「1 2 3观感已验收」、随后「3都已验收」，
 > 均指验收清单**第 1/2/3 条**。我最初误记为第 8/9 条，已改回。第 8/9 条**尚未验收**。
 
-## 1. 门禁（**2026-11-02 第十九轮主树独立实测**；第十六轮复核见 §1e）
+## 1. 门禁（**2026-11-02 收编第十八+十九轮后主树独立实测**；第十六轮复核见 §1e）
 
 > **第十六轮在 codex 树实测（独立复跑，非采信自测）**：
 > pytest `-m "not bench"` **3074 passed / 0 failed / 121 skipped**（394.51s）·
@@ -112,18 +143,25 @@
 > 与 `test_retrieval_full_scan_degraded_sentinel`），且两条单跑均通过 ⇒ 抖动，非回归。
 > 回执称「sound baseline passes」是错的。
 
-| 项 | 第十九轮实测 |
+| 项 | 收编后实测（2026-11-02） |
 |---|---|
-| pytest `-m "not bench"` | **3114 passed** / 0 failed / 121 skipped（428.88s） |
-| ruff check / format | clean（385 files） |
+| pytest `-m "not bench"` | **3280 passed** / 0 failed / 121 skipped（419.73s） |
+| ruff check / format | clean（**394 files**） |
 | pyright | 0 errors, 0 warnings, 0 infos |
 | client gen:protocol:check / typecheck / lint / prettier | EXIT 0 |
 | client vitest | **353 passed / 48 files** |
 | build_height_map --check | 逐字节一致 |
 | build_block_atlas --check | 逐字节一致 |
-| `tools/check_implementation_status.py` | 未发现缺口 |
 | `uv lock --check` | 一致 |
 | 协议 | **1.14**（双落点同值） |
+
+> **收编后首跑 1 失败，已修**：`test_m5_fork_replay.py::TestR2SeamConsistency::test_A_health_seam_equal`
+> —— 该测试是主树 `02e3b10` 的钉子，codex 分支**不含那笔提交**，所以 codex 不知道
+> 这个文件里还有一个手搓 `_minimal_package` 调用点；合并后第十八轮新加的 fail-closed
+> 判据（`package.profile_rows is None` ⇒ `ForkError`）把它撞了。修法：夹具增
+> `profile_rows` 形参 + `_profile_rows_at()` 从库导全列（该夹具的世界**有** chenmo，
+> 不能像另两个空名册夹具那样填 `()`）。修后该文件 20P，全套 3280P。
+> **这正是「收编必独立复跑」的活例**：codex 自测 3253P 全绿，主树一合就红。
 
 > 第十五轮动的是 `sim/world/offline.py`（新）+ `sim/core/persistence/` + `sim/api/main.py`
 > + 整个 `client/src/game/audio/`，故两侧全套必跑。
@@ -131,6 +169,9 @@
 > 3061 − codex 自测 3056 = 5 条 = 主树第十四轮的 `test_schema_self_heal.py`（codex 分支不含那笔提交）。
 > **第十七轮：3100 − 3069 = 31 条**（`test_species_knowledge.py` 6 + `test_m3_social_wiring.py` 25）；
 > vitest 353 − 337 = **16 条**（`name-labels.test.ts`）。两边新增数与主树复跑读数逐条对上。
+> **第十八+十九轮：3280 − 3114 = 166 条**（codex 自测 3253 与本树 3280 的 27 差 =
+> 主树第十九轮 A/D 的 13 条 + 主树 02e3b10 的健康游标钉子等主树专有提交）。
+> vitest 仍 **353/48**（两轮未动前端）。
 
 ## 1d. 收编复核纪律的一条实证（2026-11-01）
 
@@ -894,3 +935,40 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 - **门禁/证据**：全量pytest3056P/0F/121S/72D，400.84s；5warnings=4旧弃用+旧test_m4c_llm_driver种子夹具未dispose engine的一次线程警告，未顺手改。离线/E1/快照41P；T5完整10P另跑；soak零阈值契约1P。Ruff378files/Pyright0E0W/client337P/47files与全部门禁通过；两资产byte-identical、实现程度检查、uv lock全绿。round15-2026-11-01/{plan.md,gates.json}已归档。协议1.14，shared、package/lock、冻结DESIGN、registry、迷雾登记不变。真实world.db未读写、未运行其迁移，无浏览器/付费模型。
 - **恢复纪律**：workflow→talking→本节/registry；CodeGraph显式本树projectPath先行，已返源码视为已读；协作只本树talking，ignored永不add；memory只改§7、-f add并提交。Python全程uv/UTF8；PS中文脚本须OutputEncoding UTF8，重定向可能UTF16。删npm/venv先问；主树域/第十四轮历史健康还原与LOD等未派事项不展开。i-have-adhd持续，50%提醒已给，后续建议新对话。
 
+【2026-11-02 Round18+19｜codex 交付，主树已 `--no-ff` 收编】codex 连交两轮：
+第十八轮 `8b6b702`（锚点读档按游标重建 `npc_profiles`）、第十九轮 `e28e144`（L2 真实
+调用路径接齐）。主树独立复跑读数见 §1；本段记收编口径。
+
+- **第十八轮 `npc_profiles` 锚点读档**：锚点包采用**独立 profile 快照段**，不再复制父分支
+  未来 death/LOD 态。**兼容边界（可用性变化，必须告知用户）**：缺 profile 副本的旧锚点包
+  统一 `corpus_mismatch`、hooks 前拒绝——旧存档将**读不出来**。已登记
+  `docs/data/schema.md §24.2`。主树裁定：接受，属 fail-closed 取舍，非回归。
+- **第十九轮 L2 真接线**：`NpcProfileData` 读既有 `identity_anchor` 列（无新列、无 seed 改动）；
+  `NpcL2Service` 用稳定身份前缀 + 本人感知/记忆/规矩/已听对话，生成**有限单步**动作
+  （eat/rest/work/wander/request_chat）+ 成品 thought/line。异步 coordinator **锁外**等模型，
+  下拍经原 `sim_exec` 落 `NPC_ACT`/`MOVE`/`NPC_MONOLOGUE`/`NPC_CHAT`——**无新事件 kind、
+  无协议字段**（T2 逐位一致不受影响；`world.py` 三个 handler 仍是 no-op）。
+  等待 L2 时近身模板发言暂缓；模型失效回退原模板。世界/LOD 轮次/身份/距离/存活/隐藏窗口/
+  听者变化 → 丢弃旧结果。**不是多步长程规划器**，是「有限单步 L2」。
+- **成本闸**：新增村民池默认同 NPC 60 真实秒、全村滑动 60 秒最多 4 次、单并发、8 秒超时、
+  192 输出 token、单 HTTP 尝试；`NPC_L2_MIN_INTERVAL_SECONDS` / `NPC_L2_CALLS_PER_MINUTE`
+  （0=关）/ `NPC_L2_TIMEOUT_SECONDS` 可配，坏值回退保守默认。**暂停/离线/历史回放零模型调用**
+  （`offline.py` 的「不调模型」承诺未破）。离开 3 格且最后对话结束 30 游戏秒后降格；
+  最近已发结论去重 + 长度压缩经 `MemoryWritePipeline` 当前隐藏闸，无额外模型调用。
+- **收编冲突 2 处**（预测 4 处，`main.py`/`fork.py` 自动合并）：
+  1. `sim/npc/sim_exec.py` —— **两边都保留**：先 `note_dialogue`（L2 降格判据），
+     再主树单次 `apply_remedy(..., "request_chat")`。L2 侧不写 social ⇒ 不会重复扣账。
+  2. `.orca/memory.md` —— 取主树版本后补记本轮（本节）。
+- **自动合并后复查（必做，第十七轮活例）**：`main.py::ensure_schema`（`:42,208`）、
+  `fork.py::_clone_health_at_cursor`（`02e3b10`）、`ws.py` D 的 `_MONO_HISTORY` 视角过滤，
+  三处均须仍在——已核。
+- **第十九轮自测（codex 侧，不采信）**：pytest 非 bench 3253P/121S/72D、403.86s；
+  L2 边界 127P；Ruff 390 files；Pyright 0/0；client 353P/48files；两资产逐字节；
+  `uv lock`；全 EXIT 0。两项 Important（中文/Unicode/全角 Roman 数字闸、故障启动后
+  L2 动态就绪）RED→GREEN 关闭。**全部 FakeLLM/MockTransport——无付费模型质量验收。**
+- **只报未修（主树待评估）**：第十八轮的 `seed_villagers` 分支过滤问题，codex 仅报告未改。
+- **证据**：`.orca/audits/round18-*`（如有）、`.orca/audits/round19-2026-11-02/
+  {plan.md,progress.md,gates.json,review.md}`；配置与行为记 `docs/perf/llm-monitoring.md §8`。
+- **未动**：`ChenmoDriver`、`needs.py`、villager 种子、WS 语义、`fork/_BOUNDED_TABLES`、
+  协议 1.14、`shared/`、`package.json`+lock、冻结 `DESIGN.md`、`registry`、迷雾登记。
+  默认陈默重试仍 2 次；新村民专用 client 只 1 次并在停服 `aclose`。

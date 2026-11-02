@@ -93,6 +93,7 @@ def _row_to_profile_data(row: NpcProfile) -> NpcProfileData:
         skills=_skills_from_json(row.skills),
         lod=row.lod,
         class_register=LanguageProfile.from_json(row.knowledge_boundary).class_register,
+        identity_anchor=row.identity_anchor,
     )
 
 

@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable, Mapping
 from dataclasses import replace
+from typing import TYPE_CHECKING
 
 from sim.agent.build_exec import BuildRuntime
 from sim.core.events import WorldEvent, move_event, npc_chat_event, npc_monologue_event
@@ -24,6 +25,9 @@ from sim.core.world import EntityState, WorldState
 from sim.npc.contract import HiddenState
 from sim.npc.schedule import MARKET_SITE
 from sim.world.pathfinding import Pathfinder
+
+if TYPE_CHECKING:
+    from sim.agent.npc_l2 import L2Decision
 
 # ---------------------------------------------------------------------------
 # 意愿独白（批次 D2：NPC 开口）——节流常数
@@ -546,6 +550,8 @@ def npc_events_for_tick(
     build_runtime: BuildRuntime | None = None,
     hidden_states: dict[str, HiddenState] | None = None,
     context_of: Callable[[str], str] | None = None,
+    l2_decisions: Mapping[str, L2Decision] | None = None,
+    l2_controlled: frozenset[str] = frozenset(),
 ) -> list[WorldEvent]:
     """一个决策节拍的事件批次：NpcRuntime.tick → NPC_ACT 批次 + MOVE 交错。
 
@@ -575,11 +581,18 @@ def npc_events_for_tick(
             if hidden_states is not None
             else {}
         ),
+        **(
+            {"action_overrides": {nid: decision.action for nid, decision in l2_decisions.items()}}
+            if l2_decisions
+            else {}
+        ),
     )
     events: list[WorldEvent] = []
     for event in acts:
         if event.event_type.value == "npc.monologue":
             npc_id = str(event.payload.get("npc_id", ""))
+            if npc_id in l2_controlled or npc_id in (l2_decisions or {}):
+                continue  # This beat has a model conclusion instead of a template voice.
             if monologue_last is not None:
                 cooldown = _cooldown_ticks(npc_id)
                 last = monologue_last.get(npc_id, -(cooldown + 1))
@@ -608,6 +621,26 @@ def npc_events_for_tick(
         npc_id = str(event.payload.get("npc_id", ""))
         action = str(event.payload.get("action", ""))
         target = str(event.payload.get("target", ""))
+        model_decision = (l2_decisions or {}).get(npc_id)
+        waiting_l2_chat = (
+            npc_id in l2_controlled and model_decision is None and action == "request_chat"
+        )
+        if model_decision is not None:
+            actor = state.entities.get(npc_id)
+            if actor is not None and actor.path:
+                # Replace an old L1 journey by an explicit stop event. The local
+                # projection lets this beat execute the new action without direct writes.
+                events.append(move_event(tick, npc_id, actor.pos, actor.pos, (actor.pos,)))
+                state = state.model_copy(
+                    update={
+                        "entities": {
+                            **state.entities,
+                            npc_id: actor.model_copy(update={"path": ()}),
+                        }
+                    }
+                )
+            if model_decision.thought:
+                events.append(npc_monologue_event(tick, npc_id, "thought", model_decision.thought))
         if action == "build":
             from sim.npc.build_action import build_action_events
             from sim.world.economy import CoinLedger
@@ -681,6 +714,7 @@ def npc_events_for_tick(
             and entity is not None
             and not entity.path
             and chat_last is not None
+            and not waiting_l2_chat
         ):
             target_id = _nearest_other(entity, state)
             if target_id is not None:
@@ -702,12 +736,25 @@ def npc_events_for_tick(
                         and target_id in chat_ledger.relations_of(npc_id),
                     )
                     line = template_line(npc_id, listener, tick, speech_context=context)
+                    if (
+                        model_decision is not None
+                        and model_decision.listener_id == target_id
+                        and model_decision.line
+                    ):
+                        line = model_decision.line
                     events.append(
                         npc_chat_event(tick=tick, npc_id=npc_id, to_id=target_id, line=line)
                     )
-                    # social 闭环（2026-11-02 修）：真的开上口了才算「说到话」——
+                    # 第十九轮（codex）：L2 降格判定用「最后一句对话结束」时刻。
+                    note_dialogue = getattr(runtime, "note_dialogue", None)
+                    if note_dialogue is not None:
+                        note_dialogue(npc_id, tick=tick)
+                        note_dialogue(target_id, tick=tick)
+                    # social 闭环（主树 2026-11-02 修）：真的开上口了才算「说到话」——
                     # 与 D3「吃了才算吃」同口径（未开口=冷却内/邻域无人，不回写）。
                     # 修前 social 只涨不降，第 2 游戏日起恒 1.00 → 全场 band 3。
+                    # 收编口径（codex 回执 §4）：本块与 note_dialogue 同在，
+                    # L2 服务侧不写 social ⇒ 不会重复计账。
                     profiles_now = getattr(runtime, "profiles", None)
                     if profiles_now is not None and npc_id in profiles_now:
                         from sim.npc.needs import apply_remedy
@@ -750,6 +797,8 @@ def npc_events_for_tick(
                                 from sim.core.events import relationship_retell_event
 
                                 events.append(relationship_retell_event(tick, npc_id, target_id))
+        if waiting_l2_chat:
+            continue
         mv = plan_npc_move(
             state,
             npc_id,

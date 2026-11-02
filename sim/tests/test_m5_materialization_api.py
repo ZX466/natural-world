@@ -401,6 +401,8 @@ class TestMaterializationRoute:
 class TestSyncAsyncParity:
     async def test_write_faces_produce_identical_row(self, tmp_path: Path) -> None:
         """同步写面 ≡ async 写面（同 SQL + 同参数构造 ⇒ 同行值）。"""
+        from sim.core.persistence.models import NpcProfile
+
         db = tmp_path / "parity.db"
         eng = create_async_engine(f"sqlite+aiosqlite:///{db}")
         await init_database(eng)
@@ -414,6 +416,10 @@ class TestSyncAsyncParity:
                     )
                 )
                 await s.commit()
+                s.add(
+                    NpcProfile(id="saved-npc", branch_id="main", name="存档中的人", created_at=12.0)
+                )
+                await s.commit()
                 await write_anchor_package(
                     s,
                     anchor_id="a-async",
@@ -422,7 +428,7 @@ class TestSyncAsyncParity:
                     seq=3,
                     rng_state=RNG_BLOB,
                     agent_override='{"npc":"chenmo"}',
-                    corpus_blob=b"blob",
+                    corpus_blob=ap_mod.encode_corpus_blob({}),
                     state_hash="hash-x",
                     snapshot=SnapshotData(branch_id="main", seq=2, tick=2, data=b"{}"),
                 )
@@ -440,7 +446,7 @@ class TestSyncAsyncParity:
                 seq=3,
                 rng_state=RNG_BLOB,
                 agent_override='{"npc":"chenmo"}',
-                corpus_blob=b"blob",
+                corpus_blob=ap_mod.encode_corpus_blob({}),
                 state_hash="hash-x",
                 snapshot=(2, 2),
             )
@@ -458,6 +464,11 @@ class TestSyncAsyncParity:
         )
         assert len(rows) == 2
         assert rows[0] == rows[1], f"同步面与 async 面写出的行不同：{rows}"
+        import gzip
+
+        body = json.loads(gzip.decompress(rows[0][7]))
+        assert body["npc_profiles"][0]["name"] == "存档中的人"
+        assert len(body["npc_profiles"][0]) == len(NpcProfile.__table__.columns)
 
     async def test_collect_faces_match(self, tmp_path: Path) -> None:
         """同步采集 ≡ async 采集（同一份 SQL；列序/行序都不能漂）。"""

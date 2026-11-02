@@ -95,11 +95,20 @@ async def _noop_preflush() -> None:
     return None
 
 
-def _minimal_package(branch_id: str, seq: int, tick: int) -> Materialization:
+def _minimal_package(
+    branch_id: str,
+    seq: int,
+    tick: int,
+    profile_rows: tuple[dict[str, object], ...] = (),
+) -> Materialization:
     """最小物化包：只为过 `fork.py` 的逐项校验（语料/火场留空 ⇒ 子线无附加写入）。
 
     用真 ``Materialization`` 而非 Mock——被测语义是「anchor-fork 走真实 fork 路径」，
     Mock 会把校验与交接两段都绕过去。
+
+    ``profile_rows``：第十八轮起锚点包必须自带**完整**档案基线（`npc.death` 只有 ID，
+    重建不出已删的 26 列），缺段 ⇒ `ForkError`。本夹具的世界里种了 ``chenmo``，
+    所以调用方要传真行；确实无人的世界传 ``()`` 才是合法「该时刻空名册」。
     """
     return Materialization(
         anchor_id=f"anc-{branch_id}-{seq}",
@@ -118,6 +127,20 @@ def _minimal_package(branch_id: str, seq: int, tick: int) -> Materialization:
         agent_override={},
         state_hash=None,
         steps=(),
+        profile_rows=profile_rows,
+    )
+
+
+async def _profile_rows_at(session: AsyncSession, branch_id: str) -> tuple[dict[str, object], ...]:
+    """按 ORM 全列导出该分支的档案行（锚点包的 `profile_rows` 形状）。"""
+    rows = (
+        (await session.execute(select(NpcProfile).where(NpcProfile.branch_id == branch_id)))
+        .scalars()
+        .all()
+    )
+    return tuple(
+        {column.name: getattr(row, column.name) for column in NpcProfile.__table__.columns}
+        for row in rows
     )
 
 
@@ -321,7 +344,9 @@ class TestR2SeamConsistency:
             new_branch_id=CHILD,
             preflush=_noop_preflush,
             kind="anchor",
-            package=_minimal_package(PARENT, anchor_seq, anchor_seq),
+            package=_minimal_package(
+                PARENT, anchor_seq, anchor_seq, await _profile_rows_at(session, PARENT)
+            ),
         )
 
         child_rows = (
