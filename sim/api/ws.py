@@ -581,6 +581,17 @@ _MONO_HISTORY: deque[tuple[str, dict[str, Any]]] = deque(maxlen=20)
 #: 既有事件投影，非新表达面）。
 
 
+def monologue_history_clear() -> None:
+    """读档 = 分叉 ⇒ 进程内心声账本整体失效（2026-11-02 修）。
+
+    与 `npc_l2.reset()` / `chat_ledger.reset()` 同批调用（`main.py` 读档成功块）：
+    账本记的是**本分支**最近 20 条，分叉后旧分支的内容不得随快照灌进新分支的
+    心之声面板（修前读档后面板先被旧线内容冲一遍，`bubble` 面全过投递面过滤）。
+    事件仍在库里，历史可重放——清的只是进程内投影，不是真相。
+    """
+    _MONO_HISTORY.clear()
+
+
 def monologue_history_push(events: list[WorldEvent]) -> None:
     """事件批次 → 心声历史账本（每帧由 driver 调；O(本帧 monologue 数)）。
 

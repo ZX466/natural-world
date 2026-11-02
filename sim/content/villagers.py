@@ -286,15 +286,22 @@ def _profile_row(p: NpcProfileData) -> dict[str, object]:
     from sim.npc.roles import ROLES
 
     role = ROLES.get(p.npc_id)
+    # 身份锚必须与同一行的 name/occupation **同源**（2026-11-02 修）：
+    # 修前这里用名册原始值 `p.name`/`p.occupation`，而上面两列走 `ROLES` 覆盖 ⇒
+    # 三个专属角色自相矛盾（库里「赵铁·镖师」配锚「我是赵铁柱，农人。」）。
+    # 第十九轮接上 L2 后，`agent/npc_l2.py:243` 把这个锚直接塞进 prompt 的
+    # 第一条 system 消息 —— 模型与玩家头顶名牌对不上，且正是最常碰面的三人。
+    name = role[0] if role else p.name
+    occupation = role[2] if role else p.occupation
     return {
         "id": p.npc_id,
         "branch_id": "main",
-        "name": role[0] if role else p.name,
+        "name": name,
         "species": "human",
         "gender": "unknown",
         "age": role[1] if role else 30 + (_hash_u32(p.npc_id, "age") % 40),
-        "occupation": role[2] if role else p.occupation,
-        "identity_anchor": f"我是{p.name}，{p.occupation}。",
+        "occupation": occupation,
+        "identity_anchor": f"我是{name}，{occupation}。",
         "ocean_openness": int(p.ocean[0]),
         "ocean_conscientiousness": int(p.ocean[1]),
         "ocean_extraversion": int(p.ocean[2]),

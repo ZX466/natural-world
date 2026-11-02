@@ -1149,6 +1149,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 loop.perception_frames = {}
                 world_revision += 1
                 npc_l2.reset()
+                # 读档 = 分叉 ⇒ 心声历史账本同样失效（2026-11-02 修）：
+                # 不清则旧分支最近 20 条随快照灌进新分支的心之声面板
+                # （bubble 面全过投递面过滤，旧线嘟囔会整批出现在新世界）。
+                _ws_mod.monologue_history_clear()
                 for control in manager.controls():
                     control.cancel_fast_forward()
                 changed = True

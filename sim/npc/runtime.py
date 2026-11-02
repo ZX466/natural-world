@@ -194,7 +194,9 @@ class NpcRuntime:
             elif self.willingness is not None:
                 verdict = self.willingness
             if verdict is not None:
-                expr = willingness_expression(verdict, npc_name=nid)
+                # 2026-11-02：把本拍动作一并传入 —— 独白必须与动作同口径
+                # （修前人 rest 却嘟囔「这活儿讨价还价也没人听」）。
+                expr = willingness_expression(verdict, npc_name=nid, action=d.action)
                 if expr is not None:
                     events.append(
                         npc_monologue_event(

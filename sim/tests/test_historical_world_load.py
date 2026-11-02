@@ -153,6 +153,39 @@ async def test_historical_load_restores_npc_profile_and_runtime_after_later_deat
     assert profiles["villager_01"].name == "赵铁"
 
 
+async def test_historical_load_clears_old_branch_monologue_history(saved_world):
+    """读档 = 分叉 ⇒ 旧分支的心声账本不得随快照灌进新分支面板。
+
+    修前 `_MONO_HISTORY` 全仓无 `.clear()`，读档成功后
+    `broadcast_json(snapshot_payload(...))` 带着旧分支最近 20 条出站，
+    客户端逐条 `pushMonologue` ⇒ 新世界面板先被旧线内容冲一遍。
+    """
+    from collections import deque
+
+    app, anchor_id, _, _, frames = saved_world
+    # 本测试直接改模块级账本（读档路径清的就是它）。断言失败时别把脏数据
+    # 留给后面的用例 —— 用 try/finally 兜底清一次（正常路径已由被测代码清空）。
+    try:
+        ws._MONO_HISTORY.append(
+            ("villager_07", ws.monologue_payload("bubble", "旧分支的嘟囔", name="某某"))
+        )
+        assert len(ws._MONO_HISTORY) == 1
+        ws.handle_client_message(
+            {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id},
+            app.state.loop,
+            app.state.pathfinder,
+            ws.ControlState(),
+        )
+        await app.state.drain_pending_loads()
+        assert app.state.load_outcomes[-1] == (anchor_id, True)
+        assert len(ws._MONO_HISTORY) == 0, "旧分支心声账本必须随分叉清空"
+        snapshot = next(f for f in frames if f["type"] == "full_snapshot")
+        assert snapshot["monologue_history"] == []
+        assert isinstance(ws._MONO_HISTORY, deque)
+    finally:
+        ws._MONO_HISTORY.clear()
+
+
 async def test_decision_started_before_load_cannot_execute_in_restored_world(
     saved_world, monkeypatch
 ):

@@ -3,8 +3,38 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-02 第十八+十九轮**已收编**：锚点档案 + L2 真接线）
+## 0. 当前状态（2026-11-02 收编完成 + 主树 1A/2A/4A/roles + 第二十轮已派）
 
+- **主树本批（2026-11-02，用户问「还有什么问题」后按建议顺序做的前三条 + 顺带一条）**：
+  1. **1A 身份锚自洽**（`villagers.py::_profile_row`）：`identity_anchor` 改与同行
+     `name`/`occupation` 同源。修前三个专属角色库里「赵铁·镖师」配锚
+     「我是赵铁柱，农人。」——`npc_l2.py:243` 把这个锚当 prompt **第一条 system
+     消息**，模型与玩家头顶名牌对不上。新增 6 条钉子。
+     **真实库（只读）实测**：54 行里严格比对 **7 行**不符，其中真缺陷 **3 行**
+     （三个专属角色）；另 4 行是合法不同形——陈默的故意长锚 + 灰/黑子/鸦
+     走 `animals.py:27` 的 `我叫{name}。`。**别把 7 当缺陷数**。
+  2. **2A 读档清心声账本**（`ws.py::monologue_history_clear()`）：`_MONO_HISTORY`
+     修前全仓无 `.clear()`，读档后旧分支最近 20 条随快照灌进新世界面板
+     （D 只过滤「别人的」，没管「旧世界的」）。新增 4 条 + 端到端 1 条。
+  3. **4A 意愿独白按动作分口径 + 扩街巷句库**：`will.py::_ACTION_TEMPLATES`
+     （5 动作 × 3 档 × **≥12 句**，与通用池同宽）+ `willingness_expression(..., action=)`；
+     `dialogue.py` 粗 2→9 / 文雅 2→7（文雅每句必带「您」）。新增 **53 条**。
+     - `action=""` 与修前逐位一致；**`move`/`build`（无专属池）也必须逐位一致**
+       ——首版只回落池、仍用 `(npc, action)` 作键，会静默换句，已修 + 钉死。
+     - 池宽**必须 ≥12**：真实库 `npc.act` rest **87,864 次**是绝对主力，
+       专属池 4 句 = 比它替换掉的 12 句通用池**更复读**，本末倒置。
+     - **命中面实测**（真实库 `npc.monologue` 60 条 thought 按同人前一动作配对）：
+       rest **33** / wander **18** / work **6** / eat 1 / request_chat 1 / move 1
+       ⇒ 新专属池覆盖 **85%**（rest+wander），`move` 几乎不产 band>0，
+       其回落修正属正确性保险而非热点。
+  4. **顺带修（同一子系统，查证时撞见）**：`npc/roles.py::role_events` 把
+     `narrate_sound` 的**完整句**（自带句号）直接拼进 `听见{clue}，…` ⇒
+     真实库 `npc.monologue` 实测：**209 条里 60 条**含「句号/问号/感叹号紧跟逗号」
+     （= thought 面**全部** 60 条，bubble 面 149 条无一命中），形态是
+     `听见传来一阵脚步声，像是奚船家。，先记在心里。`。
+     加 `_as_clause()` 只剥一层尾标点，5 条参数化钉子（RED 4 失败 → GREEN 5）。
+- **第二十轮已派 codex**：每日健康严重度演进 + `seed_villagers` 分支过滤
+  （两条真缺口，见「单列未派」）。**主树只报未修，不重复实现**。
 - **第十八+十九轮（codex，2026-11-02）：已 `--no-ff` 收编 `e28e144`**。
   第十八轮 = 锚点读档按游标重建 `npc_profiles`（独立 profile 快照段）；
   第十九轮 = **L2 真实调用路径接齐**（有限单步，不是多步规划器）。详见 §7 与 §1。
@@ -90,9 +120,9 @@
   - 只走各树 `.orca/talking.txt`；不直接对话。
 - **远程**：origin/gitee 均在 `3603ecb`（**主树领先未推**，推送仍由用户决定）。
   现测：`git rev-list --count origin/main..main`——**不要记数字**，每提交一次它就变。
-- **在飞**：第十八轮（codex `8b6b702`，`npc_profiles` 锚点读档）**待收编**；
-  **codex 第十九轮已派**（L2 真接线，见 §1g）。未派：V3.5 内容包 / V4-3D。
-  主树 C 项（扩池 + 动作语境）**已诊断未做**，依据在 §1g。
+- **在飞**：**第二十轮已派 codex**（每日健康严重度演进 + `seed_villagers` 分支过滤）。
+  未派：V3.5 内容包 / V4-3D。第十八+十九轮**已收编**；主树 1A/2A/4A **已做完**。
+  §1g 的 C 项（扩池 + 动作语境）已由 4A 关闭。
 
 > **第十九轮派单的三个硬约束**（主树已查实，写给收编时的自己）：
 > 1. `NpcProfileData`（`sim/npc/model.py:40`）**没有 `identity_anchor` 字段**，
@@ -124,8 +154,9 @@
 
 > **第十九轮新增待验收（观感类，与上面 5 条同性质）**：
 > 10. **心声/街巷是否还乱**：A 修后街巷从 75.2 → 56.5 条/分钟、换屏 6.4→8.5 秒，
->     心之声面板不再被别人的内心话冲掉（D 修）。**但句库仍是 2 句 + 19 句**，
->     C（扩池 + 动作语境）没做——这一条很可能仍不过，见 §1g。
+>     心之声面板不再被别人的内心话冲掉（D 修）。**4A 后句库 9 句（粗）+ 每动作
+>     每档 ≥12 句专属独白**，动作与独白同口径。验收时看：同一场景下 rest 的人
+>     还会不会嘟囔「这活儿讨价还价也没人听」（4A 前必现，4A 后不该出现）。
 > 11. **L2 是否真的「有脑子」**（第十八+十九轮收编后新增）：现在主角 3 格内的村民
 >     会走模型。看两点：①升格村民的心声/对白是否明显比模板有人味；
 >     ②模型失败/超时是否干净退回模板（不卡顿、不空窗、不重复说同一句）。
@@ -134,7 +165,7 @@
 > **记录订正**：用户 2026-10-31 先发「1 2 3观感已验收」、随后「3都已验收」，
 > 均指验收清单**第 1/2/3 条**。我最初误记为第 8/9 条，已改回。第 8/9 条**尚未验收**。
 
-## 1. 门禁（**2026-11-02 收编第十八+十九轮后主树独立实测**；第十六轮复核见 §1e）
+## 1. 门禁（**2026-11-02 收编第十八+十九轮 + 主树 1A/2A/4A/roles 后主树独立实测**；第十六轮复核见 §1e）
 
 > **第十六轮在 codex 树实测（独立复跑，非采信自测）**：
 > pytest `-m "not bench"` **3074 passed / 0 failed / 121 skipped**（394.51s）·
@@ -143,10 +174,10 @@
 > 与 `test_retrieval_full_scan_degraded_sentinel`），且两条单跑均通过 ⇒ 抖动，非回归。
 > 回执称「sound baseline passes」是错的。
 
-| 项 | 收编后实测（2026-11-02） |
+| 项 | 本批实测（2026-11-02，1A/2A/4A/roles 后） |
 |---|---|
-| pytest `-m "not bench"` | **3280 passed** / 0 failed / 121 skipped（419.73s） |
-| ruff check / format | clean（**394 files**） |
+| pytest `-m "not bench"` | **3350 passed** / 0 failed / 121 skipped（435.39s） |
+| ruff check / format | clean（**397 files**） |
 | pyright | 0 errors, 0 warnings, 0 infos |
 | client gen:protocol:check / typecheck / lint / prettier | EXIT 0 |
 | client vitest | **353 passed / 48 files** |
@@ -154,6 +185,16 @@
 | build_block_atlas --check | 逐字节一致 |
 | `uv lock --check` | 一致 |
 | 协议 | **1.14**（双落点同值） |
+
+> **本批新增数对得上**（3280 是收编后的读数，见下条）：3350 − 3280 = **70** =
+> `test_villager_identity_consistency.py` **6** + `test_monologue_history_fork_reset.py` **4**
+> + `test_willingness_action_context.py` **53** + `test_roles.py` **+5**（2→7）
+> + `test_historical_world_load.py` 端到端 **1** 条 × `saved_world` 两个 `params` = **2**
+> ⇒ 6+4+53+5+2 = **70**。逐条对上。vitest 仍 **353/48**（本批零前端改动）。
+
+> **收编后门禁（上一轮实测，2026-11-02）**：pytest **3280 passed** / 0 failed / 121 skipped
+> （419.73s）· ruff/format **394 files** · pyright 0/0 · client 四件 EXIT 0 ·
+> vitest **353 passed / 48 files** · 两资产逐字节一致 · `uv lock --check` 一致 · 协议 1.14。
 
 > **收编后首跑 1 失败，已修**：`test_m5_fork_replay.py::TestR2SeamConsistency::test_A_health_seam_equal`
 > —— 该测试是主树 `02e3b10` 的钉子，codex 分支**不含那笔提交**，所以 codex 不知道
@@ -299,7 +340,18 @@ B 锚点 tick=1，tick=5 lod 1→2 → child=[('a',2),('d',1)]    ← 'a' 的 lo
 |---|---|
 | **音效**（**已验收**） | ~~全仓 0 个 `.mp3/.ogg/.wav`、0 处 `this.sound`~~ → **2026-11-01 第十五轮已收编（`28e8ac9`）**：Phaser 3.87 内置 WebAudio，`client/src/game/audio/{synth,world-audio,index}.ts`；零新 npm 依赖、零资产文件、协议不变。默认静音 25% 音量、8 音轨上限、8 格衰减、120ms 节流；只消费可观测的 `voxel_edits`/actor 位移/`combat_event`/`lights`，不碰独白。**2026-11-01 用户亲听验收通过**（5 短音 step/dig/place/combat/collapse + fire 循环）。**仍未做**：真实火场音效外发（用户裁定为独立缺口） |
 | **M3 社会层** | ~~0 生产调用点~~ → **2026-11-01 第十六轮 `ffa74bd` 已收编并修好根因**：关系真实库副本 0→37 行，知识 22 行（隔离库 Playwright 实测）。根因是 `Observation.subject` 为中文显示名而装配拿 rtoken 去比 ⇒ 恒空；修法 `display_name_of` 反查 + 重名 fail-closed（§1e）。**第十七轮 `16b7eae` 已收编**：物种知识门（`can_hold_knowledge`，仅 human 持有/转述，未知 fail-closed；目击仍留在 `hidden_emerge.witnesses`）+ 名牌屏幕空间避让 |
-| **`npc_health`** | ~~有模型/迁移/读路径，但**零写入**~~ → **2026-10-31 第十四轮已收编并修好启动自愈（`1d4bfa9`）**：事件→总线→同事务健康投影→感知触发→陈默闸门/记忆已接通；6 条内容种子。**2026-11-01 真实库已正式迁移（`d64464d`）**：备份 `world.db.bak-20261101-150615`（先副本演练再动真库），版本 `0015_health_code`、`code` 列补齐，events **187857** / snapshots **3946** / max seq 187857 **零丢失**，存档副本启动成功（tick 36001 / 54 实体）。**仍未做**：历史锚点 fork 的 severity/active 还原、每日严重度演进、第三方浮现见证链。**锚点 fork 有真 bug**：`fork.py:559` 走 `_clone_bounded`（复制父分支**当前**值），而 structures/materials 走 `_clone_*_at_cursor` ⇒ 回退旧档拿到父分支「未来」健康态；`anchor_package.CORPUS_TABLES` 也不含 `npc_health` |
+| **`npc_health`** | ~~有模型/迁移/读路径，但**零写入**~~ → **2026-10-31 第十四轮已收编并修好启动自愈（`1d4bfa9`）**：事件→总线→同事务健康投影→感知触发→陈默闸门/记忆已接通；6 条内容种子。**2026-11-01 真实库已正式迁移（`d64464d`）**：备份 `world.db.bak-20261101-150615`（先副本演练再动真库），版本 `0015_health_code`、`code` 列补齐，events **187857** / snapshots **3946** / max seq 187857 **零丢失**，存档副本启动成功（tick 36001 / 54 实体）。~~**仍未做**：历史锚点 fork 的 severity/active 还原、每日严重度演进、第三方浮现见证链。~~ → **2026-11-02 订正（三条里有两条已通）**：
+  ① **锚点 fork 的 severity/active 还原：已修**（主树 `02e3b10`）——`fork.py:559` 现走
+     `_clone_health_at_cursor`（按 seq 重放事件 + 补无事件源的种子行，`created_at_tick <= fork_tick`），
+     不再 `_clone_bounded` 复制父 head。钉子 `test_m5_fork_replay.py::test_A_health_seam_equal`。
+  ② **第三方浮现见证链：已通**——真实库 `npc.hidden_emerge` 2 条带完整 `witnesses` 列，
+     `knowledge` 32 行（`witnessed` 18 / `told` 14），`main.py:672` 的
+     `witnesses_of_entity_emerge` + 物种知识门在链上。
+  ③ **每日严重度演进：仍是真缺口**——`sim/content/health.py` 无日切钩子，
+     真实库 `npc.health_changed` **0 条**、6 条种子全 `active=1` 且 severity 不变
+     （伤既不好也不恶化）。见「单列未派」。
+  > `anchor_package.CORPUS_TABLES` 仍不含 `npc_health`（设计如此：健康是**可折叠族**，
+  > 走 `_clone_health_at_cursor` 重放，不进包——第十八轮也只在包里加了 `npc_profiles`）。 |
 | **`npc.lod_change` 持久化** | **已完成**（`runtime.py:223` 发射 + `npc_store._project_lod_change` 双键投影）。此前记忆卡写「仍未做」是过时记录，2026-11-01 已订正 |
 | **离线推进** | ~~`sim/world/offline*.py` 不存在~~ → **2026-11-01 第十五轮已收编（`28e8ac9`）**：`sim/world/offline.py::advance_offline` 复用现有 `TickLoop`；墙钟只在启动边界采样一次（`_offline_wall_time`）；水位取 `snapshots/branches.created_at`（控制元数据，不进事件流与 `state_hash` ⇒ **C5 安全**）；批上限 240 tick、`MAX_CATCHUP_REAL_SECONDS=4.0`、上限 1 游戏日（`TICKS_PER_GAME_DAY=86400`，超限记 `offline.capped`）；同墙钟重启零补跑。主树实测：60s→3600 tick、30 天→86400 tick 且丢弃 2590560s、两遍重放 hash 相同、玩家档零写。**仍未做**：真实 `world.db` 上跑一次真实停机补偿（需备份） |
 | **T5 差事完成率** | ~~`errands_rate.py` 明写「本轮不设阈值」~~ → **2026-11-01 已定线（`d64464d`）**：用户裁定 **`ERRAND_COMPLETION_RATE_MIN = 1.0`**。依据实测 40/40（10 seed × 4 链，中位与最差都 1.0，`.orca/audits/t5-baseline-2026-11-01/baseline.json`）。**不留缓冲的理由**：口径是确定性脚本链（零 LLM/网络/随机），无抖动来源，0.95 只会让真实回退静默通过。**不沿用 M1 的 80%**（单决策口径）。**口径边界写死在模块 docstring**：这是脚本完成率，不是生产 NPC 自主完成率 |
@@ -330,7 +382,7 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
   DESIGN 是历史契约，不随裁决改；真相在 `docs/api/versioning.md` 的 1.8 行。
   真实库 `world.db` 里 `fog.reveal` 事件 **0 条**（生产从没发过）。
 
-## 1g. 心声/街巷的真实产线（2026-11-02 实测，**下一轮 B/C 的依据**）
+## 1g. 心声/街巷的真实产线（2026-11-02 实测，**B/C 的依据；C 已由 4A 关闭**）
 
 用户问「模型能控制人物吗 / 心声和街巷太乱，感觉模型没发挥作用」。查证结论：
 
@@ -359,10 +411,18 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
 `_pick_index(npc_name)` **不含 tick / 动作 / 处境** ⇒ 同一 NPC 同一 band 永远同一句
 （坏掉的唱片；50 人分 12 句）。且 36 句全是「不想干活」口径，**与动作无关**。
 
+> **4A 已修（2026-11-02）**：动作专属池 `_ACTION_TEMPLATES`（5 动作 × 3 档 × ≥12 句）
+> + `willingness_expression(..., action=)`，选取键变 `(npc_name, action)`；
+> `move`/`build` 无专属池 ⇒ 池与键**一起**回落（与修前逐位一致）。见 §0。
+
 **街巷（街谈巷议面板）来源**：`dialogue.py:34 template_line`，池
 `:18 _CHAT_TEMPLATES` 5 句；但生产语域 `SpeechContext(平民, in_circle=False)` →
 `speech_register` 返回「粗」→ `_REGISTER_TEMPLATES["粗"]` **只有 2 句**。
 实测 50 人一整天不同台词总数 = **2**。
+
+> **4A 已修（2026-11-02）**：`粗` 2→9 句、`文雅` 2→7 句（每句必带「您」）。
+> 真实库 `npc.chat` 实测（278 条）修前「粗」池的两句占了绝对多数
+> （「忙着呢，回头再说。」110 次）。见 §0。
 
 > **订正（2026-11-02，我上一轮报错）**：我先前说屏幕上会出现字面量「旁人」——
 > **生产不会**。`sim_exec.py:694` 是 `(display_name_of or {}).get(target_id, target_id)`，
@@ -389,11 +449,11 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
 又被 `sim_exec.py:48` 开口冷却压掉 → 人被逼去 wander/rest/eat（都不 remedy social）
 → 满屏「这活儿我实在打怵」而人在闲逛。**A 已修**（见 §0），第 0~5 日 band>0 恒 2%。
 
-**A 修后仍存在的残留（属 C 范畴，未做）**：
-- 第 3 日 band>0 只剩 `rest band2` 10,298 + `request_chat band1` 212 次决策；
-- 这 10,298 条的文本**仍是「不想干活」口径**（`rest` 却配「这活儿讨价还价也没人听」）
-  —— 模板池不区分动作，`willingness_expression` 也不收 `action` 参数；
-- 街巷句库仍是 2 句、「旁人」兜底仍在。
+**A 修后仍存在的残留（4A 已于 2026-11-02 修掉前两条）**：
+- ~~第 3 日 band>0 只剩 `rest band2` 10,298 + `request_chat band1` 212 次决策，
+  文本仍是「不想干活」口径~~ → **4A 已修**（动作专属池）。
+- ~~街巷句库 2 句~~ → **4A 已修**（粗 9 / 文雅 7）。
+- 「旁人」兜底**不是缺陷**（见上方订正），保持原样。
 
 ## 2-newest. 第十～十五轮（2026-10-29 → 11-01）
 

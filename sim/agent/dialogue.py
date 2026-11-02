@@ -24,9 +24,34 @@ _CHAT_TEMPLATES: tuple[str, ...] = (
 )
 
 
+#: 语域池（2026-11-02 扩池）。**为什么**：生产语域恒为「粗」
+#: （`SpeechContext(平民, in_circle=False)` → `speech_register` 返回「粗」），
+#: 而「粗」修前只有 2 句 ⇒ 50 人一整天不同台词总数 = 2（街巷「乱」的另一半根因）。
+#: 扩池口径不变：第一人称世界内台词、`{listener}` 占位、全部过 banned scan、
+#: 不嵌操纵感语态；每池句子互不重复。
 _REGISTER_TEMPLATES = {
-    "粗": ("喂，{listener}，有事快说。", "{listener}，忙着呢，回头再说。"),
-    "文雅": ("{listener}，您近来可好？", "{listener}，您得空不妨来坐坐。"),
+    "粗": (
+        "喂，{listener}，有事快说。",
+        "{listener}，忙着呢，回头再说。",
+        "{listener}，吃了没？",
+        "哎，{listener}，今儿个日头毒得很。",
+        "{listener}，甭管那些闲话，过好自己的日子。",
+        "嘿，{listener}，这阵子可不大太平。",
+        "{listener}，忙完这阵子再说吧。",
+        "得了，{listener}，我先去忙，回头聊。",
+        "{listener}，听说了没？镇上又出了档子事。",
+    ),
+    # 文雅语域**每句必带敬称「您」**——既有契约（`test_speech_live.py` 逐句钉死）：
+    # 士绅语域不得出现「你」。扩池时漏了两句，已补回。
+    "文雅": (
+        "{listener}，您近来可好？",
+        "{listener}，您得空不妨来坐坐。",
+        "{listener}，您这几日可还顺遂？",
+        "{listener}，叨扰您了，改日再叙。",
+        "{listener}，天凉了，您多添件衣裳。",
+        "{listener}，有劳您费心，我心里记着。",
+        "{listener}，不知可否向您打听一件事？",
+    ),
     "日常": _CHAT_TEMPLATES,
 }
 

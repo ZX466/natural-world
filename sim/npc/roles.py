@@ -10,13 +10,25 @@ ROLES = {
 }
 
 
+def _as_clause(description: str) -> str:
+    """感知描述 → 可嵌进 `听见…，…` 的**从句**（2026-11-02 修）。
+
+    `narrate_sound`（`perception/narrate.py:63`）产出的描述是**完整句**，自带句号：
+    `"传来一阵脚步声，像是奚船家。"`。直接拼进 `听见{clue}，先记在心里。`
+    就得到 `"听见传来一阵脚步声，像是奚船家。，先记在心里。"`——句号后紧跟逗号。
+    真实库 `npc.monologue` 实测：209 条里 **60 条**命中（= thought 面全部 60 条）。
+    去尾句号/问号/感叹号即可（只剥一层，不动中间的标点）。
+    """
+    return description.rstrip().rstrip("。？！")
+
+
 def role_events(npc_id: str, frame: PerceptionFrame | None, tick: int) -> list[WorldEvent]:
     if npc_id not in ROLES or frame is None:
         return []
     heard = [o.description for o in frame.observations if o.channel is Channel.HEARING]
     if not heard:
         return []
-    clue = heard[0][:120]
+    clue = _as_clause(heard[0][:120])
     if npc_id == "villager_02":
         content = f"我蹲在墙角没人留意，听见{clue}，先记在心里。"
     elif npc_id == "villager_03":
