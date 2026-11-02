@@ -54,9 +54,17 @@ def threshold_hits(
 # ---------------------------------------------------------------------------
 
 #: 补救动作 → 需求回写量（正值=紧迫度缓解量，value 直接减；clip 到 [0,1]）
+#:
+#: `request_chat`（2026-11-02 修）：修前 social 只涨不降（1/172800 tick），
+#: 第 2 游戏日起恒 1.00；`synthesize_verdict` 见 social ≥ 0.8 且动作非
+#: request_chat 即判需求冲突维 ≥0.8 → 全场 band 3（满屏「这活儿我实在打怵」，
+#: 人却在闲逛/歇息）。聊过天就该缓下来——这是 social 的补救动作
+#: （`DEFAULT_DECAYS` 已声明 remedy_action="request_chat"），此前只有
+#: 声明没有回写。
 REMEDY_RELIEF: dict[str, tuple[tuple[str, float], ...]] = {
     "eat": (("hunger", 0.3), ("energy", 0.15)),  # 吃饱（负=小幅提振social压力）
     "rest": (("energy", 0.3),),
+    "request_chat": (("social", 0.3),),  # 说上话，孤独感回落（与 hunger/energy 同档）
 }
 
 

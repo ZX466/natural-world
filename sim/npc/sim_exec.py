@@ -705,6 +705,17 @@ def npc_events_for_tick(
                     events.append(
                         npc_chat_event(tick=tick, npc_id=npc_id, to_id=target_id, line=line)
                     )
+                    # social 闭环（2026-11-02 修）：真的开上口了才算「说到话」——
+                    # 与 D3「吃了才算吃」同口径（未开口=冷却内/邻域无人，不回写）。
+                    # 修前 social 只涨不降，第 2 游戏日起恒 1.00 → 全场 band 3。
+                    profiles_now = getattr(runtime, "profiles", None)
+                    if profiles_now is not None and npc_id in profiles_now:
+                        from sim.npc.needs import apply_remedy
+
+                        _p = profiles_now[npc_id]
+                        profiles_now[npc_id] = replace(
+                            _p, needs=apply_remedy(_p.needs, "request_chat")
+                        )
                     # E2：聊天落账本——好感漂移 + 双方记忆（进程内 runtime 态）。
                     if chat_ledger is not None:
                         from sim.npc.chat_ledger import ChatLedger

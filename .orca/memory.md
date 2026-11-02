@@ -3,7 +3,31 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-01 第十七轮**已收编**）
+## 0. 当前状态（2026-11-02 第十九轮**已修**：心声/街巷 A+D）
+
+- **第十九轮（主树，2026-11-02）：A social 需求闭环 + D 心声历史私密面**。
+  用户问「模型能控制人物吗 / 心声和街巷太乱」，实测结论见 §1g；本轮只修
+  两条**真缺陷**（用户裁定 A+D，B 真接 L2 与 C 扩池未动）。
+  1. **A**：`needs.py::REMEDY_RELIEF` 加 `request_chat → social -0.3`；
+     `sim_exec.py` 开口成功后回写（与 D3「吃了才算吃」同口径）。
+     修前 social 只涨不降 ⇒ 第 0 日 0.31 / 第 1 日 0.81 / **第 2 日起恒 1.00**
+     ⇒ 全场 band 3（满屏「这活儿我实在打怵」而人实际在闲逛）。修后实测
+     第 0~5 日 band>0 恒 **2%**（修前第 2~5 日 **100%**），social 稳在 0.05。
+  2. **D**：`ws.py::_MONO_HISTORY` 改存 `(actor_id, 帧)`，
+     `monologue_history_payload` 按 `_protagonist_id(loop)` 过滤——
+     `bubble`/`plan` 广播面全可见，`thought` 只出本人视角（与 `route_monologue` 同源）。
+     修前村民/三专属角色的 thought 随每次 full_snapshot 落进陈默心之声面板
+     （20 条缓冲约 19 条是别人的）。
+  3. 新增 **13 条** pytest（`test_social_need_relief.py` 8 +
+     `test_monologue_history_privacy.py` 5），RED 9 失败 → GREEN 13 通过。
+- **第十九轮门禁（主树独立实测）**：pytest `-m "not bench"` **3114 passed / 0 failed
+  / 121 skipped**（428.88s）· ruff 385 files · format 385 files · pyright 0/0 ·
+  client gen:protocol:check/typecheck/lint/prettier EXIT 0 · vitest **353 passed / 48 files** ·
+  两资产 `--check` 逐字节一致 · `uv lock --check` 一致 · 协议 **1.14** 未动。
+  > pytest 3100 → 3114 = **+14** = 第十九轮 13 条 + `02e3b10` 的
+  > `test_A_health_seam_equal` 1 条（3100 是第十七轮收编时的读数，
+  > 早于 `npc_health` 修复那笔提交）。vitest 不变（353）——本轮零前端改动。
+
 
 - **main HEAD**：`git log -1 --oneline` 现测（**别记哈希**，记录本身就会产生新提交）。
   第十七轮收编 = 本文件本次提交的父提交（`--no-ff` 合并 `16b7eae`）。
@@ -40,7 +64,8 @@
 - **远程**：origin/gitee 均在 `3603ecb`（**主树领先未推**，推送仍由用户决定）。
   现测：`git rev-list --count origin/main..main`——**不要记数字**，每提交一次它就变。
 - **在飞**：**第十八轮已派 codex**（`npc_profiles` 锚点读档 bug，见 §1f）。
-  未派：V3.5 内容包 / V4-3D。
+  未派：V3.5 内容包 / V4-3D / **L2 真接线（B，用户已裁定实现形态：事件记录+回放读记录）**。
+  第十九轮的 C 项（扩池 + 动作语境）**已诊断未做**，依据在 §1g。
 - **第十五轮留给用户的四件事 → 2026-11-01 已完成三件**：
   1. ~~T5 完成率阈值定线~~ → **已定 1.0**（用户裁定，见 §1b）
   2. ~~soak 流失阈值定线~~ → **已裁定：良性保 0 + 「流失须被死亡解释」契约**（见 §1b）
@@ -60,10 +85,15 @@
   8. **土坎观感（第十一轮）**：1568 格隐形墙是否一眼可辨
   9. **前端画面（第十二轮）**：侧栏收起是否顺手、小屏是否还挤压世界
 
+> **第十九轮新增待验收（观感类，与上面 5 条同性质）**：
+> 10. **心声/街巷是否还乱**：A 修后街巷从 75.2 → 56.5 条/分钟、换屏 6.4→8.5 秒，
+>     心之声面板不再被别人的内心话冲掉（D 修）。**但句库仍是 2 句 + 19 句**，
+>     C（扩池 + 动作语境）没做——这一条很可能仍不过，见 §1g。
+
 > **记录订正**：用户 2026-10-31 先发「1 2 3观感已验收」、随后「3都已验收」，
 > 均指验收清单**第 1/2/3 条**。我最初误记为第 8/9 条，已改回。第 8/9 条**尚未验收**。
 
-## 1. 门禁（2026-11-01 第十五轮收编后主树独立实测；第十六轮复核见 §1e）
+## 1. 门禁（**2026-11-02 第十九轮主树独立实测**；第十六轮复核见 §1e）
 
 > **第十六轮在 codex 树实测（独立复跑，非采信自测）**：
 > pytest `-m "not bench"` **3074 passed / 0 failed / 121 skipped**（394.51s）·
@@ -72,10 +102,10 @@
 > 与 `test_retrieval_full_scan_degraded_sentinel`），且两条单跑均通过 ⇒ 抖动，非回归。
 > 回执称「sound baseline passes」是错的。
 
-| 项 | 第十七轮收编后实测 |
+| 项 | 第十九轮实测 |
 |---|---|
-| pytest `-m "not bench"` | **3100 passed** / 0 failed / 121 skipped（405.23s） |
-| ruff check / format | clean（383 files） |
+| pytest `-m "not bench"` | **3114 passed** / 0 failed / 121 skipped（428.88s） |
+| ruff check / format | clean（385 files） |
 | pyright | 0 errors, 0 warnings, 0 infos |
 | client gen:protocol:check / typecheck / lint / prettier | EXIT 0 |
 | client vitest | **353 passed / 48 files** |
@@ -248,6 +278,65 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
 - `DESIGN.md` §13/§17 仍列「空间迷雾」（**冻结基线不回写**，见 §19/§20 的冻结声明）——
   DESIGN 是历史契约，不随裁决改；真相在 `docs/api/versioning.md` 的 1.8 行。
   真实库 `world.db` 里 `fog.reveal` 事件 **0 条**（生产从没发过）。
+
+## 1g. 心声/街巷的真实产线（2026-11-02 实测，**下一轮 B/C 的依据**）
+
+用户问「模型能控制人物吗 / 心声和街巷太乱，感觉模型没发挥作用」。查证结论：
+
+**模型只控制 1 个人。** 全仓 `self._llm.complete(...)` 只有 `sim/agent/driver.py`
+两处（`:188` 决策、`:282` 对话台词），都属陈默。
+- 陈默：`main.py::_chenmo_loop` → `driver.decide_once`，`CHENMO_DECIDE_SECONDS`
+  默认 **60 秒 1 次**；
+- 50 村民：`npc/runtime.py:150 evaluate_batch`（numpy 效用矩阵），每 10 tick；
+- 赵铁/小满/苏婉：`npc/roles.py::role_events` 硬编码 f-string，每 600 tick（10 秒）。
+
+**「升格 L2」是空壳（DESIGN §13 / `DESIGN.md:371,381` 承诺未兑现）**：
+`main.py:639` 确实调 `update_lod(in_interaction=nearby)` 把 3 格内的人改成 lod=2，
+但**全仓非测试代码没有任何地方读 `lod == 2`**（只有 `runtime.py:214/219` 是升降格自身）。
+`runtime.py:129` 过滤条件是 `lod > 0` ⇒ **lod=1 与 lod=2 决策逐位相同**。
+真接 L2 要派 codex（用户已裁定实现形态：**LLM 输出落事件、回放读事件**，保 C6/T2）。
+
+**心声（心之声面板）来源**：
+
+| 来源 | 代码 | 性质 |
+|---|---|---|
+| 陈默 thought | `driver.py:364-371`，`content=intent.reason` | 真模型，~1 条/分钟 |
+| 村民嘟囔 | `will.py:90 _TEMPLATES`（每档 12 句）+ `:159 _pick_index(npc_name)` | 纯模板 |
+| 三专属角色 | `roles.py:20-27`，三条 f-string | 纯模板 |
+| 玩家念头回执 | `ws.py:1265-1268` | **恒为「这话我记下了。」** |
+
+`_pick_index(npc_name)` **不含 tick / 动作 / 处境** ⇒ 同一 NPC 同一 band 永远同一句
+（坏掉的唱片；50 人分 12 句）。且 36 句全是「不想干活」口径，**与动作无关**。
+
+**街巷（街谈巷议面板）来源**：`dialogue.py:34 template_line`，池
+`:18 _CHAT_TEMPLATES` 5 句；但生产语域 `SpeechContext(平民, in_circle=False)` →
+`speech_register` 返回「粗」→ `_REGISTER_TEMPLATES["粗"]` **只有 2 句**。
+实测 50 人一整天不同台词总数 = **2**，且 `_display_name_of` 查不到时兜底成字面量
+「旁人」（屏幕上出现「旁人，忙着呢」）。
+
+**「乱」的数量根因（3 游戏日 ≈ 72 真实分钟实测）**：
+
+| 项 | 修前 | 修后（A 之后） |
+|---|---|---|
+| 嘟囔 bubble | 27.8 条/分钟（36 句） | 17.9 条/分钟（19 句） |
+| 聊天 chat | 47.4 条/分钟（**2 句**） | 38.6 条/分钟（2 句） |
+| 合计 | **75.2 条/分钟** | 56.5 条/分钟 |
+| `CHATTER_CAP=8` 换屏周期 | **6.4 秒** | 8.5 秒 |
+| 陈默心声 | 1 条/分钟 | 1 条/分钟 |
+
+街巷是心声的 **75 倍**，句库 2 句，6 秒换屏 —— 用户「感觉模型没发挥作用」是准确的。
+
+**根因链（一条解释全部）**：
+`REMEDY_RELIEF` 无 `request_chat` → social 只涨不降 → 第 2 游戏日起恒 1.00 →
+`synthesize_verdict` 需求冲突维 ≥0.8 → 全场 band 3 → 唯一补救动作 `request_chat`
+又被 `sim_exec.py:48` 开口冷却压掉 → 人被逼去 wander/rest/eat（都不 remedy social）
+→ 满屏「这活儿我实在打怵」而人在闲逛。**A 已修**（见 §0），第 0~5 日 band>0 恒 2%。
+
+**A 修后仍存在的残留（属 C 范畴，未做）**：
+- 第 3 日 band>0 只剩 `rest band2` 10,298 + `request_chat band1` 212 次决策；
+- 这 10,298 条的文本**仍是「不想干活」口径**（`rest` 却配「这活儿讨价还价也没人听」）
+  —— 模板池不区分动作，`willingness_expression` 也不收 `action` 参数；
+- 街巷句库仍是 2 句、「旁人」兜底仍在。
 
 ## 2-newest. 第十～十五轮（2026-10-29 → 11-01）
 

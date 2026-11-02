@@ -574,21 +574,27 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
 #: 心声历史环形缓冲（2026-10-12 卡顿修复：不在快照里查库——run_until_complete
 #: 会阻塞 WS 事件循环，重连即卡全部连接）。进程内 20 条，monologue 帧投递时
 #: 由 run_world_driver 侧记账（monologue_history_push）；快照直接取，零 IO。
-_MONO_HISTORY: deque[dict[str, Any]] = deque(maxlen=20)
+#: 存 `(actor_id, 帧)`——actor_id 是投递面判据（出站前按视角过滤），不进载荷。
+_MONO_HISTORY: deque[tuple[str, dict[str, Any]]] = deque(maxlen=20)
 
 #: 心声历史出站形（帧形即 monologue_payload；内容已过 banned 面——来源是
 #: 既有事件投影，非新表达面）。
 
 
 def monologue_history_push(events: list[WorldEvent]) -> None:
-    """事件批次 → 心声历史账本（每帧由 driver 调；O(本帧 monologue 数)）。"""
+    """事件批次 → 心声历史账本（每帧由 driver 调；O(本帧 monologue 数)）。
+
+    账本存 `(actor_id, 帧)`：actor_id 是**投递面判据**，出站前按视角过滤
+    （`monologue_history_payload`），绝不进载荷（W7 字段最小化）。
+    """
     for e in events:
         if e.event_type is not EventKind.NPC_MONOLOGUE:
             continue
         payload = e.payload
         form = str(payload.get("form", ""))
         name = _display_name_of(e.actor_id) if form == "bubble" else None
-        _MONO_HISTORY.append(monologue_payload(form, str(payload.get("content", "")), name=name))
+        frame = monologue_payload(form, str(payload.get("content", "")), name=name)
+        _MONO_HISTORY.append((e.actor_id, frame))
 
 
 def monologue_history_payload(loop: TickLoop, *, cap: int = 20) -> list[dict[str, Any]]:
@@ -597,9 +603,20 @@ def monologue_history_payload(loop: TickLoop, *, cap: int = 20) -> list[dict[str
     历史是**已发生事实的投影**（事件即真相），快照带出属重同步语义，
     同 fog/structures。账本为进程态（重启即清——快照此键为空数组，
     面板空但世界不损：历史事件仍在库里）。
+
+    **投递面同源**（2026-11-02 修）：与 `route_monologue` 同口径——
+    `bubble`/`plan` 是广播面，任何视角可见；`thought` 是私密面，只出本人视角
+    （视角 = 服务端定的主角 `_protagonist_id(loop)`，不采客户端自报）。
+    修前无条件全表出站，村民与专属角色的 thought 会随每次快照落进
+    陈默的心之声面板（20 条缓冲里约 19 条是别人的）。
     """
-    del loop, cap  # 账本自持上限；签名保留 loop 供调用点稳定
-    return list(_MONO_HISTORY)
+    del cap  # 账本自持上限
+    viewer = _protagonist_id(loop)
+    return [
+        frame
+        for actor_id, frame in _MONO_HISTORY
+        if frame.get("form") in MONOLOGUE_DELIVERY_ALL or actor_id == viewer
+    ]
 
 
 # ---------------------------------------------------------------------------
