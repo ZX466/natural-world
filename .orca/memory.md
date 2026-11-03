@@ -412,10 +412,14 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-11-03 第二十轮v3｜B已独立提交bb0647e，A/B全部指定门禁绿】基线e28e144。三处播种按branch复合身份补齐，main一次算有界祖先死亡前缀复用三seed；None独立调用也安全，死者不复活、祖先未来死亡不渗入。真正空库仍main创世，已有Branch无is_current的故障态不猜main播种。A用同步无IO快照适配器，反思先健康后，loop.enqueue七键健康事件、下一帧flush；日切缓存顺序递推，refresh不吃日号，load/reset重建branch与基线。下一步主树独立复跑收编。
+> ⚠️ **本树纪律：memory.md 只改 §7。§0–§6 是主树 2026-10-31 的旧快照，已过期**
+> （里面「在飞第十四轮」「已派第十八轮」等均已完成收编）。当前状态以**本节 +
+> 本树 `.orca/talking.txt`** 为准；主树权威卡是主树那份 `.orca/memory.md`。
+
+【2026-11-03 第二十轮v3｜B已独立提交bb0647e，A/B全部指定门禁绿｜**主树已收编 66637b7（2 冲突，0 红）**】基线e28e144。三处播种按branch复合身份补齐，main一次算有界祖先死亡前缀复用三seed；None独立调用也安全，死者不复活、祖先未来死亡不渗入。真正空库仍main创世，已有Branch无is_current的故障态不猜main播种。A用同步无IO快照适配器，反思先健康后，loop.enqueue七键健康事件、下一帧flush；日切缓存顺序递推，refresh不吃日号，load/reset重建branch与基线。主树独立复跑3457P/0F/121S（=3350+107，逐条对上）。
 
 - **规则/边界**：old_injury -0.05、disease +0.10、addiction +0.02、disability0、trauma -0.02/游戏日，round12后clip[0,1]。愈合0后inactive一次；恶化1持续active且饱和不重复。只更新已有健康条目，不自动制造病/触发实际失能死亡。新伤只从创建时刻不晚于该日界时演进，原category/code/hidden/notes保留。profileJOIN+现场entities双过滤，pending/已投影死亡不再产健康事件；坏NPC隔离，enqueue/IO故障不吞。
 - **选项/未覆盖**：选(B)异步批读后同步闭包，run_world_driver签名/同步语义与reflection.py不动。选(b)离线不演进，补跑结束后初始化last_day，不在线追补离线天数；该离线缺口明确保留。重症上限只健康投影，不新增普通NPC无恢复路的失能。fork.py本树仍无主树健康折叠，未改/未冒称历史健康锚点端到端验收；用逐字段事件与完整投影行重放相等替代，绝不以state_hash证明健康。
 - **验证**：最终pytest非bench3360P/121S/72D/4旧warnings、416.08s EXIT0；AB新专项107P；B集成120P；A模块51P。主角失能alias文件11P、旧四日切钉4P、指定五兼容文件70P均单跑EXIT0。Ruff check/format396文件、Pyright0E0W、client353P/48files/typecheck/lint/prettier/protocol、两资产byte-identical、uv lock全EXIT0。双独立审查0Critical/Important/Minor，B独立50P/A独立57P。证据.orca/audits/round20-2026-11-03/{plan.md,progress.md,gates.json,review.md,b-report.md}及RED/GREEN日志。
 - **接口/收编**：seed三函数新增keyword branch_id='main'/dead_ids=None，_profile_row保持p位置/陈默零参；旧9个测试调用无需改，main3处显式branch/deadIDs，seed_health原参数值不变。无新mandatory字段/事件kind/DB迁移。不要覆盖主树58ab1ca的姓名/职业/身份锚、voice池/history清理以及02e3b10的健康fork修复；本树identity_anchor旧错行故意保留，B只动branch参数和判据。WS/reflection/fork/will/dialogue/roles/shared/client/package+lock/DESIGN/registry/迷雾均未改。
-- **历史/恢复**：第十八8b6b702+十九e28e144已由主树bdeeb19收编（talking最新状态为准）；旧细节git log --oneline -- .orca/memory.md。协议1.14，只pytest临时库，坏world.db未访问，无浏览器/模型调用，不推送/不同步main；talking永不add。恢复workflow→talking→本节/registry→Git，CodeGraph显式本树projectPath先行；uv/UTF8，原命令退出码后读日志尾；删npm/venv先问，i-have-adhd持续。
+- **历史/恢复**：第十八8b6b702+十九e28e144已由主树bdeeb19收编；第二十bb0647e+3012063已由主树66637b7收编（talking最新状态为准）；旧细节git log --oneline -- .orca/memory.md。协议1.14，只pytest临时库，坏world.db未访问，无浏览器/模型调用，不推送/不同步main；talking永不add。恢复workflow→talking→本节/registry→Git，CodeGraph显式本树projectPath先行；uv/UTF8，原命令退出码后读日志尾；删npm/venv先问，i-have-adhd持续。
