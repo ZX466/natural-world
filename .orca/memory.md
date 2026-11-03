@@ -33,8 +33,11 @@
      （= thought 面**全部** 60 条，bubble 面 149 条无一命中），形态是
      `听见传来一阵脚步声，像是奚船家。，先记在心里。`。
      加 `_as_clause()` 只剥一层尾标点，5 条参数化钉子（RED 4 失败 → GREEN 5）。
-- **第二十轮已派 codex**：每日健康严重度演进 + `seed_villagers` 分支过滤
-  （两条真缺口，见「单列未派」）。**主树只报未修，不重复实现**。
+- **第二十轮已收编（codex `bb0647e` + `3012063` → 主树 `66637b7`）**：
+  每日健康严重度演进（`health_evolve.py`）+ 三处播种分支过滤（`seeding.py`）。
+  两条真缺口均已关闭。主树独立复跑 **3457P/0F/121S**（= 基线 3350 + 107），
+  逐条对上；冲突 2 处按预定口径解决（`villagers.py` 保留主树 1A 同源修复 +
+  采纳 codex 的 `branch_id` 形参；`memory.md` 取主树版本）。
 - **第十八+十九轮（codex，2026-11-02）：已 `--no-ff` 收编 `e28e144`**。
   第十八轮 = 锚点读档按游标重建 `npc_profiles`（独立 profile 快照段）；
   第十九轮 = **L2 真实调用路径接齐**（有限单步，不是多步规划器）。详见 §7 与 §1。
@@ -120,8 +123,8 @@
   - 只走各树 `.orca/talking.txt`；不直接对话。
 - **远程**：origin/gitee 均在 `3603ecb`（**主树领先未推**，推送仍由用户决定）。
   现测：`git rev-list --count origin/main..main`——**不要记数字**，每提交一次它就变。
-- **在飞**：**第二十轮已派 codex**（每日健康严重度演进 + `seed_villagers` 分支过滤）。
-  未派：V3.5 内容包 / V4-3D。第十八+十九轮**已收编**；主树 1A/2A/4A **已做完**。
+- **在飞**：**无**。第二十轮已收编（`66637b7`）。未派：V3.5 内容包 / V4-3D。
+  第十八+十九轮**已收编**；主树 1A/2A/4A **已做完**。
   §1g 的 C 项（扩池 + 动作语境）已由 4A 关闭。
 
 > **第十九轮派单的三个硬约束**（主树已查实，写给收编时的自己）：
@@ -325,14 +328,30 @@ B 锚点 tick=1，tick=5 lod 1→2 → child=[('a',2),('d',1)]    ← 'a' 的 lo
 `npc_profiles` 写入面（已查实，**只有两条事件**）：`NPC_LOD_CHANGE`（改 `lod`+
 `updated_at_tick`）、`NPC_DEATH`（**删行**）。其余 24 列无运行时写入路径，只由种子直插。
 
-**顺带发现（主树 2026-11-02 已复跑定性；已派第二十轮任务 B，主树未修）**：
-`seed_villagers`（`villagers.py:320`）幂等判据 `select(NpcProfile.id)` **无 branch 过滤**，
-`_profile_row` **硬编码 `branch_id="main"`**（`villagers.py:291`、`protagonist.py:37`）。
-主树 5 组临时内存库实测：**(main0,child0)→main50；(main0,child50)→新增0；(main0,child49)
-→main1/child49；(main50,child49)→新增0；(main50,child50)→新增0** ⇒ **只补 main，
-子分支永远补不上**。难点：缺行可能是**合法死亡**（`_project_npc_death` 锚点前删行），
-不能盲目按 id 补齐。派单要求按 `(branch_id, id)` 判存在 + 查该分支 `npc.death` 排除死者 +
-`seed_protagonist` 一并修。**别当已修**。
+**顺带发现（第二十轮任务 B，已修，主树收编 `66637b7`）**：
+`seed_villagers`（`villagers.py:320`）幂等判据原本是 `select(NpcProfile.id)` **无 branch
+过滤**，`_profile_row` **硬编码 `branch_id="main"`**（`villagers.py:291`、`protagonist.py:37`），
+`seed_animals`（`animals.py:13`）是同一缺陷的**第三处**（复用 `villagers._profile_row`）。
+主树 5 组临时内存库实测（修前）：**(main0,child0)→main50；(main0,child50)→新增0；
+(main0,child49)→main1/child49；(main50,child49)→新增0；(main50,child50)→新增0**
+⇒ **只补 main，子分支永远补不上**。
+
+**修后（codex `bb0647e`）**：三处播种都按 `(branch_id, id)` 判存在，`_profile_row`
+的 `branch_id` 由调用方传入（`villagers._profile_row(p, *, branch_id="main")`、
+`protagonist._profile_row(*, branch_id="main")` 仍零参可调）。新增
+`sim/content/seeding.py::read_branch_death_ids`：`main.py` 用**既有 store** 一次读取
+**有界祖先死亡前缀**（`read_branch_history` 沿 `forked_from_branch` 拼），同一个
+`frozenset` 传给三个播种函数；独立调用（`dead_ids=None`）时用
+`SqlEventStore(session_factory)` 只读 wrapper 自算，不另开 SQL 驱动。
+**祖先分叉游标之后的死亡不纳入**（父分支未来死的人不算子分支的死者）；缺祖先 /
+缺 cutoff / 循环 / 孤儿事件一律拒绝盲补。
+**故障态不猜 main**：`current_branch is None` 且**库里已有 Branch 行** ⇒ 判为故障、
+不播种（只有真正空库才当创世写 `"main"`）。
+**修后实测**（codex，主树已复跑同组）：目标分支语义下 5 组全对；
+十个目标分支组合第二次调用均 0（幂等）；本线与祖先死者三类都不补。
+
+> ⚠️ **主树 2026-11-03 收编实测**：真实冷 child 场景 `main 54` 不变、`child 49` 补
+> 3 个缺失活人后 `52`，两名已死者仍缺行。**这是正确行为**（死者不复活）。
 
 ## 1b. 已关闭但代码不支撑的承诺（主树 2026-10-31 审计，**新对话先读**）
 
@@ -344,18 +363,28 @@ B 锚点 tick=1，tick=5 lod 1→2 → child=[('a',2),('d',1)]    ← 'a' 的 lo
 |---|---|
 | **音效**（**已验收**） | ~~全仓 0 个 `.mp3/.ogg/.wav`、0 处 `this.sound`~~ → **2026-11-01 第十五轮已收编（`28e8ac9`）**：Phaser 3.87 内置 WebAudio，`client/src/game/audio/{synth,world-audio,index}.ts`；零新 npm 依赖、零资产文件、协议不变。默认静音 25% 音量、8 音轨上限、8 格衰减、120ms 节流；只消费可观测的 `voxel_edits`/actor 位移/`combat_event`/`lights`，不碰独白。**2026-11-01 用户亲听验收通过**（5 短音 step/dig/place/combat/collapse + fire 循环）。**仍未做**：真实火场音效外发（用户裁定为独立缺口） |
 | **M3 社会层** | ~~0 生产调用点~~ → **2026-11-01 第十六轮 `ffa74bd` 已收编并修好根因**：关系真实库副本 0→37 行，知识 22 行（隔离库 Playwright 实测）。根因是 `Observation.subject` 为中文显示名而装配拿 rtoken 去比 ⇒ 恒空；修法 `display_name_of` 反查 + 重名 fail-closed（§1e）。**第十七轮 `16b7eae` 已收编**：物种知识门（`can_hold_knowledge`，仅 human 持有/转述，未知 fail-closed；目击仍留在 `hidden_emerge.witnesses`）+ 名牌屏幕空间避让 |
-| **`npc_health`** | ~~有模型/迁移/读路径，但**零写入**~~ → **2026-10-31 第十四轮已收编并修好启动自愈（`1d4bfa9`）**：事件→总线→同事务健康投影→感知触发→陈默闸门/记忆已接通；6 条内容种子。**2026-11-01 真实库已正式迁移（`d64464d`）**：备份 `world.db.bak-20261101-150615`（先副本演练再动真库），版本 `0015_health_code`、`code` 列补齐，events **187857** / snapshots **3946** / max seq 187857 **零丢失**，存档副本启动成功（tick 36001 / 54 实体）。~~**仍未做**：历史锚点 fork 的 severity/active 还原、每日严重度演进、第三方浮现见证链。~~ → **2026-11-02 订正（三条里有两条已通）**：
+| **`npc_health`** | ~~有模型/迁移/读路径，但**零写入**~~ → **2026-10-31 第十四轮已收编并修好启动自愈（`1d4bfa9`）**：事件→总线→同事务健康投影→感知触发→陈默闸门/记忆已接通；6 条内容种子。**2026-11-01 真实库已正式迁移（`d64464d`）**：备份 `world.db.bak-20261101-150615`（先副本演练再动真库），版本 `0015_health_code`、`code` 列补齐，events **187857** / snapshots **3946** / max seq 187857 **零丢失**，存档副本启动成功（tick 36001 / 54 实体）。~~**仍未做**：历史锚点 fork 的 severity/active 还原、每日严重度演进、第三方浮现见证链。~~ → **2026-11-03 订正：三条全通**（前两条 11-02，第三条第二十轮收编 `66637b7`）：
   ① **锚点 fork 的 severity/active 还原：已修**（主树 `02e3b10`）——`fork.py:559` 现走
      `_clone_health_at_cursor`（按 seq 重放事件 + 补无事件源的种子行，`created_at_tick <= fork_tick`），
      不再 `_clone_bounded` 复制父 head。钉子 `test_m5_fork_replay.py::test_A_health_seam_equal`。
   ② **第三方浮现见证链：已通**——真实库 `npc.hidden_emerge` 2 条带完整 `witnesses` 列，
      `knowledge` 32 行（`witnessed` 18 / `told` 14），`main.py:672` 的
      `witnesses_of_entity_emerge` + 物种知识门在链上。
-  ③ **每日严重度演进：仍是真缺口，已派第二十轮（codex）**——`sim/content/health.py`
-     无日切钩子，真实库 `npc.health_changed` **0 条**、6 条种子全 `active=1` 且
-     severity 不变（伤既不好也不恶化）。派单要求：复用 `run_world_driver(on_day_switch=)`
-     缝、确定性演进（禁墙钟/RNG）、**只发 `npc.health_changed` 事件不改行**（C4）、
-     规则数值表写进 docstring、补「锚点前演进不进子分支」的钉子。见「单列未派」。
+  ③ **每日严重度演进：已修**（第二十轮 codex，主树收编 `66637b7`）——新增
+     `sim/content/health_evolve.py`：同步无 IO 快照适配器，挂在 `main.py` 的
+     `_on_day_switch`（反思先、健康后，两者返回值均丢弃），**只 `loop.enqueue`
+     `npc.health_changed` 七键事件、不直写行**（C4），下一帧 drain+flush 落库
+     （正常 1 帧延迟）。数值表（严重度/游戏日）：`old_injury -0.05` /
+     `disease +0.10` / `addiction +0.02` / `disability 0` / `trauma -0.02`；
+     round 12 位后 clip[0,1]；愈合归零后 `active=False` **只发一次**，恶化到 1 饱和
+     不重复。`run_world_driver` 签名与同步语义**未改**。
+     **离线选 (b)**：`advance_offline` 不演进健康，补跑结束后才建基线，不在首个
+     在线日追补离线天数（已写进两处 docstring，**是真缺口、明确保留**）。
+     **重症上限只到健康投影**：本适配器不产 `AGENT_INCAPACITATED`——普通 NPC 没有
+     生产恢复入口，静默制造永久失能会把世界卡死（不是漏做，是**故意不做**）。
+     **本树 fork 侧仍未做**：`fork.py` 走 `_clone_bounded`，没有主树的
+     `_clone_health_at_cursor`；codex 按 A5 改钉「事件逐字段相等 + 投影行全列重放相等」
+     替代，**未冒称历史健康锚点端到端验收**（收编后主树版本已在，见 ①）。
   > `anchor_package.CORPUS_TABLES` 仍不含 `npc_health`（设计如此：健康是**可折叠族**，
   > 走 `_clone_health_at_cursor` 重放，不进包——第十八轮也只在包里加了 `npc_profiles`）。 |
 | **`npc.lod_change` 持久化** | **已完成**（`runtime.py:223` 发射 + `npc_store._project_lod_change` 双键投影）。此前记忆卡写「仍未做」是过时记录，2026-11-01 已订正 |
@@ -1032,7 +1061,8 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
   L2 边界 127P；Ruff 390 files；Pyright 0/0；client 353P/48files；两资产逐字节；
   `uv lock`；全 EXIT 0。两项 Important（中文/Unicode/全角 Roman 数字闸、故障启动后
   L2 动态就绪）RED→GREEN 关闭。**全部 FakeLLM/MockTransport——无付费模型质量验收。**
-- **只报未修（主树待评估）**：第十八轮的 `seed_villagers` 分支过滤问题，codex 仅报告未改。
+- **~~只报未修（主树待评估）~~：`seed_villagers` 分支过滤** —— 第十八轮只报未改，
+  **第二十轮 `bb0647e` 已修**（详见 §1b 的 `npc_profiles` 条目下方）。
 - **证据**：`.orca/audits/round18-*`（如有）、`.orca/audits/round19-2026-11-02/
   {plan.md,progress.md,gates.json,review.md}`；配置与行为记 `docs/perf/llm-monitoring.md §8`。
 - **未动**：`ChenmoDriver`、`needs.py`、villager 种子、WS 语义、`fork/_BOUNDED_TABLES`、
