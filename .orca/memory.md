@@ -3,7 +3,7 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-02 收编完成 + 主树 1A/2A/4A/roles + 第二十轮已派）
+## 0. 当前状态（2026-11-03 第二十轮已收编 · 无在飞 · 主树 1A/2A/4A/roles 已合）
 
 - **主树本批（2026-11-02，用户问「还有什么问题」后按建议顺序做的前三条 + 顺带一条）**：
   1. **1A 身份锚自洽**（`villagers.py::_profile_row`）：`identity_anchor` 改与同行
@@ -78,8 +78,7 @@
 
 - **main HEAD**：`git log -1 --oneline` 现测（**别记哈希**，记录本身就会产生新提交）。
   第十八+十九轮收编 = 本文件本次提交的父提交（`--no-ff` 合并 `e28e144`）。
-- **codex HEAD**：`e28e144`（第十九轮；含第十八轮 `8b6b702`）。**两轮均已收编**；
-  codex 树仍未同步 main。
+- **codex HEAD**：`3012063`（第二十轮 A；含 `bb0647e` B）。**已收编**；codex 树仍未同步 main。
 - **第十八+十九轮：已收编**（`--no-ff` 合并 `e28e144`，merge-base `16b7eae`）。
   - **2 处冲突**（预测 4 处；`main.py`/`fork.py` 自动合并，已复查主树修复仍在）：
     1. `sim/npc/sim_exec.py` —— **两边都保留**：先 codex 的 `note_dialogue`（L2 降格判据），
@@ -168,7 +167,7 @@
 > **记录订正**：用户 2026-10-31 先发「1 2 3观感已验收」、随后「3都已验收」，
 > 均指验收清单**第 1/2/3 条**。我最初误记为第 8/9 条，已改回。第 8/9 条**尚未验收**。
 
-## 1. 门禁（**2026-11-02 收编第十八+十九轮 + 主树 1A/2A/4A/roles 后主树独立实测**；第十六轮复核见 §1e）
+## 1. 门禁（**2026-11-03 第二十轮收编后主树独立实测**；第十六轮复核见 §1e）
 
 > **第十六轮在 codex 树实测（独立复跑，非采信自测）**：
 > pytest `-m "not bench"` **3074 passed / 0 failed / 121 skipped**（394.51s）·
@@ -177,10 +176,10 @@
 > 与 `test_retrieval_full_scan_degraded_sentinel`），且两条单跑均通过 ⇒ 抖动，非回归。
 > 回执称「sound baseline passes」是错的。
 
-| 项 | 本批实测（2026-11-02，1A/2A/4A/roles 后） |
+| 项 | 本批实测（2026-11-03，第二十轮收编 `66637b7` 后） |
 |---|---|
-| pytest `-m "not bench"` | **3350 passed** / 0 failed / 121 skipped（435.39s） |
-| ruff check / format | clean（**397 files**） |
+| pytest `-m "not bench"` | **3457 passed** / 0 failed / 121 skipped（434.12s） |
+| ruff check / format | clean（**403 files**） |
 | pyright | 0 errors, 0 warnings, 0 infos |
 | client gen:protocol:check / typecheck / lint / prettier | EXIT 0 |
 | client vitest | **353 passed / 48 files** |
@@ -189,11 +188,15 @@
 | `uv lock --check` | 一致 |
 | 协议 | **1.14**（双落点同值） |
 
-> **本批新增数对得上**（3280 是收编后的读数，见下条）：3350 − 3280 = **70** =
+> **本批新增数对得上**：**3457 − 3350 = 107** = 第二十轮 B 专项 47+ 与 A 专项 51+
+> （codex 回执逐条对上：B 模块 47P + 生产冷 child/故障态 3P、A 模块 51P + 真实日切
+> live 6P，合计 107）。ruff 397 → **403 files**（新增 2 个源文件 + 4 个测试文件口径）。
+> 关键回归文件单跑 **98P**；fork 相关 39P/1S。vitest 仍 **353/48**（本轮零前端改动）。
+
+> **上一批（主树 1A/2A/4A/roles，2026-11-02）新增 70**：3350 − 3280 = **70** =
 > `test_villager_identity_consistency.py` **6** + `test_monologue_history_fork_reset.py` **4**
 > + `test_willingness_action_context.py` **53** + `test_roles.py` **+5**（2→7）
-> + `test_historical_world_load.py` 端到端 **1** 条 × `saved_world` 两个 `params` = **2**
-> ⇒ 6+4+53+5+2 = **70**。逐条对上。vitest 仍 **353/48**（本批零前端改动）。
+> + `test_historical_world_load.py` 端到端 **1** 条 × `saved_world` 两个 `params` = **2**。
 
 > **收编后门禁（上一轮实测，2026-11-02）**：pytest **3280 passed** / 0 failed / 121 skipped
 > （419.73s）· ruff/format **394 files** · pyright 0/0 · client 四件 EXIT 0 ·
@@ -312,7 +315,7 @@ player_anchor` **全为 0** ⇒ **未丢用户操作**。但追加段含我伪�
   `test_m6_death_profiles_contract::test_fork_does_not_clone_dead_health_row` 抓出。
   **别照抄 `structures` 的纯重放写法**。
 
-**⚠️ 未修（已派 codex 第十八轮）**：`npc_profiles`，后果比健康表重——**丢整个 NPC**。
+**✅ 已修（第十八轮 `8b6b702`，主树收编 `bdeeb19`）**：`npc_profiles`，后果比健康表重——**丢整个 NPC**。
 
 主树对照实验（临时内存库，唯一变量 = 锚点后父分支是否推进）：
 
@@ -1068,3 +1071,34 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 - **未动**：`ChenmoDriver`、`needs.py`、villager 种子、WS 语义、`fork/_BOUNDED_TABLES`、
   协议 1.14、`shared/`、`package.json`+lock、冻结 `DESIGN.md`、`registry`、迷雾登记。
   默认陈默重试仍 2 次；新村民专用 client 只 1 次并在停服 `aclose`。
+
+【2026-11-03 Round20｜codex 交付 `bb0647e`(B) + `3012063`(A)，主树 `--no-ff` 收编 `66637b7`】
+**2 处冲突、本轮 0 红**（不像第十八轮收编后才炸）。
+
+- **B 三处播种分支过滤**（`bb0647e`）：`seed_villagers`/`seed_protagonist`/`seed_animals`
+  全改按 `(branch_id, id)` 查与写；`_profile_row` 硬编码 `"main"` 改为 `branch_id="main"`
+  关键字形参（`villagers.py` / `protagonist.py`）。新增 `sim/content/seeding.py`：
+  `death_ids_from_history()` 从已解码有界历史取 `payload["entity_id"]`，
+  `read_branch_death_ids()` 经 `store.read_branch_history` 走祖先分叉点前缀 ——
+  **本线与祖先死者不复活、祖先未来死亡不渗入**。缺 Branch 且无任何事件 ⇒ 真空库才开
+  `main` 创世；已有 Branch 却无 `is_current` 指针 ⇒ **故障态，不猜 main**。
+- **A 每日健康严重度演进**（`3012063`）：新增 `sim/content/health_evolve.py`。
+  数值表（单位严重度/**游戏日**）：`old_injury -0.05` / `disease +0.10` /
+  `addiction +0.02` / `disability 0.00` / `trauma -0.02`；round 12 位后 clip `[0,1]`。
+  愈合到 0 只发一次 `active=False`；恶化到 1 保持 active、饱和不重复。
+  **只更新已有健康条目，不建新档**；新伤只有 `created_at_tick` 不晚于该日界才参加。
+  接线：**异步批读快照 + 同步闭包**（钩子契约仍是同步无 IO）；`main.py::_on_day_switch`
+  先反思、`finally` 健康，**两者返回值都丢弃**；`run_world_driver` 签名与同步语义未改。
+  逐日 `loop.enqueue` 七键健康事件，下一帧 `drain_events` + `on_flush` 才落库（一帧延迟）。
+  `refresh` 不推进 `last_day`；`reset` 用于换 branch / 建基线。
+- **两条明确保留边界（裁定，不是漏做）**：
+  ① **离线补跑不演进健康**（选项 b）：`advance_offline` 保持纯引擎路径，不扩签名/内容回调；
+  补跑结束后才建健康基线，不在首次上线日切追补离线天数。已写进两处 docstring。
+  ② **重症 1 只改健康投影，不产 `AGENT_INCAPACITATED`**：普通 NPC 无失能恢复入口，
+  静默制造永久失能会卡死世界。
+- **收编冲突**：1. `villagers.py::_profile_row` —— 两边都保留（主树 1A 同源 + codex `branch_id`）；
+  2. `.orca/memory.md` —— codex 副本停在第十八轮，取主树版本后补记（本段）。
+- **主树独立复跑**：pytest **3457P/0F/121S**（434.12s，= 3350 + 107）、ruff/format **403 files**、
+  pyright 0/0/0、client 四件 EXIT 0、vitest 353P/48F、两资产逐字节、`uv lock --check`、
+  协议 1.14。关键回归单跑 98P；fork 39P/1S。codex 自测 3360P 与本树 3457P 的差 = 主树专有提交。
+- **证据**：`.orca/audits/round20-2026-11-03/{plan.md,progress.md,gates.json,review.md,b-report.md}`。
