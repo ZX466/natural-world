@@ -304,6 +304,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     setup_logging()  # K8：redact_sensitive 进全局日志链（第二道防线）
     loop, store = await build_loop()
+    from sim.content.health_evolve import DailyHealthEvolution, load_health_snapshot
+    from sim.core.calendar import game_time
+
+    health_evolution: DailyHealthEvolution | None = None
+    health_snapshot_day: int | None = None
+    app.state.health_evolution = None
     world_write_lock = asyncio.Lock()
     app.state.world_write_lock = world_write_lock
     from sim.core.persistence.npc_store import NpcStore
@@ -354,7 +360,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async def on_flush(
         events: list[Any], *, checkpoint_at: float | None = None, force_checkpoint: bool = False
     ) -> None:
-        nonlocal tile_map, world_revision
+        nonlocal tile_map, world_revision, health_snapshot_day
 
         from sim.core.persistence.world_restore import flush_world
 
@@ -391,10 +397,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             force_checkpoint=force_checkpoint,
         )
         npc_l2.observe(events)
-        if any(
+        health_changed = any(
             event.event_type in {EventKind.NPC_HEALTH_CHANGED, EventKind.NPC_DEATH}
             for event in events
-        ):
+        )
+        if health_evolution is not None:
+            day = game_time(loop.state.tick).day
+            if (
+                health_changed
+                or health_snapshot_day != day
+                or health_evolution.branch_id != branch_id
+            ):
+                snapshot = await load_health_snapshot(store.session_factory, branch_id=branch_id)
+                if health_evolution.branch_id != branch_id:
+                    health_evolution.reset(snapshot, baseline_day=day)
+                else:
+                    health_evolution.refresh(snapshot)
+                health_snapshot_day = day
+        if health_changed:
             refresh_hidden_states(
                 hidden_states, await NpcStore(store, branch_id=branch_id).materialize_hidden()
             )
@@ -471,22 +491,39 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 1) 播种 50 村民 profile（幂等；库已有则零行）；
     # 2) 装配 NpcRuntime（物化 profiles → 效用决策器）；
     # 3) 挂决策钩子（每 10 tick 一轮 → NPC_ACT 批次 + wander/move 拆解 MOVE）。
+    from sqlalchemy import select
+
     from sim.content.health import seed_health
     from sim.content.protagonist import seed_protagonist
+    from sim.content.seeding import read_branch_death_ids
     from sim.content.villagers import seed_villagers
+    from sim.core.persistence.models import Branch
     from sim.core.persistence.npc_store import NpcStore
     from sim.npc.assemble import assemble_runtime
     from sim.npc.sim_exec import npc_events_for_tick
     from sim.world.pathfinding import Pathfinder
 
-    seeded = await seed_villagers(store.session_factory)
-    if seeded:
-        logger.info("npc.seeded", count=seeded)
-    await seed_animals(store.session_factory)
-    chenmo_seeded = await seed_protagonist(store.session_factory)
-    if chenmo_seeded:
-        logger.info("protagonist.seeded", npc_id="chenmo")
-    await seed_health(store.session_factory, branch_id=current_branch or "main")
+    seed_allowed = current_branch is not None
+    if not seed_allowed:
+        async with store.session_factory() as session:
+            seed_allowed = await session.scalar(select(Branch.id).limit(1)) is None
+    if seed_allowed:
+        # A missing current pointer in an existing world is a fault, not genesis.
+        # Otherwise compute the bounded death prefix once for all three seeders.
+        seed_branch = current_branch or "main"
+        dead_ids = await read_branch_death_ids(store, branch_id=seed_branch)
+        seeded = await seed_villagers(
+            store.session_factory, branch_id=seed_branch, dead_ids=dead_ids
+        )
+        if seeded:
+            logger.info("npc.seeded", count=seeded)
+        await seed_animals(store.session_factory, branch_id=seed_branch, dead_ids=dead_ids)
+        chenmo_seeded = await seed_protagonist(
+            store.session_factory, branch_id=seed_branch, dead_ids=dead_ids
+        )
+        if chenmo_seeded:
+            logger.info("protagonist.seeded", npc_id="chenmo")
+        await seed_health(store.session_factory, branch_id=current_branch or "main")
     npc_store = NpcStore(store, branch_id=current_branch or "main")
     # 控制权归属：陈默由 ChenmoDriver 独占，档案是否已持久化不改变装配规则。
     npc_runtime, hidden_states = await assemble_runtime(
@@ -1107,6 +1144,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     async def _drain_loads() -> bool:
         nonlocal demography, tile_map, world_revision, npc_runtime
+        nonlocal health_evolution, health_snapshot_day
         """driver 每帧调用：执行 pending fork（事件循环内，可 await）。
 
         失败帧（案 B 最小形，K16 审计稿 §3.2）：失败走既有 `_error_frame` +
@@ -1199,6 +1237,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 refresh_hidden_states(
                     hidden_states, await branch_store.materialize_hidden(), reset=True
                 )
+                snapshot = await load_health_snapshot(store.session_factory, branch_id=branch_id)
+                health_snapshot_day = game_time(loop.state.tick).day
+                if health_evolution is None:
+                    health_evolution = DailyHealthEvolution(loop, snapshot)
+                else:
+                    health_evolution.reset(snapshot, baseline_day=health_snapshot_day)
+                app.state.health_evolution = health_evolution
                 _narrated_cache.clear()
                 branch_events = await branch_store.read_branch_history()
                 coin_ledger.restore_from_events(branch_events)
@@ -1279,6 +1324,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         memory_pipeline,
         npc_ids=(CHENMO_ID, *VILLAGER_IDS),
     )
+
+    def _on_day_switch(day: int) -> None:
+        # Preserve reflection's existing material window. Both return values are
+        # ignored; reflection failure still attempts health, then propagates.
+        try:
+            _day_reflector(day)
+        finally:
+            if health_evolution is not None:
+                health_evolution(day)
+
     # 只允许空库开线；已有分支但无当前行时保持故障态，禁止后台猜 main 修复真源。
     from sqlalchemy import select
 
@@ -1336,6 +1391,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except BaseException:
             await store.session_factory.kw["bind"].dispose()
             raise
+    # Offline option (b): health does not evolve during catch-up. Its daily baseline
+    # is established afterwards so the first live day cannot backfill offline days.
+    if source_ready:
+        snapshot = await load_health_snapshot(
+            store.session_factory, branch_id=await store.current_branch_id_or_none() or "main"
+        )
+        health_evolution = DailyHealthEvolution(loop, snapshot)
+        health_snapshot_day = game_time(loop.state.tick).day
+        app.state.health_evolution = health_evolution
     # Startup catch-up is finished. Source readiness remains a dynamic gate so a
     # later successful world recovery can enable L2 without restarting the server.
     npc_l2_live = True
@@ -1347,7 +1411,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             manager,
             tile_map,
             on_flush,
-            on_day_switch=_day_reflector,
+            on_day_switch=_on_day_switch,
             drain_loads=_drain_loads,
             write_lock=world_write_lock,
         )
@@ -1358,6 +1422,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         npc_l2_live = False
+        app.state.health_evolution = None
         app.state.flush_for_anchor = None
         app.state.pathfinder = None
         delattr(app.state, "world_source_ready")

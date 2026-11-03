@@ -10,19 +10,31 @@ from sim.core.world import WorldState
 ANIMALS = {"cat_grey": ("灰", "cat"), "dog_black": ("黑子", "dog"), "raven": ("鸦", "raven")}
 
 
-async def seed_animals(session_factory) -> int:
+async def seed_animals(
+    session_factory, *, branch_id: str = "main", dead_ids: frozenset[str] | None = None
+) -> int:
     from sqlalchemy import select
 
+    from sim.content.seeding import read_branch_death_ids
     from sim.content.villagers import _profile_row
     from sim.core.persistence.models import NpcProfile
+    from sim.core.persistence.store import SqlEventStore
     from sim.npc.model import NpcProfileData
 
+    if dead_ids is None:
+        dead_ids = await read_branch_death_ids(SqlEventStore(session_factory), branch_id=branch_id)
     async with session_factory() as session:
-        existing = set((await session.execute(select(NpcProfile.id))).scalars().all())
-        missing = set(ANIMALS) - existing
+        existing = set(
+            (await session.execute(select(NpcProfile.id).where(NpcProfile.branch_id == branch_id)))
+            .scalars()
+            .all()
+        )
+        missing = set(ANIMALS) - existing - dead_ids
         for eid in sorted(missing):
             name, species = ANIMALS[eid]
-            row = _profile_row(NpcProfileData(npc_id=eid, name=name, species=species, lod=0))
+            row = _profile_row(
+                NpcProfileData(npc_id=eid, name=name, species=species, lod=0), branch_id=branch_id
+            )
             row["species"] = species
             row["identity_anchor"] = f"我叫{name}。"
             session.add(NpcProfile(**row))

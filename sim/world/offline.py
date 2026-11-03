@@ -36,6 +36,8 @@ async def advance_offline(
 
     小数不足一个 tick 的尾部向下取整；不恢复模型计划、不调用网络/墙钟。
     每批最多 4 实秒与 240 tick，避免时钟先前进而世界被单帧上限截断。
+    不调用在线日切内容钩子：离线跨日不做每日健康演进；启动后以补跑结束日
+    建立健康基线，不在首次上线日切追补离线天数（第二十轮选项 b）。
     """
     if isinstance(offline_seconds, bool) or not isinstance(offline_seconds, (int, float)):
         raise TypeError("offline_seconds must be a finite nonnegative number")

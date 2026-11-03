@@ -30,11 +30,11 @@ def build_anchor() -> IdentityAnchor:
     )
 
 
-def _profile_row() -> dict[str, object]:
+def _profile_row(*, branch_id: str = "main") -> dict[str, object]:
     """npc_profiles 行（列口径同 villagers._profile_row）。"""
     return {
         "id": CHENMO_ID,
-        "branch_id": "main",
+        "branch_id": branch_id,
         "name": "陈默",
         "species": "human",
         "gender": "male",
@@ -69,16 +69,28 @@ def _profile_row() -> dict[str, object]:
     }
 
 
-async def seed_protagonist(session_factory) -> int:
-    """陈默 profile 落库（幂等；lod=2 L2 档）。"""
+async def seed_protagonist(
+    session_factory, *, branch_id: str = "main", dead_ids: frozenset[str] | None = None
+) -> int:
+    """陈默 profile 落库（分支内幂等；排除已死者；lod=2 L2 档）。"""
     from sqlalchemy import select
 
+    from sim.content.seeding import read_branch_death_ids
     from sim.core.persistence.models import NpcProfile
+    from sim.core.persistence.store import SqlEventStore
 
+    if dead_ids is None:
+        dead_ids = await read_branch_death_ids(SqlEventStore(session_factory), branch_id=branch_id)
+    if CHENMO_ID in dead_ids:
+        return 0
     async with session_factory() as session:
-        existing = await session.execute(select(NpcProfile.id).where(NpcProfile.id == CHENMO_ID))
+        existing = await session.execute(
+            select(NpcProfile.id).where(
+                NpcProfile.branch_id == branch_id, NpcProfile.id == CHENMO_ID
+            )
+        )
         if existing.scalars().first() is not None:
             return 0
-        session.add(NpcProfile(**_profile_row()))
+        session.add(NpcProfile(**_profile_row(branch_id=branch_id)))
         await session.commit()
         return 1
