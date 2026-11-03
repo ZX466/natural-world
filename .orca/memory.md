@@ -78,7 +78,7 @@
 
 - **main HEAD**：`git log -1 --oneline` 现测（**别记哈希**，记录本身就会产生新提交）。
   第十八+十九轮收编 = 本文件本次提交的父提交（`--no-ff` 合并 `e28e144`）。
-- **codex HEAD**：`3012063`（第二十轮 A；含 `bb0647e` B）。**已收编**；codex 树仍未同步 main。
+- **codex HEAD**：内容交付 `3012063`（A）+ `bb0647e`（B），记录提交 `69444db`。**已收编**；codex 树仍未同步 main。
 - **第十八+十九轮：已收编**（`--no-ff` 合并 `e28e144`，merge-base `16b7eae`）。
   - **2 处冲突**（预测 4 处；`main.py`/`fork.py` 自动合并，已复查主树修复仍在）：
     1. `sim/npc/sim_exec.py` —— **两边都保留**：先 codex 的 `note_dialogue`（L2 降格判据），
