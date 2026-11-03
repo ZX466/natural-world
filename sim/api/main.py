@@ -468,22 +468,39 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 1) 播种 50 村民 profile（幂等；库已有则零行）；
     # 2) 装配 NpcRuntime（物化 profiles → 效用决策器）；
     # 3) 挂决策钩子（每 10 tick 一轮 → NPC_ACT 批次 + wander/move 拆解 MOVE）。
+    from sqlalchemy import select
+
     from sim.content.health import seed_health
     from sim.content.protagonist import seed_protagonist
+    from sim.content.seeding import read_branch_death_ids
     from sim.content.villagers import seed_villagers
+    from sim.core.persistence.models import Branch
     from sim.core.persistence.npc_store import NpcStore
     from sim.npc.assemble import assemble_runtime
     from sim.npc.sim_exec import npc_events_for_tick
     from sim.world.pathfinding import Pathfinder
 
-    seeded = await seed_villagers(store.session_factory)
-    if seeded:
-        logger.info("npc.seeded", count=seeded)
-    await seed_animals(store.session_factory)
-    chenmo_seeded = await seed_protagonist(store.session_factory)
-    if chenmo_seeded:
-        logger.info("protagonist.seeded", npc_id="chenmo")
-    await seed_health(store.session_factory, branch_id=current_branch or "main")
+    seed_allowed = current_branch is not None
+    if not seed_allowed:
+        async with store.session_factory() as session:
+            seed_allowed = await session.scalar(select(Branch.id).limit(1)) is None
+    if seed_allowed:
+        # A missing current pointer in an existing world is a fault, not genesis.
+        # Otherwise compute the bounded death prefix once for all three seeders.
+        seed_branch = current_branch or "main"
+        dead_ids = await read_branch_death_ids(store, branch_id=seed_branch)
+        seeded = await seed_villagers(
+            store.session_factory, branch_id=seed_branch, dead_ids=dead_ids
+        )
+        if seeded:
+            logger.info("npc.seeded", count=seeded)
+        await seed_animals(store.session_factory, branch_id=seed_branch, dead_ids=dead_ids)
+        chenmo_seeded = await seed_protagonist(
+            store.session_factory, branch_id=seed_branch, dead_ids=dead_ids
+        )
+        if chenmo_seeded:
+            logger.info("protagonist.seeded", npc_id="chenmo")
+        await seed_health(store.session_factory, branch_id=current_branch or "main")
     npc_store = NpcStore(store, branch_id=current_branch or "main")
     # 控制权归属：陈默由 ChenmoDriver 独占，档案是否已持久化不改变装配规则。
     npc_runtime, hidden_states = await assemble_runtime(

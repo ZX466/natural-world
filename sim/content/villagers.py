@@ -281,14 +281,14 @@ def spawn_positions(
 # ---------------------------------------------------------------------------
 
 
-def _profile_row(p: NpcProfileData) -> dict[str, object]:
-    """NpcProfileData → npc_profiles 行（分支 main；列口径同 M2 测试夹具）。"""
+def _profile_row(p: NpcProfileData, *, branch_id: str = "main") -> dict[str, object]:
+    """NpcProfileData → 目标分支的 npc_profiles 行（列口径同 M2 测试夹具）。"""
     from sim.npc.roles import ROLES
 
     role = ROLES.get(p.npc_id)
     return {
         "id": p.npc_id,
-        "branch_id": "main",
+        "branch_id": branch_id,
         "name": role[0] if role else p.name,
         "species": "human",
         "gender": "unknown",
@@ -317,23 +317,34 @@ def _profile_row(p: NpcProfileData) -> dict[str, object]:
     }
 
 
-async def seed_villagers(session_factory) -> int:
-    """名册落库（幂等）：已存在的 id 跳过，只插缺行；返回新增行数。
+async def seed_villagers(
+    session_factory, *, branch_id: str = "main", dead_ids: frozenset[str] | None = None
+) -> int:
+    """名册落库（分支内幂等）：跳过已存在者与已死者；返回新增行数。
 
     profile 行是**内容底座**（创世数据，非运行时状态变化）——C4 写路径约束的
-    是世界状态变更；此处同 M2 测试夹具口径直插 session。判定按 id 存在性
+    是世界状态变更；此处同 M2 测试夹具口径直插 session。判定按 (branch_id, id)
+    存在性。dead_ids 可由启动路径一次读取并复用；未传则只读本线有界死亡史。
     （部分残留补齐；内容不可变，改名单要显式重置库）。
     """
     from sqlalchemy import select
 
+    from sim.content.seeding import read_branch_death_ids
     from sim.core.persistence.models import NpcProfile
+    from sim.core.persistence.store import SqlEventStore
 
+    if dead_ids is None:
+        dead_ids = await read_branch_death_ids(SqlEventStore(session_factory), branch_id=branch_id)
     roster = build_roster()
     async with session_factory() as session:
-        existing_rows = (await session.execute(select(NpcProfile.id))).scalars().all()
+        existing_rows = (
+            (await session.execute(select(NpcProfile.id).where(NpcProfile.branch_id == branch_id)))
+            .scalars()
+            .all()
+        )
         existing = set(existing_rows)
-        missing = [p for p in roster if p.npc_id not in existing]
+        missing = [p for p in roster if p.npc_id not in existing and p.npc_id not in dead_ids]
         for p in missing:
-            session.add(NpcProfile(**_profile_row(p)))
+            session.add(NpcProfile(**_profile_row(p, branch_id=branch_id)))
         await session.commit()
         return len(missing)
