@@ -250,7 +250,9 @@ sim/api/ws  (FastAPI WebSocket 网关)
 - 重放毫秒级，期间客户端显示"片刻后……"叙事化过渡，绝不显示"重放中/tick"。
 - `anchor_id` 是**不透明字符串**（12 位 hex，`uuid4().hex[:12]`）——**不得**用 `startsWith('anc_')` 之类前缀特征做校验（`anchors-api.md` §6.5：`anc_` 前缀惯例不存在）。
 - **分发契约见 `ws-dispatch-proposal.md` §3**（M5-K4）：注册、入站校验、失败走 WS error 帧（`code:"load_failed"`）**且不断线**、成功发 `full_snapshot`。**M5-K6 已注册**（白名单 + `_CHANNEL_FOR: session` 成对）；`anchor_id` 缺失/空/非串 → `bad_anchor`，其余形状一律按不透明串走查表（§6.5 禁前缀特征），载入失败/异常 → `load_failed` 且**不断线**。生产采用提案 §3.4 的 driver 异步恢复与广播完成通道。
-- **生产读档先登记，完成后回帧**：登记请求时不发成功确认或旧快照；driver 实际恢复世界、交接当前子线与玩家游标后，依次广播 `session_state` 告知、既有 `timescale` 战斗状态、`full_snapshot`。失败只发 error（不断线）。同步兼容 hook 已完成时仍可通过 `frames_of()` 返回告知与全量两帧。以上复用现有消息形状，协议版本不变。
+- **生产读档先登记，完成后回帧**：登记请求时不发成功确认或旧快照；driver 实际恢复世界、交接当前子线与玩家游标后，依次按连接投递 `session_state` 告知（§4.6）、广播既有 `timescale` 战斗状态和 `full_snapshot`。失败只发 error（不断线）。同步兼容 hook 已完成时仍可通过 `frames_of()` 返回告知与全量两帧。以上复用现有消息形状，协议版本不变。
+- **读档防重**：同一 `anchor_id` 已排队或正在恢复时，后到请求立即收到既有 `error{ref:"load_anchor",code:"load_failed"}`（沿用读档失败文案），不会再次排队或分叉。完成或失败后解除防重，可重新请求；不同存档仍按队列顺序处理。**客户端另有一层**：读档在途时 `runtime.loadAnchor` 直接丢弃后续请求（`disabled` 要等 React 重渲染才生效，同一帧内的两次点击只有请求侧判重拦得住）；两层都在，服务端那层管多标签页，前端那层管连点。
+- **故障态恢复入口**：鉴权后的 `load_anchor` 有意不受 `world_source_ready` 动作闸门限制；投影失败时冻结世界、拒绝移动/变速/念头/体素操作，但仍允许读取有效档恢复。冻结不改变连接的暂停意图。
 
 #### sync_request.data（C→S） / full_snapshot 响应见 §4.1
 
@@ -274,6 +276,8 @@ sim/api/ws  (FastAPI WebSocket 网关)
 ```
 
 - **一帧承载两件事**：连接期初值（`speed` / `paused` / `anchor` 游标指针）与分叉告知（`notice`）。D-5 的"重连后前端不知世界是暂停还是 16x"与 D-6 的"世界已分叉怎么告知"是同一类缺口，故合并为一条消息（旧 client 静默忽略未知 type，versioning §3 铁律）。
+- **控制态按连接定向投递**：`paused` 直接取该连接的 `ControlState.paused`，`speed` 取同一对象的 `effective_speed()`；接入和成功读档都如此，不从全局时钟反推暂停。读档完成时逐连接发送各自的 `session_state`，再广播共享的 `timescale` / `full_snapshot`；一个连接暂停、另一个未暂停时，二者收到的控制字段可以不同，不互改记忆倍率。
+- **共享时钟是控制态的投影**：成功读档以发起连接当时的控制态恢复时钟（暂停为 0，未暂停为该连接的倍率）；之后有效控制操作仍作用于同一个世界。因此某连接的暂停选择不保证其他连接无法推进世界。断线不撤销已受理读档；该请求保留的控制态仍用于完成时恢复。读档失败继续冻结，只有恢复成功才解除故障冻结，用户原本暂停则仍停着。
 - **零原始数值**：`speed` 只在 `{1,4,16}`（**暂停时 = 恢复后倍率**，不是 0）；`anchor` 只带 `name` + `story_label`（组件 `SessionAnchor`，`additionalProperties:false`）；`notice` 是戏内口语行。**`branch_id` / `seq` / 世界 tick 一律不出现**——分叉只能被"叙事化告知"，不能被"标识符告知"。
 - 游标指针对齐戏外只读面 `GET /api/anchors/current`（D-9）同一行数据；WS 侧**只随事件发**（接入/读档），不做查询面——同一事实两个真相源会漂。
 - 出入站：仅 S→C。`anchor`/`notice` 为 `null` 是合法形状（无档 / 非读档场景），不是缺字段。

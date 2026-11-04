@@ -3,12 +3,20 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-04 读档修复已提交 · 第二十一轮 D1+D2 已派 codex · 主树 D3–D6 已做完待裁提交）
+## 0. 当前状态（2026-11-04 第二十一轮已收编 · 主树 D3–D6 已提交）
 
-- **在飞（2026-11-04）**：**codex 树第二十一轮 D1+D2**（派单在它的 `.orca/talking.txt`）。
-  D1 = 失败读档后的解冻 + `paused` 真值源收敛（P1，探针已取证）；D2 = `pending_loads` 去重。
-  **主树无在飞**；D3–D6（前端四条）已完成、全门禁绿，**未提交**（用户未说提交）。
-- **主树 D3–D6 已完成（2026-11-04，TDD）**：读档等待态改**帧驱动**（`loadPending`
+- **无在飞**。codex 第二十一轮 `78e5c09` 已 `--no-ff` 收编（1 冲突：`memory.md` 取主树版本）。
+  主树 D3–D6 已分三提交落地（`551f1af` / `5f890bd` / `fca7a3f`）。
+- **第二十一轮（codex，D1+D2）已收编**：成功读档按**请求保留的连接 `ControlState`**
+  重新投影 `clock`（暂停 0、否则 `effective_speed`），失败仍 fail-closed 冻结；
+  `session_state` 改**按连接定向投递**（`manager.send_to_control`），`paused` 不再从全局
+  `clock.speed == 0` 推断；`set_speed` 在暂停态也写 `speed_before_pause`。队列与执行中
+  都按 `anchor_id` 防重，重复立即 `load_failed`，`finally` 释放可重试。
+  - **收编冲突 1 处**：`.orca/memory.md`（codex 侧只有 §7 且是旧快照）→ 取主树版本。
+  - **收编时补修一处**：`single_save` 夹具只 patch `broadcast_json`，而 `session_state`
+    改成定向投递后漏帧 ⇒ 改为真 `ConnectionManager` + `_recording_socket`（与 `saved_world` 同款）。
+    这是主树自己的测试跟不上新架构，不是 codex 的缺陷。
+- **主树 D3–D6（2026-11-04，TDD，已提交）**：读档等待态改**帧驱动**（`loadPending`
   由 `loadAnchor` 置、`full_snapshot`/`error{ref:load_anchor}`/掉线收尾清），面板出
   「片刻后……」+ 三按钮真禁用；`session_state.notice`/`anchor` 接进面板与顶栏；
   `set_control` 被拒补顶栏 `role="alert"` 位（白名单 bad_speed/bad_action/bad_advance）；
@@ -17,9 +25,8 @@
   在途中再点一次直接丢弃（`disabled` 要等 React 重渲染才生效，双击可同帧跑完两次 onClick，
   只有请求侧判重拦得住第二个 fork）。**自查另修一条既有泄漏**：`player_impulse` 的错误
   分支原样透传 `msg.message`，而服务端用消息 type 当 ref ⇒ `bad_channel` 会把
-  "channel mismatch" 送进念头栏（`ws.py:995`）。客户端 **388 通过 / 51 文件**，typecheck/lint/
-  prettier/`gen:protocol:check` EXIT 0；pytest **3460P/0F/121S**（436.02s）不变。
-- **新缺陷 D1：失败读档后世界永久冻结（2026-11-04 探针实测，已派 codex）**：
+  "channel mismatch" 送进念头栏（`ws.py:995`）。
+- **已修并关闭：D1 失败读档后世界永久冻结（2026-11-04 探针实测 → codex 第二十一轮修复）**：
   一次读档失败之后再成功读档，`load_outcome=True` / `world_source_ready=True`，但
   `loop.clock.speed` 仍为 **0**，广播的 `session_state` 是 `{speed:1, paused:true}`，
   而点「继续」回 `bad_action`「本来就没停。」（因为每连接 `ControlState.paused` 是 False）。
@@ -27,7 +34,7 @@
     **成功路径 `main.py:1273` 只置回 ready，从不恢复 `clock.speed`**；而
     `main.py:1279` 用 `loop.clock.speed == 0` 推断 `paused`（与 `ControlState` 分裂）。
   - 既有测试 `test_projection_failure_stops_world_without_sending_success` 只锁「失败要冻」，
-    **缺「成功要解冻」**——这是同一根因的另一半。
+    **缺「成功要解冻」**——这是同一根因的另一半（第二十一轮已补）。
   - 可达窗口：`activated=True` 之后 `rebuild_tile_map` / `load_health_snapshot` /
     `restore_voxel_edits` 抛错。**冻结本身是故意的 fail-closed，别为凑绿取消它。**
 - **读档恒失败缺陷已修并已提交（2026-11-03 修 / 2026-11-04 提交）**：

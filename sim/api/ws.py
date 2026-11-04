@@ -1108,9 +1108,9 @@ def _handle_set_control(
             or speed not in ALLOWED_CONTROL_SPEEDS
         ):
             return _error_frame("set_control", _ERROR_BAD_SPEED, "快不了那么慢，也快不了那么快。")
+        control.speed_before_pause = float(speed)
         if control.paused:
             # 暂停中变速只改记忆值（不解除暂停）；ack 带 paused 让前端不必推断
-            control.speed_before_pause = float(speed)
             return _control_ack("set_speed", speed=speed, paused=True)
         loop.clock.set_speed(float(speed))
         return _control_ack("set_speed", speed=speed, paused=False)
@@ -1334,24 +1334,25 @@ _ANCHOR_LABELS: dict[str, dict[str, str]] = {}
 #: 载入钩子（同步布尔契约）。默认 None → 只查 _ANCHOR_IDS 存在性。
 #: ws_endpoint 装配时挂真实「定位→快照→重放」入口（§3.4 长期 driver 路径）。
 _ANCHOR_LOAD_HOOK: Any = None
+_ANCHOR_LOAD_WITH_CONTROL = False
 
 
-def set_anchor_load_hook(hook: Any) -> None:
+def set_anchor_load_hook(hook: Any, *, with_control: bool = False) -> None:
     """注册生产载入钩子（main.py lifespan 装配；读档=分叉编排缝）。
 
-    hook 契约（同步布尔）：`(anchor_id: str) -> bool`——True=已分叉换线；
-    抛异常=执行失败（handler 降级 load_failed）。None 卸载。
+    默认兼容单参数 hook；生产用 with_control=True 接收第二参 ControlState。
+    返回 True=已完成，None=已入队，False/异常=失败。hook=None 卸载。
     """
-    global _ANCHOR_LOAD_HOOK
+    global _ANCHOR_LOAD_HOOK, _ANCHOR_LOAD_WITH_CONTROL
     _ANCHOR_LOAD_HOOK = hook
+    _ANCHOR_LOAD_WITH_CONTROL = with_control
 
 
 def reset_anchor_registry() -> None:
     """测试辅助：清空 anchor id 集/标签表与载入钩子。"""
     _ANCHOR_IDS.clear()
     _ANCHOR_LABELS.clear()
-    global _ANCHOR_LOAD_HOOK
-    _ANCHOR_LOAD_HOOK = None
+    set_anchor_load_hook(None)
 
 
 def register_anchor_id(anchor_id: str, name: str = "", story_label: str = "") -> None:
@@ -1399,7 +1400,7 @@ def _handle_load_anchor(
     anchor_id 是**不透明串**（§6.5：禁 anc_ 之类前缀特征校验）——非法只回 bad_anchor，
     形状不被特征拒绝。载入执行失败（重放损坏等）降级为 load_failed，绝不炸断 handler。
 
-    同步兼容 hook 完成后返回两帧；生产 hook 返回 None 表示排队，完成才由 driver 广播。
+    同步兼容 hook 完成后返回两帧；生产 hook 返回 None 表示排队，完成才由 driver 投递。
     **M5-K3（D-6）**：同步成功返回**两帧**——`session_state`（分叉告知：一行叙事化
     文本 + 游标指针；branch_id/seq/tick 一律不出网关）与随后的全量 `full_snapshot`。
     失败路径仍是单帧 error（§3.3 连接不断）。
@@ -1407,12 +1408,14 @@ def _handle_load_anchor(
     anchor_id = raw.get("anchor_id")
     if not isinstance(anchor_id, str) or not anchor_id:
         return _error_frame("load_anchor", _ERROR_BAD_ANCHOR, "没这个档。")
+    ctrl = control if control is not None else _LEGACY_CONTROL
     try:
-        ok = (
-            _ANCHOR_LOAD_HOOK(anchor_id)
-            if _ANCHOR_LOAD_HOOK is not None
-            else (anchor_id in _ANCHOR_IDS)
-        )
+        if _ANCHOR_LOAD_HOOK is None:
+            ok = anchor_id in _ANCHOR_IDS
+        elif _ANCHOR_LOAD_WITH_CONTROL:
+            ok = _ANCHOR_LOAD_HOOK(anchor_id, ctrl)
+        else:
+            ok = _ANCHOR_LOAD_HOOK(anchor_id)
     except Exception:
         # 重放中世界状态损坏等执行异常：降级 load_failed，连接保持（§3.3）
         logger.warning("ws.anchor_load_failed", reason="hook_exception")
@@ -1424,7 +1427,6 @@ def _handle_load_anchor(
         return _load_failed_frame()
     # 短期同步路径（§3.4）：复用 snapshot_payload；长期 driver 化后本分支由广播接替。
     pointer = anchor_pointer(anchor_id)
-    ctrl = control if control is not None else _LEGACY_CONTROL
     notice_frame = session_state_payload(
         speed=ctrl.effective_speed(),
         paused=ctrl.paused,
