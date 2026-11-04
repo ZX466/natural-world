@@ -998,7 +998,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     def _npc_memories(npc_id: str) -> tuple[str, ...]:
         persisted = [entry.content for entry in memory_pipeline.iter_visible(npc_id)][-3:]
-        spoken = [text for _, text in chat_ledger.memories_of(npc_id)[-3:]]
+        spoken = [text for _, text, _speaker in chat_ledger.memories_of(npc_id)[-3:]]
         return tuple(dict.fromkeys(persisted + spoken))[-4:]
 
     npc_l2 = NpcL2Coordinator(
@@ -1071,7 +1071,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # 最新 3 条）排前（最新鲜的社交事实优先）。
             from sim.agent.chenmo_memory import merge_ledger_entries
 
-            _ledger_texts = tuple(text for _, text in chat_ledger.memories_of(CHENMO_ID)[-3:])
+            _ledger_texts = tuple(
+                text for _, text, _speaker in chat_ledger.memories_of(CHENMO_ID)[-3:]
+            )
             # 2026-10-12「只心声不动」修复：[处境] 附可去地标表——模型此前
             # 不知道任何坐标（[计划] 恒空、target_pos 无从填起），输出收敛
             # wait/短移=行动面空转。地标=戏内地点名+坐标（戏内事实可出站）。

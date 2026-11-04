@@ -773,17 +773,24 @@ def npc_events_for_tick(
                         # （本拍的话对方刚听过——复读不传播新信息；流言=
                         # 传播先前获得的内容，故先取旧记忆再落新记忆）。
                         _prior_mems = chat_ledger.memories_of(npc_id)
-                        chat_ledger.remember(npc_id, line, tick=tick)
-                        chat_ledger.remember(target_id, line, tick=tick)
-                        if retell_last is not None and _prior_mems:
+                        chat_ledger.remember(npc_id, line, tick=tick, speaker=npc_id)
+                        chat_ledger.remember(target_id, line, tick=tick, speaker=npc_id)
+                        # 转述只能传播**别人**的话：取最新一条「不是自己说的」记忆。
+                        # 自己的台词也会落进自己记忆（上一行），若直接取 `[-1]`，
+                        # 实机会大量出现「听奚船家说，韩书生，吃了没？」这种自指
+                        # （2026-11-04 修后复验仍 37/62）。
+                        _heard_mems = [m for m in _prior_mems if m[2] != npc_id]
+                        if retell_last is not None and _heard_mems:
                             cool = _RETELL_COOLDOWN_MIN_TICKS + (
                                 _hash_u32("retell-cooldown", npc_id) % _RETELL_COOLDOWN_SPAN_TICKS
                             )
                             last_r = retell_last.get(npc_id, -(cool + 1))
                             if tick - last_r >= cool:
                                 retell_last[npc_id] = tick
-                                _tick_src, _content = _prior_mems[-1]
-                                _speaker = (display_name_of or {}).get(npc_id, npc_id)
+                                _tick_src, _content, _said_by = _heard_mems[-1]
+                                # 署**原说话人**（记忆里落的那位），不是转述者自己：
+                                # 2026-11-04 实机验收 92/92 条都写成了转述者本人。
+                                _speaker = (display_name_of or {}).get(_said_by, _said_by)
                                 _line = retell_template(_speaker, _content)
                                 events.append(
                                     npc_monologue_event(

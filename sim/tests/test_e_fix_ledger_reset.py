@@ -27,7 +27,7 @@ def test_coin_ledger_reset_clears_balances():
 def test_chat_ledger_reset_clears_both():
     led = ChatLedger()
     led.adjust("a", "b", kind="chat")
-    led.remember("a", "旧分支的话", tick=1)
+    led.remember("a", "旧分支的话", tick=1, speaker="b")
     led.reset()
     assert len(led) == 0
     assert led.memories_of("a") == []

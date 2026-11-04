@@ -22,7 +22,7 @@ def test_adjust_clamps_to_unit_range():
 def test_remember_ring_buffer():
     led = ChatLedger()
     for i in range(25):
-        led.remember("a", f"第{i}句话", tick=i)
+        led.remember("a", f"第{i}句话", tick=i, speaker="b")
     mems = led.memories_of("a")
     assert len(mems) == 20  # 上限 20
     assert mems[-1][1] == "第24句话"  # 保留最新
@@ -40,9 +40,18 @@ def test_retell_kind_moves_trust():
     assert led.relations_of("a")["b"]["trust"] > 0.0
 
 
+def test_remember_keeps_speaker():
+    """记忆条目必须记住「谁说的」——转述归因（2026-11-04 实机验收缺陷）。"""
+    led = ChatLedger()
+    led.remember("a", "东边着火了", tick=1, speaker="b")
+    mems = led.memories_of("a")
+    assert len(mems) == 1
+    assert mems[0][2] == "b"
+
+
 def test_memories_of_is_copy():
     led = ChatLedger()
-    led.remember("a", "x", tick=1)
+    led.remember("a", "x", tick=1, speaker="b")
     snap = led.memories_of("a")
-    snap.append((99, "脏数据"))
+    snap.append((99, "脏数据", "b"))
     assert len(led.memories_of("a")) == 1  # 外部改不动内部缓冲

@@ -24,11 +24,11 @@ _FIELDS = ("affection", "trust", "fear", "debt", "face")
 
 
 class ChatLedger:
-    """{owner: {other: {field: value}}} + {npc: [(tick, text)]} 环形缓冲。"""
+    """{owner: {other: {field: value}}} + {npc: [(tick, text, speaker)]} 环形缓冲。"""
 
     def __init__(self) -> None:
         self._relations: dict[str, dict[str, dict[str, float]]] = {}
-        self._memories: dict[str, list[tuple[int, str]]] = {}
+        self._memories: dict[str, list[tuple[int, str, str]]] = {}
 
     def adjust(self, owner: str, other: str, *, kind: str) -> None:
         """一次互动的关系漂移（owner 对 other 的印象行；值域 clamp [0,1]）。"""
@@ -38,15 +38,21 @@ class ChatLedger:
         row = self._relations.setdefault(owner, {}).setdefault(other, dict.fromkeys(_FIELDS, 0.0))
         row[field] = min(1.0, max(0.0, row[field] + delta))
 
-    def remember(self, npc_id: str, content: str, *, tick: int) -> None:
-        """记忆环形缓冲：追加 + 截断到上限（保留最新）。"""
+    def remember(self, npc_id: str, content: str, *, tick: int, speaker: str) -> None:
+        """记忆环形缓冲：追加 + 截断到上限（保留最新）。
+
+        `speaker` 是**说出这句话的实体 id**（不是听见的人）。转述（E2 retell）
+        要署原说话人的名字；2026-11-04 实机验收发现此处原先只落 (tick, content)，
+        转述只能拿转述者自己填模板 ⇒ 92/92 条「听X说」的 X 都是转述者本人。
+        该参数**必填**：漏传会让归因错静默复发，故不给默认值。
+        """
         buf = self._memories.setdefault(npc_id, [])
-        buf.append((tick, content))
+        buf.append((tick, content, speaker))
         if len(buf) > _MEMORY_CAP:
             del buf[: len(buf) - _MEMORY_CAP]
 
-    def memories_of(self, npc_id: str) -> list[tuple[int, str]]:
-        """该 NPC 的记忆副本（调用方改不动内部缓冲）。"""
+    def memories_of(self, npc_id: str) -> list[tuple[int, str, str]]:
+        """该 NPC 的记忆副本 (tick, text, speaker)（调用方改不动内部缓冲）。"""
         return list(self._memories.get(npc_id, ()))
 
     def relations_of(self, owner: str) -> dict[str, dict[str, float]]:
