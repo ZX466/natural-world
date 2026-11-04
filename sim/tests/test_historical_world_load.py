@@ -1,12 +1,36 @@
 """DA-02：真实历史档必须恢复后才确认，并让后续事件写入选中的子线。"""
 
 import asyncio
+import json
 
 import pytest
+from fastapi import WebSocket
 
 from sim.api import main, ws
 from sim.api.anchors import AnchorStore
 from sim.core.events import npc_death_event
+
+
+def _recording_socket(frames, incoming=()) -> WebSocket:
+    messages = iter(incoming)
+    connecting = True
+
+    async def receive():
+        nonlocal connecting
+        if connecting:
+            connecting = False
+            return {"type": "websocket.connect"}
+        try:
+            raw = next(messages)
+        except StopIteration:
+            return {"type": "websocket.disconnect", "code": 1000}
+        return {"type": "websocket.receive", "text": json.dumps(raw)}
+
+    async def send(message):
+        if message["type"] == "websocket.send":
+            frames.append(json.loads(message["text"]))
+
+    return WebSocket({"type": "websocket", "path": "/ws", "headers": []}, receive, send)
 
 
 @pytest.fixture(params=["with_future_events", "quiet_head"])
@@ -17,10 +41,12 @@ async def saved_world(tmp_path, monkeypatch, request):
     monkeypatch.setattr(main, "run_world_driver", idle_driver)
     frames = []
 
-    async def capture(frame):
-        frames.append(frame)
-
-    monkeypatch.setattr(main.manager, "broadcast_json", capture)
+    manager = ws.ConnectionManager()
+    connection = _recording_socket(frames)
+    await connection.accept()
+    manager.register(connection)
+    manager.mark_authenticated(connection)
+    monkeypatch.setattr(main, "manager", manager)
     async with main.lifespan(main.app):
         app = main.app
         await app.state.flush_for_anchor()
@@ -206,6 +232,281 @@ async def test_projection_failure_stops_world_without_sending_success(saved_worl
     assert not app.state.world_source_ready
     assert app.state.loop.clock.speed == 0
     assert [frame["type"] for frame in frames] == ["error"]
+
+
+async def _other_saved_anchor(app, anchor_id):
+    """Main owns the protected-anchor fix; use the other valid saved cursor here."""
+    from sqlalchemy import select
+
+    from sim.core.persistence.models import PlayerAnchor
+
+    async with app.state.store.session_factory() as session:
+        other = await session.scalar(select(PlayerAnchor.id).where(PlayerAnchor.id != anchor_id))
+    assert other is not None
+    return other
+
+
+@pytest.mark.parametrize("speed", [1, 4, 16])
+@pytest.mark.parametrize("paused", [False, True])
+async def test_projection_failure_then_success_restores_requesting_control(
+    saved_world, monkeypatch, speed, paused
+):
+    app, anchor_id, _, _, frames = saved_world
+    control = main.manager.controls()[0]
+    loop = app.state.loop
+    recovery_anchor = await _other_saved_anchor(app, anchor_id)
+    ws.handle_client_message(
+        {"type": "set_control", "channel": "control", "action": "set_speed", "speed": speed},
+        loop,
+        app.state.pathfinder,
+        control,
+    )
+    if paused:
+        ws.handle_client_message(
+            {"type": "set_control", "channel": "control", "action": "pause"},
+            loop,
+            app.state.pathfinder,
+            control,
+        )
+    real_map = main.rebuild_tile_map
+
+    async def failed_map(*args, **kwargs):
+        raise RuntimeError("synthetic projection failure")
+
+    monkeypatch.setattr(main, "rebuild_tile_map", failed_map)
+    ws.handle_client_message(
+        {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id},
+        loop,
+        app.state.pathfinder,
+        control,
+    )
+    await app.state.drain_pending_loads()
+    assert app.state.load_outcomes[-1] == (anchor_id, False)
+    assert not app.state.world_source_ready
+    assert loop.clock.speed == 0
+    assert [frame["type"] for frame in frames] == ["error"]
+
+    monkeypatch.setattr(main, "rebuild_tile_map", real_map)
+    ws.handle_client_message(
+        {"type": "load_anchor", "channel": "session", "anchor_id": recovery_anchor},
+        loop,
+        app.state.pathfinder,
+        control,
+    )
+    await app.state.drain_pending_loads()
+    assert app.state.load_outcomes[-1] == (recovery_anchor, True)
+    assert app.state.world_source_ready
+    assert loop.clock.speed == (0 if paused else speed)
+    state = next(frame for frame in frames if frame["type"] == "session_state")
+    assert (state["speed"], state["paused"]) == (speed, paused)
+    assert (control.effective_speed(), control.paused) == (speed, paused)
+    if paused:
+        reply = ws.handle_client_message(
+            {"type": "set_control", "channel": "control", "action": "resume"},
+            loop,
+            app.state.pathfinder,
+            control,
+        )
+        assert isinstance(reply, dict)
+        assert reply["type"] == "control_ack"
+        assert loop.clock.speed == speed
+
+
+async def test_load_session_state_preserves_each_connections_control(saved_world):
+    app, anchor_id, _, _, paused_frames = saved_world
+    paused_control = main.manager.controls()[0]
+    live_frames = []
+
+    live_socket = _recording_socket(live_frames)
+    await live_socket.accept()
+    live_control = ws.ControlState()
+    main.manager.register(live_socket, control=live_control)
+    main.manager.mark_authenticated(live_socket)
+    for control, speed in ((paused_control, 4), (live_control, 16)):
+        ws.handle_client_message(
+            {"type": "set_control", "channel": "control", "action": "set_speed", "speed": speed},
+            app.state.loop,
+            app.state.pathfinder,
+            control,
+        )
+        if control is paused_control:
+            ws.handle_client_message(
+                {"type": "set_control", "channel": "control", "action": "pause"},
+                app.state.loop,
+                app.state.pathfinder,
+                control,
+            )
+    ws.handle_client_message(
+        {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id},
+        app.state.loop,
+        app.state.pathfinder,
+        live_control,
+    )
+    await app.state.drain_pending_loads()
+    assert app.state.load_outcomes[-1] == (anchor_id, True)
+    assert app.state.loop.clock.speed == 16
+    assert [(frame["type"]) for frame in paused_frames] == [
+        "session_state",
+        "timescale",
+        "full_snapshot",
+    ]
+    assert (paused_frames[0]["speed"], paused_frames[0]["paused"]) == (4, True)
+    assert (live_frames[0]["speed"], live_frames[0]["paused"]) == (16, False)
+    assert paused_control.paused and not live_control.paused
+
+
+async def test_duplicate_queued_load_returns_error_without_another_fork(saved_world):
+    from sqlalchemy import func, select
+
+    from sim.core.persistence.models import Branch
+
+    app, anchor_id, _, _, _ = saved_world
+    raw = {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id}
+    args = (app.state.loop, app.state.pathfinder, main.manager.controls()[0])
+    assert ws.handle_client_message(raw, *args) is None
+    reply = ws.handle_client_message(raw, *args)
+    assert isinstance(reply, dict), "重复读档必须显式拒绝，不能再次静默入队"
+    assert (reply["type"], reply["ref"], reply["code"]) == (
+        "error",
+        "load_anchor",
+        "load_failed",
+    )
+    await app.state.drain_pending_loads()
+    assert app.state.load_outcomes == [(anchor_id, True)]
+    async with app.state.store.session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(Branch)) == 2
+
+
+async def test_duplicate_in_flight_load_is_rejected(saved_world, monkeypatch):
+    app, anchor_id, _, _, _ = saved_world
+    entered, release = asyncio.Event(), asyncio.Event()
+    real_map = main.rebuild_tile_map
+
+    async def held_map(*args, **kwargs):
+        entered.set()
+        await release.wait()
+        return await real_map(*args, **kwargs)
+
+    monkeypatch.setattr(main, "rebuild_tile_map", held_map)
+    raw = {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id}
+    args = (app.state.loop, app.state.pathfinder, main.manager.controls()[0])
+    assert ws.handle_client_message(raw, *args) is None
+    draining = asyncio.create_task(app.state.drain_pending_loads())
+    try:
+        await asyncio.wait_for(entered.wait(), timeout=5)
+        reply = ws.handle_client_message(raw, *args)
+        assert isinstance(reply, dict), "执行中的读档也必须防重"
+        assert reply["code"] == "load_failed"
+    finally:
+        release.set()
+        await draining
+    assert app.state.load_outcomes == [(anchor_id, True)]
+
+
+async def test_failed_load_releases_duplicate_guard_for_retry(saved_world):
+    app, _, _, _, _ = saved_world
+    raw = {"type": "load_anchor", "channel": "session", "anchor_id": "missing-anchor"}
+    args = (app.state.loop, app.state.pathfinder, main.manager.controls()[0])
+    for _ in range(2):
+        assert ws.handle_client_message(raw, *args) is None
+        duplicate = ws.handle_client_message(raw, *args)
+        assert isinstance(duplicate, dict)
+        assert duplicate["code"] == "load_failed"
+        await app.state.drain_pending_loads()
+    assert app.state.load_outcomes == [("missing-anchor", False), ("missing-anchor", False)]
+
+
+async def test_distinct_queued_anchors_each_fork_once(saved_world):
+    from sqlalchemy import func, select
+
+    from sim.core.persistence.models import Branch
+
+    app, anchor_id, _, _, _ = saved_world
+    other = await _other_saved_anchor(app, anchor_id)
+    for current in (anchor_id, other):
+        assert (
+            ws.handle_client_message(
+                {"type": "load_anchor", "channel": "session", "anchor_id": current},
+                app.state.loop,
+                app.state.pathfinder,
+                main.manager.controls()[0],
+            )
+            is None
+        )
+    await app.state.drain_pending_loads()
+    assert app.state.load_outcomes == [(anchor_id, True), (other, True)]
+    async with app.state.store.session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(Branch)) == 3
+
+
+async def test_queued_load_uses_updated_control_even_after_requester_disconnects(saved_world):
+    app, anchor_id, _, _, _ = saved_world
+    control = ws.ControlState(speed_before_pause=16)
+    departed_frames = []
+    connection = _recording_socket(departed_frames)
+    await connection.accept()
+    main.manager.register(connection, control=control)
+    main.manager.mark_authenticated(connection)
+    ws.handle_client_message(
+        {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id},
+        app.state.loop,
+        app.state.pathfinder,
+        control,
+    )
+    # An accepted request retains this session's latest intent, not a speed snapshot.
+    ws.handle_client_message(
+        {"type": "set_control", "channel": "control", "action": "set_speed", "speed": 4},
+        app.state.loop,
+        app.state.pathfinder,
+        control,
+    )
+    main.manager.unregister(connection)
+    await app.state.drain_pending_loads()
+    assert app.state.load_outcomes[-1] == (anchor_id, True)
+    assert app.state.loop.clock.speed == 4
+    assert not departed_frames
+
+
+async def test_fault_gate_blocks_control_but_accepts_authenticated_recovery(
+    saved_world, monkeypatch
+):
+    app, anchor_id, _, _, _ = saved_world
+    recovery_anchor = await _other_saved_anchor(app, anchor_id)
+    real_map = main.rebuild_tile_map
+
+    async def failed_map(*args, **kwargs):
+        raise RuntimeError("synthetic projection failure")
+
+    monkeypatch.setattr(main, "rebuild_tile_map", failed_map)
+    ws.handle_client_message(
+        {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id},
+        app.state.loop,
+        app.state.pathfinder,
+        main.manager.controls()[0],
+    )
+    await app.state.drain_pending_loads()
+    assert not app.state.world_source_ready
+    monkeypatch.setattr(main, "rebuild_tile_map", real_map)
+    incoming = iter(
+        [
+            {"type": "load_anchor", "channel": "session", "anchor_id": recovery_anchor},
+            {"type": "hello", "channel": "session", "token": ws.ws_auth_token()},
+            {"type": "set_control", "channel": "control", "action": "set_speed", "speed": 4},
+            {"type": "load_anchor", "channel": "session", "anchor_id": recovery_anchor},
+        ]
+    )
+    replies = []
+
+    await main.ws_endpoint(_recording_socket(replies, incoming))
+    errors = [frame for frame in replies if frame["type"] == "error"]
+    assert [(frame["ref"], frame["code"]) for frame in errors] == [
+        ("load_anchor", "auth_error"),
+        ("set_control", "bad_action"),
+    ]
+    await app.state.drain_pending_loads()
+    assert app.state.load_outcomes == [(anchor_id, False), (recovery_anchor, True)]
+    assert app.state.world_source_ready
+    assert app.state.loop.clock.speed == 1
 
 
 async def test_fork_failure_rolls_back_world_selection_checkpoint_and_anchor(

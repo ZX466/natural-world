@@ -24,6 +24,7 @@ from sim.api.errors import install_error_handlers
 from sim.api.settings import router as settings_router
 from sim.api.ws import (
     ConnectionManager,
+    ControlState,
     _error_frame,
     check_origin,
     frames_of,
@@ -1131,13 +1132,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 修法 = kilo 建议②「批处理范式」（与 fast_forward 同构，零新增消息类型）：
     # handler 侧 hook 只做**请求登记**并立即受理；真正分叉由 driver 循环在
     # flush 后的 await 窗口执行；完成/失败由后续单接完成通道定向回帧。
-    pending_loads: deque[tuple[str, str]] = deque()  # (request_id, anchor_id)
+    pending_loads: deque[tuple[str, str, ControlState]] = deque()
+    pending_load_anchors: set[str] = set()  # 包含已出队、仍在 await 恢复的请求。
 
-    def _production_load_hook(anchor_id: str) -> None:
+    def _production_load_hook(anchor_id: str, control: ControlState | None = None) -> bool | None:
         """登记读档请求（同步、不阻塞）；真执行在 driver 的 _drain_loads。"""
+        if anchor_id in pending_load_anchors:
+            return False  # handler 给本次请求显式回 load_failed，不再分叉。
         request_id = uuid.uuid4().hex[:12]
-        pending_loads.append((request_id, anchor_id))
+        pending_load_anchors.add(anchor_id)
+        pending_loads.append(
+            (request_id, anchor_id, control if control is not None else ControlState())
+        )
         # None = 已登记、尚未完成；同步 True 路径只用于已完成的兼容 hook。
+        return None
 
     async def _drain_loads() -> bool:
         nonlocal demography, tile_map, world_revision, npc_runtime
@@ -1156,7 +1164,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         changed = False
         while pending_loads:
-            _request_id, anchor_id = pending_loads.popleft()
+            _request_id, anchor_id, load_control = pending_loads.popleft()
             activated = False
             try:
                 location = await locate_anchor(store.session_factory, anchor_id)
@@ -1263,18 +1271,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 memory_store.attach_branch(await store.current_branch_id_or_none())
                 logger.info("fork.runtime_ledgers_reset", anchor_id=anchor_id)
                 logger.info("fork.load_completed", anchor_id=anchor_id)
+                # 失败冻结不改连接意图；恢复完成后才重新投影，用户暂停仍保留。
+                loop.clock.set_speed(0 if load_control.paused else load_control.effective_speed())
                 app.state.world_source_ready = True
                 load_outcomes.append((anchor_id, True))
                 pointer = _ws_mod.anchor_pointer(anchor_id)
-                await manager.broadcast_json(
-                    session_state_payload(
-                        speed=int(loop.clock.speed) or 1,
-                        paused=loop.clock.speed == 0,
-                        anchor=pointer,
-                        notice=_ws_mod.fork_notice(pointer.get("name", "") if pointer else ""),
-                        tick=loop.state.tick,
+                for connection_control in manager.controls():
+                    await manager.send_to_control(
+                        connection_control,
+                        session_state_payload(
+                            speed=connection_control.effective_speed(),
+                            paused=connection_control.paused,
+                            anchor=pointer,
+                            notice=_ws_mod.fork_notice(pointer.get("name", "") if pointer else ""),
+                            tick=loop.state.tick,
+                        ),
                     )
-                )
                 await manager.broadcast_json(_ws_mod.timescale_payload(loop.context.combat_active))
                 await manager.broadcast_json(snapshot_payload(loop, tile_map))
             except Exception as exc:
@@ -1293,6 +1305,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await manager.broadcast_json(
                     _ws_mod._error_frame("load_anchor", "load_failed", "这个档读不出来了。")
                 )
+            finally:
+                pending_load_anchors.discard(anchor_id)
         return changed
 
     def register_new_branch(_new_branch_id: str) -> None:
@@ -1305,7 +1319,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 同步 hook 出口（ws.py 分发块契约）+ driver 每帧 drain 注册
     from sim.api import ws as _ws_mod
 
-    _ws_mod.set_anchor_load_hook(_production_load_hook)
+    _ws_mod.set_anchor_load_hook(_production_load_hook, with_control=True)
     app.state.drain_pending_loads = _drain_loads
     app.state.load_outcomes = load_outcomes
     # driver 在 _drain_loads 定义之后创建（case B 接线：drain_loads 生产调用点）
@@ -1566,6 +1580,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
                     else:
                         reply = handle_client_message(raw, app.state.loop, pf, control)
             else:
+                # load_anchor 有意不受故障态动作闸门限制：认证后的读档是恢复入口。
                 reply = handle_client_message(raw, app.state.loop, pf, control)
             if msg_type == "hello":
                 authed = any(frame.get("type") == "hello_ack" for frame in frames_of(reply))
