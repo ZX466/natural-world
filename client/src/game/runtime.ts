@@ -37,6 +37,9 @@ class Runtime {
           worldMirror.voxelDig = null;
           useUiStore.getState().setVoxelInventory(null);
           this.mapRevision += 1;
+          // D3：掉线时服务端既不会回 error 帧、也不会推 full_snapshot，
+          // 读档在途标记只能在这里收尾，否则「片刻后……」挂到重连为止。
+          useUiStore.getState().setLoadPending(false);
         }
         // H-1：真实链路起 clock（世界静止无 delta 时前端时钟仍平滑推进，R3）。
         if (status === 'open') {
@@ -49,6 +52,9 @@ class Runtime {
         // 世界已恢复 ⇒ 上一次读档失败文案必须撤掉，否则成功读档后面板仍挂着
         // 「这个档读不出来了。」（2026-11-03 code review 指出的时序缺口）。
         useUiStore.getState().setLoadError(null);
+        // D3：读档在途标记同样在此清除——`full_snapshot` 是「世界已恢复」的唯一
+        // 权威信号（分叉告知/时钟帧都可能在它之前到）。重连也会走这里，无副作用。
+        useUiStore.getState().setLoadPending(false);
         // HTTP is authoritative for unedited cells after a branch switch too.
         void this.loadWorldMap();
       },
@@ -107,9 +113,39 @@ class Runtime {
         //（"channel mismatch"），漏进面板就破了 §4.5 戏内文风 ⇒ 走戏内兜底。
         if (msg.ref === 'load_anchor') {
           const visible = msg.code === 'load_failed' || msg.code === 'bad_anchor';
-          useUiStore.getState().setLoadError(visible ? msg.message : '这个档读不出来了。');
+          const store = useUiStore.getState();
+          store.setLoadError(visible ? msg.message : '这个档读不出来了。');
+          // D3：失败是读档在途的**另一个终态**——不清则按钮永久禁用。
+          store.setLoadPending(false);
         }
-        if (msg.ref === 'player_impulse') useUiStore.getState().setImpulseError(msg.message);
+        if (msg.ref === 'player_impulse') {
+          // 同一白名单口径（§4.5）：`bad_impulse`/`impulse_too_long` 的文案是戏内口语，
+          // 可直显。**`bad_channel` 会以 ref=player_impulse 到达**（服务端分发块用消息
+          // type 当 ref，ws.py:995 回 "channel mismatch"）⇒ 必须挡，否则英文进念头栏。
+          const visible = msg.code === 'bad_impulse' || msg.code === 'impulse_too_long';
+          useUiStore.getState().setImpulseError(visible ? msg.message : '这个念头进不去。');
+        }
+        // D5：`set_control` 被拒（bad_speed/bad_action/bad_advance）此前无任何落点。
+        // 服务端 6 条文案都是戏内口语（ws.py:1110-1145），可直接显示；
+        // `bad_channel` 等工程措辞走兜底（同 load_anchor 的白名单口径，§4.5）。
+        if (msg.ref === 'set_control') {
+          // 三种 code 的文案都是戏内口语：bad_speed「快不了那么慢，也快不了那么快。」
+          // bad_action「本来就没停。」/「不知道要怎么调。」
+          // bad_advance「一下子走不了那么远。」/「停着呢，走不了。」/「日子已经在往前走了。」
+          const visible =
+            msg.code === 'bad_speed' || msg.code === 'bad_action' || msg.code === 'bad_advance';
+          useUiStore.getState().setControlError(visible ? msg.message : '这会儿调不了。');
+        }
+      },
+      onSessionState: (msg) => {
+        // 主树 D4：这两个键此前在 ws.ts 里被直接丢弃。
+        // `notice` 是服务端过闸后的戏内口语行（ws.py::fork_notice 对存量档名做终扫，
+        // 命中禁词退化为无档名兜底行），可直接显示。
+        // `anchor` 只含 name + story_label（零 tick/seq/branch_id，§4.6）。
+        // null 是合法形状（连接首帧、非读档场景）⇒ 置空而非保留旧值。
+        const store = useUiStore.getState();
+        store.setForkNotice(msg.notice ?? null);
+        store.setSessionAnchor(msg.anchor ?? null);
       },
       onControlAck: (msg) => {
         // 批次 D11：控制回执权威面——pause/resume/set_speed 后服务端真值回写
@@ -163,6 +199,8 @@ class Runtime {
 
   /** 玩家控制（TopBar 倍速按钮）——真实链路发 set_control。 */
   sendControl(action: 'pause' | 'resume' | 'set_speed', speed?: Speed): void {
+    // D5：新请求清旧拒收文案——否则顶栏那一行会永久挂着（无自动消失逻辑）。
+    useUiStore.getState().setControlError(null);
     if (action === 'set_speed' && speed !== undefined) {
       this.ws?.send({ type: 'set_control', channel: 'control', action, speed });
       return;
@@ -206,7 +244,24 @@ class Runtime {
    *  快照」两帧——镜像重置与游标指针消费链路现成（ws.ts dispatch/session_state）。 */
   loadAnchor(anchorId: string): void {
     // 新请求先清旧失败文案：否则上一次失败会一直挂在存档面板上
-    useUiStore.getState().setLoadError(null);
+    const store = useUiStore.getState();
+    store.setLoadError(null);
+    // 断线时 ws.ts 静默丢弃 send ⇒ 没有 full_snapshot、也没有 error 帧，
+    // 在途标记会永久挂着（面板永远「片刻后……」、按钮永远禁用）。这里先拒。
+    if (store.wsStatus !== 'open' || this.ws === null) {
+      store.setLoadError('这会儿连不上，读不了档。');
+      return;
+    }
+    // 在途中再点一次：`disabled` 是 React 渲染后才生效的属性，双击的两次
+    // onClick 可以在同一帧内跑完 ⇒ 只有请求侧判重能拦住第二个 fork。
+    if (store.loadPending) return;
+    // 上一次分叉告知属于旧请求：不清则新一次读档的「片刻后……」旁边还挂着
+    // 「你回到了「X」那段日子」（D4）。
+    store.setForkNotice(null);
+    // D3：在途标记**由帧**清除（full_snapshot / error{ref:load_anchor}），
+    // 不能用同步 try/finally——大库读档重放 20s+，本地 busy 会立刻清回，
+    // 按钮等于从未禁用（可连点两次 ⇒ 服务端队列无判重 ⇒ 连续分叉两次）。
+    store.setLoadPending(true);
     this.ws?.send({ type: 'load_anchor', channel: 'session', anchor_id: anchorId });
   }
 

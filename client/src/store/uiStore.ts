@@ -6,7 +6,7 @@
  * codex 意见 2：快照/世界真相数值禁入本 store（戏外调试层走 W2 独立通道，M0 不做）。
  */
 import { create } from 'zustand';
-import type { PlanDelta, VoxelStateMessage } from '../net/protocol';
+import type { PlanDelta, SessionAnchor, VoxelStateMessage } from '../net/protocol';
 import type { WsStatus } from '../net/ws';
 
 /** 独白环形缓冲上限（超过丢最旧；M4 叙事面） */
@@ -68,6 +68,18 @@ interface UiState {
   /** 读档失败文案（error 帧 ref=load_anchor）——存档面板内展示；
    *  读档请求发出时清空，避免旧失败文案赖在面板上。 */
   loadError: string | null;
+  /** 读档在途（D3）。**由帧驱动**：`loadAnchor()` 置位，
+   *  `full_snapshot`（世界已恢复）或 `error{ref:load_anchor}` 清除。
+   *  面板的 `disabled` 必须用它，不能用同步 `try/finally` 的本地 busy——
+   *  大库读档重放 20s+，本地 busy 会立刻清回，按钮等于从未禁用（可连点双 fork）。 */
+  loadPending: boolean;
+  /** 读档分叉告知（session_state.notice，D4）。服务端早已备好过闸的戏内口语行，
+   *  修前 ws.ts 直接丢弃 ⇒ 玩家永远不知道世界换线了。 */
+  forkNotice: string | null;
+  /** 当前游标指针（session_state.anchor，D4）：只含 name + story_label（零原始数值）。 */
+  sessionAnchor: SessionAnchor | null;
+  /** `set_control` 被拒文案（error 帧 ref=set_control，D5）。 */
+  controlError: string | null;
   setWsStatus: (s: WsStatus) => void;
   setGameClock: (t: InGameTime | null) => void;
   setSpeed: (s: Speed) => void;
@@ -80,6 +92,10 @@ interface UiState {
   setPlans: (plans: PlanDelta[]) => void;
   setImpulseError: (e: string | null) => void;
   setLoadError: (e: string | null) => void;
+  setLoadPending: (p: boolean) => void;
+  setForkNotice: (n: string | null) => void;
+  setSessionAnchor: (a: SessionAnchor | null) => void;
+  setControlError: (e: string | null) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -99,6 +115,10 @@ export const useUiStore = create<UiState>((set) => ({
   plans: [],
   impulseError: null,
   loadError: null,
+  loadPending: false,
+  forkNotice: null,
+  sessionAnchor: null,
+  controlError: null,
   setWsStatus: (wsStatus) => set({ wsStatus }),
   setGameClock: (gameClock) => set({ gameClock }),
   setSpeed: (speed) => set({ speed }),
@@ -113,4 +133,8 @@ export const useUiStore = create<UiState>((set) => ({
   setPlans: (plans) => set({ plans }),
   setImpulseError: (impulseError) => set({ impulseError }),
   setLoadError: (loadError) => set({ loadError }),
+  setLoadPending: (loadPending) => set({ loadPending }),
+  setForkNotice: (forkNotice) => set({ forkNotice }),
+  setSessionAnchor: (sessionAnchor) => set({ sessionAnchor }),
+  setControlError: (controlError) => set({ controlError }),
 }));

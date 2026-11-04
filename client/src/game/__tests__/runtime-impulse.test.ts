@@ -18,6 +18,12 @@ function mockDeps() {
     lastImpulseCue: null as string | null,
     impulseError: null as string | null,
     loadError: null as string | null,
+    // D3/D4/D5：runtime 的 onSnapshot/onSessionState/onError/sendControl 会调这些键，
+    // mock store 少一个键就整条链路抛 TypeError（不是被测行为失败）。
+    loadPending: false,
+    forkNotice: null as string | null,
+    sessionAnchor: null as { name: string; story_label: string } | null,
+    controlError: null as string | null,
     monologues: [] as { form: string; content: string }[],
     plans: [] as { rtoken: string; text: string }[],
     setWsStatus: (s: string) => {
@@ -34,6 +40,18 @@ function mockDeps() {
     },
     setLoadError: (e: string | null) => {
       store.loadError = e;
+    },
+    setLoadPending: (p: boolean) => {
+      store.loadPending = p;
+    },
+    setForkNotice: (n: string | null) => {
+      store.forkNotice = n;
+    },
+    setSessionAnchor: (a: { name: string; story_label: string } | null) => {
+      store.sessionAnchor = a;
+    },
+    setControlError: (e: string | null) => {
+      store.controlError = e;
     },
     pushMonologue: (form: string, content: string) => {
       store.monologues = [...store.monologues, { form, content }];
@@ -204,11 +222,39 @@ describe('runtime impulse 链路（批次 A）', () => {
     const { runtime } = await import('../runtime');
     runtime.start();
 
-    const onError = callbacks.onError as (msg: { ref: string; message: string }) => void;
-    onError({ ref: 'player_impulse', message: '这个念头进不去。' });
+    const onError = callbacks.onError as (msg: {
+      ref: string;
+      code: string;
+      message: string;
+    }) => void;
+    onError({ ref: 'player_impulse', code: 'bad_impulse', message: '这个念头进不去。' });
     expect(store.impulseError).toBe('这个念头进不去。');
-    onError({ ref: 'load_anchor', message: '这个档读不出来了。' });
+    onError({ ref: 'load_anchor', code: 'load_failed', message: '这个档读不出来了。' });
     expect(store.impulseError).toBe('这个念头进不去。'); // 非 impulse ref 不覆盖
+  });
+
+  it('impulse 的工程错误码（bad_channel）不得把英文原文送进念头栏', async () => {
+    // 服务端分发块把**消息 type 本身**当 ref：channel 不匹配时
+    // `_error_frame(str(msg_type), bad_channel, "channel mismatch")`（ws.py:995）
+    // ⇒ ref 就是 player_impulse。此前本分支原样透传 ⇒ 英文进玩家可见位。
+    const { callbacks, store, sent } = mockDeps();
+    installWsMock(callbacks, sent);
+    installMirrorMock();
+    MOCK_OTHERS();
+    vi.doMock('../../store/uiStore', () => ({
+      useUiStore: { getState: () => store },
+    }));
+    const { runtime } = await import('../runtime');
+    runtime.start();
+
+    const onError = callbacks.onError as (msg: {
+      ref: string;
+      code: string;
+      message: string;
+    }) => void;
+    onError({ ref: 'player_impulse', code: 'bad_channel', message: 'channel mismatch' });
+    expect(store.impulseError).not.toBe('channel mismatch');
+    expect(store.impulseError).toBe('这个念头进不去。');
   });
 
   it('onError(ref=load_anchor) → loadError（读档失败玩家可见）', async () => {
@@ -243,6 +289,8 @@ describe('runtime impulse 链路（批次 A）', () => {
     onError({ ref: 'load_anchor', message: '这个档读不出来了。' });
     expect(store.loadError).toBe('这个档读不出来了。');
 
+    // 读档只在连接存活时发帧（断线分支由 runtime-loadstate 钉住）。
+    store.wsStatus = 'open';
     runtime.loadAnchor('a1');
     expect(store.loadError).toBeNull();
     expect(sent.at(-1)).toMatchObject({ type: 'load_anchor', anchor_id: 'a1' });

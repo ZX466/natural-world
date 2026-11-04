@@ -49,6 +49,23 @@ describe('runtime 无 mock 生命周期', () => {
         setLoadError: (message: string | null) => {
           state.loadError = message;
         },
+        // D3/D4/D5：runtime 顶层装配会读写这四个键（见 runtime-loadstate.test.ts）。
+        loadPending: false,
+        forkNotice: null as string | null,
+        sessionAnchor: null as { name: string; story_label: string } | null,
+        controlError: null as string | null,
+        setLoadPending: (p: boolean) => {
+          state.loadPending = p;
+        },
+        setForkNotice: (n: string | null) => {
+          state.forkNotice = n;
+        },
+        setSessionAnchor: (a: { name: string; story_label: string } | null) => {
+          state.sessionAnchor = a;
+        },
+        setControlError: (e: string | null) => {
+          state.controlError = e;
+        },
         setWsStatus: (s: string) => {
           state.wsStatus = s;
         },

@@ -11,6 +11,7 @@ import type {
   FullSnapshotMessage,
   ImpulseFeedbackMessage,
   MonologueMessage,
+  SessionStateMessage,
   StateDeltaMessage,
   WsErrorMessage,
   WsMessage,
@@ -67,6 +68,9 @@ export interface WsCallbacks {
   /** 批次 D11：控制回执权威面（pause/resume/set_speed 的 speed/paused 真值；
    *  修前无此回调 → control_ack 被 default 吞 → 前端 paused/speed 永不更新） */
   onControlAck?: (msg: ControlAckMessage) => void;
+  /** 主树 D4：session_state 的 `notice`（分叉告知）与 `anchor`（游标指针）。
+   *  speed/paused 走 sink（D11 单一出口），这里只搬那两个**此前被丢弃**的键。 */
+  onSessionState?: (msg: SessionStateMessage) => void;
 }
 
 export class WsClient {
@@ -205,6 +209,9 @@ export class WsClient {
         // 重连后 TopBar 高亮/暂停按钮文案与真实状态脱节）。
         useControlState(msg.speed, msg.paused);
         if (msg.time) worldClock.apply(msg.time);
+        // 主树 D4：notice（「你回到了「X」那段日子」）与 anchor（游标指针）
+        // 此前被直接丢弃 ⇒ 读档分叉后玩家永远不知道世界换线了。
+        this.cb.onSessionState?.(msg as SessionStateMessage);
         break;
       case 'control_ack':
         // D11：控制回执（pause/resume/set_speed 的权威 speed/paused）——

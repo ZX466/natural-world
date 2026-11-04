@@ -15,6 +15,23 @@ async function setup() {
     setLoadError: vi.fn((message: string | null) => {
       state.loadError = message;
     }),
+    // D3/D4/D5：runtime 顶层装配会读写这四个键（见 runtime-loadstate.test.ts）。
+    loadPending: false,
+    forkNotice: null as string | null,
+    sessionAnchor: null as { name: string; story_label: string } | null,
+    controlError: null as string | null,
+    setLoadPending: vi.fn((p: boolean) => {
+      state.loadPending = p;
+    }),
+    setForkNotice: vi.fn((n: string | null) => {
+      state.forkNotice = n;
+    }),
+    setSessionAnchor: vi.fn((a: { name: string; story_label: string } | null) => {
+      state.sessionAnchor = a;
+    }),
+    setControlError: vi.fn((e: string | null) => {
+      state.controlError = e;
+    }),
     setWsStatus: vi.fn((s: string) => {
       state.wsStatus = s;
     }),

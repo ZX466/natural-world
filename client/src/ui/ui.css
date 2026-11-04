@@ -205,6 +205,18 @@
   border-bottom: 1px solid rgba(255, 207, 135, 0.7);
 }
 
+/* D4：游标指针（世界停在哪个档）——比时间标签更「实」，故用松绿描边。 */
+.od-clock-phase--anchor {
+  color: #d6e7b8;
+  border-color: rgba(163, 200, 120, 0.45);
+}
+/* D5：控制被拒——赤陶朱砂描边，与其余暖金标签区分（它是提示，不是状态）。 */
+.od-clock-phase--alert {
+  color: #f2c0ae;
+  border-color: rgba(201, 88, 66, 0.7);
+  background: rgba(74, 22, 14, 0.55);
+}
+
 .od-topbar__right {
   margin-left: auto;
   display: flex;
@@ -667,6 +679,35 @@
   margin: 0 0 0.6rem;
   font-size: 0.72rem;
   color: #eab2a4;
+}
+/* 分叉告知（D4）不是错误：暖金而非赤陶红，否则「你回到了……」看着像报错。 */
+.od-menu__notice--fork {
+  color: #e7c07a;
+}
+/* 读档在途（D3）：虚线边 + 呼吸透明度，与静止的提示行区分开。 */
+.od-menu__pending {
+  margin: 0 0 0.6rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  color: var(--od-menu-dim);
+  border-left: 2px solid rgba(231, 176, 98, 0.45);
+  padding-left: 0.5rem;
+  animation: od-pending-breathe 1.8s ease-in-out infinite;
+}
+@keyframes od-pending-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .od-menu__pending {
+    animation: none;
+    opacity: 0.85;
+  }
 }
 .od-menu__empty {
   margin: 0;

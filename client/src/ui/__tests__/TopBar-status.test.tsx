@@ -8,6 +8,8 @@ const state = vi.hoisted(() => ({
   speed: 1,
   paused: false,
   combatActive: false,
+  sessionAnchor: null as { name: string; story_label: string } | null,
+  controlError: null as string | null,
 }));
 vi.mock('../../store/uiStore', () => ({
   useUiStore: (selector: (s: typeof state) => unknown) => selector(state),
@@ -26,6 +28,8 @@ const render = () =>
   );
 beforeEach(() => {
   state.wsStatus = 'open';
+  state.sessionAnchor = null;
+  state.controlError = null;
 });
 
 it.each([
@@ -54,4 +58,26 @@ it.each([
   expect(dot).toContain('role="status"');
   expect(dot).toContain(`aria-label="${label}"`);
   expect(dot).toContain(`title="${label}"`);
+});
+
+it('D4：session_state.anchor 的档名显示在顶栏（游标指针此前被丢弃）', () => {
+  state.sessionAnchor = { name: '初到临河', story_label: '第二日 · 清晨' };
+  const html = render();
+  expect(html).toContain('初到临河');
+  expect(html).toContain('title="第二日 · 清晨"');
+});
+
+it('D4：无游标（连接首帧 / 非读档）→ 不渲染档名', () => {
+  expect(render()).not.toContain('title="第');
+});
+
+it('D5：set_control 被拒 → 顶栏出 role=alert 文案', () => {
+  state.controlError = '本来就没停。';
+  const html = render();
+  expect(html).toContain('role="alert"');
+  expect(html).toContain('本来就没停。');
+});
+
+it('D5：无控制错误 → 不渲染 alert', () => {
+  expect(render()).not.toContain('role="alert"');
 });

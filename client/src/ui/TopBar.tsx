@@ -42,6 +42,8 @@ export function TopBar({
   const speed = useUiStore((s) => s.speed);
   const paused = useUiStore((s) => s.paused);
   const combatActive = useUiStore((s) => s.combatActive);
+  const sessionAnchor = useUiStore((s) => s.sessionAnchor);
+  const controlError = useUiStore((s) => s.controlError);
   const connectionLabel = CONNECTION_LABELS[wsStatus];
 
   const hh = String(gameClock?.hour ?? 0).padStart(2, '0');
@@ -68,6 +70,23 @@ export function TopBar({
           </span>
         )}
         {combatActive && <span role="status">刀光剑影</span>}
+        {/* D4：游标指针（session_state.anchor，只有 name + story_label）。
+            重连/读档后玩家能看见「世界此刻停在哪个档」。 */}
+        {sessionAnchor !== null && (
+          <span
+            className="od-clock-phase od-clock-phase--anchor"
+            role="status"
+            title={sessionAnchor.story_label}
+          >
+            {sessionAnchor.name}
+          </span>
+        )}
+        {/* D5：set_control 被拒的提示位（此前 6 条戏内文案无任何落点）。 */}
+        {controlError !== null && (
+          <span className="od-clock-phase od-clock-phase--alert" role="alert">
+            {controlError}
+          </span>
+        )}
         <button
           type="button"
           id="journal-toggle"
