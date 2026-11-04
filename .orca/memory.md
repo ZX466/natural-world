@@ -3,9 +3,26 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-03 读档缺陷已修 · 第二十轮已收编 · 无在飞 · 主树 1A/2A/4A/roles 已合）
+## 0. 当前状态（2026-11-04 读档修复已提交 · 第二十一轮 D1+D2 已派 codex · 主树 D3–D6 待办）
 
-- **读档恒失败缺陷已修（2026-11-03，Playwright 实机发现 → TDD 修）**：
+- **在飞（2026-11-04）**：**codex 树第二十一轮 D1+D2**（派单在它的 `.orca/talking.txt`）。
+  D1 = 失败读档后的解冻 + `paused` 真值源收敛（P1，探针已取证）；D2 = `pending_loads` 去重。
+  **主树无在飞**，待办 D3–D6（前端四条）见主树 `talking.txt`。
+- **新缺陷 D1：失败读档后世界永久冻结（2026-11-04 探针实测，已派 codex）**：
+  一次读档失败之后再成功读档，`load_outcome=True` / `world_source_ready=True`，但
+  `loop.clock.speed` 仍为 **0**，广播的 `session_state` 是 `{speed:1, paused:true}`，
+  而点「继续」回 `bad_action`「本来就没停。」（因为每连接 `ControlState.paused` 是 False）。
+  - 根因：失败路径 `main.py:1289-1290` 置 `world_source_ready=False` + `set_speed(0)`；
+    **成功路径 `main.py:1273` 只置回 ready，从不恢复 `clock.speed`**；而
+    `main.py:1279` 用 `loop.clock.speed == 0` 推断 `paused`（与 `ControlState` 分裂）。
+  - 既有测试 `test_projection_failure_stops_world_without_sending_success` 只锁「失败要冻」，
+    **缺「成功要解冻」**——这是同一根因的另一半。
+  - 可达窗口：`activated=True` 之后 `rebuild_tile_map` / `load_health_snapshot` /
+    `restore_voxel_edits` 抛错。**冻结本身是故意的 fail-closed，别为凑绿取消它。**
+- **读档恒失败缺陷已修并已提交（2026-11-03 修 / 2026-11-04 提交）**：
+  `ae20518` 后端 + `8394856` 前端 + `2db91ff` 恢复卡。门禁 pytest 3460P/0F/121S
+  （479.61s）· vitest 360P/48F · ruff/format 403 · pyright 0/0/0 · 两资产一致 · 协议 1.14。
+  详情见下（保留原记录）：
   1. **后端 `locate_anchor` 的 `AND protected = 0` 是错的**（`fork_orchestration.py`）：
      `protected` 只表达「不许删这个档」（`anchors-api.md` §1.4），与能否载入无关。
      新建档必是末梢（`create_item` 写 `protected=True`），且读档成功后 `fork.py`
@@ -465,22 +482,31 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
   DESIGN 是历史契约，不随裁决改；真相在 `docs/api/versioning.md` 的 1.8 行。
   真实库 `world.db` 里 `fog.reveal` 事件 **0 条**（生产从没发过）。
 
-## 1g. 心声/街巷的真实产线（2026-11-02 实测，**B/C 的依据；C 已由 4A 关闭**）
+## 1g. 心声/街巷的真实产线（2026-11-02 实测，**B/C 的依据；C 已由 4A 关闭**；L2 段 2026-11-04 订正）
 
 用户问「模型能控制人物吗 / 心声和街巷太乱，感觉模型没发挥作用」。查证结论：
 
-**模型只控制 1 个人。** 全仓 `self._llm.complete(...)` 只有 `sim/agent/driver.py`
-两处（`:188` 决策、`:282` 对话台词），都属陈默。
+**模型只控制 1 个人**（2026-11-02 实测；**2026-11-04 订正：已有第三处**）。
+`self._llm.complete(...)` 现在三处：`sim/agent/driver.py:188`（陈默决策）、
+`:282`（陈默对话台词）、**`sim/agent/npc_l2.py:268`（近身村民 L2 决策，第十九轮接入）**。
+所以「模型只管陈默」在第十九轮之后**不再成立**——3 格内升格的村民也吃模型。
 - 陈默：`main.py::_chenmo_loop` → `driver.decide_once`，`CHENMO_DECIDE_SECONDS`
   默认 **60 秒 1 次**；
 - 50 村民：`npc/runtime.py:150 evaluate_batch`（numpy 效用矩阵），每 10 tick；
 - 赵铁/小满/苏婉：`npc/roles.py::role_events` 硬编码 f-string，每 600 tick（10 秒）。
 
-**「升格 L2」是空壳（DESIGN §13 / `DESIGN.md:371,381` 承诺未兑现）**：
-`main.py:639` 确实调 `update_lod(in_interaction=nearby)` 把 3 格内的人改成 lod=2，
-但**全仓非测试代码没有任何地方读 `lod == 2`**（只有 `runtime.py:214/219` 是升降格自身）。
-`runtime.py:129` 过滤条件是 `lod > 0` ⇒ **lod=1 与 lod=2 决策逐位相同**。
-真接 L2 要派 codex（用户已裁定实现形态：**LLM 输出落事件、回放读事件**，保 C6/T2）。
+**⚠️ 订正（2026-11-04）：本节原写「『升格 L2』是空壳」——已过时。第十九轮就接齐了。**
+
+实测（2026-11-04 复核）：
+- `sim/agent/npc_l2_runtime.py:84` 真的判 `profile.lod == 2`
+- `sim/api/main.py:684`（升格名单）、`:793`（专属角色）都读 `lod == 2`
+- `sim/api/main.py:1003-1024` 装配 `NpcL2Coordinator` + `_npc_l2_loop`；
+  `npc_l2_live` 在离线补跑完成后置 true（`main.py:1405`）
+- 有界单步、`L2Policy` 默认 min_interval 60s / max_calls 4 / timeout 8s / max_tokens 192
+  （env 覆盖 `NPC_L2_MIN_INTERVAL_SECONDS` / `NPC_L2_CALLS_PER_MINUTE` / `NPC_L2_TIMEOUT_SECONDS`）
+
+所以验收第 ⑪ 条「L2 是否真的有脑子」是**观感验收**，不是代码缺口。
+原判据「全仓非测试代码没有任何地方读 `lod == 2`」在第十九轮（`bdeeb19`）之后已失效。
 
 **心声（心之声面板）来源**：
 
@@ -489,7 +515,7 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
 | 陈默 thought | `driver.py:364-371`，`content=intent.reason` | 真模型，~1 条/分钟 |
 | 村民嘟囔 | `will.py:90 _TEMPLATES`（每档 12 句）+ `:159 _pick_index(npc_name)` | 纯模板 |
 | 三专属角色 | `roles.py:20-27`，三条 f-string | 纯模板 |
-| 玩家念头回执 | `ws.py:1265-1268` | **恒为「这话我记下了。」** |
+| 玩家念头回执 | `ws.py:1293-1295` | **恒为「这话我记下了。」**（2026-11-04 订正行号；cue 仍是 `ws.py:1319-1326` 的标点启发式，真表 `plan_view.py:159 band_to_cue` 未接线） |
 
 `_pick_index(npc_name)` **不含 tick / 动作 / 处境** ⇒ 同一 NPC 同一 band 永远同一句
 （坏掉的唱片；50 人分 12 句）。且 36 句全是「不想干活」口径，**与动作无关**。
