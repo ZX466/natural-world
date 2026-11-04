@@ -380,13 +380,19 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  /** 编辑拾取：看得见的那个方块柱（高方块优先）。 */
+  /** 编辑拾取：按高方块与土坎顶面标记的实际深度选可见块柱。 */
   private voxelTarget(pointer: Phaser.Input.Pointer): { x: number; y: number } | null {
     const map = this.mirror.map;
     if (map === null) return null;
     if (this.renderMode === 'iso')
-      return pickVoxel(pointer.worldX, pointer.worldY, map.w, map.h, (x, y) =>
-        effectiveHeight(x, y, this.heightAt, this.mirror.structures, this.mirror.voxelEdits),
+      return pickVoxel(
+        pointer.worldX,
+        pointer.worldY,
+        map.w,
+        map.h,
+        (x, y) =>
+          effectiveHeight(x, y, this.heightAt, this.mirror.structures, this.mirror.voxelEdits),
+        (x, y) => map.collision[y * map.w + x] === 0,
       );
     const x = Math.floor(pointer.worldX / TILE),
       y = Math.floor(pointer.worldY / TILE);
