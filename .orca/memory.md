@@ -3,11 +3,22 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-04 读档修复已提交 · 第二十一轮 D1+D2 已派 codex · 主树 D3–D6 待办）
+## 0. 当前状态（2026-11-04 读档修复已提交 · 第二十一轮 D1+D2 已派 codex · 主树 D3–D6 已做完待裁提交）
 
 - **在飞（2026-11-04）**：**codex 树第二十一轮 D1+D2**（派单在它的 `.orca/talking.txt`）。
   D1 = 失败读档后的解冻 + `paused` 真值源收敛（P1，探针已取证）；D2 = `pending_loads` 去重。
-  **主树无在飞**，待办 D3–D6（前端四条）见主树 `talking.txt`。
+  **主树无在飞**；D3–D6（前端四条）已完成、全门禁绿，**未提交**（用户未说提交）。
+- **主树 D3–D6 已完成（2026-11-04，TDD）**：读档等待态改**帧驱动**（`loadPending`
+  由 `loadAnchor` 置、`full_snapshot`/`error{ref:load_anchor}`/掉线收尾清），面板出
+  「片刻后……」+ 三按钮真禁用；`session_state.notice`/`anchor` 接进面板与顶栏；
+  `set_control` 被拒补顶栏 `role="alert"` 位（白名单 bad_speed/bad_action/bad_advance）；
+  favicon 落地 + 存档默认名改「现存最大编号+1」+ 基线文件旧路径订正。
+  **清单外另补三条**：断线时 `loadAnchor` 拒发并给可见文案；读档途中掉线由 `onStatus` 收尾；
+  在途中再点一次直接丢弃（`disabled` 要等 React 重渲染才生效，双击可同帧跑完两次 onClick，
+  只有请求侧判重拦得住第二个 fork）。**自查另修一条既有泄漏**：`player_impulse` 的错误
+  分支原样透传 `msg.message`，而服务端用消息 type 当 ref ⇒ `bad_channel` 会把
+  "channel mismatch" 送进念头栏（`ws.py:995`）。客户端 **388 通过 / 51 文件**，typecheck/lint/
+  prettier/`gen:protocol:check` EXIT 0；pytest **3460P/0F/121S**（436.02s）不变。
 - **新缺陷 D1：失败读档后世界永久冻结（2026-11-04 探针实测，已派 codex）**：
   一次读档失败之后再成功读档，`load_outcome=True` / `world_source_ready=True`，但
   `loop.clock.speed` 仍为 **0**，广播的 `session_state` 是 `{speed:1, paused:true}`，
