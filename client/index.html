@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 站点图标（D6-①）：此前无声明 ⇒ 浏览器每次请求 /favicon.ico 得 404。
+         SVG 一个文件覆盖现代浏览器；旧内核退回请求 /favicon.ico 仍会 404，
+         但不阻塞渲染，故不另造 .ico 二进制。 -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>临河镇</title>
   </head>
   <body>

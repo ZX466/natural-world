@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- 与 ui.css 同一套暖色令牌：旧木底、黄昏日、河水带。 -->
+  <rect width="32" height="32" rx="6" fill="#1c130b" />
+  <circle cx="16" cy="12" r="5" fill="#e0972f" />
+  <path d="M4 23c4-3 8-3 12 0s8 3 12 0v4H4z" fill="#3f7f86" opacity="0.9" />
+  <path d="M4 20.5c4-3 8-3 12 0s8 3 12 0" fill="none" stroke="#dcc492" stroke-width="1.6" stroke-linecap="round" opacity="0.75" />
+</svg>

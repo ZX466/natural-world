@@ -277,6 +277,7 @@ sim/api/ws  (FastAPI WebSocket 网关)
 - **零原始数值**：`speed` 只在 `{1,4,16}`（**暂停时 = 恢复后倍率**，不是 0）；`anchor` 只带 `name` + `story_label`（组件 `SessionAnchor`，`additionalProperties:false`）；`notice` 是戏内口语行。**`branch_id` / `seq` / 世界 tick 一律不出现**——分叉只能被"叙事化告知"，不能被"标识符告知"。
 - 游标指针对齐戏外只读面 `GET /api/anchors/current`（D-9）同一行数据；WS 侧**只随事件发**（接入/读档），不做查询面——同一事实两个真相源会漂。
 - 出入站：仅 S→C。`anchor`/`notice` 为 `null` 是合法形状（无档 / 非读档场景），不是缺字段。
+- **客户端消费面（2026-11-04 补齐）**：`notice` → 存档面板的 `role="status"` 行（`SaveLoadPanel`，暖金色——它是"世界已换线"的确认而非错误）；`anchor` → 顶栏档名位（`TopBar`，`title` 挂 `story_label`）。两键此前在 `ws.ts` 的 dispatch 里被直接丢弃 ⇒ 读档分叉后玩家永远不知道世界换线了、也看不见世界此刻停在哪个档。`speed`/`paused` 仍走 D11 的 `setControlStateSink` 单一出口，不经这条新回调。
 
 ### 4.5 error 通道
 
@@ -287,8 +288,8 @@ sim/api/ws  (FastAPI WebSocket 网关)
 - message 保持戏内文风（§19 不静默丢弃、不用系统措辞）；code 供客户端逻辑分支，不向玩家显示。
 - **`code` 一律小写 snake_case**（M5-K4 §5.1 统一口径；实现已是此风格，本节样例原写 `IMPULSE_TOO_LONG` 已订正）。全量 code 词表见 `ws-dispatch-proposal.md` §5.1。
 - 三原则：**不静默丢弃**（非法输入必回 error 帧，不 `return None`）；**不泄露内部真相**（§5 禁出字段不出现在 `message`）；**不断线**（`load_anchor` 失败等只回 error，连接保持）。
-- **客户端消费面**：`ref` 决定哪个 UI 位显示——`player_impulse` → 念头栏错误行，`move_request`/`voxel_request` → 世界内提示，`load_anchor` → 存档面板提示（`SaveLoadPanel` 的 `role="alert"` 行）。**玩家发起、失败后需要玩家重新决策的 ref 必须有可见位**；`set_control`（倍速/暂停/推进被拒）当前无 UI 位，属已知缺口而非契约（2026-11-03 修：`load_anchor` 此前被静默丢弃，读档失败时点按钮毫无反应）。
-- **`message` 只在戏内文风 code 下才可直接显示**：`bad_channel`（"channel mismatch"）与 `unknown_type`（"unsupported message type"）是**工程措辞**，客户端必须按 `code` 白名单放行（`load_failed`/`bad_anchor` 可直显），其余走戏内兜底文案——否则英文原文会漏进玩家可见位。
+- **客户端消费面**：`ref` 决定哪个 UI 位显示——`player_impulse` → 念头栏错误行，`move_request`/`voxel_request` → 世界内提示，`load_anchor` → 存档面板提示（`SaveLoadPanel` 的 `role="alert"` 行），`set_control` → 顶栏提示位（`TopBar` 的 `role="alert"`）。**玩家发起、失败后需要玩家重新决策的 ref 必须有可见位**——玩家可发起的五种 ref（`move_request`/`voxel_request`/`set_control`/`player_impulse`/`load_anchor`）现全部有位（`hello` 的 auth 失败属连接级、随即断线，不在此列）。（2026-11-03 修：`load_anchor` 此前被静默丢弃，读档失败时点按钮毫无反应；2026-11-04 修：`set_control` 的六条戏内文案此前无落点。）
+- **`message` 只在戏内文风 code 下才可直接显示**：`bad_channel`（"channel mismatch"）与 `unknown_type`（"unsupported message type"）是**工程措辞**，客户端必须按 `code` 白名单放行（`load_failed`/`bad_anchor` 可直显），其余走戏内兜底文案——否则英文原文会漏进玩家可见位。`set_control` 的白名单是 `bad_speed`/`bad_action`/`bad_advance`，兜底「这会儿调不了。」
 
 ## 5. 出戏边界（逐条可查）
 

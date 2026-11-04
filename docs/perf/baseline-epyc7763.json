@@ -162,7 +162,7 @@
       "commit": "1d5d3c5",
       "note": "CI 档位基线（bench-plan §4.1 八步：首个全绿 run 整份复制）；定标机绝对阈值见 sim/tests/bench/thresholds.py；25% 只是相对漂移参数，不是新阈值",
       "machine_class": "AMD EPYC 7763 64-Core Processor · Linux · nproc 4 · 6.17.0-1022-azure · CPython 3.12.3 · pytest-benchmark 5.3.0",
-      "sampling": "uv run pytest -m bench 全量（每行 stats 为该行自身 rounds/iterations 采样；稳态看 median，bench-plan §2「至少 3 轮取中位」）；采集日 2026-09-29T14:10:37Z；对比门禁 = --benchmark-compare=docs/perf/baseline.json --benchmark-compare-fail=median:25%",
+      "sampling": "uv run pytest -m bench 全量（每行 stats 为该行自身 rounds/iterations 采样；稳态看 median，bench-plan §2「至少 3 轮取中位」）；采集日 2026-09-29T14:10:37Z；对比门禁 = --benchmark-compare=docs/perf/baseline-epyc7763.json --benchmark-compare-fail=median:25%",
       "rows_provenance": {
         "run_36580639759_2026-09-29": {
           "commit": "1d5d3c5",
