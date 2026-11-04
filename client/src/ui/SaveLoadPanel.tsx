@@ -12,6 +12,7 @@ import type { AnchorListItem } from '../net/protocol';
 import { runtime } from '../game/runtime';
 import { useUiStore } from '../store/uiStore';
 import { nextSaveName } from './save-names';
+import { storyLabel } from './labels';
 
 export function SaveLoadPanel(): ReactElement {
   const [items, setItems] = useState<AnchorListItem[]>([]);
@@ -122,7 +123,7 @@ export function SaveLoadPanel(): ReactElement {
                 <p className="od-menu__name" title={item.name}>
                   {item.name}
                 </p>
-                <p className="od-menu__label">{item.story_label}</p>
+                <p className="od-menu__label">{storyLabel(item.story_label)}</p>
               </div>
               <div className="od-menu__acts">
                 <button

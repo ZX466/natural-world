@@ -79,6 +79,11 @@ describe('SaveLoadPanel', () => {
     expect(saveBtn).not.toContain('disabled');
   });
 
+  // 「story_label 为空串 → 显「未标注」」不在本文件测：
+  // 列表行由 `anchorsApi.list()` 异步填充，而 `renderToStaticMarkup` 不跑
+  // `useEffect` ⇒ 行恒不渲染（同上一条 D3 注释）。该口径由
+  // `labels.test.ts` 直接钉 `storyLabel('')`，面板/顶栏只是调用点。
+
   it('D4：分叉告知（forkNotice）在面板里可见', async () => {
     const html = await renderWith({ forkNotice: '你回到了「初到临河」那段日子' });
     expect(html).toContain('你回到了「初到临河」那段日子');

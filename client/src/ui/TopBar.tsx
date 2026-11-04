@@ -6,6 +6,7 @@
 import type { ReactElement } from 'react';
 import { runtime } from '../game/runtime';
 import { useUiStore, type Speed } from '../store/uiStore';
+import { storyLabel } from './labels';
 
 const SPEEDS: readonly Speed[] = [1, 4, 16];
 const CONNECTION_LABELS = {
@@ -76,7 +77,9 @@ export function TopBar({
           <span
             className="od-clock-phase od-clock-phase--anchor"
             role="status"
-            title={sessionAnchor.story_label}
+            // 空串是 calendar 未就绪的合法形状（anchors-api.md §1.1）⇒ 按契约
+            // 显「未标注」。`title=""` 会挂一个永远弹不出内容的提示，比没有更糟。
+            title={storyLabel(sessionAnchor.story_label)}
           >
             {sessionAnchor.name}
           </span>

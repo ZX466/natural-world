@@ -71,6 +71,16 @@ it('D4：无游标（连接首帧 / 非读档）→ 不渲染档名', () => {
   expect(render()).not.toContain('title="第');
 });
 
+it('D4：story_label 为空串（calendar 未就绪，anchors-api.md §1.1 契约）→ 显示「未标注」而非空 title', () => {
+  // 实测：隔离库所有档的 story_label 都是 ""（anchors.py 六处硬写空串）。
+  // 渲染 title="" 等于挂一个永远弹不出内容的提示 ⇒ 按契约显式标「未标注」。
+  state.sessionAnchor = { name: '游历 6', story_label: '' };
+  const html = render();
+  expect(html).toContain('游历 6');
+  expect(html).toContain('title="未标注"');
+  expect(html).not.toContain('title=""');
+});
+
 it('D5：set_control 被拒 → 顶栏出 role=alert 文案', () => {
   state.controlError = '本来就没停。';
   const html = render();
