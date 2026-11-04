@@ -5,8 +5,10 @@
 
 ## 0. 当前状态（2026-11-04 第二十一轮已收编 · 主树 D3–D6 已提交）
 
-- **无在飞**。codex 第二十一轮 `78e5c09` 已 `--no-ff` 收编（1 冲突：`memory.md` 取主树版本）。
-  主树 D3–D6 已分三提交落地（`551f1af` / `5f890bd` / `fca7a3f`）。
+- **无在飞**。codex 第二十一轮 `78e5c09` 已 `--no-ff` 收编（合并提交 `1d55179`；
+  1 冲突：`memory.md` 取主树版本）。主树 D3–D6 已分三提交落地（`551f1af` / `5f890bd` / `fca7a3f`）。
+  **门禁读数（收编后主树实测）**：pytest **3486P/0F/121S**（453.34s）· ruff/format 403 ·
+  pyright 0/0/0 · client **388P/51F** + 四件 EXIT 0 · 两资产 byte-identical · lock 一致 · 协议 1.14。
 - **第二十一轮（codex，D1+D2）已收编**：成功读档按**请求保留的连接 `ControlState`**
   重新投影 `clock`（暂停 0、否则 `effective_speed`），失败仍 fail-closed 冻结；
   `session_state` 改**按连接定向投递**（`manager.send_to_control`），`paused` 不再从全局
