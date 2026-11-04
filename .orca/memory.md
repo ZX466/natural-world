@@ -3,8 +3,41 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-03 第二十轮已收编 · 无在飞 · 主树 1A/2A/4A/roles 已合）
+## 0. 当前状态（2026-11-03 读档缺陷已修 · 第二十轮已收编 · 无在飞 · 主树 1A/2A/4A/roles 已合）
 
+- **读档恒失败缺陷已修（2026-11-03，Playwright 实机发现 → TDD 修）**：
+  1. **后端 `locate_anchor` 的 `AND protected = 0` 是错的**（`fork_orchestration.py`）：
+     `protected` 只表达「不许删这个档」（`anchors-api.md` §1.4），与能否载入无关。
+     新建档必是末梢（`create_item` 写 `protected=True`），且读档成功后 `fork.py`
+     把载入的档回写为 `protected=1`（读档即成为当前游标）⇒ **「存完立刻读」与
+     「读过再读」两条主路径恒回 `load_failed`**，玩家看到「这个档读不出来了。」
+     该过滤是 `5755a62`（2026-09-28）遗留，早于 `protected` 写入路径。
+     **既有测试为何没抓到**：`saved_world` 夹具存了**两档**，旧档自动降级为
+     `protected=False` ⇒ 永远只测非末梢档。新增 `single_save`（只存一档）夹具
+     + 2 条 e2e + 1 条单元钉（RED 3 失败 → GREEN）。
+  2. **前端读档失败无任何提示**（`runtime.ts::onError`）：`ref=load_anchor` 的
+     error 帧被静默丢弃 ⇒ 点「读档」面板毫无反应（实机就是这个现象）。服务端
+     早已备好文案，只是没接到 UI。新增 `uiStore.loadError` + `SaveLoadPanel`
+     复用 `role="alert"` 提示位；`loadAnchor()` 发请求时先清旧文案；空串不渲染空框。
+     - **文案有两个来源，别混**：生产 drain 路径走 `main.py:1301` 的**硬编码
+       字面量**（`_error_frame("load_anchor", "load_failed", "这个档读不出来了。")`，
+       K16 白盒钉要求字面量）——**不过** `scan()` 终扫；`ws.py::_load_failed_frame`
+       是**同步路径**的构造器，那条才做终扫并可能产出空串。当前两处文案相同。
+     - **只认两种 code**（2026-11-03 code review）：`load_failed` / `bad_anchor` 可直显，
+       `bad_channel`（"channel mismatch"）等工程措辞走戏内兜底——否则英文原文会
+       漏进玩家面板。`onSnapshot`（世界已恢复）清 `loadError`，避免成功后仍挂着旧失败。
+  - **实机复核（隔离库 `p7verify-20261103`，ms-playwright chromium-1252）**：
+    **11/11 PASS**——存一档→立刻读／读过再读／未注册 id 面板出文案／**失败后成功
+    读档旧文案已清**／**bad_channel 未泄漏英文**／无 4xx/5xx。截图 `V1~V5`。
+    > 大库读档要重放 20s+，脚本必须**轮询等 `full_snapshot`**；死等 6s 会假红
+    >（第一次重跑就踩了，5 条假失败）。别照旧脚本的固定 `waitForTimeout`。
+  - **门禁（主树实测，code review 后重跑）**：pytest **3460 passed / 0 failed /
+    121 skipped**（469.33s，三次独立复跑同读数）· ruff/format 403 files · pyright 0/0 ·
+    vitest **360 passed / 48 files**（+7）· client 四件 EXIT 0 · 两资产 `--check` 一致 ·
+    `uv lock --check` 一致 · 协议 **1.14** 未动。
+  - 契约同步：`docs/api/anchors-api.md` §1.4 增「`protected` 与可读性无关」；
+    §4.3 订正「`load_anchor` 不返回 error 帧」的自相矛盾说法（一律走 WS error 帧）；
+    `docs/api/ws-protocol.md` §4.5 增可见位条 + `message` 只在戏内文风 code 下可直显。
 - **主树本批（2026-11-02，用户问「还有什么问题」后按建议顺序做的前三条 + 顺带一条）**：
   1. **1A 身份锚自洽**（`villagers.py::_profile_row`）：`identity_anchor` 改与同行
      `name`/`occupation` 同源。修前三个专属角色库里「赵铁·镖师」配锚
@@ -176,17 +209,28 @@
 > 与 `test_retrieval_full_scan_degraded_sentinel`），且两条单跑均通过 ⇒ 抖动，非回归。
 > 回执称「sound baseline passes」是错的。
 
-| 项 | 本批实测（2026-11-03，第二十轮收编 `66637b7` 后） |
+| 项 | 本批实测（2026-11-03，读档缺陷修复后） |
 |---|---|
-| pytest `-m "not bench"` | **3457 passed** / 0 failed / 121 skipped（434.12s） |
+| pytest `-m "not bench"` | **3460 passed** / 0 failed / 121 skipped（469.33s，三次独立复跑同读数） |
 | ruff check / format | clean（**403 files**） |
 | pyright | 0 errors, 0 warnings, 0 infos |
 | client gen:protocol:check / typecheck / lint / prettier | EXIT 0 |
-| client vitest | **353 passed / 48 files** |
+| client vitest | **360 passed / 48 files** |
 | build_height_map --check | 逐字节一致 |
 | build_block_atlas --check | 逐字节一致 |
 | `uv lock --check` | 一致 |
 | 协议 | **1.14**（双落点同值） |
+
+> **读档修复新增 3 条**：3460 − 3457 = **3** = `test_m5_fork_orchestration.py`
+> `test_protected_tail_anchor_is_locatable` 1 + `test_historical_world_load.py`
+> `single_save` 夹具下 `test_load_the_only_anchor_after_saving_it` /
+> `test_reloading_a_previously_loaded_anchor` 2。vitest 360 − 353 = **7** =
+> `runtime-impulse.test.ts` 5（loadError 路由／发新请求清旧文案／code 白名单／
+> 空串原样透传／成功后清文案）+ `SaveLoadPanel.test.tsx` 2（提示框/空串不渲染）。
+> pytest 新增数不变（e2e 的 `ref`/`code` 断言是补钉，不是新用例）。
+
+> **第二十轮收编 `66637b7` 后读数（历史）**：pytest 3457P/0F/121S（434.12s）·
+> ruff/format 403 files · pyright 0/0 · vitest 353/48。
 
 > **本批新增数对得上**：**3457 − 3350 = 107**，与 codex 回执的独立审查读数
 > **B 50P + A 57P** 精确吻合（B = 模块 47P + 生产冷 child/故障态 3P；
