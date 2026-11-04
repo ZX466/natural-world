@@ -65,6 +65,9 @@ interface UiState {
   plans: PlanDelta[];
   /** impulse 入站 error 帧玩家可见文案（仅 ref=player_impulse 置位） */
   impulseError: string | null;
+  /** 读档失败文案（error 帧 ref=load_anchor）——存档面板内展示；
+   *  读档请求发出时清空，避免旧失败文案赖在面板上。 */
+  loadError: string | null;
   setWsStatus: (s: WsStatus) => void;
   setGameClock: (t: InGameTime | null) => void;
   setSpeed: (s: Speed) => void;
@@ -76,6 +79,7 @@ interface UiState {
   pushChatter: (name: string | null, content: string) => void;
   setPlans: (plans: PlanDelta[]) => void;
   setImpulseError: (e: string | null) => void;
+  setLoadError: (e: string | null) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -94,6 +98,7 @@ export const useUiStore = create<UiState>((set) => ({
   chatter: [],
   plans: [],
   impulseError: null,
+  loadError: null,
   setWsStatus: (wsStatus) => set({ wsStatus }),
   setGameClock: (gameClock) => set({ gameClock }),
   setSpeed: (speed) => set({ speed }),
@@ -107,4 +112,5 @@ export const useUiStore = create<UiState>((set) => ({
     set((s) => ({ chatter: [...s.chatter, { name, content }].slice(-CHATTER_CAP) })),
   setPlans: (plans) => set({ plans }),
   setImpulseError: (impulseError) => set({ impulseError }),
+  setLoadError: (loadError) => set({ loadError }),
 }));

@@ -10,11 +10,19 @@ import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import { anchorsApi } from '../net/anchorsApi';
 import type { AnchorListItem } from '../net/protocol';
 import { runtime } from '../game/runtime';
+import { useUiStore } from '../store/uiStore';
 
 export function SaveLoadPanel(): ReactElement {
   const [items, setItems] = useState<AnchorListItem[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** 读档失败（error 帧 ref=load_anchor → store）：异步到达，不在 onLoad 的
+   *  同步 try/finally 里，因此单列一个展示位。 */
+  const loadError = useUiStore((s) => s.loadError);
+  /** 面板提示：本面板同步失败（notice）优先，其次读档失败（loadError）。
+   *  空串是服务端终扫 fail-closed 的结果（不给玩家看未过闸文本）⇒ 不渲染空提示框。 */
+  const noticeText = notice ?? loadError;
+  const message = noticeText !== null && noticeText !== '' ? noticeText : null;
 
   const refresh = useCallback(async () => {
     try {
@@ -80,9 +88,9 @@ export function SaveLoadPanel(): ReactElement {
           存一档
         </button>
       </div>
-      {notice !== null && (
+      {message !== null && (
         <p className="od-menu__notice" role="alert" aria-live="polite">
-          {notice}
+          {message}
         </p>
       )}
       {items.length === 0 ? (

@@ -31,4 +31,27 @@ describe('SaveLoadPanel', () => {
     expect(html).toContain('存档');
     expect(html).toContain('存一档');
   });
+
+  it('读档失败（store.loadError）→ 面板内 role=alert 提示', async () => {
+    vi.resetModules();
+    vi.doMock('../../store/uiStore', () => ({
+      useUiStore: (selector: (s: { loadError: string | null }) => unknown) =>
+        selector({ loadError: '这个档读不出来了。' }),
+    }));
+    const { SaveLoadPanel: Panel } = await import('../SaveLoadPanel');
+    const html = renderToStaticMarkup(createElement(Panel));
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('这个档读不出来了。');
+  });
+
+  it('loadError 为空串（服务端终扫全命中 fail-closed）→ 不渲染空提示框', async () => {
+    vi.resetModules();
+    vi.doMock('../../store/uiStore', () => ({
+      useUiStore: (selector: (s: { loadError: string | null }) => unknown) =>
+        selector({ loadError: '' }),
+    }));
+    const { SaveLoadPanel: Panel } = await import('../SaveLoadPanel');
+    const html = renderToStaticMarkup(createElement(Panel));
+    expect(html).not.toContain('role="alert"');
+  });
 });

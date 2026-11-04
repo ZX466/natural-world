@@ -45,6 +45,10 @@ describe('runtime 无 mock 生命周期', () => {
         setVoxelError: (message: string | null) => {
           state.voxelError = message;
         },
+        loadError: null as string | null,
+        setLoadError: (message: string | null) => {
+          state.loadError = message;
+        },
         setWsStatus: (s: string) => {
           state.wsStatus = s;
         },

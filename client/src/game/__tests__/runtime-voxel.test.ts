@@ -11,6 +11,10 @@ async function setup() {
     wsStatus: 'connecting',
     voxelInventory: null as { earth: number } | null,
     voxelError: null as string | null,
+    loadError: null as string | null,
+    setLoadError: vi.fn((message: string | null) => {
+      state.loadError = message;
+    }),
     setWsStatus: vi.fn((s: string) => {
       state.wsStatus = s;
     }),

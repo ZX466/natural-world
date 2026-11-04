@@ -287,6 +287,8 @@ sim/api/ws  (FastAPI WebSocket 网关)
 - message 保持戏内文风（§19 不静默丢弃、不用系统措辞）；code 供客户端逻辑分支，不向玩家显示。
 - **`code` 一律小写 snake_case**（M5-K4 §5.1 统一口径；实现已是此风格，本节样例原写 `IMPULSE_TOO_LONG` 已订正）。全量 code 词表见 `ws-dispatch-proposal.md` §5.1。
 - 三原则：**不静默丢弃**（非法输入必回 error 帧，不 `return None`）；**不泄露内部真相**（§5 禁出字段不出现在 `message`）；**不断线**（`load_anchor` 失败等只回 error，连接保持）。
+- **客户端消费面**：`ref` 决定哪个 UI 位显示——`player_impulse` → 念头栏错误行，`move_request`/`voxel_request` → 世界内提示，`load_anchor` → 存档面板提示（`SaveLoadPanel` 的 `role="alert"` 行）。**玩家发起、失败后需要玩家重新决策的 ref 必须有可见位**；`set_control`（倍速/暂停/推进被拒）当前无 UI 位，属已知缺口而非契约（2026-11-03 修：`load_anchor` 此前被静默丢弃，读档失败时点按钮毫无反应）。
+- **`message` 只在戏内文风 code 下才可直接显示**：`bad_channel`（"channel mismatch"）与 `unknown_type`（"unsupported message type"）是**工程措辞**，客户端必须按 `code` 白名单放行（`load_failed`/`bad_anchor` 可直显），其余走戏内兜底文案——否则英文原文会漏进玩家可见位。
 
 ## 5. 出戏边界（逐条可查）
 

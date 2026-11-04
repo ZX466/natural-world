@@ -46,6 +46,9 @@ class Runtime {
       onSnapshot: () => {
         worldAudio.snapshot(worldMirror);
         useUiStore.getState().setWsStatus('open');
+        // 世界已恢复 ⇒ 上一次读档失败文案必须撤掉，否则成功读档后面板仍挂着
+        // 「这个档读不出来了。」（2026-11-03 code review 指出的时序缺口）。
+        useUiStore.getState().setLoadError(null);
         // HTTP is authoritative for unedited cells after a branch switch too.
         void this.loadWorldMap();
       },
@@ -97,7 +100,15 @@ class Runtime {
             .getState()
             .setVoxelError(msg.code === 'bad_target' ? msg.message : '这会儿动不了土。');
         }
-        // 仅 impulse 来源的 error 入玩家可见位；其他 ref（load_anchor 等）当前无 UI 面
+        // 读档失败（load_failed）必须有玩家可见位：服务端已备好过闸文案，
+        // 修前此处静默丢弃 ⇒ 点「读档」面板毫无反应（2026-11-03 实机发现）。
+        // **只认两种玩家可见 code**：`load_failed`（文案已过终扫）与 `bad_anchor`
+        //（「没这个档。」）。`bad_channel`/`unknown_type` 等是工程措辞
+        //（"channel mismatch"），漏进面板就破了 §4.5 戏内文风 ⇒ 走戏内兜底。
+        if (msg.ref === 'load_anchor') {
+          const visible = msg.code === 'load_failed' || msg.code === 'bad_anchor';
+          useUiStore.getState().setLoadError(visible ? msg.message : '这个档读不出来了。');
+        }
         if (msg.ref === 'player_impulse') useUiStore.getState().setImpulseError(msg.message);
       },
       onControlAck: (msg) => {
@@ -194,6 +205,8 @@ class Runtime {
   /** 读档=分叉（批次 D4）：发 load_anchor，成功后服务端推「分叉告知 + 全量
    *  快照」两帧——镜像重置与游标指针消费链路现成（ws.ts dispatch/session_state）。 */
   loadAnchor(anchorId: string): void {
+    // 新请求先清旧失败文案：否则上一次失败会一直挂在存档面板上
+    useUiStore.getState().setLoadError(null);
     this.ws?.send({ type: 'load_anchor', channel: 'session', anchor_id: anchorId });
   }
 

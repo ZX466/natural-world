@@ -17,6 +17,7 @@ function mockDeps() {
     speed: 1,
     lastImpulseCue: null as string | null,
     impulseError: null as string | null,
+    loadError: null as string | null,
     monologues: [] as { form: string; content: string }[],
     plans: [] as { rtoken: string; text: string }[],
     setWsStatus: (s: string) => {
@@ -30,6 +31,9 @@ function mockDeps() {
     },
     setImpulseError: (e: string | null) => {
       store.impulseError = e;
+    },
+    setLoadError: (e: string | null) => {
+      store.loadError = e;
     },
     pushMonologue: (form: string, content: string) => {
       store.monologues = [...store.monologues, { form, content }];
@@ -54,6 +58,7 @@ function installMirrorMock() {
       applyLightDeltas: vi.fn(),
       reset: vi.fn(),
       actors: new Map(),
+      structures: new Map(),
       protagonist: null as string | null,
     };
     return {
@@ -65,6 +70,7 @@ function installMirrorMock() {
         applyLightDeltas = mirrorMethods.applyLightDeltas;
         reset = mirrorMethods.reset;
         actors = mirrorMethods.actors;
+        structures = mirrorMethods.structures;
         protagonist = mirrorMethods.protagonist;
       },
       worldMirror: mirrorMethods,
@@ -203,5 +209,109 @@ describe('runtime impulse 链路（批次 A）', () => {
     expect(store.impulseError).toBe('这个念头进不去。');
     onError({ ref: 'load_anchor', message: '这个档读不出来了。' });
     expect(store.impulseError).toBe('这个念头进不去。'); // 非 impulse ref 不覆盖
+  });
+
+  it('onError(ref=load_anchor) → loadError（读档失败玩家可见）', async () => {
+    const { callbacks, store, sent } = mockDeps();
+    installWsMock(callbacks, sent);
+    installMirrorMock();
+    MOCK_OTHERS();
+    vi.doMock('../../store/uiStore', () => ({
+      useUiStore: { getState: () => store },
+    }));
+    const { runtime } = await import('../runtime');
+    runtime.start();
+
+    const onError = callbacks.onError as (msg: { ref: string; message: string }) => void;
+    onError({ ref: 'load_anchor', message: '这个档读不出来了。' });
+    expect(store.loadError).toBe('这个档读不出来了。');
+    expect(store.impulseError).toBeNull(); // 不串到念头位
+  });
+
+  it('loadAnchor 发新请求时清掉上一次的失败文案', async () => {
+    const { callbacks, store, sent } = mockDeps();
+    installWsMock(callbacks, sent);
+    installMirrorMock();
+    MOCK_OTHERS();
+    vi.doMock('../../store/uiStore', () => ({
+      useUiStore: { getState: () => store },
+    }));
+    const { runtime } = await import('../runtime');
+    runtime.start();
+
+    const onError = callbacks.onError as (msg: { ref: string; message: string }) => void;
+    onError({ ref: 'load_anchor', message: '这个档读不出来了。' });
+    expect(store.loadError).toBe('这个档读不出来了。');
+
+    runtime.loadAnchor('a1');
+    expect(store.loadError).toBeNull();
+    expect(sent.at(-1)).toMatchObject({ type: 'load_anchor', anchor_id: 'a1' });
+  });
+
+  it('load_anchor 的工程错误码（bad_channel 等）不得把英文原文送进面板', async () => {
+    const { callbacks, store, sent } = mockDeps();
+    installWsMock(callbacks, sent);
+    installMirrorMock();
+    MOCK_OTHERS();
+    vi.doMock('../../store/uiStore', () => ({
+      useUiStore: { getState: () => store },
+    }));
+    const { runtime } = await import('../runtime');
+    runtime.start();
+
+    const onError = callbacks.onError as (msg: {
+      ref: string;
+      code: string;
+      message: string;
+    }) => void;
+    // 客户端发错 channel 时服务端回 bad_channel/"channel mismatch"（ws.py:995）——
+    // 那是工程措辞，绝不能进玩家可见位（§4.5 戏内文风）。
+    onError({ ref: 'load_anchor', code: 'bad_channel', message: 'channel mismatch' });
+    expect(store.loadError).not.toBe('channel mismatch');
+    expect(store.loadError).toBe('这个档读不出来了。');
+  });
+
+  it('load_failed 的空文案原样透传（不归一成 null，交给面板判空）', async () => {
+    const { callbacks, store, sent } = mockDeps();
+    installWsMock(callbacks, sent);
+    installMirrorMock();
+    MOCK_OTHERS();
+    vi.doMock('../../store/uiStore', () => ({
+      useUiStore: { getState: () => store },
+    }));
+    const { runtime } = await import('../runtime');
+    runtime.start();
+
+    const onError = callbacks.onError as (msg: {
+      ref: string;
+      code: string;
+      message: string;
+    }) => void;
+    onError({ ref: 'load_anchor', code: 'load_failed', message: '' });
+    expect(store.loadError).toBe('');
+  });
+
+  it('读档成功（full_snapshot）清掉旧失败文案', async () => {
+    const { callbacks, store, sent } = mockDeps();
+    installWsMock(callbacks, sent);
+    installMirrorMock();
+    MOCK_OTHERS();
+    vi.doMock('../../store/uiStore', () => ({
+      useUiStore: { getState: () => store },
+    }));
+    const { runtime } = await import('../runtime');
+    runtime.start();
+
+    const onError = callbacks.onError as (msg: {
+      ref: string;
+      code: string;
+      message: string;
+    }) => void;
+    onError({ ref: 'load_anchor', code: 'load_failed', message: '这个档读不出来了。' });
+    expect(store.loadError).toBe('这个档读不出来了。');
+
+    // 读档成功帧序 = session_state → timescale → full_snapshot；快照到达即世界已恢复。
+    (callbacks.onSnapshot as () => void)();
+    expect(store.loadError).toBeNull();
   });
 });
