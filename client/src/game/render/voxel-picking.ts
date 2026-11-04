@@ -4,13 +4,23 @@ import { ISO, depthKey, isoProject, isoUnproject, screenBounds, type HeightLooku
  *  单向不变量 `walkable ⇒ h == EARTH` 保证所有可走格的顶面都在这一层。 */
 const WALK_HEIGHT = 1;
 
-/** Editing picks the visible block column (高方块优先——玩家看到的就是它)。 */
+/** The frozen dark slat quad is(-3,1),(-1,2),(3,-1),(1,-2), at offsets -7/0/7.
+ * Its two pairs of edges are |x-2y|<=5 and |3x+4y|<=5; the light inset is inside it. */
+function hitsBankGlyph(dx: number, dy: number): boolean {
+  return [-7, 0, 7].some((offset) => {
+    const x = dx - offset;
+    return Math.abs(x - 2 * dy) <= 5 + 1e-6 && Math.abs(3 * x + 4 * dy) <= 5 + 1e-6;
+  });
+}
+
+/** Editing follows high Images and bank-top glyph depth above the baked ground. */
 export function pickVoxel(
   px: number,
   py: number,
   w: number,
   h: number,
   heightAt: HeightLookup,
+  isBank?: (x: number, y: number) => boolean,
 ): { x: number; y: number } | null {
   if (!Number.isFinite(px) || !Number.isFinite(py)) return null;
   const bounds = screenBounds(w, h),
@@ -34,8 +44,11 @@ export function pickVoxel(
         const slope = (distance * ISO.TH) / ISO.TW;
         if (py < top.sy - ISO.TH / 2 + slope - 1e-6 || py > base.sy + ISO.TH / 2 - slope + 1e-6)
           continue;
-        // High Images are above the baked low canvas; within each pool use its draw order.
-        const rank = (height >= 2 ? 1000000 : 0) + depthKey(x, y);
+        // Only painted bank strokes are at depthKey + .5. The empty parts of
+        // its baked top/side stay below high Images, preserving house-side editing.
+        const bankTop =
+          height === 1 && isBank?.(x, y) === true && hitsBankGlyph(px - top.sx, py - top.sy);
+        const rank = (height >= 2 || bankTop ? 1000000 : 0) + depthKey(x, y) + (bankTop ? 0.5 : 0);
         if (rank > bestRank) {
           bestRank = rank;
           best = { x, y };
