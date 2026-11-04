@@ -152,6 +152,7 @@ name: str = Field(min_length=1, max_length=64)
 - 409 是**唯一**的删除拒绝原因；删除不碰世界档（C6）。
 - **`protected` 落库**（`player_anchors.protected` 新列）：构造时计算写入，列表时直接读，避免 N+1 查询。
 - **`updated_at` 只写一次**（`default=lambda: time.time()`，仅 INSERT 赋值；改名/删除都不改它）。它代表「这个档是什么时候存的」，不是「记录什么时候被改过」——后者若参与排序，改名就会篡改 `protected` 归属。删掉末梢后，剩余档中的最新者**不自动补位**为 `protected`（保守：补位要重算，且删档后立刻有新存档才是常态；真需要时由下一次新建档统一维护）。
+- **`protected` 与可读性无关**（2026-11-03 修）：该列**只**约束删除（§1.4 的 409），`load_anchor` 定位存档时**不得**按它过滤。反例：新建档必为末梢（`protected=true`），且读档成功后 `fork.py` 会把载入的档回写成 `protected=1`（读档即成为当前游标）——按 `protected=0` 过滤会让「存完立刻读」和「读过再读」两条主路径恒回 `load_failed`。
 
 ### 1.5 切列与 CRUD v2 增补条款（**正式契约**，2026-09-29 合入）
 
@@ -449,7 +450,7 @@ components.setdefault("responses", {})["Problem"] = {
 
 - **meta shell 操作失败**（profile/anchor CRUD）→ HTTP ProblemDetail。例：anchor 不存在、重名校验、protected 删除。
 - **WS 消息被拒** → `WsErrorMessage` + `code`（`unknown_type` / `bad_channel` / `auth_error`，见 `ws.py:196-256`）。
-- **`load_anchor` 的失败走哪边？** → 它是 WS 消息（session 通道），但失败多发生在**载入执行阶段**（anchor 不存在、重放失败）。契约：`load_anchor` 自身**不返回 error 帧作为回答**——前端应在调用前先 `GET /api/anchors` 确认 id 存在；若仍失败（如重放中世界状态损坏），sim 发 `WsErrorMessage`（`ref: "load_anchor"`, `code: "load_failed"`）并**保持现有 WS 连接**不断线。
+- **`load_anchor` 的失败走哪边？** → **一律走 WS `WsErrorMessage`**（它是 WS 消息，走 session 通道，§4.5 同一体例）：形状非法/空 id → `code: "bad_anchor"`（「没这个档。」）；存在但载入失败（定位失败、重放损坏等）→ `code: "load_failed"`。两种都**保持现有 WS 连接**不断线。前端不再需要先 `GET /api/anchors` 预检 id，但预检仍可用于在列表里置灰。**注意**：`load_failed` 的文案在**最终文案边界过 `scan()` 终扫**（`ws.py::_load_failed_frame`），全候选被拒时 message 为空串——客户端必须把空串当作「无文案可显示」而不是「显示空框」。（订正：本节此前写「不返回 error 帧作为回答」，与紧随其后的 `WsErrorMessage` 描述自相矛盾，已改。）
 - **绝不允许**：把 `ProblemDetail.detail` 的工程措辞（"9f3c1a7b2e04 不存在"）塞进 WS `message`；也绝不允许把戏内文风写进 HTTP `title`。
 
 ### 4.1 sim WS 分发现状（施工前必读）

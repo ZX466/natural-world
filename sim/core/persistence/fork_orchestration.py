@@ -101,14 +101,17 @@ async def locate_anchor(
 
     anchor 行由 K7 落库路径写入（`(branch_id, seq)` 指针，不复制世界态）；
     tick 取存档时刻；同一事件游标后仍可能有安静时间，不能用事件 tick 代替。
+
+    **`protected` 不参与可读性判定**（2026-11-03 修）：该列只表达「不许删这个档」
+    （`anchors-api.md` §1.4），与能否载入无关。排除它会让两条主路径恒失败——
+    新建档必是末梢（`create_item` 写 `protected=True`），且读档成功后
+    `fork.py` 把载入的档回写为 `protected=1`（读档即成为当前游标）⇒
+    「存完立刻读」与「读过再读」都拿不到行。
     """
     async with session_factory() as session:
         row = (
             await session.execute(
-                text(
-                    "SELECT branch_id, seq, tick FROM player_anchors"
-                    " WHERE id = :aid AND protected = 0"
-                ),
+                text("SELECT branch_id, seq, tick FROM player_anchors WHERE id = :aid"),
                 {"aid": anchor_id},
             )
         ).first()

@@ -55,6 +55,105 @@ async def saved_world(tmp_path, monkeypatch, request):
     ws.reset_anchor_registry()
 
 
+@pytest.fixture()
+async def single_save(tmp_path, monkeypatch):
+    """只存**一档**的世界（该档即末梢，`protected=True`）。
+
+    `saved_world` 存了两档 ⇒ 旧档自动降级为 `protected=False`，因此抓不到
+    「末梢档读不出来」（2026-11-03 实机发现的缺陷）。本夹具只存一档。
+    """
+
+    async def idle_driver(*args, **kwargs):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(main, "run_world_driver", idle_driver)
+    frames = []
+
+    async def capture(frame):
+        frames.append(frame)
+
+    monkeypatch.setattr(main.manager, "broadcast_json", capture)
+    async with main.lifespan(main.app):
+        app = main.app
+        await app.state.flush_for_anchor()
+        loop = app.state.loop
+        store = app.state.store
+        anchors = AnchorStore(f"sqlite:///{tmp_path / 'world.db'}")
+        rows = await store.read_range("main", 0, 100000)
+        only = anchors.create_item(
+            "唯一一档",
+            branch_id="main",
+            tick=loop.state.tick,
+            seq=rows[-1]["seq"],
+            rng_state=app.state.rng_capture(),
+            state_hash=loop.state.state_hash(),
+        )
+        ws.register_anchor_id(only.id, "唯一一档", "河面刚起雾")
+        yield app, only.id, frames
+    ws.reset_anchor_registry()
+
+
+async def test_load_the_only_anchor_after_saving_it(single_save):
+    """存完立刻读：新建档是末梢（protected=True），必须能载入。
+
+    修前 `locate_anchor` 带 `AND protected = 0` ⇒ 回 `load_failed`
+    「这个档读不出来了。」（实机复现：存一档后点读档，面板无任何反应）。
+    """
+    from sqlalchemy import select
+
+    from sim.core.persistence.models import PlayerAnchor
+
+    app, anchor_id, frames = single_save
+    async with app.state.store.session_factory() as session:
+        saved = await session.scalar(
+            select(PlayerAnchor.protected).where(PlayerAnchor.id == anchor_id)
+        )
+    assert saved is True, "前置：唯一存档必须是末梢（protected=True）"
+
+    ws.handle_client_message(
+        {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id},
+        app.state.loop,
+        app.state.pathfinder,
+        ws.ControlState(),
+    )
+    await app.state.drain_pending_loads()
+
+    assert app.state.load_outcomes[-1] == (anchor_id, True)
+    assert [frame["type"] for frame in frames] == ["session_state", "timescale", "full_snapshot"]
+
+
+async def test_reloading_a_previously_loaded_anchor(single_save):
+    """读过再读：读档成功后该档被回写为 protected=1，仍必须能再读。"""
+    from sqlalchemy import select
+
+    from sim.core.persistence.models import PlayerAnchor
+
+    app, anchor_id, _frames = single_save
+    ws.handle_client_message(
+        {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id},
+        app.state.loop,
+        app.state.pathfinder,
+        ws.ControlState(),
+    )
+    await app.state.drain_pending_loads()
+    assert app.state.load_outcomes[-1] == (anchor_id, True)
+
+    # 读档即把该档设为当前游标 ⇒ protected 回写为 1
+    async with app.state.store.session_factory() as session:
+        assert (
+            await session.scalar(select(PlayerAnchor.protected).where(PlayerAnchor.id == anchor_id))
+        ) is True
+
+    ws.handle_client_message(
+        {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id},
+        app.state.loop,
+        app.state.pathfinder,
+        ws.ControlState(),
+    )
+    await app.state.drain_pending_loads()
+    assert app.state.load_outcomes[-1] == (anchor_id, True), "二次读档不得因 protected 回写而失败"
+
+
 async def test_queued_load_does_not_confirm_with_the_old_world(saved_world):
     app, anchor_id, _, _, _ = saved_world
     reply = ws.handle_client_message(
@@ -128,6 +227,10 @@ async def test_invalid_rng_leaves_live_world_and_current_branch_untouched(saved_
     assert app.state.loop.state.state_hash() == state_before
     assert await app.state.store.current_branch_id() == "main"
     assert [frame["type"] for frame in frames] == ["error"]
+    # `ref` 是客户端路由的唯一依据（runtime.ts 按 ref=load_anchor 才进存档面板提示位），
+    # 它硬编码在 main.py 的失败广播里 ⇒ 必须端到端钉住，别只在帧构造器层面测。
+    assert frames[0]["ref"] == "load_anchor"
+    assert frames[0]["code"] == "load_failed"
     parent_rows = await app.state.store.read_range("main", 0, 100000)
     assert parent_rows[-1]["seq"] == parent_head
 

@@ -90,6 +90,27 @@ class TestLocateAnchor:
         with pytest.raises(OrchestrationError, match="指向的事件不存在"):
             await locate_anchor(session_factory, "anc-bad")
 
+    async def test_protected_tail_anchor_is_locatable(self, session_factory):
+        """末梢档（protected=1）必须可定位。
+
+        `protected` 只表达「不许删除这个档」（anchors-api §1.4），与可读性无关；
+        新建档必为末梢，且读档成功后 `fork.py` 会把载入的档回写成 protected=1
+        ⇒ 排除 protected 会让「存完立刻读」和「读过再读」两条主路径全部失败。
+        """
+        import time as _time
+
+        async with session_factory() as session, session.begin():
+            await session.execute(
+                text(
+                    "INSERT INTO player_anchors (id, name, branch_id, seq, tick,"
+                    " agent_override, protected, created_at, updated_at)"
+                    " VALUES ('anc-tail', '末梢档', 'main', 3, 300, '{}', 1, :ts, :ts)"
+                ),
+                {"ts": _time.time()},
+            )
+        loc = await locate_anchor(session_factory, "anc-tail")
+        assert loc == AnchorLocation(branch_id="main", seq=3, tick=300)
+
 
 class TestOrchestrateLoadAnchor:
     async def test_happy_path_forks_and_registers_child(self, session_factory):
