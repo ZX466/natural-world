@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from sim.api.anchors import router as anchors_router
 from sim.api.errors import install_error_handlers
+from sim.api.narration_cache import NarratedCache
 from sim.api.settings import router as settings_router
 from sim.api.ws import (
     ConnectionManager,
@@ -534,7 +535,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     hidden_states.update(await npc_store.materialize_hidden([CHENMO_ID]))
     app.state.hidden_states = hidden_states
-    _narrated_cache: dict[str, tuple[Any, str]] = {}
+    _narration = NarratedCache()
 
     def _hidden_context(npc_id: str) -> str:
         from sim.perception.senses import rtoken_of
@@ -542,12 +543,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         frame = loop.perception_frames.get(rtoken_of(npc_id))
         if not isinstance(frame, PerceptionFrame):
             return ""
-        cached = _narrated_cache.get(npc_id)
-        if cached is not None and cached[0] is frame:
-            return cached[1]
         text = frame.narrated(language=language if npc_id == CHENMO_ID else None)
-        _narrated_cache[npc_id] = (frame, text)
-        return text
+        return _narration.remember(npc_id, (frame, text))
 
     # 批次 D14：真实意愿面——逐人合成（性格/需求/处境 → band 全谱），
     # 替换 D2 的全队 band=1 占位（「四句循环」根因收口）。最终都执行
@@ -1254,7 +1251,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 else:
                     health_evolution.reset(snapshot, baseline_day=health_snapshot_day)
                 app.state.health_evolution = health_evolution
-                _narrated_cache.clear()
+                _narration.clear()
                 branch_events = await branch_store.read_branch_history()
                 coin_ledger.restore_from_events(branch_events)
                 fire_runtime.restore_from_events(branch_events)
