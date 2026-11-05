@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import type { MapStatic, WorldMirror } from '../world-mirror';
 import { ISO, depthKey, effectiveHeight, isoProject, screenBounds, type VoxelEdits } from './iso';
 import { BlockAtlas } from './block-atlas';
+import { paintTile } from './tile-projection';
 
 const GROUND_KEY = 'iso-ground-composite';
 const TILESET_KEY = 'god-town-16';
@@ -105,6 +106,9 @@ export class IsoTerrain {
   private banks = new Map<string, Phaser.GameObjects.Graphics>();
   private textureKeys = new Set<string>();
   private colors: ((gid: number) => number) | null = null;
+  /** The tileset image itself, kept for the per-cell `drawImage` bake. */
+  private sourceImage: CanvasImageSource | null = null;
+  private sourceSize: { width: number; height: number } | null = null;
   private lastMap: MapStatic | null = null;
   private lastWidth = 0;
   private lastHeight = 0;
@@ -383,8 +387,16 @@ export class IsoTerrain {
         const cell = this.cells[y * map.w + x]!;
         if (cell.h >= 2) continue;
         const top = isoProject(x, y, cell.h, bounds);
-        if (this.atlas) this.atlas.paintBlock(ctx, top.sx, top.sy, cell.h, cell.color);
-        else paintBlock(ctx, top.sx, top.sy, cell.h, cell.color);
+        const gid = map.ground?.[y * map.w + x] ?? 0;
+        const painted =
+          !cell.edited &&
+          this.sourceImage !== null &&
+          this.sourceSize !== null &&
+          paintTile(ctx, this.sourceImage, top.sx, top.sy, gid, this.sourceSize);
+        if (!painted) {
+          if (this.atlas) this.atlas.paintBlock(ctx, top.sx, top.sy, cell.h, cell.color);
+          else paintBlock(ctx, top.sx, top.sy, cell.h, cell.color);
+        }
       }
     }
     if (dirty) {
@@ -545,8 +557,15 @@ export class IsoTerrain {
   }
 
   private readColors(): (gid: number) => number {
-    if (!this.scene.textures.exists(TILESET_KEY)) return () => FALLBACK_COLOR;
+    if (!this.scene.textures.exists(TILESET_KEY)) {
+      this.sourceImage = null;
+      this.sourceSize = null;
+      return () => FALLBACK_COLOR;
+    }
     const source = this.scene.textures.get(TILESET_KEY).getSourceImage() as HTMLImageElement;
+    // The bake reads these; keeping them here avoids a texture lookup per cell.
+    this.sourceImage = source;
+    this.sourceSize = { width: source.width, height: source.height };
     const canvas = document.createElement('canvas');
     canvas.width = source.width;
     canvas.height = source.height;

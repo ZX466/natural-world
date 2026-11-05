@@ -35,6 +35,12 @@ class Image {
   ) {}
 }
 
+/** A tileset source of the given pixel size, uniformly filled — the rasterizer
+ * needs real pixels to blit, and these tests only assert how many blits happen. */
+function tileset(width: number, height: number, color = 0xff6496c8) {
+  return { width, height, pixels: new Uint32Array(width * height).fill(color) };
+}
+
 function setup(
   heights = [0, 1, 2, 3],
   w = 2,
@@ -58,7 +64,27 @@ function setup(
         if (raster) software.fill();
       }),
       fillStyle: '',
-      drawImage: vi.fn(),
+      drawImage: vi.fn(
+        (
+          source: { width: number; height: number; pixels: Uint32Array },
+          sx: number,
+          sy: number,
+          sw: number,
+          sh: number,
+          dx: number,
+          dy: number,
+          dw: number,
+          dh: number,
+        ) => {
+          // readColors() blits the whole source with the 3-arg form; only the
+          // 9-arg tile blit is rasterized.
+          if (raster && dh !== undefined)
+            software.drawImage(source, sx, sy, sw, sh, dx, dy, dw, dh);
+        },
+      ),
+      transform: vi.fn((a: number, b: number, c: number, d: number, e: number, f: number) => {
+        if (raster) software.transform(a, b, c, d, e, f);
+      }),
       clearRect: vi.fn((x: number, y: number, width: number, height: number) => {
         if (raster) software.clearRect(x, y, width, height);
       }),
@@ -86,7 +112,15 @@ function setup(
     },
   });
   const textures = new Map<string, unknown>();
-  textures.set('god-town-16', { width: 16, height: 16 });
+  // The tileset source carries real pixels so a rasterized bake is comparable
+  // pixel-for-pixel between a full redraw and a clipped repaint.
+  textures.set('god-town-16', {
+    width: 16,
+    height: 16,
+    pixels: new Uint32Array(16 * 16).fill(
+      (0xff000000 | (source[0] << 16) | (source[1] << 8) | source[2]) >>> 0,
+    ),
+  });
   const images: Image[] = [];
   const refresh = vi.fn();
   const graphics: {
@@ -196,7 +230,47 @@ it('bakes low blocks and gives high images the exact base anchor, size, and dept
     expect(image.setDepth).toHaveBeenLastCalledWith(depthKey(x!, y!));
   }
   const ground = canvases.find((c) => c.width === 64)!;
-  expect(ground.ctx.fill).toHaveBeenCalledTimes(4); // Water top + three ground faces.
+  // Both low cells have a valid gid in the 16×16 fixture ⇒ both are baked tiles.
+  expect(ground.ctx.drawImage).toHaveBeenCalledTimes(2);
+  expect(ground.ctx.fill).not.toHaveBeenCalled();
+});
+
+it('bakes the real tileset pixels into the ground for unedited low cells', () => {
+  const { terrain, map, structures, textures, canvases } = setup([1, 1, 1, 1], 2, 2, true);
+  textures.set('god-town-16', tileset(2240, 1600)); // gid 1/2/141 都有效
+  map.ground!.set([1, 2, 141, 0]);
+  terrain.redraw(map, structures);
+  const ground = canvases.find((c) => c.width > 32 && c.height > 32)!;
+  // 三个有效 gid 走 drawImage；gid=0 走 paintBlock 的 fill 兜底
+  expect(ground.ctx.drawImage).toHaveBeenCalledTimes(3);
+});
+
+it('falls back to flat polygons when the map carries no ground layer', () => {
+  const { terrain, map, structures, canvases } = setup([1, 1, 1, 1], 2, 2, true);
+  delete (map as { ground?: Uint16Array }).ground;
+  terrain.redraw(map, structures);
+  const ground = canvases.find((c) => c.width > 32 && c.height > 32)!;
+  expect(ground.ctx.drawImage).not.toHaveBeenCalled();
+  expect(ground.ctx.fill).toHaveBeenCalled(); // 仍是色块渲染
+});
+
+it('keeps flat polygons for edited cells even when the gid is valid', () => {
+  const { terrain, map, structures, textures, canvases } = setup([1, 1, 1, 1], 2, 2, true);
+  textures.set('god-town-16', tileset(2240, 1600));
+  map.ground!.set([1, 2, 141, 0]);
+  const edits = new Map([['0,0', { x: 0, y: 0, action: 'dig' as const, gid: 0, height: 1 }]]);
+  terrain.redraw(map, structures, edits);
+  const ground = canvases.find((c) => c.width > 32 && c.height > 32)!;
+  expect(ground.ctx.drawImage).toHaveBeenCalledTimes(2); // 只剩两个未编辑格
+});
+
+it('falls back when the gid is outside the source image', () => {
+  const { terrain, map, structures, canvases } = setup([1, 1, 1, 1], 2, 2, true);
+  map.ground!.set([1, 2, 3, 4]); // 夹具源图 16×16 ⇒ 只有 gid 1 有效
+  terrain.redraw(map, structures);
+  const ground = canvases.find((c) => c.width > 32 && c.height > 32)!;
+  expect(ground.ctx.drawImage).toHaveBeenCalledTimes(1);
+  expect(ground.ctx.fill).toHaveBeenCalled();
 });
 
 it('repaints when only the edited flag flips, even if the colour is identical', () => {
@@ -561,9 +635,9 @@ it('repaints a clipped neighborhood after one edit and retains the canvas textur
   terrain.redraw(map, structures, edits, 1);
   const ground = textures.get('iso-ground-composite');
   const ctx = canvases.find((c) => c.width === 1280)!.ctx;
-  expect(ctx.fill).toHaveBeenCalledTimes(4800);
+  expect(ctx.drawImage).toHaveBeenCalledTimes(1600); // One baked tile per low cell.
   const canvasCount = canvases.length;
-  ctx.fill.mockClear();
+  ctx.drawImage.mockClear();
   scene.textures.addCanvas.mockClear();
   scene.textures.remove.mockClear();
   edits.set('20,20', { x: 20, y: 20, action: 'dig', gid: 0, height: 0 });
@@ -579,9 +653,11 @@ it('repaints a clipped neighborhood after one edit and retains the canvas textur
   expect(y).toBeGreaterThan(0);
   expect(width).toBeLessThanOrEqual(36);
   expect(height).toBeLessThanOrEqual(36);
-  expect(ctx.fill.mock.calls.length).toBeGreaterThan(1); // Includes the overlapping neighbors.
-  expect(ctx.fill.mock.calls.length).toBeLessThan(100); // Over 98% fewer than the 4800-call bake.
-  console.info(`terrain paints: full=4800, dirty=${ctx.fill.mock.calls.length}; idle frames=120`);
+  expect(ctx.drawImage.mock.calls.length).toBeGreaterThan(1); // Includes the overlapping neighbors.
+  expect(ctx.drawImage.mock.calls.length).toBeLessThan(100); // Over 98% fewer than the 1600-tile bake.
+  console.info(
+    `terrain paints: full=1600, dirty=${ctx.drawImage.mock.calls.length}; idle frames=120`,
+  );
   expect(refresh).toHaveBeenCalledTimes(1);
 });
 

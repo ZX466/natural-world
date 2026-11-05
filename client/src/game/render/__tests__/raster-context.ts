@@ -102,12 +102,16 @@ export function rasterContext(size: () => { width: number; height: number }) {
       const det = a * d - b * c;
       if (det === 0) return;
       // The destination rect is given in user space; iterate its image in device space.
-      const corners: [number, number][] = [
+      const userCorners: [number, number][] = [
         [dx, dy],
         [dx + dw, dy],
         [dx, dy + dh],
         [dx + dw, dy + dh],
-      ].map(([x, y]) => [a * x + c * y + e, b * x + d * y + f]);
+      ];
+      const corners: [number, number][] = userCorners.map(([x, y]) => [
+        a * x + c * y + e,
+        b * x + d * y + f,
+      ]);
       eachPixel(
         {
           left: Math.min(...corners.map(([x]) => x)),
