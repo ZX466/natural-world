@@ -320,7 +320,7 @@ class PerceptionEngine:
         # subject="smell" 全场去重（一帧最多一条嗅觉）。环境气味语义：报「空气里
         # 有味道」（含自己站进去的云，不归属来源）；零元信息，风向叙事 M3 起。
         if concentrations:
-            smell_floor = profile.hearing_floor  # 显著性地板暂与听觉同档
+            smell_floor = profile.smell_floor  # 独立旋钮：与听觉不同档（spec §4.1）
             others_max = max(
                 (c for eid2, c in concentrations.items() if eid2 != observer_id),
                 default=0.0,

@@ -82,10 +82,10 @@ def narrate_smell(concentration: float) -> str:
 
     分档只按浓淡，不带来源方向（风向叙事 M3 起；现批次浓度→文案占位映射）。
     """
-    if concentration >= 2.0:
+    if concentration >= 0.55:
         return "一股浓重的气味直冲鼻子。"
-    if concentration >= 0.5:
+    if concentration >= 0.30:
         return "空气里飘着一股明显的味道。"
-    if concentration >= 0.1:
+    if concentration >= 0.18:
         return "空气里飘着一股说不清的味道。"
     return "隐约有一丝陌生的气味。"

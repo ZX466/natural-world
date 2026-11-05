@@ -16,8 +16,10 @@ import numpy as np
 
 from sim.perception.smell import SmellField, smell_propagate, smell_sample_batch
 
-#: 实体持续源发射强度（占位常量；matter 源 M3 接 MatterLedger 后分物质定标）。
-SMELL_SOURCE_STRENGTH: float = 1.0
+#: 实体持续源发射强度（matter 源 M3 接 MatterLedger 后分物质定标）。
+#: 定标：0.04 使 50 人聚集全部可闻（min 0.168 / med 0.350 / max 0.430），
+#: 而独行者 0.063 落在 0.08 地板之下（spec §4.1 实测）。
+SMELL_SOURCE_STRENGTH: float = 0.04
 
 #: 每 tick 场衰减系数（与 pi bench 参考实现同口径 0.98）。
 SMELL_DECAY: float = 0.98

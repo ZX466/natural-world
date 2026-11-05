@@ -114,14 +114,19 @@ class TestWiring:
     def _state(self, tick: int = 100) -> WorldState:
         from sim.core.world import EntityState
 
+        # 定标后（SMELL_SOURCE_STRENGTH=0.04）一格外的单个人浓度只有 0.0196，
+        # 落在地板 0.08 之下——这是**正确的**产品行为（spec §4.1）。要断言
+        # 「帧里应有嗅觉观测」，夹具必须是人挤人。
         ents = {
             "alice": EntityState(entity_id="alice", pos=(10, 10)),
-            "bob": EntityState(entity_id="bob", pos=(11, 10)),
+            "bob": EntityState(entity_id="bob", pos=(10, 10)),
+            "carol": EntityState(entity_id="carol", pos=(10, 11)),
+            "dave": EntityState(entity_id="dave", pos=(11, 10)),
+            "erin": EntityState(entity_id="erin", pos=(11, 11)),
         }
         return WorldState(world_seed=7, tick=tick, entities=ents)
 
-    def _step(self, state: WorldState):
-        from sim.perception.senses import run_perception_step
+    def _map(self):
         from sim.world.map import Chunk, TileMap
 
         chunks = {
@@ -132,11 +137,20 @@ class TestWiring:
                 collision=(True,) * (GRID * GRID),
             )
         }
-        tile_map = TileMap(width=GRID, height=GRID, chunks=chunks)
+        return TileMap(width=GRID, height=GRID, chunks=chunks)
+
+    def _step(self, state: WorldState, tile_map=None):
+        from sim.perception.senses import run_perception_step
+
+        tile_map = tile_map if tile_map is not None else self._map()
         return run_perception_step(state, tile_map, []), tile_map
 
     def test_frame_contains_smell_observation(self) -> None:
-        frames, _ = self._step(self._state())
+        # 嗅觉场跨 tick 累积；单 tick 起步浓度接近 0。用同一张图推进到稳态
+        # （真实生产里场常驻，这正是一帧帧累积的结果）。
+        tile_map = self._map()
+        for _ in range(30):
+            frames, tile_map = self._step(self._state(), tile_map)
         frame = frames["rt-" + __import__("hashlib").sha256(b"alice").hexdigest()[:12]]
         smell_obs = [ob for ob in frame.observations if ob.channel is Channel.SMELL]
         assert smell_obs, "帧里应有嗅觉观测（他人贴身，浓度必超地板）"

@@ -19,4 +19,5 @@ class PerceptionProfile(BaseModel):
     touch_radius: float = 1.5  # 触觉：相邻（8 邻域 √2 ≈ 1.41 < 1.5）
     vision_floor: float = 0.02  # 显著性地板（视觉：夜间低强度不抹掉人影）
     hearing_floor: float = 0.04  # 显著性地板（听觉：低于则「没注意到」）
+    smell_floor: float = 0.08  # 嗅觉显著性地板（与「隐约」档同值，spec §4.1）
     max_observations: int = 12  # 单帧单者观测数上限（prompt 体积治理）
