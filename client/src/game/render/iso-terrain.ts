@@ -30,6 +30,9 @@ interface SurfaceCell {
   rubble: boolean;
   scar: boolean;
   bank: boolean;
+  /** The edit ledger has a row here. `color` cannot express this: EDIT_COLORS
+   * may coincide with the sampled source colour. */
+  edited: boolean;
 }
 type Rect = { left: number; top: number; right: number; bottom: number };
 
@@ -238,8 +241,9 @@ export class IsoTerrain {
         const phase = overrides.get(key);
         const h = effectiveHeight(x, y, this.heightOf, structures, edits);
         const bank = h === 1 && map.collision[y * map.w + x] === 0;
+        const edited = edits.has(key);
         const color =
-          edits.has(key) && phase === undefined
+          edited && phase === undefined
             ? EDIT_COLORS[h]!
             : this.colors(map.ground?.[y * map.w + x] ?? 0);
         const cell = {
@@ -251,10 +255,11 @@ export class IsoTerrain {
           rubble: phase === undefined && ruins.has(key),
           scar: phase === undefined && h === 1 && !bank && edits.get(key)?.action === 'dig',
           bank,
+          edited,
         };
         cells.push(cell);
         const prior = full ? undefined : previous[y * map.w + x];
-        if (prior?.h !== h || prior.color !== color) {
+        if (prior?.h !== h || prior.color !== color || prior.edited !== edited) {
           if (prior) includeLow(prior);
           includeLow(cell);
           changed = true;
@@ -286,7 +291,12 @@ export class IsoTerrain {
       if (cell.h < 2) continue;
       retained.add(`${cell.x},${cell.y}`);
       const prior = full ? undefined : previous[cell.y * map.w + cell.x];
-      if (prior?.h !== cell.h || prior.color !== cell.color || prior.phase !== cell.phase) {
+      if (
+        prior?.h !== cell.h ||
+        prior.color !== cell.color ||
+        prior.phase !== cell.phase ||
+        prior.edited !== cell.edited
+      ) {
         this.syncBlock(cell, bounds);
       }
     }

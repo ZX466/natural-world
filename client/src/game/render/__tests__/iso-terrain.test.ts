@@ -35,9 +35,15 @@ class Image {
   ) {}
 }
 
-function setup(heights = [0, 1, 2, 3], w = 2, h = 2, raster = false) {
+function setup(
+  heights = [0, 1, 2, 3],
+  w = 2,
+  h = 2,
+  raster = false,
+  source: [number, number, number] = [100, 150, 200],
+) {
   const pixels = new Uint8ClampedArray(16 * 16 * 4);
-  for (let i = 0; i < pixels.length; i += 4) pixels.set([100, 150, 200, 255], i);
+  for (let i = 0; i < pixels.length; i += 4) pixels.set([...source, 255], i);
   const canvases: { width: number; height: number; ctx: ReturnType<typeof context> }[] = [];
   function context(
     size: () => { width: number; height: number } = () => ({ width: 0, height: 0 }),
@@ -191,6 +197,30 @@ it('bakes low blocks and gives high images the exact base anchor, size, and dept
   }
   const ground = canvases.find((c) => c.width === 64)!;
   expect(ground.ctx.fill).toHaveBeenCalledTimes(4); // Water top + three ground faces.
+});
+
+it('repaints when only the edited flag flips, even if the colour is identical', () => {
+  // Source pixels chosen so sampleTileColor yields 0x8f8055 — the same value
+  // EDIT_COLORS[1] paints for an edited height-1 cell. A height-1 place edit
+  // therefore leaves both h and color untouched; only `edited` changes.
+  const { terrain, map, structures, canvases } = setup(
+    [1, 1, 1, 1],
+    2,
+    2,
+    false,
+    [0x8f, 0x80, 0x55],
+  );
+  terrain.redraw(map, structures);
+  const ground = canvases.find((c) => c.width === 64)!;
+  const before = ground.ctx.drawImage.mock.calls.length + ground.ctx.fill.mock.calls.length;
+  const edits = new Map<
+    string,
+    { x: number; y: number; action: 'dig' | 'place'; gid: number; height: number }
+  >();
+  edits.set('0,0', { x: 0, y: 0, action: 'place', gid: 0, height: 1 });
+  terrain.sync(map, structures, edits);
+  const after = ground.ctx.drawImage.mock.calls.length + ground.ctx.fill.mock.calls.length;
+  expect(after).toBeGreaterThan(before); // Without an `edited` flag nothing changes ⇒ no repaint.
 });
 
 it('keeps unchanged high images and skips all work on identical frames', () => {
