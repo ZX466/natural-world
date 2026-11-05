@@ -48,10 +48,25 @@ function topImages(images: Image[]): Image[] {
   return images.filter((image) => image.frame?.startsWith('tile-') ?? false);
 }
 
-/** A tileset source of the given pixel size, uniformly filled — the rasterizer
- * needs real pixels to blit, and these tests only assert how many blits happen. */
-function tileset(width: number, height: number, color = 0xff6496c8) {
-  return { width, height, pixels: new Uint32Array(width * height).fill(color) };
+/** A tileset source of the given pixel size where every 16×16 cell carries its own
+ * colour, so a gid change is a real colour change and not a no-op repaint.
+ * Cell k gets `0xff000000 | (k * 0x010203 & 0xffffff)`, which is distinct for the
+ * small gids these fixtures use. */
+function tileset(width: number, height: number, uniform?: number) {
+  const pixels = new Uint32Array(width * height);
+  if (uniform !== undefined) {
+    pixels.fill(uniform >>> 0);
+    return { width, height, pixels };
+  }
+  const cols = width / 16;
+  for (let cell = 0; cell < (width / 16) * (height / 16); cell++) {
+    const color = (0xff000000 | (((cell + 1) * 0x010203) & 0xffffff)) >>> 0;
+    const ox = (cell % cols) * 16,
+      oy = Math.floor(cell / cols) * 16;
+    for (let y = oy; y < oy + 16; y++)
+      for (let x = ox; x < ox + 16; x++) pixels[y * width + x] = color;
+  }
+  return { width, height, pixels };
 }
 
 function setup(
@@ -64,6 +79,10 @@ function setup(
   const pixels = new Uint8ClampedArray(16 * 16 * 4);
   for (let i = 0; i < pixels.length; i += 4) pixels.set([...source, 255], i);
   const canvases: { width: number; height: number; ctx: ReturnType<typeof context> }[] = [];
+  let blittedCanvas: {
+    size: () => { width: number; height: number };
+    software: ReturnType<typeof rasterContext>;
+  } | null = null;
   function context(
     size: () => { width: number; height: number } = () => ({ width: 0, height: 0 }),
   ) {
@@ -93,6 +112,22 @@ function setup(
           // 9-arg tile blit is rasterized.
           if (raster && dh !== undefined)
             software.drawImage(source, sx, sy, sw, sh, dx, dy, dw, dh);
+          if (dh === undefined && source.pixels !== undefined) {
+            // The colour sampler's whole-source blit: record which raster it
+            // landed in so getImageData can report those pixels.
+            blittedCanvas = { size, software };
+            software.drawImage(
+              source,
+              0,
+              0,
+              source.width,
+              source.height,
+              0,
+              0,
+              source.width,
+              source.height,
+            );
+          }
         },
       ),
       transform: vi.fn((a: number, b: number, c: number, d: number, e: number, f: number) => {
@@ -105,7 +140,23 @@ function setup(
       restore: vi.fn(software.restore),
       rect: vi.fn(software.rect),
       clip: vi.fn(software.clip),
-      getImageData: () => ({ data: pixels }),
+      // readColors() blits the source and then reads it back. Derive the RGBA
+      // bytes from what was actually blitted so each gid samples its own colour.
+      getImageData: () => {
+        const blitted = blittedCanvas;
+        if (blitted === null) return { data: pixels };
+        const { width, height } = blitted.size();
+        const words = blitted.software.pixels();
+        const data = new Uint8ClampedArray(width * height * 4);
+        for (let i = 0; i < width * height; i++) {
+          const w = words[i]!;
+          data[i * 4] = (w >>> 16) & 255;
+          data[i * 4 + 1] = (w >>> 8) & 255;
+          data[i * 4 + 2] = w & 255;
+          data[i * 4 + 3] = (w >>> 24) & 255;
+        }
+        return { data };
+      },
       pixels: software.pixels,
     };
     Object.defineProperty(ctx, 'fillStyle', {
@@ -674,6 +725,27 @@ it('does no ground or collection traversal during 120 frames with an unchanged v
   expect(values).not.toHaveBeenCalled();
   expect(entries).not.toHaveBeenCalled();
   expect(editEntries).not.toHaveBeenCalled();
+});
+
+it('limits a dirty repaint to the changed cell instead of redrawing the whole map', () => {
+  const side = 20;
+  const { terrain, map, structures, textures, canvases } = setup(
+    new Array<number>(side * side).fill(1),
+    side,
+    side,
+    true,
+  );
+  textures.set('god-town-16', tileset(2240, 1600));
+  for (let i = 0; i < map.ground!.length; i++) map.ground![i] = (i % 400) + 1;
+  terrain.redraw(map, structures);
+  const ground = canvases.find((c) => c.width === (side + side) * 16)!;
+  ground.ctx.drawImage.mockClear();
+  map.ground![10 * side + 10] = 999 % 400; // 改一格，换到另一种颜色
+  terrain.sync(map, structures);
+  // A full repaint would blit 400 cells; the dirty rect only covers its neighbours.
+  expect(ground.ctx.drawImage.mock.calls.length).toBeGreaterThan(0);
+  // 实测 18 次（400 格全量）；上限留余量，但必须远低于全量。
+  expect(ground.ctx.drawImage.mock.calls.length).toBeLessThanOrEqual(30);
 });
 
 it('repaints a clipped neighborhood after one edit and retains the canvas texture', () => {

@@ -421,6 +421,15 @@ export class IsoTerrain {
         const cell = this.cells[y * map.w + x]!;
         if (cell.h >= 2) continue;
         const top = isoProject(x, y, cell.h, bounds);
+        if (dirty) {
+          // Diamond bounding box: the top face plus the column below it.
+          const left = top.sx - hw,
+            right = top.sx + hw;
+          const up = top.sy - hh - cell.h * ISO.HH,
+            down = top.sy + hh;
+          if (right < dirty.left || left > dirty.right || down < dirty.top || up > dirty.bottom)
+            continue;
+        }
         const gid = map.ground?.[y * map.w + x] ?? 0;
         const painted =
           !cell.edited &&
