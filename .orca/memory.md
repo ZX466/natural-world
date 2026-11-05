@@ -3,11 +3,22 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-05 第二十三轮主树部分已完工 · B2/B3 派 codex）
+## 0. 当前状态（2026-11-05 第二十三轮已收编 · 主树 HEAD `5e4e20b`）
 
-- **主树在飞：无**。第二十三轮主树部分已全部提交（`c7b7d1d` 设计+计划 →
-  `c3e2a2b` 实现收口）。**B2/B3 已派 codex 树**（派单说明在该树 `.orca/talking.txt`），
-  主树待收编复核。
+- **主树在飞：无**。第二十三轮**全部收编**：主树部分 `c7b7d1d`/`c3e2a2b`/`c7f5e31`，
+  codex 部分 `424ec34`/`1738e09`，`--no-ff` 合并提交 **`5e4e20b`**（4 处冲突全解）。
+- **收编后主树独立复跑（不采信 codex 自测）**：pytest **3544P / 121S / 72D**
+  （497.88s，EXIT 0）· ruff 410 files + format 全过 · pyright **0/0/0** ·
+  client typecheck/eslint/prettier/gen:protocol 全 EXIT 0 · vitest **428P / 57F** ·
+  两资产 `--check` 逐字节一致 · `uv lock --check` 一致 · 协议 **1.15**（双落点同值）。
+  警告 556 条全为既存（2 starlette/anyio 弃用 + 1 alembic path_separator + 8 旧迁移子进程
+  UTF-8 线程警告 + Pydantic 弃用），**无一条来自本轮改动**。
+- **协议 1.15 落点核对**：`sim/api/ws.py::_PROTOCOL_VERSION` 与
+  `client/src/net/ws.ts::PROTOCOL_VERSION` 同值；`FastAPI(version=)` / `shared/openapi.json` /
+  `shared/protocol.ts` 三处一致，`gen:protocol:check` 通过。
+- **合并后复查（必做）**：`ensure_schema`（`main.py:216`）仍在、`ChatLedger.remember`
+  的 `speaker` 必填与 `_heard_mems` 转述归因仍在、`narration_cache.py` 仍在、
+  `onMonologueHistory` 整组替换仍在、`voxel-picking.ts` **零改动**（拾取基线不变）。
 - **本轮做了什么**（用户验收驱动，原话：世界空空如也 / npc 只会聚集 / llm 除寻路无法执行 /
   石头等材料不能用 / 主角老说有奇怪气味）：
   - **A 等距烘焙**（`9b83d79`..`c3e2a2b`）：真实 tileset 像素烘进地面画布（`tile-projection.ts`
