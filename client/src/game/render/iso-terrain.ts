@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import type { MapStatic, WorldMirror } from '../world-mirror';
 import { ISO, depthKey, effectiveHeight, isoProject, screenBounds, type VoxelEdits } from './iso';
 import { BlockAtlas } from './block-atlas';
-import { paintTile } from './tile-projection';
+import { frameOf, paintTile } from './tile-projection';
 
 const GROUND_KEY = 'iso-ground-composite';
 const TILESET_KEY = 'god-town-16';
@@ -18,7 +18,10 @@ type Edits = VoxelEdits;
 const NO_EDITS: Edits = new Map();
 type HeightLookup = (x: number, y: number) => number;
 interface BlockView {
-  image: Phaser.GameObjects.Image;
+  /** Shared-height mask with a per-cell tint: the two side faces. */
+  side: Phaser.GameObjects.Image;
+  /** The cell's own tileset frame as the top face; absent when the gid has no pixels. */
+  top: Phaser.GameObjects.Image | null;
   texture: string;
   phase: string | undefined;
 }
@@ -144,9 +147,12 @@ export class IsoTerrain {
 
   private phase(view: BlockView, phase: string | undefined, initial = false): void {
     const opacity = phase === 'collapsing' ? 0.5 : phase === 'built' ? 0.92 : 1;
-    if (initial) view.image.setAlpha(opacity);
-    else if (view.phase !== phase)
-      this.transitions.set(view.image, { from: view.image.alpha, to: opacity, elapsed: 0 });
+    const targets = view.top === null ? [view.side] : [view.side, view.top];
+    for (const image of targets) {
+      if (initial) image.setAlpha(opacity);
+      else if (view.phase !== phase)
+        this.transitions.set(image, { from: image.alpha, to: opacity, elapsed: 0 });
+    }
     view.phase = phase;
   }
 
@@ -301,13 +307,12 @@ export class IsoTerrain {
         prior.phase !== cell.phase ||
         prior.edited !== cell.edited
       ) {
-        this.syncBlock(cell, bounds);
+        this.syncBlock(cell, map, bounds);
       }
     }
     for (const [key, view] of this.blocks) {
       if (retained.has(key)) continue;
-      this.transitions.delete(view.image);
-      view.image.destroy();
+      this.destroyBlock(view);
       this.blocks.delete(key);
     }
     this.syncRubble(map, structures, overrides, bounds, edits);
@@ -320,6 +325,7 @@ export class IsoTerrain {
 
   private syncBlock(
     { x, y, h, color, phase }: SurfaceCell,
+    map: MapStatic,
     bounds: ReturnType<typeof screenBounds>,
   ) {
     const key = `${x},${y}`;
@@ -335,21 +341,49 @@ export class IsoTerrain {
       this.scene.textures.addCanvas(texture, block);
       this.textureKeys.add(texture);
     }
+    const topFrame = this.ensureTileFrame(map.ground?.[y * map.w + x] ?? 0);
     let view = this.blocks.get(key);
     const isNew = view === undefined;
     const base = isoProject(x, y, 0, bounds);
     if (view === undefined) {
-      const image = this.scene.add.image(base.sx, base.sy + ISO.TH / 2, texture).setOrigin(0.5, 1);
-      view = { image, texture, phase };
+      const side = this.scene.add.image(base.sx, base.sy + ISO.TH / 2, texture).setOrigin(0.5, 1);
+      const top =
+        topFrame === null
+          ? null
+          : this.scene.add
+              .image(base.sx, base.sy - h * ISO.HH, TILESET_KEY, topFrame)
+              .setOrigin(0.5, 0.5);
+      view = { side, top, texture, phase };
       this.blocks.set(key, view);
     } else if (view.texture !== texture) {
-      view.image.setTexture(texture);
+      view.side.setTexture(texture);
       view.texture = texture;
     }
-    view.image.setPosition(base.sx, base.sy + ISO.TH / 2);
-    view.image.setDisplaySize(ISO.TW, h * ISO.HH + ISO.TH).setDepth(depthKey(x, y));
-    view.image.setTint(color);
+    view.side.setPosition(base.sx, base.sy + ISO.TH / 2);
+    // The mask already contains its own top face, so the side keeps its full height.
+    view.side.setDisplaySize(ISO.TW, h * ISO.HH + ISO.TH).setDepth(depthKey(x, y) - 0.01);
+    view.side.setTint(color);
+    if (view.top !== null && topFrame !== null) {
+      view.top
+        .setTexture(TILESET_KEY, topFrame)
+        .setPosition(base.sx, base.sy - h * ISO.HH)
+        .setDisplaySize(ISO.TW, ISO.TH)
+        .setDepth(depthKey(x, y));
+    }
     this.phase(view, phase, isNew);
+  }
+
+  /** Register the tileset frame for a gid on first use, on both the full and the
+   * incremental path. `Texture.add` records metadata only — no pixel copy. */
+  private ensureTileFrame(gid: number): string | null {
+    if (gid <= 0 || this.sourceSize === null) return null;
+    const name = `tile-${gid}`;
+    const texture = this.scene.textures.get(TILESET_KEY);
+    if (texture.has(name)) return name;
+    const frame = frameOf(gid, this.sourceSize);
+    if (frame.w === 0) return null;
+    texture.add(name, 0, frame.x, frame.y, frame.w, frame.h);
+    return name;
   }
 
   /** Repaint every overlapping low block, clipped to the old/new footprint union.
@@ -584,11 +618,20 @@ export class IsoTerrain {
     };
   }
 
+  private destroyBlock(view: BlockView): void {
+    this.transitions.delete(view.side);
+    view.side.destroy();
+    if (view.top !== null) {
+      this.transitions.delete(view.top);
+      view.top.destroy();
+    }
+  }
+
   private clear(): void {
     this.transitions.clear();
     this.ground?.destroy();
     this.ground = null;
-    for (const view of this.blocks.values()) view.image.destroy();
+    for (const view of this.blocks.values()) this.destroyBlock(view);
     this.blocks.clear();
     for (const marker of this.rubble.values()) marker.destroy();
     this.rubble.clear();

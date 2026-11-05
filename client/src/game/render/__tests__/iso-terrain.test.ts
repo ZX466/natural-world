@@ -21,8 +21,9 @@ class Image {
     return this;
   });
   setDisplaySize = vi.fn(() => this);
-  setTexture = vi.fn((key: string) => {
+  setTexture = vi.fn((key: string, frame?: string) => {
     this.key = key;
+    if (frame !== undefined) this.frame = frame;
     return this;
   });
   destroy() {
@@ -32,7 +33,19 @@ class Image {
     public x: number,
     public y: number,
     public key: string,
+    public frame: string | undefined = undefined,
   ) {}
+}
+
+/** A high cell is one side sprite (texture `iso-block-h`) plus, when the gid has
+ * source pixels, one top sprite (tileset frame `tile-gid`). Counting sides counts
+ * cells, so the existing `toHaveLength` assertions keep their meaning. */
+function highCells(images: Image[]): Image[] {
+  return images.filter((image) => image.key.startsWith('iso-block-'));
+}
+
+function topImages(images: Image[]): Image[] {
+  return images.filter((image) => image.frame?.startsWith('tile-') ?? false);
 }
 
 /** A tileset source of the given pixel size, uniformly filled — the rasterizer
@@ -134,10 +147,25 @@ function setup(
     fillStyle: ReturnType<typeof vi.fn>;
     fillPoints: ReturnType<typeof vi.fn>;
   }[] = [];
+  // Frame registrations are metadata only; one map per texture key, shared
+  // across get() calls so `has` is stable (a fresh object each call would re-add).
+  const frames = new Map<string, Map<string, unknown>>();
+  const framesOf = (key: string) => {
+    let set = frames.get(key);
+    if (set === undefined) frames.set(key, (set = new Map()));
+    return set;
+  };
   const scene = {
     textures: {
       exists: (key: string) => textures.has(key),
-      get: (key: string) => ({ getSourceImage: () => textures.get(key) }),
+      get: (key: string) => ({
+        getSourceImage: () => textures.get(key),
+        has: (name: string) => framesOf(key).has(name),
+        add: (name: string, _source: number, x: number, y: number, w: number, h: number) => {
+          framesOf(key).set(name, { x, y, w, h });
+          return { name };
+        },
+      }),
       addCanvas: vi.fn((key: string, canvas: unknown) => {
         textures.set(key, canvas);
         return { refresh };
@@ -177,8 +205,8 @@ function setup(
         graphics.push(marker);
         return marker;
       },
-      image: (x: number, y: number, key: string) => {
-        const image = new Image(x, y, key);
+      image: (x: number, y: number, key: string, frame?: string) => {
+        const image = new Image(x, y, key, frame);
         images.push(image);
         return image;
       },
@@ -218,16 +246,22 @@ it('bakes low blocks and gives high images the exact base anchor, size, and dept
   const { terrain, map, structures, images, textures, canvases } = setup();
   terrain.redraw(map, structures);
   expect(textures.get('iso-ground-composite')).toMatchObject({ width: 64, height: 152 });
-  expect(images).toHaveLength(3); // One low canvas, exactly two high images.
+  expect(highCells(images)).toHaveLength(2); // One low canvas, exactly two high cells.
   for (const [x, y, height] of [
     [0, 1, 2],
     [1, 1, 3],
   ]) {
     const p = isoProject(x!, y!, 0, screenBounds(2, 2));
-    const image = images.find((i) => i.x === p.sx && i.y === p.sy + 8)!;
-    expect(image.setOrigin).toHaveBeenLastCalledWith(0.5, 1);
-    expect(image.setDisplaySize).toHaveBeenLastCalledWith(32, height! * 16 + 16);
-    expect(image.setDepth).toHaveBeenLastCalledWith(depthKey(x!, y!));
+    const side = images.find((i) => i.key === `iso-block-${height}` && i.x === p.sx)!;
+    expect(side.setOrigin).toHaveBeenLastCalledWith(0.5, 1);
+    expect(side.y).toBe(p.sy + 8);
+    expect(side.setDisplaySize).toHaveBeenLastCalledWith(32, height! * 16 + 16);
+    expect(side.setDepth).toHaveBeenLastCalledWith(depthKey(x!, y!) - 0.01);
+    const top = images.find((i) => i.frame?.startsWith('tile-') && i.x === p.sx)!;
+    expect(top.setOrigin).toHaveBeenLastCalledWith(0.5, 0.5);
+    expect(top.y).toBe(p.sy - height! * 16);
+    expect(top.setDisplaySize).toHaveBeenLastCalledWith(32, 16);
+    expect(top.setDepth).toHaveBeenLastCalledWith(depthKey(x!, y!));
   }
   const ground = canvases.find((c) => c.width === 64)!;
   // Both low cells have a valid gid in the 16×16 fixture ⇒ both are baked tiles.
@@ -307,7 +341,7 @@ it('keeps unchanged high images and skips all work on identical frames', () => {
   structures.set('house', { tiles: [[1, 0]], phase: 'built' });
   terrain.sync(map, structures);
   expect(original.every((image) => !image.destroyed)).toBe(true);
-  expect(images).toHaveLength(4); // Only the newly built high cell needs an Image.
+  expect(highCells(images)).toHaveLength(3); // Only the newly built high cell is new.
 });
 
 it('overrides built/collapsing to two and restores static height on rubble/removal', () => {
@@ -319,16 +353,16 @@ it('overrides built/collapsing to two and restores static height on rubble/remov
   structures.get('house')!.phase = 'collapsing';
   terrain.sync(map, structures);
   terrain.advance(240); // V3 preserves the original opacity after the deterministic transition.
-  expect(images).toHaveLength(2);
+  expect(highCells(images)).toHaveLength(1);
   expect(house.setAlpha).toHaveBeenLastCalledWith(0.5);
   expect(house.setDisplaySize).toHaveBeenLastCalledWith(32, 48);
   structures.get('house')!.phase = 'rubble';
   terrain.sync(map, structures);
   expect(house.destroyed).toBe(true);
-  expect(images).toHaveLength(2);
+  expect(highCells(images.filter((image) => !image.destroyed))).toHaveLength(0);
   structures.clear();
   terrain.sync(map, structures);
-  expect(images).toHaveLength(2);
+  expect(highCells(images.filter((image) => !image.destroyed))).toHaveLength(0);
 });
 
 it('repositions retained high cells when a replacement map changes its origin', () => {
@@ -362,8 +396,8 @@ it('merges a built structure into the terrain cell once and puts rubble in the s
   structures.set('house', { tiles: [[1, 0]], phase: 'built' });
   terrain.redraw(map, structures);
   const house = images[1]!;
-  expect(images.filter((image) => !image.destroyed)).toHaveLength(2);
-  expect(house.setDepth).toHaveBeenLastCalledWith(depthKey(1, 0));
+  expect(highCells(images.filter((image) => !image.destroyed))).toHaveLength(1);
+  expect(house.setDepth).toHaveBeenLastCalledWith(depthKey(1, 0) - 0.01);
   expect(house.setAlpha).toHaveBeenLastCalledWith(0.92);
   structures.get('house')!.phase = 'rubble';
   terrain.sync(map, structures);
@@ -379,7 +413,7 @@ it('merges a built structure into the terrain cell once and puts rubble in the s
   structures.get('house')!.phase = 'built';
   terrain.sync(map, structures);
   expect(marker.destroyed).toBe(true);
-  expect(images.filter((image) => !image.destroyed)).toHaveLength(2);
+  expect(highCells(images.filter((image) => !image.destroyed))).toHaveLength(1);
 });
 
 it('rebuilds moved footprints and clears rubble on removal, empty maps, and shutdown', () => {
@@ -390,7 +424,7 @@ it('rebuilds moved footprints and clears rubble on removal, empty maps, and shut
   structures.get('house')!.tiles = [[0, 1]];
   terrain.sync(map, structures);
   expect(old.destroyed).toBe(true);
-  expect(images.filter((image) => !image.destroyed)).toHaveLength(2);
+  expect(highCells(images.filter((image) => !image.destroyed))).toHaveLength(1);
   structures.get('house')!.phase = 'rubble';
   terrain.sync(map, structures);
   expect(graphics).toHaveLength(1);
@@ -415,7 +449,7 @@ it('draws overlapping ruins only once and lets a newer active footprint cover th
   structures.set('older', { tiles: [[1, 0]], phase: 'rubble' });
   structures.set('new', { tiles: [[1, 0]], phase: 'collapsing' });
   terrain.redraw(map, structures);
-  expect(images).toHaveLength(2);
+  expect(highCells(images)).toHaveLength(1);
   expect(graphics).toHaveLength(0);
   structures.delete('new');
   terrain.sync(map, structures);
@@ -464,19 +498,39 @@ it('drops the high block immediately on rubble and fades only the low marker', (
   terrain.advance(240);
 });
 
-it('shares a fixed height texture across differently colored cells and preserves their tints', () => {
-  const { terrain, map, structures, images, textures } = setup([2, 2, 2, 2]);
+it('gives each high cell its own tileset frame while keeping shared side masks', () => {
+  const { terrain, map, structures, textures, images } = setup([2, 2, 2, 2]);
+  textures.set('god-town-16', tileset(2240, 1600));
+  map.ground!.set([1, 2, 141, 140]);
   terrain.redraw(map, structures);
+  // Sides still share one mask texture per height.
   expect([...textures.keys()].filter((key) => key.startsWith('iso-block-'))).toEqual([
     'iso-block-2',
   ]);
-  expect(images.slice(1).every((image) => image.key === 'iso-block-2')).toBe(true);
-  expect(images[1]!.setTint).toHaveBeenLastCalledWith(0x6496c8);
+  // Tops: four distinct gids ⇒ four distinct frames.
+  const tops = topImages(images);
+  expect(new Set(tops.map((image) => image.frame)).size).toBe(4);
+});
+
+it('does not share a top texture between two cells with different gids', () => {
+  const { terrain, map, structures, textures, images } = setup([2, 2, 2, 2]);
+  textures.set('god-town-16', tileset(2240, 1600));
+  map.ground!.set([1, 2, 141, 140]);
+  terrain.redraw(map, structures);
+  const tops = topImages(images);
+  expect(tops[0]!.frame).not.toBe(tops[1]!.frame);
+});
+
+it('keeps side tints per cell while every top carries the same tileset', () => {
+  const { terrain, map, structures, images } = setup([2, 2, 2, 2]);
+  terrain.redraw(map, structures);
+  const sides = highCells(images);
+  expect(sides[0]!.setTint).toHaveBeenLastCalledWith(0x6496c8);
   map.ground![1] = 0;
   terrain.sync(map, structures);
-  expect(images[2]!.setTint).toHaveBeenLastCalledWith(0x6b4f2a);
-  expect(images[1]!.setTint).toHaveBeenLastCalledWith(0x6496c8);
-  expect([...textures.keys()].filter((key) => key.startsWith('iso-block-'))).toHaveLength(1);
+  expect(sides[1]!.setTint).toHaveBeenLastCalledWith(0x6b4f2a);
+  expect(sides[0]!.setTint).toHaveBeenLastCalledWith(0x6496c8);
+  expect([...(terrain['textureKeys'] as Set<string>)]).toHaveLength(1);
 });
 
 it('includes edits in the surface cache and uses the resulting stone layer for a dug high column', () => {
