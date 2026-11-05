@@ -3,13 +3,35 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-04 第二十二轮已收编 · 转述修复已提交）
+## 0. 当前状态（2026-11-05 第二十三轮主树部分已完工 · B2/B3 派 codex）
 
-- **无在飞**。codex 第二十二轮 `1fb935d` 已 `--no-ff` 收编（1 冲突：`memory.md` 取主树版本）。
-  主树转述归因修复已提交（`74fe95c`）。**人工验收待用户亲验**（用户 2026-11-04 明确
-  「我自己验收」——主树只做到浏览器实机跑一轮 + codex 回执独立复核，不代表用户验收通过）。
-  **门禁读数（收编后主树实测）**：pytest **3490P/0F/121S**（457.23s）· ruff/format 403 ·
-  pyright 0/0/0 · client **399P/53F** + 四件 EXIT 0 · 两资产 byte-identical · lock 一致 · 协议 1.14。
+- **主树在飞：无**。第二十三轮主树部分已全部提交（`c7b7d1d` 设计+计划 →
+  `c3e2a2b` 实现收口）。**B2/B3 已派 codex 树**（派单说明在该树 `.orca/talking.txt`），
+  主树待收编复核。
+- **本轮做了什么**（用户验收驱动，原话：世界空空如也 / npc 只会聚集 / llm 除寻路无法执行 /
+  石头等材料不能用 / 主角老说有奇怪气味）：
+  - **A 等距烘焙**（`9b83d79`..`c3e2a2b`）：真实 tileset 像素烘进地面画布（`tile-projection.ts`
+    新增）；高格顶面注册 `tile-<gid>` 帧。验收截图三档均见桃花林/草地/石阶/水面。
+  - **B1 气味**（`3e915b5`/`4bea378`）：`SMELL_SOURCE_STRENGTH=0.04` + 新增独立旋钮
+    `smell_floor=0.08`（与 `hearing_floor` 解耦）；`narration_cache.py` 跨帧抑制重复气味行。
+    实测：聚集 50 人 50/50 可闻，稀疏 0/10，独行 0.0628 不可闻。
+  - **B4 主体**（`6a008fa`）：prompt 里 `96×96` → **`140×100`**；集合差测试钉死
+    `IntentAction - M1_SUPPORTED_ACTIONS == {demolish, use}`。`take`/`give` 按用户裁定单列。
+  - **两处实机缺陷**（都不是计划里的）：① 心声/街谈巷议面板每次重连整屏重复——
+    `full_snapshot.monologue_history` 被逐条追加，改为 `onMonologueHistory` +
+    `replaceMonologues/replaceChatter` 整组替换（`d95696e`）；② 脏矩形裁剪只有 4×4 图的
+    等价测试（脏矩形≈整幅=没测），补 16×16 图回归钉（`c3e2a2b`）。
+  - **门禁**：pytest **3503P/121S** · ruff/format 全过 · pyright **0/0/0** ·
+    client typecheck/eslint/prettier EXIT 0 · vitest **423P/56F** · 两资产 byte-identical ·
+    协议 **1.14 未动** · 拾取与基线逐项相同（448/448 · 3947/3947 · 7141/7373）。
+- **🚨 本轮事故（已处置）**：`sim/api/main.py:69` 硬编码 `WORLD_DB_PATH = Path("world.db")`，
+  **不读同名环境变量**。用 `WORLD_DB_PATH=<临时路径> uv run uvicorn` 起验收后端，实际写的是
+  真实档 48 分钟（14:03–14:51，+1,274,454 events、tick 66000→309910、快照 2→12）。
+  已按 `seq 341740` 边界回滚：events **341,740** / snapshots 1 / knowledge 62 /
+  relationships 151（按事件重放重建，值与存库 83/83 零误差）/ npc_memories 384；
+  `integrity_check: ok`，`restore_world` 实测恢复 **tick 66000 / 54 实体**。
+  备份保留：`world.db.bak-20261105-203825`（回滚前）、`world.db.polluted-20261105-150143`（取证）。
+  **下次起验收后端：`cd` 进空目录，或 monkeypatch `main.WORLD_DB_PATH`。**
 - **第二十二轮（codex，土坎拾取）已收编**：`pickVoxel` 增可选第六参 `isBank(x,y)`；
   `WorldScene` 传实时 `collision===0`。只有 h=1 土坎的**实际三道斜纹像素**
   （`|x-2y|<=5 && |3x+4y|<=5`，offset -7/0/7）与高块同池，按 `depthKey+.5` 与绘制同序；
