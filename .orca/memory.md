@@ -412,14 +412,12 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 
 ## 7. ④ codex｜新对话恢复快照
 
-> ⚠️ **本树纪律：memory.md 只改 §7。§0–§6 是主树 2026-10-31 的旧快照，已过期**
-> （里面「在飞第十四轮」「已派第十八轮」等均已完成收编）。当前状态以**本节 +
-> 本树 `.orca/talking.txt`** 为准；主树权威卡是主树那份 `.orca/memory.md`。
+> 本树仅更新 §7，§0–§6 属主树历史快照。先 workflow → 完整 talking → 本节/registry → Git；当前派单以 talking 全文件为准。两树长期并存，codex 本地提交，禁止自行 merge/rebase main 或 push。
 
-【2026-11-04 第二十二轮｜1fb935d已由主树收编；无在飞，等最新派单】基线78e5c09。pickVoxel新增可选isBank(x,y)；WorldScene传当前collision===0，仍用原effectiveHeight。仅height1土坎实际三道斜纹与高块同池按depthKey+.5排序，烘焙顶面空白/侧面/普通地面保留原低池。高块侧面与移动行为不变；生产仅两个client文件+一个真实地图测试文件。收编/空闲状态来自2026-11-04最新talking，恢复时仍须重新核对。
+【2026-11-05 第二十三轮｜已交付，待主树收编】基线c59cb00；B2提交424ec34，B3及建造安全1738e09，协议1.15。职业地标活动/自主建造/材料闭环完成，全门禁与3游戏日真实生产钩子+临时SQL实况通过；无在飞，等主树独立复跑收编。
 
-- **关键裁定**：不能全局深度优先（普通低地面会抢房屋侧面），也不能提升整个土坎顶面（空白处实际显示身后房屋侧面）。斜纹dark quad(-3,1),(-1,2),(3,-1),(1,-2)，offset -7/0/7；等价半平面|x-2y|<=5及|3x+4y|<=5，light inset在内。glyph本身颜色/几何/renderer均未动。旧五参pickVoxel保持旧行为；独立脚本要传第六参collision谓词，生产场景已接入。pickGround/WALK_HEIGHT/groundTarget/INTERP_MS与基线逐字一致，见freeze-check.json。
-- **实测/口径**：原始真实地图bank1568，前景高块遮挡1120，未遮挡448：149/448→448/448；高块7141/7373不变；可走3947/3947不变。派单7371/3949是另一运行态分母，本轮坚持同张未改静态图前后比较。派单示例(91,30)实际被更高depth的(92,30)/(92,31)覆盖，正确仍选(92,31)；E2E用真正可见且旧版误选的(99,31)。不改资产求计数。
-- **TDD/门禁**：新增real-map-picking.test.ts7例，初始3F/3P（299漏选、20,3错成19,3、Scene发错dig_start）；审查补1条真实side RED后修正glyph范围，最后7文件49P。完整client360P/0F/0S/49files2.14s，typecheck/lint/prettier/protocol全EXIT0。独立审查最终0Critical/Important/Minor（原1Important已修；独立55P、12545斜纹点与33936真实重叠点验证）。后端未改，按派单未跑pytest，协议1.14/共享/包锁/地图/生成器/DESIGN/registry/迷雾未动。
-- **真实E2E/隔离坑**：ms-playwright headless，独占私有15222/18022；显式新临时库同时隔离main.WORLD_DB_PATH、anchors._anchor_store、settings._profile_store，空profile/providerNone防模型调用。仅审计Vite配置重绑WS URL，不改生产runtime。实际runtime.requestMove+服务端寻路到99,32后鼠标长按99,31，WS请求99,31、voxelEdits只新增99,31（dig/gid0/height0）、土0→1石0→0、pageErrors空。进程均已收尾，真world.db未碰。等待用同步谓词轮询预先导入的真实mirror引用；别让异步等待假到位。
-- **交接/恢复**：证据.orca/audits/round22-2026-11-04/{plan.md,progress.md,gates.json,review.md,baseline.json,after-final.json,freeze-check.json,e2e-verified.log}，E2E截图/JSON在e2e-fnib_apm/。旧轮git log --oneline -- .orca/memory.md（第二十一78e5c09、第二十bb0647e+3012063、十八8b6b702/十九e28e144）。不重造主树D1-D6/ae20518等已交付修复；主树新增74fe95c的转述speaker归因本树不含，也别重造。恢复workflow→完整talking→本节/registry→Git；新单可追加文末，不能只读文件头便判断空闲，确认全文件无新单再等待。CodeGraph显式本树projectPath、uv/UTF8、保存原命令退出码；talking永不add，仅本地codex Conventional Commit不推送/不同步main，i-have-adhd持续。
+- **B2**：新landmarks.py单源10地标含中文名/语义标签，主角文案不再漏5处；职业动作9站点，不新增/改序8职业，村塾不指派。home_base_of保留睡眠/出生/本区聊天；日间wander围绕当前片区中心半径12，scatter4与arrival4分开。执行层查钱/空地/需求/忙工地后向runtime.tick注入bonus_of，选build时补x/y再写NPC_ACT；创世50人每人15文coin.grant，冷启动重放不重发；先start再扣40，无静默退账。
+- **建造安全**：独立审查实图(12,69)唯一邻格(13,69)被棚封死，1Important已修。BuildRuntime.can_start以候选footprint外沿连通检查保留原可走区域，NPC选址还查可达并避开人/旧路径/地标4格邻域。完工有人占格则等待；旧路径穿新墙以MOVE停止。4条RED→GREEN，相关74P；独立审查另43P，零遗留问题。
+- **B3/用户裁定**：请求material可选缺省earth，放土/石/木=h1/h2/h3且均阻挡；新放置块挖一次返原料一份并恢复可走h1，放土不造石、放木不倍增。天然多层格高度递减而保留记录材质，h1地面为earth。_materials与_placed从已有VOXEL_EDITED恢复，TILE_CHANGED投影带material；HUD选材/空库存禁选/阻挡轮廓预览，Scene→bridge→runtime→WS全接。协议八处1.15、openapi_ext与shared快照两schema手改相等、protocol.ts由快照生成；不改SQL schema/依赖/包锁/冻结基线。
+- **验证**：pytest notbench3427P/121既有S/72benchDeselected，453.95s，EXIT0；8warnings=2依赖弃用+4旧迁移子进程编码线程警告+2Pydantic弃用，UTF8单跑旧迁移1P/0warnings。client365P/50files；Ruff399files、Pyright0E/0W、typecheck/lint/prettier/protocol/两资产/uv-lock全EXIT0。真实生产hooks+SQL3日259200tick/807.46s：开工2(54320、227120)/完工1，动作站点9、各区distinct7/8/9/8/7，忙工地失败独白0，538笔coin事件与SQL重放均等于50人实况余额。MOVE覆盖10地标邻域含偶然靠近村塾，不是给村塾指派职业。真实网关三材料闭环含石/木2次冷启动通过。
+- **交接**：证据.orca/audits/round23-2026-11-05/{plan.md,progress.md,gates.json,review.md,live-result.json,material-result.json}；实况脚本live_probe.py/material_probe.py，每次都显式新建审计私库并隔离world/anchor/profile，禁真world.db（本树已坏）、浏览器与付费模型未跑，不把此结果称为视觉/旧真库存档验收。收编保留主树B1叙事缓存、74fe95c转述speaker归因、ensure_schema等未同步改动。本树仅改本节；talking永不add；uv/UTF8、保留原命令退出码；CodeGraph先用显式本树projectPath。旧轮快照走git log -- .orca/memory.md（第二十二c59cb00/1fb935d；第二十一78e5c09；更早不重做）；i-have-adhd持续。
