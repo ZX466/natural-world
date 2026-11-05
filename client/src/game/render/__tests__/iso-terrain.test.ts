@@ -815,6 +815,46 @@ it('does not upload ground pixels for phase-only or high-only changes', () => {
   expect(canvases.length - canvasCount).toBeLessThanOrEqual(1); // At most the shared h=3 texture.
 });
 
+it('matches a fresh full bake on a map large enough for the clip to bite', () => {
+  // The 4×4 fixtures above bake a canvas the dirty rect nearly covers, so they
+  // pass even if the clip is wrong. A 16×16 map puts the edit far from the
+  // border, where a stale or under-sized rect leaves an unpainted hole.
+  const side = 16;
+  const heights = new Array<number>(side * side).fill(0);
+  for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) heights[y * side + x] = (x + y) % 4;
+
+  const live = setup(heights, side, side, true);
+  const edits = new Map<
+    string,
+    { x: number; y: number; action: 'dig' | 'place'; gid: number; height: number }
+  >();
+  live.terrain.redraw(live.map, live.structures, edits, 0);
+  const original = live.textures.get('iso-ground-composite');
+  const canvasWidth = (side + side) * 16;
+
+  // Edit cells whose neighbours differ in height: a low cell beside a high one,
+  // a high cell becoming low, and a cell in the middle of the map.
+  const snapshots = [
+    [{ x: 7, y: 7, action: 'place' as const, gid: 0, height: 2 }],
+    [{ x: 8, y: 7, action: 'dig' as const, gid: 1, height: 1 }],
+    [{ x: 7, y: 8, action: 'place' as const, gid: 0, height: 2 }],
+    [{ x: 8, y: 8, action: 'dig' as const, gid: 1, height: 1 }],
+    [],
+  ];
+  for (const [i, snapshot] of snapshots.entries()) {
+    edits.clear();
+    for (const row of snapshot) edits.set(`${row.x},${row.y}`, row);
+    live.terrain.sync(live.map, live.structures, edits, i + 1);
+    // The incremental path must keep the same texture object (no full re-bake).
+    expect(live.textures.get('iso-ground-composite')).toBe(original);
+    const reference = setup(heights, side, side, true);
+    reference.terrain.redraw(reference.map, reference.structures, edits);
+    const actual = live.canvases.find((c) => c.width === canvasWidth)!.ctx.pixels!();
+    const expected = reference.canvases.find((c) => c.width === canvasWidth)!.ctx.pixels!();
+    expect(actual, `large-map edit ${i}`).toEqual(expected);
+  }
+});
+
 it('matches a fresh full bake through clipped dig/place, low/high transitions and edge edits', () => {
   const heights = [0, 1, 2, 3, 1, 0, 1, 2, 1, 1, 0, 1, 3, 2, 1, 0];
   const live = setup(heights, 4, 4, true);
