@@ -49,4 +49,29 @@ describe('uiStore 街谈巷议（批次 D10/D12）', () => {
     expect(useUiStore.getState().monologues).toEqual([{ form: 'thought', content: '心里话' }]);
     expect(useUiStore.getState().chatter).toEqual([{ name: '李阿婆', content: '街上的嘟囔' }]);
   });
+
+  it('replaceChatter 整组替换：重连快照不叠加重复行', () => {
+    useUiStore.getState().pushChatter('赵铁柱', '先说的一句。');
+    useUiStore.getState().pushChatter('李阿婆', '街上很静。');
+    // 快照带的是「最近 N 条」的完整投影，不是增量：重复回放会让同一句叠两遍。
+    useUiStore.getState().replaceChatter([
+      { name: '赵铁柱', content: '先说的一句。' },
+      { name: '李阿婆', content: '街上很静。' },
+    ]);
+    expect(useUiStore.getState().chatter).toEqual([
+      { name: '赵铁柱', content: '先说的一句。' },
+      { name: '李阿婆', content: '街上很静。' },
+    ]);
+  });
+
+  it('replaceChatter 保留环形上限', () => {
+    const many = Array.from({ length: CHATTER_CAP + 3 }, (_, i) => ({
+      name: null,
+      content: String(i),
+    }));
+    useUiStore.getState().replaceChatter(many);
+    const chatter = useUiStore.getState().chatter;
+    expect(chatter).toHaveLength(CHATTER_CAP);
+    expect(chatter[chatter.length - 1]?.content).toBe(String(CHATTER_CAP + 2));
+  });
 });

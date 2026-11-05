@@ -80,6 +80,18 @@ class Runtime {
           useUiStore.getState().pushMonologue(msg.form, msg.content);
         }
       },
+      onMonologueHistory: (history) => {
+        // 重连/读档快照的心声历史：**整组替换**，不逐条追加。
+        // 快照带的是最近 N 条的完整投影；按增量喂会每重连一次整屏重复
+        //（2026-11-05 实机截图：两条一模一样的气味独白）。
+        // 两面板分流口径与 onMonologue 一致：bubble → 街谈巷议，其余 → 心之声。
+        // 气泡不重放（历史是面板文本，不是此刻正在冒的头顶气泡）。
+        const store = useUiStore.getState();
+        const chatter = history.filter((f) => f.form === 'bubble');
+        const monologues = history.filter((f) => f.form !== 'bubble');
+        store.replaceChatter(chatter.map((f) => ({ name: f.name ?? null, content: f.content })));
+        store.replaceMonologues(monologues.map((f) => ({ form: f.form, content: f.content })));
+      },
       onImpulseFeedback: (msg) => {
         const store = useUiStore.getState();
         store.setLastImpulseCue(msg.cue);

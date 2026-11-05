@@ -33,6 +33,27 @@ describe('uiStore 叙事状态（批次 A）', () => {
     expect(before).not.toBe(after);
   });
 
+  it('replaceMonologues 整组替换：重连快照不叠加重复行', () => {
+    useUiStore.getState().pushMonologue('thought', '这句是重连前的。');
+    // full_snapshot 带的是最近 N 条完整投影；按增量追加 = 同一句出现两遍
+    //（实机截图实证：心声面板两条一模一样的气味独白）。
+    useUiStore.getState().replaceMonologues([{ form: 'thought', content: '这句是重连前的。' }]);
+    expect(useUiStore.getState().monologues).toEqual([
+      { form: 'thought', content: '这句是重连前的。' },
+    ]);
+  });
+
+  it('replaceMonologues 保留环形上限', () => {
+    const many = Array.from({ length: MONOLOGUE_CAP + 3 }, (_, i) => ({
+      form: 'thought' as const,
+      content: String(i),
+    }));
+    useUiStore.getState().replaceMonologues(many);
+    const monologues = useUiStore.getState().monologues;
+    expect(monologues).toHaveLength(MONOLOGUE_CAP);
+    expect(monologues[monologues.length - 1]?.content).toBe(String(MONOLOGUE_CAP + 2));
+  });
+
   it('环形上限：超过 MONOLOGUE_CAP 丢最旧', () => {
     for (let i = 0; i <= MONOLOGUE_CAP; i += 1) {
       useUiStore.getState().pushMonologue('thought', String(i));

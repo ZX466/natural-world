@@ -8,7 +8,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { WsCallbacks } from '../ws';
 import { WsClient } from '../ws';
-import type { WorldMirror } from '../../game/world-mirror';
+import { WorldMirror } from '../../game/world-mirror';
 
 function makeClient() {
   const cb: WsCallbacks = {
@@ -16,11 +16,12 @@ function makeClient() {
     onSnapshot: vi.fn(),
     onDelta: vi.fn(),
     onMonologue: vi.fn(),
+    onMonologueHistory: vi.fn(),
     onImpulseFeedback: vi.fn(),
     onError: vi.fn(),
     onControlAck: vi.fn(),
   };
-  const client = new WsClient('ws://test', {} as WorldMirror, cb);
+  const client = new WsClient('ws://test', new WorldMirror(), cb);
   // dispatch 是私有方法；单测经类型断言直调（帧 JSON 字符串入）
   const dispatch = (raw: string): void =>
     (client as unknown as { dispatch(raw: string): void }).dispatch(raw);
@@ -119,5 +120,45 @@ describe('WsClient dispatch 叙事消息（批次 A）', () => {
     expect(cb.onMonologue).not.toHaveBeenCalled();
     expect(cb.onImpulseFeedback).not.toHaveBeenCalled();
     expect(cb.onError).not.toHaveBeenCalled();
+  });
+
+  it('full_snapshot 的心声历史走 onMonologueHistory 整组替换，不逐条重放', () => {
+    const { cb, dispatch } = makeClient();
+    const history = [
+      {
+        type: 'monologue',
+        channel: 'narrative',
+        v: '1.14',
+        ws_seq: 0,
+        form: 'thought',
+        content: '第一句',
+      },
+      {
+        type: 'monologue',
+        channel: 'narrative',
+        v: '1.14',
+        ws_seq: 0,
+        form: 'thought',
+        content: '第二句',
+      },
+    ];
+    dispatch(
+      JSON.stringify({
+        type: 'full_snapshot',
+        channel: 'render',
+        v: '1.14',
+        ws_seq: 0,
+        actors: [],
+        lights: [],
+        structures: [],
+        map: { w: 140, h: 100, tileset: 'linhe-town' },
+        time: { day: 1, hour: 5, minute: 10, phase: 'dawn', is_market_day: false },
+        monologue_history: history,
+      }),
+    );
+    // 逐条重放会让调用方无从区分「历史」与「新发生」——面板每重连一次就整屏重复。
+    expect(cb.onMonologue).not.toHaveBeenCalled();
+    expect(cb.onMonologueHistory).toHaveBeenCalledTimes(1);
+    expect(cb.onMonologueHistory).toHaveBeenCalledWith(history);
   });
 });

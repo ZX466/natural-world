@@ -149,7 +149,8 @@ class TestWiring:
         # 嗅觉场跨 tick 累积；单 tick 起步浓度接近 0。用同一张图推进到稳态
         # （真实生产里场常驻，这正是一帧帧累积的结果）。
         tile_map = self._map()
-        for _ in range(30):
+        frames, tile_map = self._step(self._state(), tile_map)
+        for _ in range(29):
             frames, tile_map = self._step(self._state(), tile_map)
         frame = frames["rt-" + __import__("hashlib").sha256(b"alice").hexdigest()[:12]]
         smell_obs = [ob for ob in frame.observations if ob.channel is Channel.SMELL]

@@ -88,7 +88,12 @@ interface UiState {
   recordCombatEvent: () => void;
   setLastImpulseCue: (cue: string | null) => void;
   pushMonologue: (form: MonologueForm, content: string) => void;
+  /** 整组替换（重连/读档快照的历史投影）。与 push 不同：快照带的是最近 N 条
+   *  的**完整**投影，按增量追加会让同一句叠两遍（实机截图实证）。 */
+  replaceMonologues: (entries: readonly MonologueEntry[]) => void;
   pushChatter: (name: string | null, content: string) => void;
+  /** 同上，街谈巷议面。 */
+  replaceChatter: (entries: readonly ChatterEntry[]) => void;
   setPlans: (plans: PlanDelta[]) => void;
   setImpulseError: (e: string | null) => void;
   setLoadError: (e: string | null) => void;
@@ -128,8 +133,10 @@ export const useUiStore = create<UiState>((set) => ({
   setLastImpulseCue: (lastImpulseCue) => set({ lastImpulseCue }),
   pushMonologue: (form, content) =>
     set((s) => ({ monologues: [...s.monologues, { form, content }].slice(-MONOLOGUE_CAP) })),
+  replaceMonologues: (entries) => set(() => ({ monologues: [...entries].slice(-MONOLOGUE_CAP) })),
   pushChatter: (name, content) =>
     set((s) => ({ chatter: [...s.chatter, { name, content }].slice(-CHATTER_CAP) })),
+  replaceChatter: (entries) => set(() => ({ chatter: [...entries].slice(-CHATTER_CAP) })),
   setPlans: (plans) => set({ plans }),
   setImpulseError: (impulseError) => set({ impulseError }),
   setLoadError: (loadError) => set({ loadError }),

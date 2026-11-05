@@ -61,6 +61,10 @@ export interface WsCallbacks {
   onDelta: (msg: StateDeltaMessage) => void;
   /** 批次 A：narrative 通道独白帧（bubble/thought/plan 三形态） */
   onMonologue?: (msg: MonologueMessage) => void;
+  /** 快照附带的心声历史（重连/读档后重同步）。**整组替换语义**：这是最近 N 条
+   *  的完整投影，不是增量——逐条喂 onMonologue 会让面板每重连一次整屏重复
+   *  （2026-11-05 实机实证：两条一模一样的心声）。 */
+  onMonologueHistory?: (history: readonly MonologueMessage[]) => void;
   /** 批次 A：impulse 乐观反馈（入网即回） */
   onImpulseFeedback?: (msg: ImpulseFeedbackMessage) => void;
   /** 批次 A：协议 error 帧（ref 定位来源；player_impulse 由 runtime 消费） */
@@ -178,11 +182,11 @@ export class WsClient {
         }
         this.mirror.applyStructures(msg.structures ?? [], true); // 全量替换，包括空快照
         if (msg.time) worldClock.apply(msg.time); // M7-R3：时钟权威帧
-        // 2026-10-11 心声历史：重启/重连面板不空（后端带最近 20 条，逐条回放）
+        // 2026-10-11 心声历史：重启/重连面板不空（后端带最近 20 条）。
+        // 2026-11-05 修：这是**重同步**（完整投影），交给消费方整组替换。
+        // 逐条重放曾让每次重连/读档把同一句叠一遍（实机截图两条同句心声）。
         if (msg.monologue_history) {
-          for (const frame of msg.monologue_history) {
-            this.cb.onMonologue?.(frame as MonologueMessage);
-          }
+          this.cb.onMonologueHistory?.(msg.monologue_history as readonly MonologueMessage[]);
         }
         this.cb.onSnapshot(msg);
         break;
