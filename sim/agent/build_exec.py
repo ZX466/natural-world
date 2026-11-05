@@ -63,6 +63,10 @@ class BuildRuntime:
     def build_cost(self) -> int:
         return BUILD_COST_COINS
 
+    @property
+    def busy(self) -> bool:
+        return self._site is not None
+
     def reset(self) -> None:
         """丢弃内存工地账本（读档=分叉时调用）。
 

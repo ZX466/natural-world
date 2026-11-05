@@ -244,6 +244,10 @@ async def build_loop() -> tuple[TickLoop, Any]:
     spawn_of.update({"cat_grey": (99, 52), "dog_black": (101, 52), "raven": (101, 53)})
     for eid in GENESIS_ENTITIES:
         loop.issue_move(eid, [(0, 0), spawn_of[eid]])
+    from sim.core.events import coin_grant_event
+
+    for npc_id in roster:
+        loop.enqueue(coin_grant_event(0, npc_id, 15, note="genesis:household"))
     loop.advance_frame(1.0)
     return loop, store
 
@@ -828,6 +832,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         _cold_events = await NpcStore(store, branch_id=current_branch).read_branch_history()
         coin_ledger.restore_from_events(_cold_events)
         fire_runtime.restore_from_events(_cold_events)
+    else:
+        coin_ledger.restore_from_events(event.to_store_dict() for event in loop.pending_events)
 
     def _fire_tick_hook(state: Any, tick: int) -> list[Any] | None:
         events: list[Any] = []
@@ -1072,11 +1078,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # 2026-10-12「只心声不动」修复：[处境] 附可去地标表——模型此前
             # 不知道任何坐标（[计划] 恒空、target_pos 无从填起），输出收敛
             # wait/短移=行动面空转。地标=戏内地点名+坐标（戏内事实可出站）。
-            _landmarks = (
-                "你知道这些去处：药铺（100,53，你的铺子）、染坊市集（72,52）、"
-                "桃门（15,18）、溪桥（66,19）、梯田（122,19）、客栈院（44,53）。"
-                "想去哪就 move_to 它的坐标。"
-            )
+            from sim.content.landmarks import landmarks_text
+
+            _landmarks = landmarks_text()
             from sim.core.persistence.knowledge_store import KnowledgeStore
             from sim.npc.norms import select_norms
 

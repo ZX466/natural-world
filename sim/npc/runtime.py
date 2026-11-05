@@ -86,6 +86,7 @@ class NpcRuntime:
         context_of: Callable[[str], str] | None = None,
         chat_cooldown_until: dict[str, int] | None = None,
         action_overrides: Mapping[str, str] | None = None,
+        bonus_of: Mapping[str, Mapping[str, float]] | None = None,
     ) -> list[WorldEvent]:
         """推进一 tick：隐藏档重估(+E1 浮现事件) → 需求 → 效用 → 事件批次（顺序固定，可重放）。
 
@@ -159,6 +160,7 @@ class NpcRuntime:
             night_bias=night,
             suppress_chat=suppress_chat,
             schedule_slots=schedule_slots,
+            bonus_of=bonus_of,
         )
 
         # 3. 事件产出：params 只带白名单键（eat/rest/wander/move 无参数动作 → 空 params）
