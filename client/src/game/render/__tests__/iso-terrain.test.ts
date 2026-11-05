@@ -572,6 +572,17 @@ it('does not share a top texture between two cells with different gids', () => {
   expect(tops[0]!.frame).not.toBe(tops[1]!.frame);
 });
 
+it('gives an existing high cell a top face once its gid becomes valid', () => {
+  const { terrain, map, structures, textures, images } = setup([2, 2, 2, 2]);
+  textures.set('god-town-16', tileset(2240, 1600));
+  map.ground!.set([0, 0, 0, 0]); // 起始无源像素 ⇒ 不建顶面
+  terrain.redraw(map, structures);
+  expect(topImages(images)).toHaveLength(0);
+  map.ground![1] = 7; // 同一格后来有了有效 gid
+  terrain.sync(map, structures);
+  expect(topImages(images)).toHaveLength(1);
+});
+
 it('keeps side tints per cell while every top carries the same tileset', () => {
   const { terrain, map, structures, images } = setup([2, 2, 2, 2]);
   terrain.redraw(map, structures);

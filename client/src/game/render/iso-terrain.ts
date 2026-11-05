@@ -347,13 +347,8 @@ export class IsoTerrain {
     const base = isoProject(x, y, 0, bounds);
     if (view === undefined) {
       const side = this.scene.add.image(base.sx, base.sy + ISO.TH / 2, texture).setOrigin(0.5, 1);
-      const top =
-        topFrame === null
-          ? null
-          : this.scene.add
-              .image(base.sx, base.sy - h * ISO.HH, TILESET_KEY, topFrame)
-              .setOrigin(0.5, 0.5);
-      view = { side, top, texture, phase };
+      // The top is created by the branch below, so a later gid change reuses one path.
+      view = { side, top: null, texture, phase };
       this.blocks.set(key, view);
     } else if (view.texture !== texture) {
       view.side.setTexture(texture);
@@ -363,7 +358,21 @@ export class IsoTerrain {
     // The mask already contains its own top face, so the side keeps its full height.
     view.side.setDisplaySize(ISO.TW, h * ISO.HH + ISO.TH).setDepth(depthKey(x, y) - 0.01);
     view.side.setTint(color);
-    if (view.top !== null && topFrame !== null) {
+    if (topFrame === null) {
+      // A gid that was invalid can become valid in place; drop the stale top.
+      if (view.top !== null) {
+        this.transitions.delete(view.top);
+        view.top.destroy();
+        view.top = null;
+      }
+    } else if (view.top === null) {
+      view.top = this.scene.add
+        .image(base.sx, base.sy - h * ISO.HH, TILESET_KEY, topFrame)
+        .setOrigin(0.5, 0.5)
+        .setDisplaySize(ISO.TW, ISO.TH)
+        .setDepth(depthKey(x, y));
+      view.top.setAlpha(view.side.alpha);
+    } else {
       view.top
         .setTexture(TILESET_KEY, topFrame)
         .setPosition(base.sx, base.sy - h * ISO.HH)
