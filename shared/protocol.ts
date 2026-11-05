@@ -668,6 +668,8 @@ export type components = {
       readonly action: 'dig' | 'place';
       readonly gid: number;
       readonly height: number;
+      /** @enum {string} */
+      readonly material?: 'earth' | 'stone' | 'wood';
       readonly x: number;
       readonly y: number;
     };
@@ -683,6 +685,8 @@ export type components = {
       readonly action: 'dig_start' | 'dig_cancel' | 'place';
       /** @enum {string} */
       readonly channel: 'render';
+      /** @enum {string} */
+      readonly material?: 'earth' | 'stone' | 'wood';
       /**
        * @description discriminator enum property added by openapi-typescript
        * @enum {string}

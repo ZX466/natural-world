@@ -1,8 +1,10 @@
 """Round 23: meaningful destinations, bounded travel and real construction."""
 
 import json
+from collections import deque
 from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -56,7 +58,7 @@ def test_wandering_uses_current_district_and_rest_still_returns_home():
     )
     event = plan_npc_move(state, "villager_02", "wander", pf, seed=42, tick=7)
     assert event is not None
-    x, y = event.payload["goal"]
+    x, y = cast("tuple[int, int]", event.payload["goal"])
     assert abs(x - 124) + abs(y - 52) <= 12
     assert _site_anchor_of("rest", "villager_02") == home_base_of("villager_02")
 
@@ -140,7 +142,9 @@ def test_real_l1_chooses_a_buildable_site_and_records_the_debit_once():
         for event in events
         if event.event_type is EventKind.NPC_ACT and event.payload["action"] == "build"
     ]
-    assert len(acts) == 1 and set(acts[0].payload["params"]) == {"x", "y"}
+    assert len(acts) == 1
+    assert isinstance(acts[0].payload["params"], dict)
+    assert set(acts[0].payload["params"]) == {"x", "y"}
     grants = [event for event in events if event.event_type is EventKind.COIN_GRANT]
     assert len(grants) == 1 and grants[0].payload["delta"] == -40
     assert sorted(ledger.balance_of(nid) for nid in runtime.profiles) == [0, 40]
@@ -204,6 +208,90 @@ def test_failed_start_does_not_debit_then_refund(monkeypatch):
     events = build_action_events(state, "villager_01", pos, tick=2, runtime=build, ledger=ledger)
     assert changes == []
     assert not any(event.event_type is EventKind.COIN_GRANT for event in events)
+
+
+def test_autonomous_build_does_not_isolate_a_real_map_dead_end():
+    runtime, state, pf, ledger, build = builder_fixture()
+    # This cell has exactly one walkable neighbor, (13,69). The former chosen
+    # footprint (13,68)..(14,69) sealed it permanently at completion.
+    pos = (12, 69)
+    state = state.model_copy(
+        update={"entities": {"villager_01": EntityState(entity_id="villager_01", pos=pos)}}
+    )
+    events = npc_events_for_tick(
+        runtime, state, 30_000, pf, seed=42, coin_ledger=ledger, build_runtime=build
+    )
+    started = any(event.event_type is EventKind.STRUCTURE_STARTED for event in events)
+    build.on_tick(30_000 + build.active_duration())
+    reached: set[tuple[int, int]] = {pos}
+    todo: deque[tuple[int, int]] = deque([pos])
+    while todo:
+        x, y = todo.popleft()
+        for neighbor in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+            if neighbor not in reached and build.tile_map.is_walkable(*neighbor):
+                reached.add(neighbor)
+                todo.append(neighbor)
+    assert len(reached) == 3947 - (4 if started else 0)
+
+
+def test_explicit_build_rejects_a_footprint_that_cuts_existing_access():
+    from sim.npc.build_action import build_action_events
+
+    _, state, _, ledger, build = builder_fixture()
+    state = state.model_copy(
+        update={"entities": {"villager_01": EntityState(entity_id="villager_01", pos=(12, 69))}}
+    )
+    events = build_action_events(
+        state, "villager_01", (13, 68), tick=30_000, runtime=build, ledger=ledger
+    )
+    assert not any(event.event_type is EventKind.STRUCTURE_STARTED for event in events)
+    assert not any(event.event_type is EventKind.COIN_GRANT for event in events)
+    assert ledger.balance_of("villager_01") == 40
+    assert not build.busy
+
+
+def test_completion_waits_until_people_have_left_the_footprint():
+    _, state, _, _, build = builder_fixture()
+    x, y = state.entities["villager_01"].pos
+    assert build.start("villager_01", (x, y), tick=10) is not None
+    due = 10 + build.active_duration()
+    events = build.on_tick(due, occupied={(x, y)})
+    assert not any(event.event_type is EventKind.STRUCTURE_COMPLETED for event in events)
+    assert build.tile_map.is_walkable(x, y)
+    assert build.busy
+    completed = build.on_tick(due + 10)
+    assert any(event.event_type is EventKind.STRUCTURE_COMPLETED for event in completed)
+    assert not build.tile_map.is_walkable(x, y)
+
+
+@pytest.mark.asyncio
+async def test_production_completion_stops_an_existing_path_through_the_new_wall(monkeypatch):
+    import asyncio
+
+    from sim.api import main
+
+    async def idle(*args, **kwargs):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(main, "run_world_driver", idle)
+    async with main.lifespan(main.app):
+        app = main.app
+        _, state, _, _, _ = builder_fixture()
+        x, y = state.entities["villager_01"].pos
+        build = app.state.build_runtime
+        assert build.start("villager_01", (x, y), tick=100) is not None
+        actor = EntityState(entity_id="villager_01", pos=(x + 2, y), path=((x + 1, y), (x, y)))
+        crossing = WorldState(entities={"villager_01": actor})
+        hook = next(
+            hook for hook in app.state.loop._npc_hooks if hook.__name__ == "_build_tick_hook"
+        )
+        events = hook(crossing, 100 + build.active_duration())
+        assert any(event.event_type is EventKind.STRUCTURE_COMPLETED for event in events)
+        stopped = [event for event in events if event.event_type is EventKind.MOVE]
+        assert len(stopped) == 1
+        assert stopped[0].payload["entity_id"] == "villager_01"
+        assert stopped[0].payload["goal"] == [x + 2, y]
+        assert stopped[0].payload["path"] == [[x + 2, y]]
 
 
 @pytest.mark.asyncio

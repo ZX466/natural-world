@@ -11,6 +11,7 @@ async function setup() {
     wsStatus: 'connecting',
     voxelInventory: null as { earth: number } | null,
     voxelError: null as string | null,
+    voxelMaterial: 'earth' as 'earth' | 'stone' | 'wood',
     setWsStatus: vi.fn((s: string) => {
       state.wsStatus = s;
     }),
@@ -49,11 +50,25 @@ it('sends only the declared voxel fields and refuses disconnected editing', asyn
   const { runtime, callbacks, sent, state } = await setup();
   (callbacks.onStatus as (s: string) => void)('open');
   runtime.requestVoxel('place', 2, 3);
-  expect(sent).toEqual([{ type: 'voxel_request', channel: 'render', action: 'place', x: 2, y: 3 }]);
+  expect(sent).toEqual([
+    { type: 'voxel_request', channel: 'render', action: 'place', x: 2, y: 3, material: 'earth' },
+  ]);
   (callbacks.onStatus as (s: string) => void)('closed');
   runtime.requestVoxel('dig_start', 2, 3);
   expect(sent).toHaveLength(1);
   expect(state.voxelError).toBeTruthy();
+});
+
+it('forwards the selected material on placements and keeps dig messages unchanged', async () => {
+  const { runtime, callbacks, sent, state } = await setup();
+  (callbacks.onStatus as (s: string) => void)('open');
+  state.voxelMaterial = 'wood';
+  runtime.requestVoxel('place', 2, 3, 'stone');
+  runtime.requestVoxel('dig_start', 2, 3);
+  expect(sent).toEqual([
+    { type: 'voxel_request', channel: 'render', action: 'place', x: 2, y: 3, material: 'stone' },
+    { type: 'voxel_request', channel: 'render', action: 'dig_start', x: 2, y: 3 },
+  ]);
 });
 
 it('uses voxel_state inventory for the HUD without turning it into impulses', async () => {

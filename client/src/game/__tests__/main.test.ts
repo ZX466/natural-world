@@ -13,6 +13,7 @@ type MoveHandler = (
     x: number;
     y: number;
     action?: 'dig_start' | 'dig_cancel' | 'place';
+    material?: 'earth' | 'stone' | 'wood';
   },
   result?: (accepted: boolean) => void,
 ) => void;
@@ -91,7 +92,9 @@ describe('createGame move_request bridge', () => {
     expect(listeners?.size).toBe(1);
     for (const cb of listeners!) cb({ action: 'dig_start', x: 7, y: 9 });
     const { runtime } = await import('../runtime');
-    expect(runtime.requestVoxel).toHaveBeenCalledWith('dig_start', 7, 9);
+    expect(runtime.requestVoxel).toHaveBeenCalledWith('dig_start', 7, 9, undefined);
+    for (const cb of listeners!) cb({ action: 'place', x: 7, y: 9, material: 'stone' });
+    expect(runtime.requestVoxel).toHaveBeenLastCalledWith('place', 7, 9, 'stone');
     expect(runtime.requestMove).not.toHaveBeenCalled();
   });
 

@@ -520,6 +520,7 @@ _SUB_SCHEMAS.update(
                 "action": {"type": "string", "enum": ["dig", "place"]},
                 "gid": {"type": "integer", "minimum": 0, "maximum": 65535},
                 "height": {"type": "integer", "minimum": 0, "maximum": 3},
+                "material": {"type": "string", "enum": ["earth", "stone", "wood"]},
             },
             "additionalProperties": False,
         },
@@ -560,6 +561,7 @@ _WS_SCHEMAS.update(
             "voxel_request",
             {
                 "action": {"type": "string", "enum": ["dig_start", "dig_cancel", "place"]},
+                "material": {"type": "string", "enum": ["earth", "stone", "wood"]},
                 "x": dict(_VOXEL_POSITION),
                 "y": dict(_VOXEL_POSITION),
             },

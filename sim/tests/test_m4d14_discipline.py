@@ -116,12 +116,12 @@ class TestWanderNearby:
         assert a == b
 
     def test_wander_move_uses_nearby(self) -> None:
-        """wander 动作的位移面走邻域（D16 升级：邻域=本人片区锚点邻域）。"""
-        from sim.npc.sim_exec import _WANDER_RADIUS, home_base_of, plan_npc_move
+        """Round 23: wander remains bounded around the current activity district."""
+        from sim.npc.sim_exec import _WANDER_RADIUS, plan_npc_move
 
         pf = _town_pf()
         state = _state_at(npc_01=(100, 53))
-        home = home_base_of("npc_01")
+        home = (100, 52)
         for i in range(10):
             mv = plan_npc_move(state, "npc_01", "wander", pf, seed=42, tick=1000 + i)
             assert mv is not None
@@ -129,7 +129,7 @@ class TestWanderNearby:
             assert isinstance(raw_goal, (list, tuple)) and len(raw_goal) >= 2
             goal = (int(raw_goal[0]), int(raw_goal[1]))
             dist = abs(goal[0] - home[0]) + abs(goal[1] - home[1])
-            assert dist <= _WANDER_RADIUS, f"wander 目标 {goal} 距定籍点 {dist}（越出邻域）"
+            assert dist <= _WANDER_RADIUS, f"wander 目标 {goal} 距当前片区 {dist}（越出邻域）"
 
     def test_unreachable_returns_none_no_wild_wander(self) -> None:
         """目的地不可达 → None（原地待着）；修前退化为全图闲逛。"""

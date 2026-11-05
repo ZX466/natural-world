@@ -582,8 +582,13 @@ def _build_site_for_tick(
                 for sx, sy in protected
             ):
                 continue
-            if all(pathfinder.tile_map.is_walkable(*pos) for pos in tiles):
-                return {npc_id: (x, y)}
+            if not build.can_start((x, y)):
+                continue
+            try:
+                pathfinder.find(entity.pos, (x, y))
+            except ValueError:
+                continue
+            return {npc_id: (x, y)}
     return {}
 
 

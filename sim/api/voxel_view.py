@@ -11,13 +11,16 @@ _VOXEL_EDITS: dict[tuple[int, int], dict[str, Any]] = {}
 _broadcast: dict[tuple[int, int], dict[str, Any]] = {}
 
 
-def set_voxel_edit(x: int, y: int, action: str, gid: int, height: int) -> None:
+def set_voxel_edit(
+    x: int, y: int, action: str, gid: int, height: int, material: str = "earth"
+) -> None:
     _VOXEL_EDITS[(x, y)] = {
         "x": x,
         "y": y,
         "action": action,
         "gid": gid if height == 1 else 0,
         "height": height,
+        "material": material,
     }
 
 
@@ -43,14 +46,17 @@ def apply_voxel_events(
                 edit.x,
                 edit.y,
                 edit.action,
-                ground_gid(edit.x, edit.y) if height == 1 else 0,
+                ground_gid(edit.x, edit.y) if height == 1 and edit.action == "dig" else 0,
                 height,
+                "earth" if height <= 1 else edit.material_id,
             )
         elif event.event_type is EventKind.TILE_CHANGED:
             tile = TileChangedPayload.model_validate(event.payload)
             old = _VOXEL_EDITS.get((tile.x, tile.y))
             if old is not None:
-                set_voxel_edit(tile.x, tile.y, old["action"], tile.tile_id, old["height"])
+                set_voxel_edit(
+                    tile.x, tile.y, old["action"], tile.tile_id, old["height"], old["material"]
+                )
 
 
 def restore_voxel_edits(

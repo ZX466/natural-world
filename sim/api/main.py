@@ -39,7 +39,13 @@ from sim.api.ws import (
     snapshot_payload,
     ws_auth_token,
 )
-from sim.core.events import EventKind, TileChangedPayload, tile_changed_event, world_create_event
+from sim.core.events import (
+    EventKind,
+    TileChangedPayload,
+    move_event,
+    tile_changed_event,
+    world_create_event,
+)
 from sim.core.persistence.database import create_session_factory, init_database
 from sim.core.persistence.store import SqlEventStore
 from sim.core.rng import RngRegistry
@@ -633,13 +639,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     def _build_tick_hook(state: Any, tick: int) -> list[Any] | None:
         nonlocal tile_map
-        events = build_runtime.on_tick(tick)
+        events = build_runtime.on_tick(
+            tick, occupied={entity.pos for entity in state.entities.values()}
+        )
         if events:
             # TILE_CHANGED → 寻路缓存失效（§14 chunk 失效；图换新实例后
             # pathfinder 需感知——observe_map 对齐新几何）。
             tile_map = build_runtime.tile_map
             app.state.tile_map = tile_map
             pathfinder.observe_map(tile_map)
+            if any(event.event_type is EventKind.STRUCTURE_COMPLETED for event in events):
+                for entity_id, entity in sorted(state.entities.items()):
+                    if any(not tile_map.is_walkable(*pos) for pos in entity.path):
+                        events.append(
+                            move_event(tick, entity_id, entity.pos, entity.pos, (entity.pos,))
+                        )
         return events or None
 
     loop.attach_npc_runtime(_build_tick_hook)
@@ -1450,7 +1464,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 raise result
 
 
-app = FastAPI(title="临河镇 sim", version="1.14", lifespan=lifespan)
+app = FastAPI(title="临河镇 sim", version="1.15", lifespan=lifespan)
 app.include_router(settings_router)
 app.include_router(anchors_router)  # M5-K7：玩家档读路径（落库 → WS 查表集供数）
 

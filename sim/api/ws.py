@@ -88,7 +88,7 @@ logger = structlog.get_logger(__name__)
 #: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
 #: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
 #: PlanDelta 封闭）；1.2 = 批次 E 只读诊断面进协议快照（M6-K2）——登记见 versioning.md §7。
-_PROTOCOL_VERSION = "1.14"
+_PROTOCOL_VERSION = "1.15"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 _VOXEL_RUNTIME: VoxelRuntime | None = None
 
@@ -876,6 +876,7 @@ class VoxelRequestFields(BaseModel):
     action: Literal["dig_start", "dig_cancel", "place"]
     x: int = Field(strict=True, ge=0)
     y: int = Field(strict=True, ge=0)
+    material: Literal["earth", "stone", "wood"] = "earth"
 
 
 def _voxel_bad_target(reason: object) -> dict[str, Any]:
@@ -913,7 +914,7 @@ def _handle_voxel_request(raw: dict[str, Any], loop: TickLoop, owner: ControlSta
             }
         )
         events = _VOXEL_RUNTIME.request(
-            request.action, request.x, request.y, loop.state, owner=owner
+            request.action, request.x, request.y, loop.state, owner=owner, material=request.material
         )
         for event in events:
             loop.enqueue(event)

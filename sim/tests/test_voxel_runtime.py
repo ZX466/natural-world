@@ -292,7 +292,7 @@ def test_place_on_a_walkable_surface_requires_earth_after_each_yield(height, mat
         return
     placed = runtime.request("place", 3, 1, state.model_copy(update={"tick": 130}))
     assert placed[0].payload["material_id"] == "earth"
-    assert placed[0].payload["height"] == 2
+    assert placed[0].payload["height"] == 1
     assert placed[1].payload["material_id"] == "earth"
     assert placed[1].payload["reason"] == "place_consumed"
     commit(placed)
@@ -316,18 +316,18 @@ def stock_events():
 
 
 def test_pending_placements_reserve_target_materials_independently_until_flush():
-    runtime, state, _, _, _, commit = setup_runtime(heights={(3, 1): 2, (4, 1): 2})
+    runtime, state, _, _, _, commit = setup_runtime()
     runtime.observe(stock_events())
-    stone = runtime.request("place", 3, 1, state)
+    stone = runtime.request("place", 3, 1, state, material="stone")
     earth = runtime.request("place", 1, 2, state)
     assert stone[0].payload["material_id"] == "stone"
     assert earth[0].payload["material_id"] == "earth"
     assert runtime.snapshot()["inventory"] == {"earth": 1, "stone": 1, "wood": 1}
     with pytest.raises(VoxelRejected):
-        runtime.request("place", 4, 1, state)
+        runtime.request("place", 4, 1, state, material="stone")
     commit(stone)
     with pytest.raises(VoxelRejected):
-        runtime.request("place", 4, 1, state)
+        runtime.request("place", 4, 1, state, material="stone")
     commit(earth)
     with pytest.raises(VoxelRejected):
         runtime.request("place", 1, 3, state)
@@ -335,13 +335,15 @@ def test_pending_placements_reserve_target_materials_independently_until_flush()
 
 
 def test_restore_discards_pending_reservations_for_every_material():
-    runtime, state, _, _, _, _ = setup_runtime(heights={(3, 1): 2})
+    runtime, state, _, _, _, _ = setup_runtime()
     grants = stock_events()
     runtime.observe(grants)
-    runtime.request("place", 3, 1, state)
+    runtime.request("place", 3, 1, state, material="stone")
     runtime.request("place", 1, 2, state)
     runtime.restore_from_events([event.to_store_dict() for event in grants])
-    assert runtime.request("place", 3, 1, state)[0].payload["material_id"] == "stone"
+    assert (
+        runtime.request("place", 3, 1, state, material="stone")[0].payload["material_id"] == "stone"
+    )
     assert runtime.request("place", 1, 2, state)[0].payload["material_id"] == "earth"
 
 

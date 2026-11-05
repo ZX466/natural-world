@@ -9,6 +9,7 @@ vi.mock('../../store/uiStore', () => ({
     select({
       voxelInventory: data.inventory,
       voxelError: data.error,
+      voxelMaterial: 'earth',
     }),
 }));
 import { VoxelInventory } from '../VoxelInventory';
@@ -40,16 +41,17 @@ it('shows the three nonzero materials as separate ordered rows', () => {
   expect(html).toContain('木 ×4');
   expect(html.indexOf('土 ×2')).toBeLessThan(html.indexOf('石 ×3'));
   expect(html.indexOf('石 ×3')).toBeLessThan(html.indexOf('木 ×4'));
-  expect(html.match(/<p/g)).toHaveLength(3);
+  expect(html.match(/<button/g)).toHaveLength(3);
 });
 
-it('hides zero rows while keeping nonzero optional stock visible', () => {
+it('disables zero rows while keeping nonzero optional stock selectable', () => {
   data.inventory = { earth: 0, stone: 2, wood: 0 };
   data.error = null;
   const html = renderToStaticMarkup(<VoxelInventory />);
   expect(html).toContain('石 ×2');
-  expect(html).not.toContain('土 ×');
-  expect(html).not.toContain('木 ×');
+  expect(html).toContain('土 ×0');
+  expect(html).toContain('木 ×0');
+  expect(html.match(/disabled=""/g)).toHaveLength(2);
 });
 
 it('treats absent optional materials as zero and hides a fully empty bag', () => {

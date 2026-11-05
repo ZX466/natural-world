@@ -22,8 +22,11 @@ sim/api/ws  (FastAPI WebSocket 网关)
 
 ## 2. 信封格式
 
-当前协议 **1.14**：`full_snapshot` / `state_delta` 的可选 `voxel_edits` 行为
-`{x,y,action,gid,height}`；`height` 是服务端提交后的结果高度（必需整数 0..3），
+当前协议 **1.15**：`full_snapshot` / `state_delta` 的可选 `voxel_edits` 行为
+`{x,y,action,gid,height,material?}`；`material` 为 earth/stone/wood，缺省 earth。
+`voxel_request` 的可选 `material` 只在 place 时指定扣料，缺省 earth。
+放土/石/木分别为阻挡的高度 1/2/3；新放置块挖一次返还原材料一份，恢复可走高度 1。
+`height` 是服务端提交后的结果高度（必需整数 0..3），
 客户端直接使用，不按静态高度与最后动作推算。`gid != 0` 只有在 `height == 1` 时才可走；
 `height == 1` 的土坎或结构占格仍可阻挡。库存与挖掘进度仍只通过原有 `voxel_state` 发布。
 

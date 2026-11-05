@@ -10,10 +10,27 @@ from sim.api import main
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_material_contract_is_optional_sealed_and_matches_the_live_schema():
+    from sim.api.ws import VoxelRequestFields
+
+    snapshot = json.loads((ROOT / "shared/openapi.json").read_text(encoding="utf8"))
+    live = main.app.openapi()
+    assert snapshot["info"]["version"] == live["info"]["version"] == "1.15"
+    for name in ("VoxelEdit", "VoxelRequestMessage"):
+        schema = snapshot["components"]["schemas"][name]
+        assert "material" not in schema["required"]
+        assert schema["properties"]["material"] == {
+            "type": "string",
+            "enum": ["earth", "stone", "wood"],
+        }
+        assert live["components"]["schemas"][name] == schema
+    assert VoxelRequestFields(action="place", x=1, y=1).material == "earth"
+
+
 def test_voxel_schemas_match_the_snapshot_without_replacing_the_legacy_source():
     snapshot = json.loads((ROOT / "shared/openapi.json").read_text(encoding="utf8"))
     live = main.app.openapi()
-    assert snapshot["info"]["version"] == "1.14"
+    assert snapshot["info"]["version"] == "1.15"
     names = ("VoxelEdit", "VoxelDig", "VoxelInventory", "VoxelRequestMessage", "VoxelStateMessage")
     for name in names:
         assert live["components"]["schemas"][name] == snapshot["components"]["schemas"][name]
@@ -55,7 +72,7 @@ def test_real_websocket_requires_hello_before_inventory_or_edits(tmp_path, monke
         socket.send_json({"type": "hello", "channel": "session", "token": credentials["token"]})
         receive_until(socket, "hello_ack")
         state, _ = receive_until(socket, "voxel_state")
-        assert state["v"] == "1.14"
+        assert state["v"] == "1.15"
         assert state["inventory"] == {"earth": 0, "stone": 0, "wood": 0}
         assert state["dig"] is None
         assert main.app.state.voxel_runtime.snapshot()["inventory"]["earth"] == 0

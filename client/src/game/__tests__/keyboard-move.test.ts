@@ -197,7 +197,12 @@ it('cancels an old walking goal before a right-click placement', () => {
   emit.mockClear();
   input.handlePointerDown({ ...pointer(5, 4), button: 2 });
   expect(emit.mock.calls[0]).toEqual(['client:move_request', { x: 4, y: 4 }, expect.any(Function)]);
-  expect(emit).toHaveBeenLastCalledWith('client:voxel_request', { action: 'place', x: 5, y: 4 });
+  expect(emit).toHaveBeenLastCalledWith('client:voxel_request', {
+    action: 'place',
+    x: 5,
+    y: 4,
+    material: 'earth',
+  });
   expect(marker.setVisible).toHaveBeenLastCalledWith(false);
 });
 
