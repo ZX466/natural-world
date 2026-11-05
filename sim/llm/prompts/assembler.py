@@ -32,7 +32,7 @@ _REQUIREMENTS_TEXT = (
     "talk_to、investigate、flee、attack、buy、sell、build）、"
     "target_id（可选，要找的人或要买的货，直接说名字或货名：草药/药膏/饭食/米酒）、"
     "target_pos（可选，要去的地点或要施工的地块，格式 [x, y] 的格子坐标；"
-    "镇子是 96×96 的格子，路面和空地能走，屋顶、水塘、树林进不去，"
+    "镇子是 140×100 的格子，路面和空地能走，屋顶、水塘、树林进不去，"
     "坐标要落在能站人的地方）、"
     "params（可选：交手时 posture 取 attack/defend/withdraw/aim/flee/shout），"
     "reason（你为什么这么做，用你自己的话，第一人称，一句话）。"
