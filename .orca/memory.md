@@ -1236,3 +1236,15 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
   pyright 0/0/0、client 四件 EXIT 0、vitest 353P/48F、两资产逐字节、`uv lock --check`、
   协议 1.14。关键回归单跑 98P；fork 39P/1S。codex 自测 3360P 与本树 3457P 的差 = 主树专有提交。
 - **证据**：`.orca/audits/round20-2026-11-03/{plan.md,progress.md,gates.json,review.md,b-report.md}`。
+【2026-11-05 Round23｜codex 交付，主树收编中】基线 c59cb00；B2 `424ec34`，
+B3 + 建造安全 `1738e09`；协议 **1.15**。本节记收编口径，读数以主树独立复跑为准。
+
+- **B2**：新landmarks.py单源10地标含中文名/语义标签，主角文案不再漏5处；职业动作9站点，不新增/改序8职业，村塾不指派。home_base_of保留睡眠/出生/本区聊天；日间wander围绕当前片区中心半径12，scatter4与arrival4分开。执行层查钱/空地/需求/忙工地后向runtime.tick注入bonus_of，选build时补x/y再写NPC_ACT；创世50人每人15文coin.grant，冷启动重放不重发；先start再扣40，无静默退账。
+- **建造安全**：独立审查实图(12,69)唯一邻格(13,69)被棚封死，1Important已修。BuildRuntime.can_start以候选footprint外沿连通检查保留原可走区域，NPC选址还查可达并避开人/旧路径/地标4格邻域。完工有人占格则等待；旧路径穿新墙以MOVE停止。4条RED→GREEN，相关74P；独立审查另43P，零遗留问题。
+- **B3/用户裁定**：请求material可选缺省earth，放土/石/木=h1/h2/h3且均阻挡；新放置块挖一次返原料一份并恢复可走h1，放土不造石、放木不倍增。天然多层格高度递减而保留记录材质，h1地面为earth。_materials与_placed从已有VOXEL_EDITED恢复，TILE_CHANGED投影带material；HUD选材/空库存禁选/阻挡轮廓预览，Scene→bridge→runtime→WS全接。协议八处1.15、openapi_ext与shared快照两schema手改相等、protocol.ts由快照生成；不改SQL schema/依赖/包锁/冻结基线。
+- **验证**：pytest notbench3427P/121既有S/72benchDeselected，453.95s，EXIT0；8warnings=2依赖弃用+4旧迁移子进程编码线程警告+2Pydantic弃用，UTF8单跑旧迁移1P/0warnings。client365P/50files；Ruff399files、Pyright0E/0W、typecheck/lint/prettier/protocol/两资产/uv-lock全EXIT0。真实生产hooks+SQL3日259200tick/807.46s：开工2(54320、227120)/完工1，动作站点9、各区distinct7/8/9/8/7，忙工地失败独白0，538笔coin事件与SQL重放均等于50人实况余额。MOVE覆盖10地标邻域含偶然靠近村塾，不是给村塾指派职业。真实网关三材料闭环含石/木2次冷启动通过。
+- **交接**：证据 `.orca/audits/round23-2026-11-05/{plan.md,progress.md,gates.json,review.md,
+  live-result.json,material-result.json}`；实况脚本 `live_probe.py` / `material_probe.py`，
+  每次显式新建审计私库并隔离 world/anchor/profile。**未跑浏览器与付费模型**，
+  不能当视觉或旧真库存档验收。收编保留主树 B1 叙事缓存、`74fe95c` 转述 speaker 归因、
+  `ensure_schema` 等本树未同步改动。

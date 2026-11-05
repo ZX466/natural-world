@@ -36,8 +36,8 @@ export function createGame(parent: HTMLElement, mirror: WorldMirror): Phaser.Gam
   );
   game.events.on(
     'client:voxel_request',
-    ({ action, x, y }: Pick<VoxelRequestMessage, 'action' | 'x' | 'y'>) => {
-      runtime.requestVoxel(action, x, y);
+    ({ action, x, y, material }: Pick<VoxelRequestMessage, 'action' | 'x' | 'y' | 'material'>) => {
+      runtime.requestVoxel(action, x, y, material);
     },
   );
   return game;

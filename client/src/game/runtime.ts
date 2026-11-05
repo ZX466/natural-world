@@ -199,14 +199,26 @@ class Runtime {
   }
 
   /** V4a 手势只发送编辑意图；库存和完成时刻始终由 sim 决定。 */
-  requestVoxel(action: VoxelRequestMessage['action'], x: number, y: number): void {
+  requestVoxel(
+    action: VoxelRequestMessage['action'],
+    x: number,
+    y: number,
+    material?: VoxelRequestMessage['material'],
+  ): void {
     const state = useUiStore.getState();
     state.setVoxelError(null);
     if (state.wsStatus !== 'open') {
       state.setVoxelError('这会儿动不了土。');
       return;
     }
-    this.ws?.send({ type: 'voxel_request', channel: 'render', action, x, y });
+    this.ws?.send({
+      type: 'voxel_request',
+      channel: 'render',
+      action,
+      x,
+      y,
+      ...(action === 'place' ? { material: material ?? state.voxelMaterial ?? 'earth' } : {}),
+    });
   }
 
   /** 玩家控制（TopBar 倍速按钮）——真实链路发 set_control。 */

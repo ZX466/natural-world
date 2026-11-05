@@ -13,6 +13,7 @@ L1 决策不走 IntentGate（闸门审 LLM 输出；效用函数是确定性代�
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final
 
@@ -117,6 +118,7 @@ def utility_scores_matrix(
     night_bias: bool = False,
     suppress_chat: tuple[bool, ...] | None = None,
     schedule_slots: list[ScheduleSlot] | None = None,
+    bonus_of: Mapping[str, Mapping[str, float]] | None = None,
 ) -> np.ndarray:
     """50 NPC 全量打分：需求加权和 + 外向偏置 → (n_npc, n_actions) float32。
 
@@ -182,6 +184,16 @@ def utility_scores_matrix(
         columns = np.array([model.action_index[slot.action] for slot in schedule_slots], dtype=int)
         scores[np.arange(len(profiles)), columns] += np.float32(0.18)
 
+    # World-aware conditional incentives are supplied by the execution layer.
+    if bonus_of:
+        scores += np.array(
+            [
+                [bonus_of.get(p.npc_id, {}).get(action, 0.0) for action in ACTION_ORDER]
+                for p in profiles
+            ],
+            dtype=np.float32,
+        )
+
     # 决策面节流（2026-10-11）：冷却内的人 chat 列压 -inf——argmax 必落其他列。
     # 布尔掩码向量化（同 P10 红线口径：整列运算，禁逐人 Python 循环）。
     if suppress_chat is not None:
@@ -202,6 +214,7 @@ def evaluate_batch(
     night_bias: bool = False,
     suppress_chat: tuple[bool, ...] | None = None,
     schedule_slots: list[ScheduleSlot] | None = None,
+    bonus_of: Mapping[str, Mapping[str, float]] | None = None,
 ) -> list[UtilityDecision]:
     """批量评估 → 每 NPC 一个 UtilityDecision（argmax；scores 全量随行供审计）。
 
@@ -215,6 +228,7 @@ def evaluate_batch(
         night_bias=night_bias,
         suppress_chat=suppress_chat,
         schedule_slots=schedule_slots,
+        bonus_of=bonus_of,
     )
     best = scores.argmax(axis=1)
     return [

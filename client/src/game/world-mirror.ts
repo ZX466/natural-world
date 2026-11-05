@@ -215,14 +215,21 @@ export class WorldMirror {
         !Number.isInteger(row.height) ||
         row.height < 0 ||
         row.height > 3 ||
-        (row.action !== 'dig' && row.action !== 'place')
+        (row.action !== 'dig' && row.action !== 'place') ||
+        (row.material !== undefined && !['earth', 'stone', 'wood'].includes(row.material))
       )
         continue;
       const key = `${row.x},${row.y}`;
+      const material = row.material ?? 'earth';
       const prior = this.voxelEdits.get(key);
-      if (prior?.action === row.action && prior.gid === row.gid && prior.height === row.height)
+      if (
+        prior?.action === row.action &&
+        prior.gid === row.gid &&
+        prior.height === row.height &&
+        prior.material === material
+      )
         continue;
-      this.voxelEdits.set(key, { ...row });
+      this.voxelEdits.set(key, { ...row, material });
       changed = true;
     }
     this.reapplyVoxelEdits();

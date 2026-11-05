@@ -29,6 +29,7 @@ STATE_EVERY_TICKS = 6
 PLAYER = "chenmo"
 STOCK = "npc:chenmo"
 _MATERIAL_BY_HEIGHT = {1: "earth", 2: "stone", 3: "wood"}
+_HEIGHT_BY_MATERIAL = {material: height for height, material in _MATERIAL_BY_HEIGHT.items()}
 _MATERIAL_LABELS = {"earth": "土", "stone": "石料", "wood": "木料"}
 type Action = Literal["dig", "place"]
 
@@ -68,13 +69,22 @@ class VoxelRuntime:
         self._reserved = dict.fromkeys(_MATERIAL_BY_HEIGHT.values(), 0)
         self._pending: dict[tuple[int, int], tuple[Action, str]] = {}
         self._heights: dict[tuple[int, int], int] = {}
+        self._materials: dict[tuple[int, int], str] = {}
+        self._placed: set[tuple[int, int]] = set()
         self._updates: list[tuple[object | None, dict[str, Any]]] = []
 
     def height_at(self, x: int, y: int) -> int:
         return self._heights.get((x, y), self._height(x, y))
 
     def _observe_height(self, edit: VoxelEditedPayload) -> None:
-        self._heights[(edit.x, edit.y)] = edit.result_height(self.height_at(edit.x, edit.y))
+        pos = (edit.x, edit.y)
+        height = edit.result_height(self.height_at(*pos))
+        self._heights[pos] = height
+        self._materials[pos] = "earth" if height <= 1 else edit.material_id
+        if edit.action == "place":
+            self._placed.add(pos)
+        else:
+            self._placed.discard(pos)
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -114,7 +124,8 @@ class VoxelRuntime:
         height = self.height_at(x, y)
         if height == 0:
             raise VoxelRejected("水面上动不了土。")
-        material = _MATERIAL_BY_HEIGHT.get(height)
+        # Height seeds unedited natural cells only. Edited material is event truth.
+        material = self._materials.get((x, y), _MATERIAL_BY_HEIGHT.get(height))
         if material is None:
             raise VoxelRejected("这处材料辨不清。")
         if self._occupied(x, y):
@@ -123,7 +134,7 @@ class VoxelRuntime:
             raise VoxelRejected("这块地方刚动过，稍等一等。")
         if self._map().is_walkable(x, y) != (action == "place"):
             raise VoxelRejected("这块地方不用再动了。")
-        if action == "place" and height >= 3:
+        if action == "place" and height != 1:
             raise VoxelRejected("这块地方不用再动了。")
         return material
 
@@ -135,6 +146,7 @@ class VoxelRuntime:
         state: WorldState,
         *,
         owner: object | None = None,
+        material: str = "earth",
     ) -> list[WorldEvent]:
         if action == "dig_cancel":
             if not self.cancel(owner):
@@ -143,7 +155,7 @@ class VoxelRuntime:
         if action not in ("dig_start", "place"):
             raise VoxelRejected("这会儿做不了这件事。")
         kind: Action = "dig" if action == "dig_start" else "place"
-        material = self._validate(state, x, y, kind)
+        self._validate(state, x, y, kind)
         if kind == "dig":
             if (
                 self._dig is not None
@@ -155,6 +167,8 @@ class VoxelRuntime:
             self._elapsed = self._reported = 0
             self._notify()
             return []
+        if not isinstance(material, str) or material not in _HEIGHT_BY_MATERIAL:
+            raise VoxelRejected("这处材料辨不清。")
         # Read committed stock, excluding earlier unflushed placement reservations.
         if self._inventory[material] - self._reserved[material] < 1:
             raise VoxelRejected(f"行囊里没有{_MATERIAL_LABELS[material]}了。")
@@ -195,9 +209,13 @@ class VoxelRuntime:
         return [*events, *stopped]
 
     def _edit(self, tick: int, x: int, y: int, action: Action, material: str) -> list[WorldEvent]:
-        height = self.height_at(x, y) + (-1 if action == "dig" else 1)
-        gid = self._ground(x, y) if height == 1 else 0
-        if height == 1 and gid <= 0:
+        if action == "place":
+            height = _HEIGHT_BY_MATERIAL[material]
+        else:
+            # Each placed unit is recovered once, even a height-three wood block.
+            height = 1 if (x, y) in self._placed else self.height_at(x, y) - 1
+        gid = self._ground(x, y) if action == "dig" and height == 1 else 0
+        if action == "dig" and height == 1 and gid <= 0:
             raise VoxelRejected("这处没有能落脚的土面。")
         edit = voxel_edited_event(tick, x=x, y=y, action=action)
         payload = VoxelEditedPayload.model_validate(

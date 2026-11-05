@@ -9,6 +9,8 @@ C5：进度=elapsed/duration 纯函数；格序排序确定（sorted tiles）。
 
 from __future__ import annotations
 
+from collections import deque
+from collections.abc import Collection
 from dataclasses import dataclass
 
 from sim.core.calendar import TICKS_PER_GAME_DAY
@@ -62,6 +64,46 @@ class BuildRuntime:
     @property
     def build_cost(self) -> int:
         return BUILD_COST_COINS
+
+    @property
+    def busy(self) -> bool:
+        return self._site is not None
+
+    def can_start(self, pos: tuple[int, int]) -> bool:
+        """A completed footprint must not split any existing walkable region."""
+        if self.busy:
+            return False
+        tiles = {
+            (pos[0] + dx, pos[1] + dy) for dx in range(BUILD_TILES) for dy in range(BUILD_TILES)
+        }
+        if not all(self.tile_map.is_walkable(*tile) for tile in tiles):
+            return False
+        boundary = {
+            neighbor
+            for x, y in tiles
+            for neighbor in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1))
+            if neighbor not in tiles and self.tile_map.is_walkable(*neighbor)
+        }
+        if len(boundary) <= 1:
+            return True
+        # Only the perimeter can become disconnected when this connected 2x2
+        # footprint is removed. Stop as soon as its surviving neighbors reconnect.
+        first = min(boundary)
+        pending = boundary - {first}
+        seen = {first}
+        todo = deque([first])
+        while todo and pending:
+            x, y = todo.popleft()
+            for neighbor in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                if (
+                    neighbor not in tiles
+                    and neighbor not in seen
+                    and self.tile_map.is_walkable(*neighbor)
+                ):
+                    seen.add(neighbor)
+                    pending.discard(neighbor)
+                    todo.append(neighbor)
+        return not pending
 
     def reset(self) -> None:
         """丢弃内存工地账本（读档=分叉时调用）。
@@ -121,15 +163,13 @@ class BuildRuntime:
 
     def start(self, owner_id: str, pos: tuple[int, int], *, tick: int) -> WorldEvent | None:
         """2×2 选格 → started 事件（None=格不可走/已有工地）。"""
-        if self._site is not None:
+        if not self.can_start(pos):
             return None
         # 行主序生成（y 优先——瓦片语义；schema _canonical_tiles 会再归一化为
         # sorted 元组序，此处序只影响生成序、不影响落库形）。
         tiles = sorted(
             ((pos[0] + dx, pos[1] + dy) for dx in range(BUILD_TILES) for dy in range(BUILD_TILES)),
         )
-        if not all(self.tile_map.is_walkable(x, y) for x, y in tiles):
-            return None
         structure_id = f"structure_{self.seed}_{tick}"
         progress = BuildProgress(
             structure_id=structure_id,
@@ -157,7 +197,7 @@ class BuildRuntime:
             built_by=owner_id,
         )
 
-    def on_tick(self, tick: int) -> list[WorldEvent]:
+    def on_tick(self, tick: int, *, occupied: Collection[tuple[int, int]] = ()) -> list[WorldEvent]:
         """每 tick 推进：checkpoint cadence 到点发 checkpoint；到完工发
         completed + 4 条 tile_changed 并落世界占格（寻路缓存由调用方失效）。"""
         if self._site is None:
@@ -186,7 +226,7 @@ class BuildRuntime:
                     build_rule_version=progressed.build_rule_version,
                 )
             )
-        if progressed.progress >= 1.0:
+        if progressed.progress >= 1.0 and not set(occupied).intersection(site.tiles):
             out.append(
                 structure_completed_event(
                     tick,

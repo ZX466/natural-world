@@ -34,10 +34,9 @@ def target(app, height=3):
     )
 
 
-async def dig(app, pos):
+async def dig(app, pos, *, material="wood"):
     runtime, loop = app.state.voxel_runtime, app.state.loop
     height = runtime.height_at(*pos)
-    material = {1: "earth", 2: "stone", 3: "wood"}[height]
     before = runtime.snapshot()["inventory"][material]
     assert (
         ws.handle_client_message(
@@ -79,7 +78,7 @@ async def place(app, pos):
         is None
     )
     await app.state.flush_for_anchor()
-    assert runtime.height_at(*pos) == 2
+    assert runtime.height_at(*pos) == 1
     assert runtime.snapshot()["inventory"]["earth"] == before - 1
     assert not app.state.tile_map.is_walkable(*pos)
 
@@ -143,18 +142,18 @@ async def test_real_flush_updates_layer_collision_and_conserves_each_material():
         await dig(app, pos)
         assert not app.state.tile_map.is_walkable(*pos)
         await dig(app, pos)
-        await dig(app, bank)
+        await dig(app, bank, material="earth")
         assert not app.state.tile_map.is_walkable(*bank)
         await place(app, pos)
         assert app.state.pathfinder.tile_map is app.state.tile_map
         ns = NpcStore(app.state.store)
         balances = await ns.materialize_material_balances()
-        for material, count in {"earth": 0, "stone": 1, "wood": 1}.items():
-            assert balances[("npc:chenmo", material)] == count
-            assert balances[("world:tile", material)] == -count
+        for material, count in {"earth": 0, "stone": 0, "wood": 2}.items():
+            assert balances.get(("npc:chenmo", material), 0) == count
+            assert balances.get(("world:tile", material), 0) == -count
         rows = await assert_full_replay(app)
         edits = [r for r in rows if r["event_type"] == "voxel.edited"]
-        assert [r["payload"]["height"] for r in edits] == [2, 1, 0, 2]
+        assert [r["payload"]["height"] for r in edits] == [2, 1, 0, 1]
         assert all("inventory" not in row["payload"] for row in rows)
 
 
@@ -183,7 +182,7 @@ async def test_historical_fork_restores_cursor_depth_and_drops_future_layers():
         app = main.app
         anchors = AnchorStore()
         pos, bank = target(app), target(app, 1)
-        await dig(app, bank)
+        await dig(app, bank, material="earth")
         await dig(app, pos)
         expected_heights, expected_stock = heights(app), app.state.voxel_runtime.snapshot()
         old = await save(app, anchors, "保留两层")
@@ -211,7 +210,7 @@ async def test_nested_fork_replay_matches_all_14000_cells_without_sorting_local_
         app = main.app
         anchors = AnchorStore()
         pos, bank = target(app), target(app, 1)
-        await dig(app, bank)
+        await dig(app, bank, material="earth")
         await dig(app, pos)
         parent_target = await save(app, anchors, "父线两层")
         await dig(app, pos)

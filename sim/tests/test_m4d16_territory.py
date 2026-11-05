@@ -190,20 +190,18 @@ class TestPlanMoveTerritory:
         home = home_base_of("villager_01")
         assert abs(goal[0] - home[0]) + abs(goal[1] - home[1]) <= 12
 
-    def test_wander_action_anchored_home(self) -> None:
-        """wander 动作：人在别处 → 走回本片区再溜达（不在当前位置附近游荡）。"""
-        from sim.npc.sim_exec import home_base_of, plan_npc_move
+    def test_wander_action_anchored_current_district(self) -> None:
+        """Round 23: daytime wandering stays near the current district center."""
+        from sim.npc.sim_exec import plan_npc_move
 
         pf = _town_pf()
-        home = home_base_of("villager_02")
+        district = (100, 52)
         # 换图：起点=村广场（新图可走；旧 (5,5) 在新图不可走）
         state = _state_at(villager_02=(100, 53))
         event = plan_npc_move(state, "villager_02", "wander", pf, seed=42, tick=7)
         assert event is not None
         goal = cast("tuple[int, int]", event.payload["goal"])  # payload 值 object → 收窄
-        assert abs(goal[0] - home[0]) + abs(goal[1] - home[1]) <= 12, (
-            "wander 目标应锚定本片区（当前位置只是途经点）"
-        )
+        assert abs(goal[0] - district[0]) + abs(goal[1] - district[1]) <= 12
 
     def test_request_chat_still_cross_territory(self) -> None:
         """request_chat 仍跨片区：目标可以是任意其他实体（社交不缩水）。"""

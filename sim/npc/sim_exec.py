@@ -20,6 +20,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from sim.agent.build_exec import BuildRuntime
+from sim.content.landmarks import LANDMARKS
 from sim.core.events import WorldEvent, move_event, npc_chat_event, npc_monologue_event
 from sim.core.world import EntityState, WorldState
 from sim.npc.contract import HiddenState
@@ -112,16 +113,18 @@ def _cooldown_ticks(npc_id: str) -> int:
 #: eat → 食摊锚点（「做事的地方」是**邻域**而非一格——D12 散点化，
 #: 50 人目的地 distinct 23→40+，最热点 13→≤6 人，聚团定量钉锁死）
 #: 2026-10-12 D6-D8 换图：染坊市集（craft_market anchor，语义对位镇集食摊）
-EAT_SITE: tuple[int, int] = (72, 52)
+EAT_SITE: tuple[int, int] = LANDMARKS["craft_market"].pos
 #: rest → 两宅门前锚点（按 npc_id 哈希选一家；「家」概念随 M4 日程域细化）
 #: 换图：祖屋院（guest_yard）与桃门（peach_gate）侧
 REST_SITES: tuple[tuple[int, int], ...] = ((44, 53), (15, 18))
 #: work → 农田锚点（换图：梯田 terraced_fields）
-WORK_SITE: tuple[int, int] = (122, 19)
+WORK_SITE: tuple[int, int] = LANDMARKS["terraced_fields"].pos
 
 #: 站点散点半径（曼哈顿距离；散点生成在锚点 ±R 内挑可走格）。
 #: 4 = 5×9 邻域（约 30+ 可走格），50 人同拍打散后最热点 ≤6 人。
 _SITE_SCATTER_RADIUS = 4
+# Arrival remains independent of destination scattering and wandering extent.
+_SITE_ARRIVAL_RADIUS = 4
 
 # ---------------------------------------------------------------------------
 # D16 定籍领地（「每个 npc 在固定的区域呆着」——用户验收口径）
@@ -131,11 +134,11 @@ _SITE_SCATTER_RADIUS = 4
 #: signal_hill 瑕疵区；锚点自身可走 + 最小两两距 39.7 实证选优）：
 #: 村广场 / 桃门 / 溪桥 / 客栈院 / 梯田——每区一核（rest=锚点侧）。
 HOME_BASES: tuple[tuple[int, int], ...] = (
-    (100, 52),  # 村广场（village_square，中央对位旧镇集）
-    (15, 18),  # 桃门（peach_gate，西北）
-    (66, 19),  # 溪桥（stream_bridge，北中）
-    (44, 53),  # 客栈院（guest_yard，中西南）
-    (122, 19),  # 梯田（terraced_fields，东北）
+    LANDMARKS["village_square"].pos,
+    LANDMARKS["peach_gate"].pos,
+    LANDMARKS["stream_bridge"].pos,
+    LANDMARKS["guest_yard"].pos,
+    LANDMARKS["terraced_fields"].pos,
 )
 
 
@@ -173,34 +176,18 @@ _TERRITORY_ORDER = {
 }
 
 
-#: 片区 → 本区站点（eat/rest/work 全部落本人片区——不再全镇挤唯一摊）。
-#: 2026-10-12 换图：各站点=本区锚点近旁可走格（eat/rest/work 三表选点
-#: 全部在产物图上实测可走；语义对位随桃花源地标走）。
-_TERRITORY_EAT: dict[tuple[int, int], tuple[int, int]] = {
-    (100, 52): (100, 53),  # 村广场：药铺一带
-    (15, 18): (15, 19),  # 桃门：门内道
-    (66, 19): (66, 20),  # 溪桥：桥头
-    (44, 53): (44, 54),  # 客栈院：院前
-    (122, 19): (121, 20),  # 梯田：田埂
+# Primary work sites and secondary daytime visits; occupation order stays intact.
+_OCCUPATION_SITES = {
+    "农人": ("terraced_fields", "craft_market"),
+    "商贩": ("craft_market", "guest_yard"),
+    "匠人": ("craft_market", "ancestral_hall"),
+    "渔夫": ("stream_bridge", "guest_yard"),
+    "樵夫": ("signal_hill", "craft_market"),
+    "伙计": ("guest_yard", "craft_market"),
+    "杂役": ("archive_room", "village_square"),
+    "艺人": ("village_square", "peach_gate"),
 }
-_TERRITORY_REST: dict[tuple[int, int], tuple[int, int]] = {
-    # 2026-10-12 换图：rest 点=本片区锚点近旁可走格（原「宅门前」随旧图退役；
-    # 选取以锚点 ±2 内邻格语义对位，产物图上实测可走）
-    (100, 52): (100, 53),  # 村广场 → 广场南侧
-    (15, 18): (15, 19),  # 桃门 → 门内道
-    (66, 19): (66, 20),  # 溪桥 → 桥头
-    (44, 53): (44, 54),  # 客栈院 → 院门前
-    (122, 19): (121, 20),  # 梯田 → 田埂
-}
-_TERRITORY_WORK: dict[tuple[int, int], tuple[int, int]] = {
-    # 2026-10-12 换图：work 点=梯田带（terraced_fields 东北区）；非梯田片区
-    # 就近对位——村广场→染坊市集、桃门→门内道、溪桥→桥头、客栈院→院前
-    (100, 52): (72, 52),  # 村广场 → 染坊市集（craft_market）
-    (15, 18): (15, 19),  # 桃门 → 门内道
-    (66, 19): (66, 20),  # 溪桥 → 桥头
-    (44, 53): (44, 54),  # 客栈院 → 院门前
-    (122, 19): (121, 20),  # 梯田 → 田埂（本区即农田）
-}
+
 
 #: D14：动作 → 呈现用 anim 词（前端姿势行选择；villager 素材行序
 #: R0-R3=四向走环 / R4-7=劳作姿势——work/eat/rest/chat 各有站姿差异）。
@@ -272,7 +259,15 @@ def wander_goal(seed: int, tick: int, npc_id: str, w: int, h: int) -> tuple[int,
 
 
 #: D14 闲逛半径（曼哈顿）：闲逛不再横穿小镇——从「家」出门走走就回。
-_WANDER_RADIUS = 6
+_WANDER_RADIUS = 12
+
+
+def _wander_home(pos: tuple[int, int]) -> tuple[int, int]:
+    """Use a fixed district center near the current activity, preventing drift."""
+    return min(
+        (site.pos for key, site in LANDMARKS.items() if key != "old_school"),
+        key=lambda center: abs(pos[0] - center[0]) + abs(pos[1] - center[1]),
+    )
 
 
 def wander_near(
@@ -307,18 +302,19 @@ def wander_near(
 
 
 def _site_anchor_of(action: str, npc_id: str, *, target: str = "") -> tuple[int, int] | None:
-    """动作 → 站点锚点（D16 定籍制：eat/rest/work 全部落**本人片区**站点；
-    None=无站点）。片区锚点表缺项时退回全镇站点（fail-safe 不炸）。
-    """
+    """Occupation-led daytime sites; sleep retains the registered home."""
     if target == "market" and action in ("move", "work"):
         return MARKET_SITE
-    home = home_base_of(npc_id)
-    if action == "eat":
-        return _TERRITORY_EAT.get(home, EAT_SITE)
     if action == "rest":
-        return _TERRITORY_REST.get(home, REST_SITES[0])
-    if action == "work":
-        return _TERRITORY_WORK.get(home, WORK_SITE)
+        return home_base_of(npc_id)
+    if action in ("eat", "work"):
+        from sim.content.villagers import OCCUPATIONS, VILLAGER_IDS
+
+        if npc_id not in VILLAGER_IDS:
+            return EAT_SITE if action == "eat" else WORK_SITE
+        occupation = OCCUPATIONS[VILLAGER_IDS.index(npc_id) % len(OCCUPATIONS)]
+        key = _OCCUPATION_SITES[occupation][action == "eat"]
+        return LANDMARKS[key].pos
     return None
 
 
@@ -377,8 +373,10 @@ def _resolve_goal(
     if target == "market" and action in ("move", "work"):
         return _scatter_near(MARKET_SITE, npc_id, pathfinder, seed=seed)
     if action in ("wander", "move"):
-        # D16：闲逛锚定本人片区（人在片区外先走回家再溜达——归巢语义）。
-        return wander_near(home_base_of(npc_id), npc_id, pathfinder, seed=seed, tick=tick)
+        # Wander around the district of the current activity; sleep returns home.
+        entity = state.entities.get(npc_id)
+        home = _wander_home(entity.pos) if entity is not None else home_base_of(npc_id)
+        return wander_near(home, npc_id, pathfinder, seed=seed, tick=tick)
     if action in ("eat", "rest", "work"):
         anchor = _site_anchor_of(action, npc_id)
         assert anchor is not None  # 三动作恒有锚点
@@ -458,8 +456,8 @@ def plan_npc_move(
       （D2 起「goal==pos → 退化为闲逛」是全镇横穿的主犯）；
     - 不可达 → None（原地待着，**不再**退化为全图闲逛——错上加错）；
     - wander/move 无站点语义 → 邻域闲逛目标（wander_near）。
-    D16 定籍领地：eat/rest/wander 全部锚定本人片区（home_base_of）——
-    「一部分区域乱走」的根因收口；request_chat 仍跨片区（社交不缩水）。
+    Round 23: work/eat follow occupation landmarks, rest returns home and
+    wandering stays near the current activity district, with no cumulative drift.
     返回的 move_event **不入流**（无 enqueue）——调用方决定入流时机与 tick。
     """
     entity = state.entities.get(npc_id)
@@ -490,7 +488,7 @@ def plan_npc_move(
             anchor = _site_anchor_of(action, npc_id, target=target)
             if anchor is not None:
                 dist = abs(start[0] - anchor[0]) + abs(start[1] - anchor[1])
-                if dist <= _SITE_SCATTER_RADIUS:
+                if dist <= _SITE_ARRIVAL_RADIUS:
                     return None  # 到站停留（停留由需求回写驱动）
         if goal == start:
             return None
@@ -506,13 +504,13 @@ def plan_npc_move(
             goal=path[-1],
             path=path,
         )
-    # wander/move：D16 定籍闲逛——目标锚定本人片区（人在片区外=归巢途中）。
+    # Wander around a fixed current-district center, rather than each new position.
     # 2026-10-12 换图补：wander_near 只查目标格自身可走，不保证**可达**。
     # （旧图 820 可走格里 25 格孤立；2026-10-28 起 terrain_class 只保留最大
     # 连通块，可走面本身已单块，但保留重试以防未来地图重新出现小岛。）
     # 修法：确定性有限重试（tick+1..+8 连续 8 拍，哈希序列仍 C5），全不可达
     # 才 None（原地待着，语义同「不可达不退化」）。
-    home = home_base_of(npc_id)
+    home = _wander_home(start)
     for offset in range(8):
         goal = wander_near(home, npc_id, pathfinder, seed=seed, tick=tick + offset)
         if goal is None or goal == start:
@@ -530,6 +528,68 @@ def plan_npc_move(
             path=path,
         )
     return None
+
+
+def _build_site_for_tick(
+    runtime: object,
+    state: WorldState,
+    tick: int,
+    pathfinder: Pathfinder,
+    ledger: object,
+    build: BuildRuntime | None,
+    excluded: frozenset[str],
+) -> dict[str, tuple[int, int]]:
+    """Offer one funded, unhurried villager a nearby free site, in stable order."""
+    from sim.core.calendar import DayPhase
+    from sim.npc.schedule import current_slot
+    from sim.world.economy import CoinLedger
+
+    if build is None or build.busy or not isinstance(ledger, CoinLedger):
+        return {}
+    if current_slot(tick).phase is DayPhase.NIGHT:
+        return {}
+    profiles = getattr(runtime, "profiles", {})
+    occupied = {entity.pos for entity in state.entities.values()}
+    occupied.update(pos for entity in state.entities.values() for pos in entity.path)
+    # Keep the activity anchors and their arrival neighborhoods available.
+    protected = {site.pos for site in LANDMARKS.values()}
+    offsets = sorted(
+        ((dx, dy) for dx in range(-4, 5) for dy in range(-4, 5) if abs(dx) + abs(dy) <= 4),
+        key=lambda offset: (abs(offset[0]) + abs(offset[1]), offset),
+    )
+    for npc_id in sorted(profiles):
+        profile = profiles[npc_id]
+        entity = state.entities.get(npc_id)
+        if (
+            npc_id in excluded
+            or profile.species != "human"
+            or profile.lod == 0
+            or entity is None
+            or entity.path
+            or entity.incapacitated_until is not None
+            or ledger.balance_of(npc_id) < build.build_cost
+            or any(
+                need.value >= (0.65 if need.name == "social" else 0.55) for need in profile.needs
+            )
+        ):
+            continue
+        for dx, dy in offsets:
+            x, y = entity.pos[0] + dx, entity.pos[1] + dy
+            tiles = {(x + ox, y + oy) for ox in (0, 1) for oy in (0, 1)}
+            if tiles & occupied or any(
+                abs(tx - sx) + abs(ty - sy) <= _SITE_ARRIVAL_RADIUS
+                for tx, ty in tiles
+                for sx, sy in protected
+            ):
+                continue
+            if not build.can_start((x, y)):
+                continue
+            try:
+                pathfinder.find(entity.pos, (x, y))
+            except ValueError:
+                continue
+            return {npc_id: (x, y)}
+    return {}
 
 
 def npc_events_for_tick(
@@ -571,6 +631,15 @@ def npc_events_for_tick(
     tick_runtime = getattr(runtime, "tick", None)
     if tick_runtime is None:  # runtime 契约必有 tick（object 注解防域反向依赖）
         return []
+    build_sites = _build_site_for_tick(
+        runtime,
+        state,
+        tick,
+        pathfinder,
+        coin_ledger,
+        build_runtime,
+        l2_controlled | frozenset(l2_decisions or {}),
+    )
     acts = tick_runtime(
         tick,
         chat_cooldown_until=chat_cooldown_until_of(chat_last, tick=tick)
@@ -586,6 +655,7 @@ def npc_events_for_tick(
             if l2_decisions
             else {}
         ),
+        **({"bonus_of": {nid: {"build": 0.55} for nid in build_sites}} if build_sites else {}),
     )
     events: list[WorldEvent] = []
     for event in acts:
@@ -617,6 +687,11 @@ def npc_events_for_tick(
             if event.event_type.value == "npc.hidden_emerge":
                 events.append(event)
             continue
+        if event.payload.get("action") == "build" and event.payload.get("npc_id") in build_sites:
+            x, y = build_sites[str(event.payload["npc_id"])]
+            event = event.model_copy(
+                update={"payload": {**event.payload, "params": {"x": str(x), "y": str(y)}}}
+            )
         events.append(event)
         npc_id = str(event.payload.get("npc_id", ""))
         action = str(event.payload.get("action", ""))
@@ -675,7 +750,7 @@ def npc_events_for_tick(
             profiles = getattr(runtime, "profiles", None)
             if anchor is not None and profiles is not None and npc_id in profiles:
                 dist = abs(entity.pos[0] - anchor[0]) + abs(entity.pos[1] - anchor[1])
-                if dist <= _SITE_SCATTER_RADIUS:
+                if dist <= _SITE_ARRIVAL_RADIUS:
                     from sim.npc.needs import apply_remedy
 
                     p = profiles[npc_id]
@@ -690,7 +765,7 @@ def npc_events_for_tick(
                 and coin_ledger is not None
             ):
                 dist = abs(entity.pos[0] - anchor[0]) + abs(entity.pos[1] - anchor[1])
-                if dist <= _SITE_SCATTER_RADIUS:
+                if dist <= _SITE_ARRIVAL_RADIUS:
                     _wage_never = -(_WAGE_COOLDOWN_MIN_TICKS + _WAGE_COOLDOWN_SPAN_TICKS)
                     last_w = wage_last.get(npc_id, _wage_never)
                     if tick - last_w >= _wage_cooldown_ticks(npc_id):

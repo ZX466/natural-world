@@ -72,7 +72,12 @@ it('starts dig only after 150ms on the visible blocked cell and cancels on relea
 it('maps right click to a visible walkable placement cell without movement', () => {
   const { input, emit, pointer } = setup();
   input.handlePointerDown(pointer(0, 3, 1, 2));
-  expect(emit).toHaveBeenLastCalledWith('client:voxel_request', { action: 'place', x: 0, y: 3 });
+  expect(emit).toHaveBeenLastCalledWith('client:voxel_request', {
+    action: 'place',
+    x: 0,
+    y: 3,
+    material: 'earth',
+  });
 });
 
 it('moves on a walkable press immediately even when held longer than 150ms', () => {

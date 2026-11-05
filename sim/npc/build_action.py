@@ -26,12 +26,13 @@ def build_action_events(
     if entity.path or abs(entity.pos[0] - pos[0]) + abs(entity.pos[1] - pos[1]) > 4:
         return say("得先走到跟前，才能搭棚子。")
     cost = runtime.build_cost
-    if not ledger.apply_grant(npc_id, -cost, tick=tick):
+    if ledger.balance_of(npc_id) < cost:
         return say(f"手里凑不齐这{cost}文的工料钱，搭棚的事再缓缓。")
     started = runtime.start(npc_id, pos, tick=tick)
     if started is None:
-        ledger.apply_grant(npc_id, cost, tick=tick)
         return say("这块地使不得了，另寻去处吧。")
+    # start and this debit run synchronously, with no intervening ledger writer.
+    ledger.apply_grant(npc_id, -cost, tick=tick)
     return [
         coin_grant_event(tick, npc_id, -cost, note="build:shed"),
         started,

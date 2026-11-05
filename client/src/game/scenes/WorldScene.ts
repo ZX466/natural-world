@@ -144,6 +144,7 @@ export class WorldScene extends Phaser.Scene {
   } | null = null;
   private voxelHoldTimer: ReturnType<typeof setTimeout> | null = null;
   private voxelProgress: Phaser.GameObjects.Graphics | null = null;
+  private placementHover: MovePoint | null = null;
   private lastVoxelVersion = -1;
   private lastVoxelSignature = '';
   private lastVoxelMap: WorldMirror['map'] = null;
@@ -246,6 +247,7 @@ export class WorldScene extends Phaser.Scene {
     );
     this.input.on('pointerupoutside', () => this.cancelMovement());
     this.input.on('gameout', () => {
+      this.placementHover = null;
       if (this.voxelPress) this.cancelMovement();
     });
     const keyDown = (event: KeyboardEvent) => {
@@ -442,7 +444,11 @@ export class WorldScene extends Phaser.Scene {
     if (pointer.button === 2) {
       this.stopMovement();
       if (digTarget && map.collision[digTarget.y * map.w + digTarget.x] === 1)
-        this.game.events.emit('client:voxel_request', { action: 'place', ...digTarget });
+        this.game.events.emit('client:voxel_request', {
+          action: 'place',
+          ...digTarget,
+          material: useUiStore.getState().voxelMaterial ?? 'earth',
+        });
       return;
     }
     if (pointer.button !== 0) return;
@@ -498,6 +504,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
+    this.placementHover = this.voxelTarget(pointer);
     const press = this.voxelPress;
     if (!press || pointer.id !== press.id) return;
     if (press.version !== this.mirror.voxelSnapshotVersion) {
@@ -546,6 +553,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private cancelVoxelInput(sendCancel = true): void {
+    this.placementHover = null;
     if (this.voxelHoldTimer !== null) clearTimeout(this.voxelHoldTimer);
     this.voxelHoldTimer = null;
     const press = this.voxelPress;
@@ -764,7 +772,37 @@ export class WorldScene extends Phaser.Scene {
     if (g === null) return;
     g.clear();
     const dig = this.mirror.voxelDig;
-    if (dig === null) return;
+    if (dig === null) {
+      const cell = this.placementHover;
+      const state = useUiStore.getState();
+      const map = this.mirror.map;
+      if (
+        !cell ||
+        !map ||
+        map.collision[cell.y * map.w + cell.x] !== 1 ||
+        (state.voxelInventory?.[state.voxelMaterial] ?? 0) < 1
+      )
+        return;
+      const height = { earth: 1, stone: 2, wood: 3 }[state.voxelMaterial];
+      const top =
+        this.renderMode === 'iso'
+          ? isoProject(cell.x, cell.y, height, screenBounds(map.w, map.h))
+          : this.projectSurface(cell.x, cell.y);
+      // The crossed outline previews a blocked cell without changing collision.
+      g.lineStyle(1, 0xe2a078, 0.95);
+      g.strokePoints(
+        [
+          { x: top.sx, y: top.sy - 8 },
+          { x: top.sx + 16, y: top.sy },
+          { x: top.sx, y: top.sy + 8 },
+          { x: top.sx - 16, y: top.sy },
+        ],
+        true,
+      );
+      g.lineBetween(top.sx - 4, top.sy - 3, top.sx + 4, top.sy + 3);
+      g.lineBetween(top.sx - 4, top.sy + 3, top.sx + 4, top.sy - 3);
+      return;
+    }
     const top = this.projectSurface(dig.x, dig.y);
     g.fillStyle(0x211d16, 0.9);
     g.fillRect(top.sx - 8, top.sy - 4, 16, 3);

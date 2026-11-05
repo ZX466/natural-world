@@ -40,7 +40,13 @@ from sim.api.ws import (
     snapshot_payload,
     ws_auth_token,
 )
-from sim.core.events import EventKind, TileChangedPayload, tile_changed_event, world_create_event
+from sim.core.events import (
+    EventKind,
+    TileChangedPayload,
+    move_event,
+    tile_changed_event,
+    world_create_event,
+)
 from sim.core.persistence.database import create_session_factory, ensure_schema, init_database
 from sim.core.persistence.store import SqlEventStore
 from sim.core.rng import RngRegistry
@@ -248,6 +254,10 @@ async def build_loop() -> tuple[TickLoop, Any]:
     spawn_of.update({"cat_grey": (99, 52), "dog_black": (101, 52), "raven": (101, 53)})
     for eid in GENESIS_ENTITIES:
         loop.issue_move(eid, [(0, 0), spawn_of[eid]])
+    from sim.core.events import coin_grant_event
+
+    for npc_id in roster:
+        loop.enqueue(coin_grant_event(0, npc_id, 15, note="genesis:household"))
     loop.advance_frame(1.0)
     return loop, store
 
@@ -629,13 +639,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     def _build_tick_hook(state: Any, tick: int) -> list[Any] | None:
         nonlocal tile_map
-        events = build_runtime.on_tick(tick)
+        events = build_runtime.on_tick(
+            tick, occupied={entity.pos for entity in state.entities.values()}
+        )
         if events:
             # TILE_CHANGED → 寻路缓存失效（§14 chunk 失效；图换新实例后
             # pathfinder 需感知——observe_map 对齐新几何）。
             tile_map = build_runtime.tile_map
             app.state.tile_map = tile_map
             pathfinder.observe_map(tile_map)
+            if any(event.event_type is EventKind.STRUCTURE_COMPLETED for event in events):
+                for entity_id, entity in sorted(state.entities.items()):
+                    if any(not tile_map.is_walkable(*pos) for pos in entity.path):
+                        events.append(
+                            move_event(tick, entity_id, entity.pos, entity.pos, (entity.pos,))
+                        )
         return events or None
 
     loop.attach_npc_runtime(_build_tick_hook)
@@ -828,6 +846,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         _cold_events = await NpcStore(store, branch_id=current_branch).read_branch_history()
         coin_ledger.restore_from_events(_cold_events)
         fire_runtime.restore_from_events(_cold_events)
+    else:
+        coin_ledger.restore_from_events(event.to_store_dict() for event in loop.pending_events)
 
     def _fire_tick_hook(state: Any, tick: int) -> list[Any] | None:
         events: list[Any] = []
@@ -1074,11 +1094,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # 2026-10-12「只心声不动」修复：[处境] 附可去地标表——模型此前
             # 不知道任何坐标（[计划] 恒空、target_pos 无从填起），输出收敛
             # wait/短移=行动面空转。地标=戏内地点名+坐标（戏内事实可出站）。
-            _landmarks = (
-                "你知道这些去处：药铺（100,53，你的铺子）、染坊市集（72,52）、"
-                "桃门（15,18）、溪桥（66,19）、梯田（122,19）、客栈院（44,53）。"
-                "想去哪就 move_to 它的坐标。"
-            )
+            from sim.content.landmarks import landmarks_text
+
+            _landmarks = landmarks_text()
             from sim.core.persistence.knowledge_store import KnowledgeStore
             from sim.npc.norms import select_norms
 
@@ -1452,7 +1470,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 raise result
 
 
-app = FastAPI(title="临河镇 sim", version="1.14", lifespan=lifespan)
+app = FastAPI(title="临河镇 sim", version="1.15", lifespan=lifespan)
 app.include_router(settings_router)
 app.include_router(anchors_router)  # M5-K7：玩家档读路径（落库 → WS 查表集供数）
 
