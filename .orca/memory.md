@@ -3,10 +3,35 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-06 清理轮 · 主树 HEAD `f77fa81`）
+## 0. 当前状态（2026-11-06 第二十四轮收编后 · 主树 HEAD `cb820bf`）
 
-- **主树在飞：无**。**第二十四轮在飞的是 codex 树**（three.js 自由视角全量重写，
-  派单在 `E:/zxdevelop/.orca/worktrees/project7/codex/.orca/talking.txt`，**尚未交回**）。
+- **主树在飞：无**。**第二十四轮已收编**（`--no-ff` 合并 `cb820bf`，codex 侧
+  `d03f806`..`5db4005`，零冲突）。three.js 自由视角世界由 `?terrain=three` 启用，
+  **默认仍 Phaser**，默认切换须等用户验收。
+- **第二十四轮主树独立复跑（不采信 codex 自测）**：pytest **3544P/121S/72D**
+  （462.12s，EXIT 0）· vitest **537P/75F** · ruff/format/pyright **0/0/0** ·
+  tsc/eslint/prettier/gen:protocol 全 EXIT 0 · 两资产 `--check` 逐字节一致 ·
+  `check_implementation_status.py` EXIT 0（零缺口）。
+- **主树额外独立验证**：把 `visibility.ts::lineBlocked` 与真实
+  `sim/perception/propagation.py::line_blocked_grid` 做 **2400 例随机差分**
+  （Python 生成 oracle，seed 20261106）：**0 不匹配**（1566 阻断 / 834 通视）。
+  证据 `.orca/audits/round24-verify-2026-11-06/`（本地 ignored）。
+- **合并后复查（必做）**：清理轮 `f77fa81` 的 `pyproject.toml`/`uv.lock`/`.env.example`/
+  `.gitignore` 与合并前逐字节相同（codex 从 `3912f7c` 分叉，未回退清理）；
+  `sim/`/`shared/`/协议 1.15/`client/package*.json`/`DESIGN.md` 均零改动；
+  `voxel-picking.ts`/`cell-appearance.ts`/`tile-color.ts` 零改动。
+- **第二十四轮做了什么**：A 透视跟随/可旋转相机 + 天空/地平线雾（`d03f806`）·
+  B three billboard 人物 + 动画/朝向/同格偏移/名牌/气泡 + 天气音频（`03ab898`）·
+  C 独立移动(平面反投影)与编辑(实例 raycast)拾取 + 真鼠标键盘手势（`8fa3f56`）·
+  D 整列选中/材料高度预览/服务端进度/移动目标（`e45a4ed`）·
+  E 客户端视线遮挡（Python Bresenham 逐行移植、半径 12 由源文件钉死）（`5eacfbc`）·
+  审查修复 lostpointercapture + 逐事件世界/连接/焦点守卫（`b7ac220`）。
+- **第二十四轮遗留（别当已关闭）**：DPR 只在创建时读取（跨屏/缩放不刷新，Minor）·
+  构建包 2309kB/gzip 572kB 警告 · 房屋仍 h2 实心块、无动态光照投影/水波/塌落动画 ·
+  **服务端仍不发 `perception` 帧**（E 只关客户端人物视野，听嗅文案仍无来源）·
+  相机默认 yaw225 且近墙会抬高（临墙构图可能高于请求 12°）· 提示置顶可能覆盖前景。
+- **下一步**：① 用户实机验收 `?terrain=three`（观感/手感/建造）→ 通过后才切默认；
+  ② 用户亲验剩余项（见 `talking.txt` 待人工验收表）。
 - **2026-11-06 清理轮（`f77fa81`）**：删掉三个零引用依赖（`pydantic-settings`/`tenacity`/
   `hypothesis`，DESIGN §4 同步改写）、`.opencode/`（61M）、`agent-registry.md` 里
   四个已不存在的工作树、`.env.example` 两个死键、两份 331M 备份库、各类缓存/构建产物。
