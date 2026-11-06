@@ -33,6 +33,7 @@ it.each(['failure', 'cancel'])('disposes ready actor textures once on %s', async
   const game = createThreeWorld(
     { append() {}, clientWidth: 800, clientHeight: 600 } as unknown as HTMLElement,
     {} as Parameters<typeof createThreeWorld>[1],
+    { requestMove: () => false, requestVoxel() {} },
   );
   await Promise.resolve();
   if (mode === 'cancel') game.destroy(true);

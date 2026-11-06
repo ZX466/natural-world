@@ -12,8 +12,25 @@ import { WebAudioSynth } from '../../audio/synth';
 import { worldAudio } from '../../audio';
 import { createWeatherLayer } from './three-weather';
 import { avoidCameraBlocks } from './three-camera-collision';
+import { createWorldInput, type WorldInput } from './three-input';
+import { screenRay, editFromRay, groundFromRay, WALK_HEIGHT } from './three-picking';
+import { canStep } from '../../movement';
+import type { VoxelRequestMessage } from '../../../net/protocol';
 
-export function createThreeWorld(parent: HTMLElement, mirror: WorldMirror): WorldGame {
+export interface WorldActions {
+  requestMove(x: number, y: number): boolean;
+  requestVoxel(
+    action: VoxelRequestMessage['action'],
+    x: number,
+    y: number,
+    material?: VoxelRequestMessage['material'],
+  ): void;
+}
+export function createThreeWorld(
+  parent: HTMLElement,
+  mirror: WorldMirror,
+  actions: WorldActions,
+): WorldGame {
   const canvas = document.createElement('canvas');
   canvas.dataset.worldRenderer = 'three';
   canvas.style.cssText = 'display:block;width:100%;height:100%;touch-action:none';
@@ -25,6 +42,7 @@ export function createThreeWorld(parent: HTMLElement, mirror: WorldMirror): Worl
   let booted = false;
   let adapter: TerrainAdapter | null = null;
   let actors: ActorLayer | null = null;
+  let input: WorldInput | null = null;
   let weather: ReturnType<typeof createWeatherLayer> | null = null;
   let actorAssets: Awaited<ReturnType<typeof loadActorAssets>> | null = null;
   let previousTime = 0;
@@ -35,6 +53,8 @@ export function createThreeWorld(parent: HTMLElement, mirror: WorldMirror): Worl
   });
   worldAudio.attach(audio);
   const releaseWorld = () => {
+    input?.dispose();
+    input = null;
     weather?.dispose();
     weather = null;
     actors?.dispose();
@@ -58,13 +78,12 @@ export function createThreeWorld(parent: HTMLElement, mirror: WorldMirror): Worl
   window.addEventListener(
     'blur',
     () => {
-      drag = null;
+      input?.cancel();
       worldAudio.suspend();
     },
     { signal: abort.signal },
   );
   let frame = 0;
-  let drag: { id: number; x: number; y: number } | null = null;
   const size = {
     width: Math.max(1, parent.clientWidth),
     height: Math.max(1, parent.clientHeight),
@@ -75,56 +94,11 @@ export function createThreeWorld(parent: HTMLElement, mirror: WorldMirror): Worl
       adapter?.resize(width, height);
     },
   };
-  canvas.addEventListener('contextmenu', (event) => event.preventDefault(), {
-    signal: abort.signal,
-  });
-  canvas.addEventListener(
-    'pointerdown',
-    (event) => {
-      if (event.button !== 1 && event.button !== 2) return;
-      event.preventDefault();
-      drag = { id: event.pointerId, x: event.clientX, y: event.clientY };
-      canvas.setPointerCapture(event.pointerId);
-    },
-    { signal: abort.signal },
-  );
-  canvas.addEventListener(
-    'pointermove',
-    (event) => {
-      if (!drag || drag.id !== event.pointerId) return;
-      adapter?.rotate(event.clientX - drag.x, event.clientY - drag.y);
-      drag.x = event.clientX;
-      drag.y = event.clientY;
-    },
-    { signal: abort.signal },
-  );
-  canvas.addEventListener(
-    'pointerup',
-    () => {
-      drag = null;
-    },
-    { signal: abort.signal },
-  );
-  canvas.addEventListener(
-    'pointercancel',
-    () => {
-      drag = null;
-    },
-    { signal: abort.signal },
-  );
-  canvas.addEventListener(
-    'wheel',
-    (event) => {
-      event.preventDefault();
-      adapter?.zoom(event.deltaY);
-    },
-    { signal: abort.signal, passive: false },
-  );
-
   const render = (time: number) => {
     if (disposed) return;
     if (adapter) {
       adapter.sync();
+      input?.tick();
       const delta = previousTime ? Math.min(100, time - previousTime) : 16;
       previousTime = time;
       actors?.update(time, delta, useUiStore.getState().speed, adapter.orbitPose.azimuth);
@@ -180,6 +154,65 @@ export function createThreeWorld(parent: HTMLElement, mirror: WorldMirror): Worl
         images,
       );
       weather = createWeatherLayer(actors.overlay, mirror);
+      const getHeight = (x: number, y: number) =>
+        effectiveHeight(x, y, adapter!.heightOf, mirror.structures, mirror.voxelEdits);
+      const typing = () => {
+        const active = document.activeElement as HTMLElement | null;
+        return (
+          !!active &&
+          (['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName) ||
+            active.isContentEditable ||
+            !!active.closest('[contenteditable="true"],[contenteditable=""]'))
+        );
+      };
+      input = createWorldInput(canvas, {
+        move: (point) => actions.requestMove(point.x, point.y),
+        voxel: (action, point) =>
+          actions.requestVoxel(
+            action,
+            point.x,
+            point.y,
+            action === 'place' ? useUiStore.getState().voxelMaterial : undefined,
+          ),
+        pickEdit: (x, y) => {
+          const ray = screenRay(adapter!.scene.camera, x, y, canvas.getBoundingClientRect());
+          return ray ? editFromRay(ray, adapter!.scene.meshes) : null;
+        },
+        pickGround: (x, y) => {
+          const ray = screenRay(adapter!.scene.camera, x, y, canvas.getBoundingClientRect());
+          return ray && mirror.map ? groundFromRay(ray, mirror.map, getHeight) : null;
+        },
+        blocked: (point) => mirror.map?.collision[point.y * mirror.map.w + point.x] !== 1,
+        hero: () => mirror.actors.get(mirror.protagonist ?? '') ?? null,
+        step: (point) => {
+          const actor = mirror.actors.get(mirror.protagonist ?? '');
+          return !!(
+            actor &&
+            mirror.map &&
+            getHeight(point.x, point.y) === WALK_HEIGHT &&
+            canStep(mirror.map, actor, point)
+          );
+        },
+        enabled: () =>
+          useUiStore.getState().wsStatus === 'open' &&
+          !!mirror.map &&
+          mirror.actors.has(mirror.protagonist ?? ''),
+        typing,
+        epoch: () => `${mirror.resetCount}:${mirror.voxelSnapshotVersion}`,
+        revision: () => mirror.terrainVersion,
+        azimuth: () => adapter!.orbitPose.azimuth,
+        rotate: (dx, dy) => adapter!.rotate(dx, dy),
+        zoom: (delta) => adapter!.zoom(delta),
+        error: (message) => useUiStore.getState().setVoxelError(message),
+      });
+      window.addEventListener(
+        'keydown',
+        (event) => {
+          if (!event.repeat && !typing()) void worldAudio.unlock();
+        },
+        { signal: abort.signal },
+      );
+
       booted = true;
       for (const callback of ready) callback();
       ready.clear();

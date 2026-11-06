@@ -17,7 +17,7 @@ import type { WorldGame } from './world-game';
 export function createGame(parent: HTMLElement, mirror: WorldMirror): WorldGame {
   // The opt-in world owns its own canvas; the default keeps Phaser.
   const threeTerrain = terrainFromSearch(globalThis.location?.search ?? '') === 'three';
-  if (threeTerrain) return createThreeWorld(parent, mirror);
+  if (threeTerrain) return createThreeWorld(parent, mirror, runtime);
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent,
