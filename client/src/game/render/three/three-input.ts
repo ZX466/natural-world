@@ -77,8 +77,12 @@ export function createWorldInput(
     if (timer !== null) clearTimeout(timer);
     timer = null;
   };
+  const sameWorld = () => epoch === ports.epoch() && ports.enabled();
+  const voxel = (action: VoxelRequestMessage['action'], point: MovePoint) => {
+    if (sameWorld() && (action === 'dig_cancel' || !ports.typing())) ports.voxel(action, point);
+  };
   const stop = () => {
-    if (goal && ports.enabled()) {
+    if (goal && sameWorld()) {
       const actor = ports.hero();
       if (actor) ports.move(actor);
     }
@@ -86,7 +90,7 @@ export function createWorldInput(
     keyIntent = '';
   };
   const move = (point: MovePoint | null) => {
-    if (point && ports.enabled() && ports.move(point)) goal = point;
+    if (point && sameWorld() && !ports.typing() && ports.move(point)) goal = point;
   };
   const flushDrag = (force = false) => {
     if (!pendingDrag || (!force && Date.now() - lastDragAt < 100)) return;
@@ -100,23 +104,38 @@ export function createWorldInput(
   };
   const release = (send: boolean) => {
     clearTimer();
-    if (send && ports.enabled() && press?.digging && press.edit)
-      ports.voxel('dig_cancel', press.edit);
+    if (send && press?.digging && press.edit) voxel('dig_cancel', press.edit);
     press = null;
     lastMove = '';
     pendingDrag = null;
   };
   const cancel = (send = true) => {
-    release(send);
+    const canSend = send && sameWorld();
+    release(canSend);
     keys.clear();
     pointer = null;
-    if (send) stop();
+    if (canSend) stop();
     else {
       goal = null;
       keyIntent = '';
     }
+    epoch = ports.epoch();
+  };
+  // Browser events and timers can arrive before RAF notices a snapshot or
+  // focus change. Validate at the event boundary, not only once per frame.
+  const active = () => {
+    if (!sameWorld()) {
+      cancel(false);
+      return false;
+    }
+    if (ports.typing()) {
+      cancel();
+      return false;
+    }
+    return true;
   };
   const drive = () => {
+    if (!active()) return;
     const actor = ports.hero();
     const direction = movementDirection(keys, ports.azimuth());
     if (!actor || (!direction.x && !direction.y)) return;
@@ -137,7 +156,7 @@ export function createWorldInput(
   canvas.addEventListener(
     'pointerdown',
     (event) => {
-      if (!ports.enabled() || ports.typing() || ![0, 1, 2].includes(event.button)) return;
+      if (![0, 1, 2].includes(event.button) || !active()) return;
       release(true);
       pointer = { x: event.clientX, y: event.clientY };
       const edit = ports.pickEdit(pointer.x, pointer.y);
@@ -168,17 +187,10 @@ export function createWorldInput(
       }
       timer = setTimeout(() => {
         timer = null;
-        if (
-          press !== current ||
-          !ports.enabled() ||
-          ports.typing() ||
-          epoch !== ports.epoch() ||
-          !edit
-        )
-          return;
+        if (!active() || press !== current || !edit) return;
         stop();
         current.digging = true;
-        ports.voxel('dig_start', edit);
+        voxel('dig_start', edit);
       }, 150);
     },
     { signal: abort.signal },
@@ -186,6 +198,7 @@ export function createWorldInput(
   canvas.addEventListener(
     'pointermove',
     (event) => {
+      if (!active()) return;
       pointer = { x: event.clientX, y: event.clientY };
       if (!press || press.id !== event.pointerId) return;
       if (press.button === 1 || press.button === 2) {
@@ -194,7 +207,7 @@ export function createWorldInput(
         if (press.orbiting) ports.rotate(event.clientX - press.x, event.clientY - press.y);
       } else if (Math.hypot(event.clientX - press.startX, event.clientY - press.startY) >= 5) {
         clearTimer();
-        if (press.digging && press.edit) ports.voxel('dig_cancel', press.edit);
+        if (press.digging && press.edit) voxel('dig_cancel', press.edit);
         press.digging = false;
         press.moving = true;
         const target = ports.pickGround(event.clientX, event.clientY);
@@ -209,21 +222,13 @@ export function createWorldInput(
   canvas.addEventListener(
     'pointerup',
     (event) => {
-      if (!press || press.id !== event.pointerId) return;
+      if (!active() || !press || press.id !== event.pointerId) return;
       const current = press;
-      if (epoch !== ports.epoch() || !ports.enabled()) {
-        cancel(false);
-        return;
-      }
-      if (ports.typing()) {
-        cancel();
-        return;
-      }
       if (current.button === 2 && !current.orbiting) {
         const edit = ports.pickEdit(event.clientX, event.clientY);
         if (edit && !ports.blocked(edit)) {
           stop();
-          ports.voxel('place', edit);
+          voxel('place', edit);
         }
       } else if (current.button === 0 && !current.digging) {
         if (current.moving) {
@@ -236,6 +241,13 @@ export function createWorldInput(
     { signal: abort.signal },
   );
   canvas.addEventListener('pointercancel', () => cancel(), { signal: abort.signal });
+  canvas.addEventListener(
+    'lostpointercapture',
+    (event) => {
+      if (press?.id === event.pointerId) cancel();
+    },
+    { signal: abort.signal },
+  );
   canvas.addEventListener(
     'pointerleave',
     () => {
@@ -256,15 +268,7 @@ export function createWorldInput(
     'keydown',
     (raw) => {
       const event = raw as KeyboardEvent;
-      if (
-        ports.typing() ||
-        !ports.enabled() ||
-        event.ctrlKey ||
-        event.altKey ||
-        event.metaKey ||
-        event.isComposing
-      )
-        return;
+      if (!active() || event.ctrlKey || event.altKey || event.metaKey || event.isComposing) return;
       if (event.code === 'Escape') {
         cancel();
         return;
@@ -282,6 +286,7 @@ export function createWorldInput(
     'keyup',
     (raw) => {
       const event = raw as KeyboardEvent;
+      if (!active()) return;
       if (!keys.delete(event.code)) return;
       if (!keys.size) stop();
       else drive();
@@ -301,22 +306,14 @@ export function createWorldInput(
     },
     cancel,
     tick() {
-      if (epoch !== ports.epoch() || !ports.enabled()) {
-        cancel(false);
-        epoch = ports.epoch();
-        return;
-      }
-      if (ports.typing()) {
-        cancel();
-        return;
-      }
+      if (!active()) return;
       const actor = ports.hero();
       if (goal && actor?.x === goal.x && actor.y === goal.y) goal = null;
       if (keys.size) drive();
       else if (press?.moving) flushDrag();
     },
     dispose() {
-      cancel(false);
+      cancel();
       abort.abort();
     },
   };

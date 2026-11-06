@@ -189,6 +189,131 @@ it('throttles drag movement and flushes its final destination on release', () =>
   fixture.input.dispose();
 });
 
+it.each([0, 149, 150, 180])(
+  'ends a lost-capture gesture at %ims without a late dig or duplicate cancel',
+  (elapsed) => {
+    const fixture = setup(true);
+    dispatch(fixture.canvas, 'pointerdown', fixture.pointer());
+    vi.advanceTimersByTime(elapsed);
+    dispatch(fixture.canvas, 'lostpointercapture', { pointerId: 1 });
+    vi.advanceTimersByTime(200);
+    const starts = fixture.voxel.mock.calls.filter(([action]) => action === 'dig_start');
+    const cancellations = fixture.voxel.mock.calls.filter(([action]) => action === 'dig_cancel');
+    expect(starts).toHaveLength(elapsed >= 150 ? 1 : 0);
+    expect(cancellations).toHaveLength(elapsed >= 150 ? 1 : 0);
+    dispatch(fixture.canvas, 'pointerup', fixture.pointer());
+    dispatch(fixture.canvas, 'lostpointercapture', { pointerId: 1 });
+    expect(fixture.voxel.mock.calls.filter(([action]) => action === 'dig_cancel')).toHaveLength(
+      cancellations.length,
+    );
+    expect(fixture.move).not.toHaveBeenCalled();
+    fixture.input.dispose();
+  },
+);
+
+it('ignores another pointer capture loss and does not cancel twice on a normal release', () => {
+  const fixture = setup(true);
+  dispatch(fixture.canvas, 'pointerdown', fixture.pointer());
+  dispatch(fixture.canvas, 'lostpointercapture', { pointerId: 2 });
+  vi.advanceTimersByTime(150);
+  expect(fixture.voxel).toHaveBeenCalledWith('dig_start', { x: 4, y: 3 });
+  dispatch(fixture.canvas, 'pointerup', fixture.pointer());
+  dispatch(fixture.canvas, 'lostpointercapture', { pointerId: 1 });
+  expect(fixture.voxel.mock.calls.filter(([action]) => action === 'dig_cancel')).toHaveLength(1);
+  fixture.input.dispose();
+});
+
+it('drops a keyup from the old world before any RAF has processed the snapshot', () => {
+  const fixture = setup();
+  dispatch(fixture.keyboard, 'keydown', { code: 'KeyW' });
+  fixture.move.mockClear();
+  fixture.reset();
+  dispatch(fixture.keyboard, 'keyup', { code: 'KeyW' });
+  expect(fixture.move).not.toHaveBeenCalled();
+  fixture.input.dispose();
+});
+
+it('stops held keys when focus changes before keyup rather than driving the remaining key', () => {
+  const fixture = setup();
+  dispatch(fixture.keyboard, 'keydown', { code: 'KeyW' });
+  dispatch(fixture.keyboard, 'keydown', { code: 'KeyD' });
+  fixture.move.mockClear();
+  fixture.type();
+  dispatch(fixture.keyboard, 'keyup', { code: 'KeyD' });
+  expect(fixture.move.mock.calls).toEqual([[{ x: 3, y: 3 }]]);
+  dispatch(fixture.keyboard, 'keyup', { code: 'KeyW' });
+  expect(fixture.move).toHaveBeenCalledTimes(1);
+  fixture.input.dispose();
+});
+
+it.each([
+  'cancel',
+  'blur',
+  'pointercancel',
+  'pointerleave',
+  'pointermove',
+  'lostpointercapture',
+  'pointerup',
+  'keydown',
+])('clears old digging locally on %s before RAF without an intent in the new world', (event) => {
+  const fixture = setup(true);
+  dispatch(fixture.canvas, 'pointerdown', fixture.pointer());
+  vi.advanceTimersByTime(150);
+  fixture.voxel.mockClear();
+  fixture.move.mockClear();
+  fixture.reset();
+  if (event === 'cancel') fixture.input.cancel();
+  else if (event === 'blur') dispatch(fixture.keyboard, event);
+  else if (event === 'keydown') dispatch(fixture.keyboard, event, { code: 'KeyW' });
+  else dispatch(fixture.canvas, event, fixture.pointer(0, 200, 120));
+  expect(fixture.voxel).not.toHaveBeenCalled();
+  expect(fixture.move).not.toHaveBeenCalled();
+  fixture.input.dispose();
+});
+
+it('does not drag a move into a new world before the next RAF', () => {
+  const fixture = setup();
+  dispatch(fixture.canvas, 'pointerdown', fixture.pointer());
+  vi.advanceTimersByTime(101);
+  fixture.move.mockClear();
+  fixture.reset();
+  fixture.ground({ x: 4, y: 2 });
+  dispatch(fixture.canvas, 'pointermove', fixture.pointer(0, 200));
+  expect(fixture.move).not.toHaveBeenCalled();
+  fixture.input.dispose();
+});
+
+it('cancels a dig after focus changes before a pointermove without starting movement', () => {
+  const fixture = setup(true);
+  dispatch(fixture.canvas, 'pointerdown', fixture.pointer());
+  vi.advanceTimersByTime(150);
+  fixture.voxel.mockClear();
+  fixture.type();
+  dispatch(fixture.canvas, 'pointermove', fixture.pointer(0, 200));
+  expect(fixture.voxel.mock.calls).toEqual([['dig_cancel', { x: 4, y: 3 }]]);
+  expect(fixture.move).not.toHaveBeenCalled();
+  fixture.input.dispose();
+});
+
+it('releases an owned live dig on disposal', () => {
+  const fixture = setup(true);
+  dispatch(fixture.canvas, 'pointerdown', fixture.pointer());
+  vi.advanceTimersByTime(150);
+  fixture.voxel.mockClear();
+  fixture.input.dispose();
+  expect(fixture.voxel.mock.calls).toEqual([['dig_cancel', { x: 4, y: 3 }]]);
+});
+
+it('disposes an old-world dig locally without cancelling the new world', () => {
+  const fixture = setup(true);
+  dispatch(fixture.canvas, 'pointerdown', fixture.pointer());
+  vi.advanceTimersByTime(150);
+  fixture.voxel.mockClear();
+  fixture.reset();
+  fixture.input.dispose();
+  expect(fixture.voxel).not.toHaveBeenCalled();
+});
+
 it.each([
   [0, ['KeyW'], { x: 0, y: -1 }],
   [90, ['KeyW'], { x: -1, y: 0 }],
