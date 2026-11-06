@@ -198,7 +198,7 @@ export function createTerrainScene(canvas: HTMLCanvasElement): TerrainScene {
   scene.background = sky;
   scene.fog = new THREE.Fog(0xdce9f1, 32, 80);
 
-  // Orthographic camera from the projection contract — the same one picking
+  // Perspective camera from the projection contract — the same one picking
   // raycasts through, so blocks and clicks share one authority.
   const camera = createCamera(1, 1, 1);
 
