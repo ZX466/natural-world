@@ -17,12 +17,8 @@ export function rendererFromSearch(search: string): 'flat' | 'iso' {
   return new URLSearchParams(search).get('renderer') === 'flat' ? 'flat' : 'iso';
 }
 
-/** Which painter draws the ground and the blocks.
- *
- * Orthogonal to `rendererFromSearch`: actors, labels, bubbles, rain and the
- * night overlay stay Phaser in every case. `three` swaps only the terrain
- * canvas, and only on `?terrain=three`; anything else keeps the shipped Phaser
- * painter, which is the rollback path. */
+/** The three switch selects the complete perspective world. The default Phaser
+ * flat/iso path stays available until user acceptance of the opt-in renderer. */
 export type TerrainBackend = 'phaser' | 'three';
 
 export function terrainFromSearch(search: string): TerrainBackend {
