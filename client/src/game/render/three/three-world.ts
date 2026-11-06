@@ -18,6 +18,7 @@ import { canStep } from '../../movement';
 import type { VoxelRequestMessage } from '../../../net/protocol';
 import { createVoxelCues, type VoxelCues } from './three-voxel-cues';
 import type { MovePoint } from '../../movement';
+import { pointVisible } from '../visibility';
 
 export interface WorldActions {
   requestMove(x: number, y: number): boolean;
@@ -148,9 +149,11 @@ export function createThreeWorld(
         hoverKey = '';
       }
       const ui = useUiStore.getState();
+      const goal = input?.goal;
+      const visibleGoal = goal && map && actor && pointVisible(map, actor, goal) ? goal : null;
       cues?.update(
-        hovered,
-        input?.goal ?? null,
+        hovered && map && actor && pointVisible(map, actor, hovered) ? hovered : null,
+        visibleGoal,
         ui.voxelMaterial,
         ui.voxelInventory,
         adapter.scene.camera,

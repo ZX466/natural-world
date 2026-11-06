@@ -100,3 +100,93 @@ it('projects names and active bubbles with shared screen-space layout', () => {
   layer.labels(800, 800, 4000);
   expect(layer.bubbles.size).toBe(0);
 });
+
+it('hides a blocked actor, shadow, name and bubble together and refreshes after a wall edit', () => {
+  const { layer, mirror } = setup();
+  const collision = new Uint8Array(400).fill(1);
+  collision[212] = 0;
+  mirror.setMap({ w: 20, h: 20, tileset: 'grid', collision });
+  mirror.applySnapshot(
+    [
+      {
+        rtoken: 'hero',
+        x: 10,
+        y: 10,
+        facing: 's',
+        sprite: 'protagonist',
+        anim: 'idle',
+        name: '陈默',
+      },
+      { rtoken: 'near', x: 11, y: 10, facing: 's', sprite: 'villager', anim: 'idle', name: '近人' },
+      {
+        rtoken: 'hidden',
+        x: 14,
+        y: 10,
+        facing: 's',
+        sprite: 'villager',
+        anim: 'idle',
+        name: '墙后',
+      },
+    ],
+    [],
+  );
+  mirror.setBubble('墙后', '不该显示的墙后话语', 5000, 1000);
+  layer.update(0, 16, 1, 0);
+  layer.labels(800, 800, 1000);
+  expect(layer.views.get('near')!.sprite.visible).toBe(true);
+  const hidden = layer.views.get('hidden')!;
+  expect(hidden.sprite.visible).toBe(false);
+  expect(hidden.shadow.visible).toBe(false);
+  expect(hidden.label!.visible).toBe(false);
+  expect(layer.bubbles.has('墙后')).toBe(false);
+  expect(layer.views.get('hero')!.silhouette?.visible).toBe(true);
+  mirror.applyVoxelEdits([{ x: 12, y: 10, action: 'dig', gid: 7, height: 1, material: 'earth' }]);
+  layer.update(100, 16, 1, 0);
+  layer.labels(800, 800, 1000);
+  expect(hidden.sprite.visible).toBe(true);
+  expect(layer.bubbles.has('墙后')).toBe(true);
+});
+
+it('does not attribute a hidden speakers bubble to a visible actor with the same name', () => {
+  const { layer, mirror } = setup();
+  const collision = new Uint8Array(400).fill(1);
+  collision[212] = 0;
+  mirror.setMap({ w: 20, h: 20, tileset: 'grid', collision });
+  mirror.applySnapshot(
+    [
+      {
+        rtoken: 'hero',
+        x: 10,
+        y: 10,
+        facing: 's',
+        sprite: 'protagonist',
+        anim: 'idle',
+        name: '陈默',
+      },
+      {
+        rtoken: 'near',
+        x: 11,
+        y: 10,
+        facing: 's',
+        sprite: 'villager',
+        anim: 'idle',
+        name: '同名者',
+      },
+      {
+        rtoken: 'hidden',
+        x: 14,
+        y: 10,
+        facing: 's',
+        sprite: 'villager',
+        anim: 'idle',
+        name: '同名者',
+      },
+    ],
+    [],
+  );
+  mirror.setBubble('同名者', '来源无法区分的墙后话语', 5000, 1000);
+  layer.update(0, 16, 1, 0);
+  layer.labels(800, 800, 1000);
+  expect(layer.views.get('near')!.sprite.visible).toBe(true);
+  expect(layer.bubbles.has('同名者')).toBe(false);
+});

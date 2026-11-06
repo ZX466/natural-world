@@ -21,6 +21,7 @@ import {
 } from '../presentation';
 import { placeBubble, selectBubbleNames } from '../bubbles';
 import { worldOf } from './three-projection';
+import { visibleActorTokens } from '../visibility';
 
 export interface TextImage {
   texture: THREE.Texture;
@@ -35,6 +36,7 @@ export interface ActorView {
   readonly key: string;
   readonly sprite: THREE.Sprite;
   readonly shadow: THREE.Mesh;
+  silhouette: THREE.Sprite | null;
   label: THREE.Sprite | null;
   name: string | undefined;
   motion: ActorMotion;
@@ -78,6 +80,10 @@ export function createActorLayer(
   };
   const destroyView = (view: ActorView) => {
     scene.remove(view.sprite, view.shadow);
+    if (view.silhouette) {
+      scene.remove(view.silhouette);
+      view.silhouette.material.dispose();
+    }
     view.sprite.material.map?.dispose();
     view.sprite.material.dispose();
     (view.shadow.material as THREE.Material).dispose();
@@ -102,6 +108,7 @@ export function createActorLayer(
       reset = token;
     }
     const stacks = assignStackOffsets(mirror.actors.values());
+    const shown = visibleActorTokens(mirror);
     for (const [rtoken, actor] of mirror.actors) {
       const requested = rtoken === mirror.protagonist ? 'protagonist' : actor.sprite;
       const key = assets.texture(requested) ? requested : 'villager';
@@ -151,6 +158,7 @@ export function createActorLayer(
           key,
           sprite,
           shadow,
+          silhouette: null,
           name: undefined,
           label: null,
           motion: advanceMotion(undefined, target, time, delta, speed),
@@ -177,6 +185,30 @@ export function createActorLayer(
       );
       view.sprite.material.color.setHex(actor.tint ?? 0xffffff);
       view.sprite.material.opacity = key.startsWith('fauna_') && actor.anim === 'rest' ? 0.5 : 1;
+      view.sprite.visible = view.shadow.visible = shown.has(rtoken);
+      if (rtoken === mirror.protagonist && !view.silhouette) {
+        // A faint second pass marks only the player's own occluded pixels.
+        // Other people retain ordinary depth testing and never get this pass.
+        view.silhouette = new THREE.Sprite(
+          new THREE.SpriteMaterial({
+            map: view.sprite.material.map,
+            alphaTest: 0.2,
+            transparent: true,
+            opacity: 0.42,
+            depthTest: true,
+            depthWrite: false,
+            depthFunc: THREE.GreaterDepth,
+          }),
+        );
+        view.silhouette.center.copy(view.sprite.center);
+        view.silhouette.renderOrder = 5;
+        scene.add(view.silhouette);
+      }
+      if (view.silhouette) {
+        view.silhouette.visible = shown.has(rtoken) && rtoken === mirror.protagonist;
+        view.silhouette.position.copy(view.sprite.position);
+        view.silhouette.scale.copy(view.sprite.scale);
+      }
       if (!key.startsWith('fauna_')) {
         const sheet =
           key === 'protagonist'
@@ -213,11 +245,15 @@ export function createActorLayer(
     overlayCamera.updateProjectionMatrix();
     mirror.pruneBubbles(now);
     const hero = mirror.actors.get(mirror.protagonist ?? '');
+    const nameCounts = new Map<string, number>();
+    for (const actor of mirror.actors.values())
+      if (actor.name) nameCounts.set(actor.name, (nameCounts.get(actor.name) ?? 0) + 1);
     const anchors = new Map<string, { x: number; y: number; view: ActorView }>();
     const candidates: NameLabelCandidate[] = [];
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
     for (const [rtoken, view] of views) {
       if (view.label) view.label.visible = false;
+      if (!view.sprite.visible) continue;
       const actor = mirror.actors.get(rtoken)!;
       const head = view.sprite.position
         .clone()
@@ -246,7 +282,11 @@ export function createActorLayer(
       label.visible = true;
     }
     const selected = selectBubbleNames(
-      new Map([...mirror.bubbles].filter(([name]) => anchors.has(name))),
+      // The wire identifies a bubble by name only; ambiguity must not reveal
+      // a hidden speaker by attaching their words to a visible namesake.
+      new Map(
+        [...mirror.bubbles].filter(([name]) => anchors.has(name) && nameCounts.get(name) === 1),
+      ),
       hero?.name,
     );
     for (const [name, bubble] of bubbles)
