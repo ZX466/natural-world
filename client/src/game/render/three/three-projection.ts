@@ -6,7 +6,7 @@ export interface OrbitPose {
   readonly elevation: number;
   readonly distance: number;
 }
-export const defaultOrbit = (): OrbitPose => ({ azimuth: 45, elevation: 12, distance: 8 });
+export const defaultOrbit = (): OrbitPose => ({ azimuth: 225, elevation: 12, distance: 8 });
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
 export function orbitBy(pose: OrbitPose, dx: number, dy: number): OrbitPose {
