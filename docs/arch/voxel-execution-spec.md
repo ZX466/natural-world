@@ -248,7 +248,9 @@ npm run gen:protocol:check            # EXIT 0 硬门禁
 
 ## 10. 决策链与边界（原 voxel-transition-plan.md 并入）
 
-### 10.1 为什么是「Phaser 内等距体素」而非 Three.js 重写
+### 10.1 历史起点：2026-10-23 选择 Phaser 内等距体素
+
+下表保留当时的成本判断；当前 three.js 自由视角实现见 §10.2 与 `world-liveliness-design.md` §7。
 
 | 资产（2026-10-23 实测） | A0 等距体素 @ Phaser（采纳） | Three.js 重写（否决） | 真 MC 集成（永久排除） |
 |---|---|---|---|
@@ -270,7 +272,12 @@ npm run gen:protocol:check            # EXIT 0 硬门禁
 - 洞穴/多层垂直空间成为玩法；
 - 「真 MC 观感」成为核心卖点。
 
-在此之前等距体素已满足「Minecraft 风格」定义（方块世界 + 挖建预留）。
+**2026-11-06 已触发第一条**：用户明确要求自由旋转视角观察立体建造。
+第二十四轮在 `?terrain=three` 下完成透视相机、billboard 人物、独立射线拾取、建造提示和客户端主角视野；
+共享地图、原 sprite、运行时与 React UI 继续复用，sim/shared/协议不变。
+默认仍为 Phaser，用户验收后才决定默认切换。实现与实测边界见 `world-liveliness-design.md` §7。
+
+触发之前，等距体素作为「方块世界 + 挖建预留」的起点；§10.1 的否决记录不再代表当前路线。
 
 ### 10.3 沿用裁决
 

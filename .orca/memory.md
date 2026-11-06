@@ -1151,111 +1151,48 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-11-01 Round17｜已收编】物种知识门 + 名牌重叠，提交 `16b7eae`，主树 `--no-ff` 收编。
-- **A 物种知识门**：`sim/npc/evidence.py::can_hold_knowledge(species)` 仅 `"human"` True，
-  猫/犬/渡鸦/未知显式物种 False（未知 fail-closed）。目击与 told 两条路径都在知识事件
-  生成**之前**检查 runtime profile；told 同时检查来源与接收者。动物保留
-  `hidden_emerge.witnesses`——目击是事实，持有/转述是能力，投影不丢弃已发事件。
-- **B 名牌重叠**：标签在屏幕空间按实际 Text 矩形避让（复用 `bubbles.ts::placeBubble`），
-  主角优先、其余按距离 + token 稳定序，最多上移 36 屏幕像素后隐藏。
-  **未动 `isoProject`/`isoUnproject` 数学**。
-- **收编冲突 3 处**：`main.py` 取 codex 侧后补回主树 `ensure_schema`；`social_projection.py`
-  add/add 取 codex 侧（主树侧为纯子集）；`memory.md` 取主树版本（本树副本停在 10-31）。
-- **主树独立复跑**：pytest **3100P/0F/121S**（405.23s）、ruff 383 files、pyright 0/0、
-  client 全套 EXIT 0、vitest **353P/48F**、两资产 + protocol + lock + impl 全过；协议 1.14。
-  新增 31 + 16 条与两树复跑读数逐条对上。
-- **提醒下一轮**：本树 `world.db` 仍是坏的（83 个 `world.create`），别在上面做实验。
+【2026-11-06 Round24｜Codex 已交付，待主树收编与用户验收】three.js 自由视角 A–E 已分阶段实现并提交，默认保留 Phaser。实现 HEAD `b7ac220`；文档/本快照提交号看 `git log -1`。当前无在途开发，不重复实现、不开新一轮门禁；收到新派单后再行动。
 
-[2026-11-01 Round16 | implementation delivered with acceptance limits] M3 witness assembly uses latest completed perception frame and token/entity translation; internal knowledge_learned event holds scanned fact/evidence, flush_world projects knowledge and relationships in one transaction. told validates source holder/branch/content/confidence and receiver own-hidden gate before event generation; per-batch dedup. NormSlice connected to both existing Chenmo prompts (ordinary villagers have utility/templates, no LLM prompt path). relationship_retell event preserves trust drift; hydrate on start/branch load. Real fork test confirms child told links remapped child source. Restore retains/clones knowledge tables; does not reconstruct auto IDs by historical event re-projection. Tests: nonbench3072P/121S; latest security84P/new18P; Pyright0E0W/Ruff/format; client337P/typecheck pass. Bench remains2F (sound50NPC/retrieval degraded sentinel); parent baseline also fails retrieval but sound baseline passes, so no blanket pre-existing claim. Production lifespan fresh persistent rehearsal events0->116,knowledge2,relationships2,witnessseq60/toldparent1. Original world.db copied backup fails startup unique-genesis check; no repair/write; original+backup10033events identical SHA256. Evidence .orca/audits/round16-2026-11-01/{progress.md,gates.json,verify_live.py,live3.log,original-preservation.json}. No push/main sync/shared/lock/DESIGN/registry/fog changes; no browser/paid LLM. Next main review/integration, resolve performance and original-save compatibility separately.
+### 恢复与协作
 
-【2026-11-01 新对话交接｜第十五轮技术交付完成，当前无在途开发】用户明确要求保存记忆后开启新对话。本轮基线5a48f7c；RED ffe590f，离线4769418，音效5b35f29，取证7e97a6f。恢复先workflow→talking→本节/registry→git status/log，以最新派单为准；已交付部分不重做、不无故复跑门禁。当前只待主树复核收编、用户亲听与后续定线裁决。不同步main、不推远程；收编保留主树ensure_schema修复1d4bfa9（本树未重复实现）。提交均带派单指定Co-Authored-By。
+1. 先读 `.orca/workflow.txt` → **完整** `.orca/talking.txt` → 本节/registry → Git；扫完全部派单再判断是否等待。
+2. `.codegraph` 存在，理解/定位代码先 `codegraph_explore`，显式 `projectPath=E:/zxdevelop/.orca/worktrees/project7/codex`；返回的当前源码视为已读。
+3. 本树只做本地 Conventional Commits，不推远程、不改主树。Round24 特许的一次同步 **33e8658→3912f7c 已完成**，不能当后续自行同步许可。主树负责复核收编和推送。
+4. 协作只回写本树 ignored talking，永不 add；memory 只改本 §7，前缀 §§0–6 保留原字节，`git add -f` 后立即提交。全局 Codex memories 未写入。
+5. Python 用 uv；中文管道需 UTF-8，PS 重定向日志可能 UTF-16，先取原始 native exit 再读尾部。删除 npm 包/venv 先问。按 i-have-adhd 保持简短中文、下一步优先、不重复确认。
 
-- **①离线**：sim/world/offline.py只接显式时长；墙钟仅main._offline_wall_time采样一次，offline_store读当前分支checkpoint.created_at（epoch/ISO兼容，旧无时区ISO按UTC）。全确定性钩子装配后、两后台任务之前补跑；固定1x，普通60tick/实秒、战斗1tick/实秒，最多86400tick，每批≤4实秒/240tick。flush_world带checkpoint_at/force_checkpoint，无事件尾部也持久化游标；中间水位按已处理时长、末批置本次墙钟，超限offline.capped丢弃；不写玩家档、不调LLM、不复用WS快进。临时SQLite实测一分钟tick60→3660、events59→18391、玩家档不变；两遍事件重放hash相同、再启动零补跑；30天只86400tick。脚本/JSON在.orca/audits/offline-progress-2026-11-01。
-- **②音效**：client/src/game/audio与audioStore，Phaser context自有节点通道，默认每次页面静音/25%；设置明确启用后在场景点击/按键解锁。附近脚步、确认挖放、可见combat_event、rubble转变，8格衰减、120ms节流、最多8音源；断线/静音/失焦/销毁清理，generation守卫拦晚解锁，不close Phaser context。ActorDelta更新省略op，不是update。默认快照/心声/任务提示不发声。无npm依赖/资产文件，固定xorshift噪声可复现。客户端337P/47files、tsc/eslint/prettier/gen:protocol均绿，docs/arch/audio.md说明入口；技术验收不代表用户亲听通过。
-- **②用户明确裁定**：服务端snapshot.lights=[]、无fire.ignited出站，本轮先交脚步/挖放/战斗，火声只做客户端映射，真实火场另列缺口；禁止自行为火声扩后端/协议。WorldScene派单44.6K行实为基线1039行/45654字节。记录于audio-2026-11-01/acceptance.json与talking。
-- **③T5取证**：原PI_T5_FULL测试10种子×10日全部通过，123.97s（派单1.5h估计过时），seed7额外独立重复，rate与事件总数相同。每种子4/4=1.0，合计40/40，中位/最差1.0；只更新errands_rate过时注释、不定线。必须说明这是10实体mock移动末态跑四条跨日脚本，不是生产50NPC/LLM自主完成率。脚本、first/full逐种子与baseline在.orca/audits/t5-baseline-2026-11-01；measure.py可重跑，--collect-only仅汇总。
-- **④soak取证**：npc.death apply真实移出entities，阶段B前提已落地，契约注释已更正但SOAK_ENTITY_LOSS_PER_GAME_DAY仍0。50实体8x8移动场每游戏小时种子SHA选近战对，真实CombatLedger结算并enqueue死亡；3日对照50→50、危害50→38，12死亡/3日=4人每日；重跑死亡轨迹与state_hash一致。受控危害不是自然流失或可接受上界。按原run_soak在内存测、不触库；所有接SQL实验仅临时SQLite。measure.py/measurement.json在.orca/audits/soak-loss-2026-11-01。生产死亡源比派单多坍塌maintenance一处；7份perf文档/14处悬空引用未修、留原引用。
-- **门禁/证据**：全量pytest3056P/0F/121S/72D，400.84s；5warnings=4旧弃用+旧test_m4c_llm_driver种子夹具未dispose engine的一次线程警告，未顺手改。离线/E1/快照41P；T5完整10P另跑；soak零阈值契约1P。Ruff378files/Pyright0E0W/client337P/47files与全部门禁通过；两资产byte-identical、实现程度检查、uv lock全绿。round15-2026-11-01/{plan.md,gates.json}已归档。协议1.14，shared、package/lock、冻结DESIGN、registry、迷雾登记不变。真实world.db未读写、未运行其迁移，无浏览器/付费模型。
-- **恢复纪律**：workflow→talking→本节/registry；CodeGraph显式本树projectPath先行，已返源码视为已读；协作只本树talking，ignored永不add；memory只改§7、-f add并提交。Python全程uv/UTF8；PS中文脚本须OutputEncoding UTF8，重定向可能UTF16。删npm/venv先问；主树域/第十四轮历史健康还原与LOD等未派事项不展开。i-have-adhd持续，50%提醒已给，后续建议新对话。
+### Round24 实现与证据
 
-【2026-11-02 Round18+19｜codex 交付，主树已 `--no-ff` 收编】codex 连交两轮：
-第十八轮 `8b6b702`（锚点读档按游标重建 `npc_profiles`）、第十九轮 `e28e144`（L2 真实
-调用路径接齐）。主树独立复跑读数见 §1；本段记收编口径。
+| 阶段 | 本地提交 | 结果 |
+|---|---|---|
+| A | `d03f806` | PerspectiveCamera、天空/雾、单位方块、单世界 canvas；默认 fov60/pitch12/请求距离8 |
+| B | `03ab898` | 原资源 billboard、动画/朝向/同格偏移/名字/气泡、天气与音频；默认 yaw225，近墙避碰会缩短或抬高视角 |
+| C | `8fa3f56` | 独立高1移动平面与最近实例编辑 raycast；真实地图3947可走中心与旧路径对照、四方向/侧面/土坎 |
+| D | `e45a4ed` | 方块整列轮廓、材料1/2/3高度预览、服务端进度与移动目标；提示置顶以保近处可读 |
+| E | `5eacfbc` | 精确 Python Bresenham 移植、半径12源文件钉死；共用可见集合控制人物/接触阴影/名字/气泡和目标；主角淡轮廓恒可见 |
+| 审查修复 | `b7ac220` | 丢失捕获取消、逐事件世界/连接/焦点守卫；旧世界输入不向新世界发包 |
 
-- **第十八轮 `npc_profiles` 锚点读档**：锚点包采用**独立 profile 快照段**，不再复制父分支
-  未来 death/LOD 态。**兼容边界（可用性变化，必须告知用户）**：缺 profile 副本的旧锚点包
-  统一 `corpus_mismatch`、hooks 前拒绝——旧存档将**读不出来**。已登记
-  `docs/data/schema.md §24.2`。主树裁定：接受，属 fail-closed 取舍，非回归。
-- **第十九轮 L2 真接线**：`NpcProfileData` 读既有 `identity_anchor` 列（无新列、无 seed 改动）；
-  `NpcL2Service` 用稳定身份前缀 + 本人感知/记忆/规矩/已听对话，生成**有限单步**动作
-  （eat/rest/work/wander/request_chat）+ 成品 thought/line。异步 coordinator **锁外**等模型，
-  下拍经原 `sim_exec` 落 `NPC_ACT`/`MOVE`/`NPC_MONOLOGUE`/`NPC_CHAT`——**无新事件 kind、
-  无协议字段**（T2 逐位一致不受影响；`world.py` 三个 handler 仍是 no-op）。
-  等待 L2 时近身模板发言暂缓；模型失效回退原模板。世界/LOD 轮次/身份/距离/存活/隐藏窗口/
-  听者变化 → 丢弃旧结果。**不是多步长程规划器**，是「有限单步 L2」。
-- **成本闸**：新增村民池默认同 NPC 60 真实秒、全村滑动 60 秒最多 4 次、单并发、8 秒超时、
-  192 输出 token、单 HTTP 尝试；`NPC_L2_MIN_INTERVAL_SECONDS` / `NPC_L2_CALLS_PER_MINUTE`
-  （0=关）/ `NPC_L2_TIMEOUT_SECONDS` 可配，坏值回退保守默认。**暂停/离线/历史回放零模型调用**
-  （`offline.py` 的「不调模型」承诺未破）。离开 3 格且最后对话结束 30 游戏秒后降格；
-  最近已发结论去重 + 长度压缩经 `MemoryWritePipeline` 当前隐藏闸，无额外模型调用。
-- **收编冲突 2 处**（预测 4 处，`main.py`/`fork.py` 自动合并）：
-  1. `sim/npc/sim_exec.py` —— **两边都保留**：先 `note_dialogue`（L2 降格判据），
-     再主树单次 `apply_remedy(..., "request_chat")`。L2 侧不写 social ⇒ 不会重复扣账。
-  2. `.orca/memory.md` —— 取主树版本后补记本轮（本节）。
-- **自动合并后复查（必做，第十七轮活例）**：`main.py::ensure_schema`（`:42,208`）、
-  `fork.py::_clone_health_at_cursor`（`02e3b10`）、`ws.py` D 的 `_MONO_HISTORY` 视角过滤，
-  三处均须仍在——已核。
-- **第十九轮自测（codex 侧，不采信）**：pytest 非 bench 3253P/121S/72D、403.86s；
-  L2 边界 127P；Ruff 390 files；Pyright 0/0；client 353P/48files；两资产逐字节；
-  `uv lock`；全 EXIT 0。两项 Important（中文/Unicode/全角 Roman 数字闸、故障启动后
-  L2 动态就绪）RED→GREEN 关闭。**全部 FakeLLM/MockTransport——无付费模型质量验收。**
-- **~~只报未修（主树待评估）~~：`seed_villagers` 分支过滤** —— 第十八轮只报未改，
-  **第二十轮 `bb0647e` 已修**（详见 §1b 的 `npc_profiles` 条目下方）。
-- **证据**：`.orca/audits/round18-*`（如有）、`.orca/audits/round19-2026-11-02/
-  {plan.md,progress.md,gates.json,review.md}`；配置与行为记 `docs/perf/llm-monitoring.md §8`。
-- **未动**：`ChenmoDriver`、`needs.py`、villager 种子、WS 语义、`fork/_BOUNDED_TABLES`、
-  协议 1.14、`shared/`、`package.json`+lock、冻结 `DESIGN.md`、`registry`、迷雾登记。
-  默认陈默重试仍 2 次；新村民专用 client 只 1 次并在停服 `aclose`。
+- 基线 `3912f7c` 含主树 three 初版与既有修复，保留共享 `cell-appearance.ts`、`tile-color.ts`、旧 `voxel-picking.ts`。sim/shared/协议1.15/资源/依赖清单锁/DESIGN/registry 均未改。没有新后端感知通道。
+- 最终门禁：**vitest 537P/75files**；tsc、eslint、prettier、协议生成检查、build 全 EXIT0。最初478P/65files，A 移除过时正交对齐断言后470P；不是跳过失败用例。无后端代码改动，未为本轮重跑全量 pytest。
+- 独立全分支审查初始0Critical/2Important/1Minor；2Important 先复现 **15F/16P** 再修，focused31P、全量537P。审查只跑一轮；修复用 RED→GREEN 验证，没有二次独立复审。Minor DPR 暂缓。
+- 真浏览器仅打包版 ms-playwright Chromium。真实鼠标移动至 `(100,52)`、挖 `(100,54)` 石料0→1；HUD选石/右键放/挖回石料1→0→1、h2→可走h1，实收进度0.2。旋转不发 voxel 请求，页面/console error0；无手改镜像或假回包。
+- 原生捕获补测3次可信 lostpointercapture、每次活跃挖掘只取消一次，文本框聚焦后只发当前位置停止。精确0/149/150/180ms边界由单测覆盖；最终原生“尽早释放”耗203.8ms，不能报成150ms前实机证据。pending capture 先等 gotpointercapture；CDP发帧异步，焦点顺序用同步透明观察器读取。
+- E 真140×100地图出生名册 `(100,53)` 可见 **10/51**（含主角），街区开阔者可见、墙后者隐藏。最终运行快照原生移到 `(99,53)`：**2/57可见，4名附近NPC被墙挡**（吴秀才/严药童/葛园丁/彭花匠）；实际 Python LOS/HUMAN 对同一捕获网格与全部人物逐人完全一致。先前9/57/2是另一时刻，只保留 initial-parity 摘要，不与当前快照混用。
+- 证据 `.orca/audits/round24-2026-11-06/`：`gates.json`、`frozen.json`/`frozen-files.json`、`review.md`、`progress.md`；最终 `e-observer-three-desktop.png` / `e-observer-three-orbit.png` / `e-observer-three-1024.png` / `e-observer-default-phaser.png` 已看图，C/D原生操作与进度图保留。设计现状更新于 `docs/arch/world-liveliness-design.md` §7、`voxel-execution-spec.md` §10。
+- 浏览器后端全部显式隔离 world/anchor/profile 三库，providerNone、offline wall0，原 world.db 未读写、无付费模型。临时 backend94559/Vite89397 已 Ctrl-C 停止，8000/5173端口确认关闭；测试浏览器由 finally 关闭。审计目录按交付要求保留，属于 ignored 本地证据。
 
-【2026-11-03 Round20｜codex 交付 `bb0647e`(B) + `3012063`(A)，主树 `--no-ff` 收编 `66637b7`】
-**2 处冲突、本轮 0 红**（不像第十八轮收编后才炸）。
+### 当前限制与闭合边界
 
-- **B 三处播种分支过滤**（`bb0647e`）：`seed_villagers`/`seed_protagonist`/`seed_animals`
-  全改按 `(branch_id, id)` 查与写；`_profile_row` 硬编码 `"main"` 改为 `branch_id="main"`
-  关键字形参（`villagers.py` / `protagonist.py`）。新增 `sim/content/seeding.py`：
-  `death_ids_from_history()` 从已解码有界历史取 `payload["entity_id"]`，
-  `read_branch_death_ids()` 经 `store.read_branch_history` 走祖先分叉点前缀 ——
-  **本线与祖先死者不复活、祖先未来死亡不渗入**。缺 Branch 且无任何事件 ⇒ 真空库才开
-  `main` 创世；已有 Branch 却无 `is_current` 指针 ⇒ **故障态，不猜 main**。
-- **A 每日健康严重度演进**（`3012063`）：新增 `sim/content/health_evolve.py`。
-  数值表（单位严重度/**游戏日**）：`old_injury -0.05` / `disease +0.10` /
-  `addiction +0.02` / `disability 0.00` / `trauma -0.02`；round 12 位后 clip `[0,1]`。
-  愈合到 0 只发一次 `active=False`；恶化到 1 保持 active、饱和不重复。
-  **只更新已有健康条目，不建新档**；新伤只有 `created_at_tick` 不晚于该日界才参加。
-  接线：**异步批读快照 + 同步闭包**（钩子契约仍是同步无 IO）；`main.py::_on_day_switch`
-  先反思、`finally` 健康，**两者返回值都丢弃**；`run_world_driver` 签名与同步语义未改。
-  逐日 `loop.enqueue` 七键健康事件，下一帧 `drain_events` + `on_flush` 才落库（一帧延迟）。
-  `refresh` 不推进 `last_day`；`reset` 用于换 branch / 建基线。
-- **两条明确保留边界（裁定，不是漏做）**：
-  ① **离线补跑不演进健康**（选项 b）：`advance_offline` 保持纯引擎路径，不扩签名/内容回调；
-  补跑结束后才建健康基线，不在首次上线日切追补离线天数。已写进两处 docstring。
-  ② **重症 1 只改健康投影，不产 `AGENT_INCAPACITATED`**：普通 NPC 无失能恢复入口，
-  静默制造永久失能会卡死世界。
-- **收编冲突**：1. `villagers.py::_profile_row` —— 两边都保留（主树 1A 同源 + codex `branch_id`）；
-  2. `.orca/memory.md` —— codex 副本停在第十八轮，取主树版本后补记（本段）。
-- **主树独立复跑**：pytest **3457P/0F/121S**（434.12s，= 3350 + 107）、ruff/format **403 files**、
-  pyright 0/0/0、client 四件 EXIT 0、vitest 353P/48F、两资产逐字节、`uv lock --check`、
-  协议 1.14。关键回归单跑 98P；fork 39P/1S。codex 自测 3360P 与本树 3457P 的差 = 主树专有提交。
-- **证据**：`.orca/audits/round20-2026-11-03/{plan.md,progress.md,gates.json,review.md,b-report.md}`。
-【2026-11-05 Round23｜codex 交付，主树收编中】基线 c59cb00；B2 `424ec34`，
-B3 + 建造安全 `1738e09`；协议 **1.15**。本节记收编口径，读数以主树独立复跑为准。
+- **默认仍 Phaser**；`?terrain=three` 开完整新世界。用户主观观感、手感和默认切换未验收；本线程无参考原图，不声称逐像素对比。
+- DPR 仅创建时读取，跨屏/缩放后清晰度与GPU分配可能沿用旧值；CSS拾取正确。构建大包警告保留：JS2309.34kB/gzip572.25kB。不同硬件FPS、长GPU会话、音频亲听未验收；不将未测性能当通过。
+- 近墙抬高相机、提示置顶是为可读性所作取舍，可能改变临墙构图/产生提示覆盖。房屋仍h2实心块，有简单接触阴影，无动态光照投影、水波或塌落动画。
+- 不做E2地形消失、夜间视距修正、听嗅文案、perception出站/后端；take/give下一轮，离线不演进健康、重症不产失能的裁定仍闭合。
+- 原本树 world.db 有历史唯一创世损坏，继续禁止拿它实验。真实库存档兼容与模型内容质量不在本轮验收范围。
 
-- **B2**：新landmarks.py单源10地标含中文名/语义标签，主角文案不再漏5处；职业动作9站点，不新增/改序8职业，村塾不指派。home_base_of保留睡眠/出生/本区聊天；日间wander围绕当前片区中心半径12，scatter4与arrival4分开。执行层查钱/空地/需求/忙工地后向runtime.tick注入bonus_of，选build时补x/y再写NPC_ACT；创世50人每人15文coin.grant，冷启动重放不重发；先start再扣40，无静默退账。
-- **建造安全**：独立审查实图(12,69)唯一邻格(13,69)被棚封死，1Important已修。BuildRuntime.can_start以候选footprint外沿连通检查保留原可走区域，NPC选址还查可达并避开人/旧路径/地标4格邻域。完工有人占格则等待；旧路径穿新墙以MOVE停止。4条RED→GREEN，相关74P；独立审查另43P，零遗留问题。
-- **B3/用户裁定**：请求material可选缺省earth，放土/石/木=h1/h2/h3且均阻挡；新放置块挖一次返原料一份并恢复可走h1，放土不造石、放木不倍增。天然多层格高度递减而保留记录材质，h1地面为earth。_materials与_placed从已有VOXEL_EDITED恢复，TILE_CHANGED投影带material；HUD选材/空库存禁选/阻挡轮廓预览，Scene→bridge→runtime→WS全接。协议八处1.15、openapi_ext与shared快照两schema手改相等、protocol.ts由快照生成；不改SQL schema/依赖/包锁/冻结基线。
-- **验证**：pytest notbench3427P/121既有S/72benchDeselected，453.95s，EXIT0；8warnings=2依赖弃用+4旧迁移子进程编码线程警告+2Pydantic弃用，UTF8单跑旧迁移1P/0warnings。client365P/50files；Ruff399files、Pyright0E/0W、typecheck/lint/prettier/protocol/两资产/uv-lock全EXIT0。真实生产hooks+SQL3日259200tick/807.46s：开工2(54320、227120)/完工1，动作站点9、各区distinct7/8/9/8/7，忙工地失败独白0，538笔coin事件与SQL重放均等于50人实况余额。MOVE覆盖10地标邻域含偶然靠近村塾，不是给村塾指派职业。真实网关三材料闭环含石/木2次冷启动通过。
-- **交接**：证据 `.orca/audits/round23-2026-11-05/{plan.md,progress.md,gates.json,review.md,
-  live-result.json,material-result.json}`；实况脚本 `live_probe.py` / `material_probe.py`，
-  每次显式新建审计私库并隔离 world/anchor/profile。**未跑浏览器与付费模型**，
-  不能当视觉或旧真库存档验收。收编保留主树 B1 叙事缓存、`74fe95c` 转述 speaker 归因、
-  `ensure_schema` 等本树未同步改动。
+### 历史指针（旧全文查 Git，不重做）
+
+- Round23 已由主树 `5e4e20b` 收编：B2 `424ec34`、B3/建造安全 `1738e09`。材料按请求：土/石/木=h1/h2/h3且均挡路；挖新放块返原料一份、恢复可走h1。用户已选“土高1仍挡路”，勿改回堆高2才可挖。NPC十地标/九站点/五区、开工预算/防封路及真实SQL三日证据在 `round23-2026-11-05/`；本轮未重复后端功能。
+- Round22 `1fb935d` + `c59cb00`：只有实际height1土坎glyph参与高块排序，旧picker保持；主树已收编。
+- Round20 `bb0647e`/`3012063`（主树 `66637b7`）：三处播种分支过滤、每日健康；离线/失能边界见上。Round18 `8b6b702` 与Round19 `e28e144` 已收编：profile锚点缺副本 fail-closed、有限单步L2，非多步规划；无付费质量验收。
+- Round17 `16b7eae`：物种知识门与名牌避让；Round16/15的详细知识、离线、音效、T5/soak证据及既有限制查 `.orca/audits/round16-2026-11-01/`、`round15-2026-11-01/` 和 `git log -p -- .orca/memory.md`。火声仅客户端映射，真实火场出站仍延后；不得扩成新后端火生产器。
+- 保留主树既有 ensure_schema、转述 speaker 归因、叙事缓存、历史健康分叉、保护锚点等修复；以当前源码为准，dated handoff不是许可。
