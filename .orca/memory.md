@@ -3,10 +3,17 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-05 第二十三轮已收编 · 主树 HEAD `5e4e20b`）
+## 0. 当前状态（2026-11-06 清理轮 · 主树 HEAD `f77fa81`）
 
-- **主树在飞：无**。第二十三轮**全部收编**：主树部分 `c7b7d1d`/`c3e2a2b`/`c7f5e31`，
-  codex 部分 `424ec34`/`1738e09`，`--no-ff` 合并提交 **`5e4e20b`**（4 处冲突全解）。
+- **主树在飞：无**。**第二十四轮在飞的是 codex 树**（three.js 自由视角全量重写，
+  派单在 `E:/zxdevelop/.orca/worktrees/project7/codex/.orca/talking.txt`，**尚未交回**）。
+- **2026-11-06 清理轮（`f77fa81`）**：删掉三个零引用依赖（`pydantic-settings`/`tenacity`/
+  `hypothesis`，DESIGN §4 同步改写）、`.opencode/`（61M）、`agent-registry.md` 里
+  四个已不存在的工作树、`.env.example` 两个死键、两份 331M 备份库、各类缓存/构建产物。
+  1.5G → 719M。清理后门禁实测：pytest **3544P/121S/72D** · vitest **478P/0F** ·
+  ruff/format/pyright 全 0 · tsc/eslint/prettier/gen:protocol/lock/两资产 全 EXIT 0。
+- **第二十三轮已收编**（上一轮，`5e4e20b`）：主树部分 `c7b7d1d`/`c3e2a2b`/`c7f5e31`，
+  codex 部分 `424ec34`/`1738e09`，`--no-ff` 合并（4 处冲突全解）。
 - **收编后主树独立复跑（不采信 codex 自测）**：pytest **3544P / 121S / 72D**
   （497.88s，EXIT 0）· ruff 410 files + format 全过 · pyright **0/0/0** ·
   client typecheck/eslint/prettier/gen:protocol 全 EXIT 0 · vitest **428P / 57F** ·
