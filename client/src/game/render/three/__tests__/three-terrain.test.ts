@@ -1,9 +1,10 @@
 import { expect, it } from 'vitest';
-import { HEIGHT_UNIT, worldOf } from '../three-projection';
+import { worldOf } from '../three-projection';
 import {
   FACE_SHADE,
   WATER_THICKNESS,
   blockTransform,
+  blockInstances,
   grainOf,
   layerOf,
   shadedBoxForTest,
@@ -12,6 +13,13 @@ import {
 
 const W = 140;
 const H = 100;
+
+it('builds tall columns from unit cubes rather than stretching a face texture', () => {
+  const instances = blockInstances([{ x: 10, y: 20, h: 3, color: 0xffffff }], W, H);
+  expect(instances).toHaveLength(3);
+  expect(instances.map((instance) => instance.scaleY)).toEqual([1, 1, 1]);
+  expect(instances.map((instance) => instance.position.y)).toEqual([0.5, 1.5, 2.5]);
+});
 
 it('grain is deterministic, bounded, and not uniform', () => {
   const values = new Set<number>();
@@ -84,17 +92,17 @@ it('layerOf clamps a cell height into the four render layers', () => {
 it('a block stands on the ground plane with its top at its height level', () => {
   for (const level of [1, 2, 3]) {
     const t = blockTransform(10, 20, level, W, H);
-    expect(t.scaleY).toBeCloseTo(level * HEIGHT_UNIT, 10);
+    expect(t.scaleY).toBeCloseTo(level, 10);
     // Centre sits half a box up, so the bottom face is exactly at y = 0 ...
     expect(t.position.y).toBeCloseTo(t.scaleY / 2, 10);
     // ... and the top face lands on the elevation the camera and picking assume.
-    expect(t.position.y + t.scaleY / 2).toBeCloseTo(level * HEIGHT_UNIT, 10);
+    expect(t.position.y + t.scaleY / 2).toBeCloseTo(level, 10);
   }
 });
 
 it('water is a thin slab whose top face is the ground plane', () => {
   const t = blockTransform(10, 20, 0, W, H);
-  expect(t.scaleY).toBeCloseTo(WATER_THICKNESS * HEIGHT_UNIT, 10);
+  expect(t.scaleY).toBeCloseTo(WATER_THICKNESS, 10);
   // Top at y = 0 so walkable h=0 cells are flush with the pick plane.
   expect(t.position.y + t.scaleY / 2).toBeCloseTo(0, 10);
   // The slab hangs below the plane rather than above it.

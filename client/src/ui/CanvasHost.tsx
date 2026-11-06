@@ -4,14 +4,14 @@
  */
 import type { ReactElement } from 'react';
 import { useEffect, useRef } from 'react';
-import type Phaser from 'phaser';
+import type { WorldGame } from '../game/world-game';
 import { createGame } from '../game/main';
 import { worldMirror } from '../game/runtime';
 import { VoxelInventory } from './VoxelInventory';
 
 export function CanvasHost(): ReactElement {
   const ref = useRef<HTMLDivElement>(null);
-  const gameRef = useRef<Phaser.Game | null>(null);
+  const gameRef = useRef<WorldGame | null>(null);
 
   useEffect(() => {
     const parent = ref.current;

@@ -17,9 +17,6 @@ import {
   screenBounds,
 } from '../render/iso';
 import { IsoTerrain } from '../render/iso-terrain';
-import { createTerrainAdapter, type TerrainAdapter } from '../render/three/three-terrain-adapter';
-import { createColorSampler, FALLBACK_COLOR } from '../render/tile-color';
-import { type TerrainBackend, terrainFromSearch } from '../render/presentation';
 import { pickGround, pickVoxel } from '../render/voxel-picking';
 import { BLOCK_ATLAS_KEY, BLOCK_ATLAS_META_KEY } from '../render/block-atlas';
 import { placeBubble, selectBubbleNames } from '../render/bubbles';
@@ -134,11 +131,7 @@ export class WorldScene extends Phaser.Scene {
   /** 建筑内容签名：同数量的相位/格位变化也须重绘。 */
   private lastStructureSignature = '';
   private renderMode: Renderer;
-  private terrainBackend: TerrainBackend;
   private isoTerrain: IsoTerrain | null = null;
-  /** `?terrain=three`: blocks are drawn by three.js on a canvas under the
-   * Phaser canvas. Actors, labels, bubbles, rain and night stay Phaser. */
-  private threeTerrain: TerrainAdapter | null = null;
   private heightAt = createHeightLookup(null);
   private isoCameraTarget = { x: 0, y: 0 };
   private isoFollowToken: string | null = null;
@@ -169,12 +162,10 @@ export class WorldScene extends Phaser.Scene {
   constructor(
     mirror: WorldMirror,
     renderer: Renderer = rendererFromSearch(globalThis.location?.search ?? ''),
-    terrain: TerrainBackend = terrainFromSearch(globalThis.location?.search ?? ''),
   ) {
     super({ key: 'world' });
     this.mirror = mirror;
     this.renderMode = renderer;
-    this.terrainBackend = terrain;
     this.inputMap = mirror.map;
     this.inputReset = mirror.resetCount;
     this.inputSnapshot = mirror.voxelSnapshotVersion;
@@ -209,60 +200,6 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  /** Build the three.js terrain canvas under the Phaser one.
-   *
-   * The two canvases share one coordinate system: `syncCamera` derives the
-   * three camera from the Phaser camera every frame, so a Phaser screen pixel
-   * maps to the same block. That is what lets `pickVoxel` / `pickGround` stay
-   * untouched — the only reason this renderer is safe at all, given that all
-   * three historical picking accidents came from geometry disagreement.
-   *
-   * The three canvas is inserted *behind* Phaser's (lower z-index, same box), so
-   * actors, labels, bubbles, rain and the night overlay keep drawing on top
-   * exactly as before.
-   */
-  private createThreeTerrain(): void {
-    const parent = this.game.canvas.parentElement;
-    if (parent === null) return;
-    const canvas = document.createElement('canvas');
-    canvas.style.position = 'absolute';
-    canvas.style.inset = '0';
-    canvas.style.width = '100%';
-    canvas.style.height = '100%';
-    canvas.style.zIndex = '0';
-    canvas.style.pointerEvents = 'none';
-    this.game.canvas.style.position = 'relative';
-    this.game.canvas.style.zIndex = '1';
-    parent.insertBefore(canvas, this.game.canvas);
-
-    const source = this.textures.exists(TILESET_KEY)
-      ? (this.textures.get(TILESET_KEY).getSourceImage() as HTMLImageElement)
-      : null;
-    const sampleColor = this.sampleTileset(source);
-    const adapter = createTerrainAdapter({
-      canvas,
-      mirror: this.mirror,
-      heightOf: this.heightAt,
-      sampleColor,
-    });
-    adapter.resize(this.scale.width, this.scale.height);
-    this.threeTerrain = adapter;
-  }
-
-  /** gid → 0xRRGGBB, the same central-4×4 mean the Phaser painter and
-   * `build_block_atlas.py` use. Missing tileset falls back to the timber tone. */
-  private sampleTileset(source: HTMLImageElement | null): (gid: number) => number {
-    if (source === null) return () => FALLBACK_COLOR;
-    const canvas = document.createElement('canvas');
-    canvas.width = source.width;
-    canvas.height = source.height;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (ctx === null) return () => FALLBACK_COLOR;
-    ctx.drawImage(source, 0, 0);
-    const pixels = ctx.getImageData(0, 0, source.width, source.height).data;
-    return createColorSampler(pixels, source.width, source.height);
-  }
-
   create(): void {
     const audio = new WebAudioSynth(() => {
       if (!this.sound || !('context' in this.sound)) return null;
@@ -273,13 +210,10 @@ export class WorldScene extends Phaser.Scene {
     this.events.once('shutdown', () => worldAudio.detach(audio));
     if (this.renderMode === 'iso') {
       this.heightAt = createHeightLookup(this.cache.json.get('linhe-height'));
-      if (this.terrainBackend === 'three') this.createThreeTerrain();
-      else this.isoTerrain = new IsoTerrain(this, this.heightAt);
+      this.isoTerrain = new IsoTerrain(this, this.heightAt);
       this.events.once('shutdown', () => {
         this.isoTerrain?.destroy();
         this.isoTerrain = null;
-        this.threeTerrain?.dispose();
-        this.threeTerrain = null;
       });
     }
     createFaunaTextures(this);
@@ -357,12 +291,6 @@ export class WorldScene extends Phaser.Scene {
     if (g === null) return;
     g.clear();
     if (this.renderMode === 'iso') {
-      if (this.threeTerrain !== null) {
-        // three owns the terrain: the Phaser map graphics stay empty, and the
-        // blocks are rebuilt by the adapter's dirty check.
-        this.threeTerrain.sync();
-        return;
-      }
       this.isoTerrain?.redraw(
         map,
         this.mirror.structures,
@@ -800,16 +728,11 @@ export class WorldScene extends Phaser.Scene {
     this.syncBubbles(Date.now()); // 与 mirror.setBubble 的到期时钟一致
     this.syncStructures();
     this.isoTerrain?.advance(delta);
-    this.threeTerrain?.scene.render();
   }
 
   /** E7 建筑投影：内容变化才重绘，保留相位对应的颜色与透明度。 */
   private syncStructures(): void {
     if (this.renderMode === 'iso') {
-      if (this.threeTerrain !== null) {
-        this.threeTerrain.sync();
-        return;
-      }
       this.isoTerrain?.sync(
         this.mirror.map,
         this.mirror.structures,
@@ -1204,14 +1127,6 @@ export class WorldScene extends Phaser.Scene {
         // 目标本身已是逐帧插值，再叠 0.12 缓动 = 双重滞后（人物粘滞/漂移感）。
         camera.startFollow(this.isoCameraTarget, true, 1, 1);
         this.isoFollowToken = this.mirror.protagonist;
-      }
-      if (this.threeTerrain !== null) {
-        // The Phaser camera is the authority; three follows its *visible*
-        // centre. `midPoint` is in screenBounds space, which is exactly what
-        // `alignTarget` inverts — one authority, two canvases.
-        const mid = camera.midPoint;
-        this.threeTerrain.resize(this.scale.width, this.scale.height);
-        this.threeTerrain.syncCamera(mid.x, mid.y, camera.zoom);
       }
       return;
     }

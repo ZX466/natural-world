@@ -10,12 +10,12 @@
  * the camera, the raycaster and the blocks cannot drift apart. Pixels never
  * enter this file; the camera's frustum does the scaling.
  *
- * Block appearance is Minecraft-style: flat per-cell colour, a small
- * deterministic brightness grain, no texture sampling.
+ * Block appearance uses the existing per-cell palette and nearest-filtered
+ * pixel grain on unit cubes; tall columns never stretch a texture.
  */
 
 import * as THREE from 'three';
-import { HEIGHT_UNIT, createCamera, resizeCamera, worldOf } from './three-projection';
+import { createCamera, resizeCamera, worldOf } from './three-projection';
 
 /** Fraction of a cell that a water slab occupies. Thin enough to read as a
  * surface, thick enough to still catch the key light. */
@@ -63,9 +63,7 @@ export interface BlockTransform {
  * **top face is the ground plane** for water, so the surface a walker stands on
  * is at y = 0 in both cases and matches what `worldOf` / the raycaster expect.
  *
- * Every height is multiplied by `HEIGHT_UNIT`: a raw world-Y lift is 1.2247 cell
- * runs, and a block has to be exactly as tall as it is wide (`iso.ts` lifts one
- * level by `ISO.HH` = one cell step). */
+ */
 export function blockTransform(
   x: number,
   y: number,
@@ -75,8 +73,8 @@ export function blockTransform(
 ): BlockTransform {
   const layer = layerOf(h);
   const centre = worldOf(x, y, mapW, mapH);
-  const scaleY = (layer === 0 ? WATER_THICKNESS : layer) * HEIGHT_UNIT;
-  const bottom = layer === 0 ? -WATER_THICKNESS * HEIGHT_UNIT : 0;
+  const scaleY = layer === 0 ? WATER_THICKNESS : layer;
+  const bottom = layer === 0 ? -WATER_THICKNESS : 0;
   return {
     position: { x: centre.x, y: bottom + scaleY / 2, z: centre.z },
     scaleY,
@@ -95,7 +93,8 @@ export interface TerrainCell {
 export interface TerrainScene {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene: THREE.Scene;
-  readonly camera: THREE.OrthographicCamera;
+  readonly camera: THREE.PerspectiveCamera;
+  readonly meshes: readonly THREE.InstancedMesh[];
   /** Replace every instance. Cheap enough to call on each terrain revision. */
   setCells(cells: readonly TerrainCell[], w: number, h: number): void;
   /** Draw one frame. The caller owns the animation loop. */
@@ -140,15 +139,64 @@ function shadedBox(): THREE.BoxGeometry {
   return geometry;
 }
 
-/** One 1×1×1 box shared by every instance, with baked face shading. */
-const BOX = shadedBox();
+export interface BlockInstance extends BlockTransform {
+  readonly cell: TerrainCell;
+}
+
+export function blockInstances(
+  cells: readonly TerrainCell[],
+  w: number,
+  h: number,
+): BlockInstance[] {
+  const instances: BlockInstance[] = [];
+  for (const cell of cells) {
+    const height = layerOf(cell.h);
+    if (height === 0) instances.push({ ...blockTransform(cell.x, cell.y, 0, w, h), cell });
+    for (let level = 0; level < height; level++) {
+      const transform = blockTransform(cell.x, cell.y, 1, w, h);
+      instances.push({ ...transform, position: { ...transform.position, y: level + 0.5 }, cell });
+    }
+  }
+  return instances;
+}
+
+function skyTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 2;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+  const gradient = ctx.createLinearGradient(0, 0, 0, 512);
+  gradient.addColorStop(0, '#80b9e7');
+  gradient.addColorStop(0.65, '#c8e0ef');
+  gradient.addColorStop(1, '#e6eef2');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 2, 512);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function blockTexture(): THREE.DataTexture {
+  const pixels = new Uint8Array(16 * 16 * 4);
+  for (let i = 0; i < 256; i++) {
+    const value = 239 + ((i * 37 + (i >> 4) * 13) % 17);
+    pixels.set([value, value, value, 255], i * 4);
+  }
+  const texture = new THREE.DataTexture(pixels, 16, 16);
+  texture.magFilter = texture.minFilter = THREE.NearestFilter;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
 
 export function createTerrainScene(canvas: HTMLCanvasElement): TerrainScene {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(globalThis.devicePixelRatio ?? 1);
+  renderer.setPixelRatio(Math.min(2, globalThis.devicePixelRatio ?? 1));
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1b2a24);
+  const sky = skyTexture();
+  scene.background = sky;
+  scene.fog = new THREE.Fog(0xdce9f1, 32, 80);
 
   // Orthographic camera from the projection contract — the same one picking
   // raycasts through, so blocks and clicks share one authority.
@@ -157,7 +205,9 @@ export function createTerrainScene(canvas: HTMLCanvasElement): TerrainScene {
   // No lights: brightness is baked into the geometry's vertex colours (see
   // FACE_SHADE), so the result is identical to the Phaser painter on every
   // device and does not depend on a BRDF's normalisation.
-  const material = new THREE.MeshBasicMaterial({ vertexColors: true });
+  const texture = blockTexture();
+  const geometry = shadedBox();
+  const material = new THREE.MeshBasicMaterial({ vertexColors: true, map: texture });
 
   let meshes: THREE.InstancedMesh[] = [];
   let mapW = 1;
@@ -176,20 +226,22 @@ export function createTerrainScene(canvas: HTMLCanvasElement): TerrainScene {
     mapW = w;
     mapH = h;
 
+    const instances = blockInstances(cells, w, h);
     const counts = new Array<number>(LAYERS).fill(0);
-    for (const cell of cells) counts[layerOf(cell.h)]! += 1;
+    for (const instance of instances) counts[layerOf(instance.cell.h)]! += 1;
 
     const matrix = new THREE.Matrix4();
     const colour = new THREE.Color();
     for (let layer = 0; layer < LAYERS; layer++) {
       const count = counts[layer]!;
       if (count === 0) continue;
-      const mesh = new THREE.InstancedMesh(BOX, material, count);
+      const mesh = new THREE.InstancedMesh(geometry, material, count);
       mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
       let i = 0;
-      for (const cell of cells) {
-        if (layerOf(cell.h) !== layer) continue;
-        const t = blockTransform(cell.x, cell.y, cell.h, w, h);
+      const batch = instances.filter((instance) => layerOf(instance.cell.h) === layer);
+      mesh.userData.cells = batch.map((instance) => instance.cell);
+      for (const t of batch) {
+        const cell = t.cell;
         matrix.makeScale(1, t.scaleY, 1);
         matrix.setPosition(t.position.x, t.position.y, t.position.z);
         mesh.setMatrixAt(i, matrix);
@@ -200,6 +252,8 @@ export function createTerrainScene(canvas: HTMLCanvasElement): TerrainScene {
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       // Instanced bounds are computed from the base geometry, not the instances.
+      mesh.computeBoundingBox();
+      mesh.computeBoundingSphere();
       mesh.frustumCulled = false;
       meshes.push(mesh);
       scene.add(mesh);
@@ -216,12 +270,18 @@ export function createTerrainScene(canvas: HTMLCanvasElement): TerrainScene {
     renderer,
     scene,
     camera,
+    get meshes() {
+      return meshes;
+    },
     setCells,
     resize,
     render: () => renderer.render(scene, camera),
     dispose() {
       clearMeshes();
       material.dispose();
+      geometry.dispose();
+      texture.dispose();
+      sky.dispose();
       renderer.dispose();
     },
   };

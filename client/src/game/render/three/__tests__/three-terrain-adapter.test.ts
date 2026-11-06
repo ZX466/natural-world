@@ -2,14 +2,11 @@ import * as THREE from 'three';
 import { expect, it, vi } from 'vitest';
 import type { MapStatic } from '../../../world-mirror';
 import { WorldMirror } from '../../../world-mirror';
-import { ISO, isoProject, screenBounds } from '../../iso';
-import { HEIGHT_UNIT, alignTarget } from '../three-projection';
-import { cellPxAtZoom, createTerrainAdapter, terrainCells } from '../three-terrain-adapter';
+import { createTerrainAdapter, terrainCells } from '../three-terrain-adapter';
 import type { TerrainCell, TerrainScene } from '../three-terrain';
 
 const W = 140;
 const H = 100;
-const ZOOM = 3.5;
 const VW = 1600;
 const VH = 900;
 
@@ -36,7 +33,8 @@ function stubScene() {
   const scene: TerrainScene = {
     renderer: { setSize: vi.fn(), domElement: { width: VW, height: VH } } as never,
     scene: new THREE.Scene(),
-    camera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 4000),
+    camera: new THREE.PerspectiveCamera(60, 1, 0.05, 300),
+    meshes: [],
     setCells,
     render: vi.fn(),
     resize: vi.fn(),
@@ -56,15 +54,6 @@ function adapter(mirror: WorldMirror, heightOf = () => 1) {
   });
   return { a, ...stub };
 }
-
-it('cellPxAtZoom matches isoProject’s half-cell at the Phaser zoom', () => {
-  // iso.ts steps half a cell horizontally (ISO.TW / 2 = 16 logical px).
-  expect(cellPxAtZoom(3.5)).toBe(16 * 3.5);
-  expect(cellPxAtZoom(1)).toBe(16);
-  // A zero or negative zoom must not produce a zero-width frustum.
-  expect(cellPxAtZoom(0)).toBeGreaterThan(0);
-  expect(cellPxAtZoom(-2)).toBeGreaterThan(0);
-});
 
 it('terrainCells maps the shared rule onto the instance list', () => {
   const mirror = mirrorWith();
@@ -116,83 +105,22 @@ it('a fresh map object forces a rebuild even at the same version', () => {
   expect(setCells).toHaveBeenCalledTimes(2);
 });
 
-it('syncCamera centres the three camera on the Phaser camera’s cell', () => {
-  const mirror = mirrorWith();
-  const { a, scene } = adapter(mirror);
-  a.sync();
-  a.resize(VW, VH);
-
-  const bounds = screenBounds(W, H);
-  const cell = isoProject(70, 50, 0, bounds);
-  a.syncCamera(cell.sx, cell.sy, ZOOM);
-
-  // The followed cell's centre must project to the canvas centre, which is the
-  // condition for pickVoxel/pickGround to stay valid on Phaser screen space.
-  scene.camera.updateMatrixWorld(true);
-  const centre = new THREE.Vector3(70 - W / 2 + 0.5, 0, 50 - H / 2 + 0.5);
-  const ndc = centre.clone().project(scene.camera);
-  expect(ndc.x).toBeCloseTo(0, 5);
-  expect(ndc.y).toBeCloseTo(0, 5);
-});
-
-it('syncCamera reproduces isoProject’s cell step in screen pixels', () => {
-  const mirror = mirrorWith();
-  const { a, scene } = adapter(mirror);
-  a.sync();
-  a.resize(VW, VH);
-  const bounds = screenBounds(W, H);
-  a.syncCamera(isoProject(70, 50, 0, bounds).sx, isoProject(70, 50, 0, bounds).sy, ZOOM);
-
-  const px = (v: THREE.Vector3) => {
-    scene.camera.updateMatrixWorld(true);
-    const ndc = v.clone().project(scene.camera);
-    return { x: (ndc.x * VW) / 2, y: (-ndc.y * VH) / 2 };
-  };
-  const a0 = px(new THREE.Vector3(70 - W / 2 + 0.5, 0, 50 - H / 2 + 0.5));
-  const b = px(new THREE.Vector3(71 - W / 2 + 0.5, 0, 50 - H / 2 + 0.5));
-  // +x cell: right by ISO.TW/2*zoom, down by ISO.TH/2*zoom — the 2:1 diamond.
-  expect(b.x - a0.x).toBeCloseTo((ISO.TW / 2) * ZOOM, 3);
-  expect(b.y - a0.y).toBeCloseTo((ISO.TH / 2) * ZOOM, 3);
-});
-
-it('syncCamera ignores non-finite or non-positive input', () => {
-  const mirror = mirrorWith();
-  const { a, scene } = adapter(mirror);
-  a.sync();
-  a.resize(VW, VH);
+it('follows a world target and lets orbit change the camera independently', () => {
+  const { a, scene } = adapter(mirrorWith());
+  a.follow(new THREE.Vector3(10, 2.3, 20));
   const before = scene.camera.position.clone();
-  a.syncCamera(Number.NaN, 10, ZOOM);
-  a.syncCamera(10, Infinity, ZOOM);
-  a.syncCamera(10, 10, 0);
-  a.syncCamera(10, 10, -1);
-  expect(scene.camera.position.equals(before)).toBe(true);
+  a.rotate(100, -20);
+  expect(scene.camera.position.distanceTo(before)).toBeGreaterThan(1);
+  expect(a.orbitPose.azimuth).not.toBe(45);
+  a.zoom(200);
+  expect(a.orbitPose.distance).toBeGreaterThan(8);
 });
 
-it('resize ignores a collapsed container and forwards the CSS size', () => {
-  const mirror = mirrorWith();
-  const { a, scene } = adapter(mirror);
-  const setSize = scene.renderer.setSize as unknown as ReturnType<typeof vi.fn>;
+it('resize ignores a collapsed container and updates aspect using CSS dimensions', () => {
+  const { a, scene } = adapter(mirrorWith());
   a.resize(0, 500);
-  a.resize(500, 0);
-  expect(setSize).not.toHaveBeenCalled();
+  expect(scene.renderer.setSize).not.toHaveBeenCalled();
   a.resize(800, 600);
-  expect(setSize).toHaveBeenCalledWith(800, 600, false);
-});
-
-it('alignTarget keeps the block and actor frames on one origin', () => {
-  // A guard on the exact expression the adapter uses: alignTarget must land on
-  // worldOf's cell centre, or the blocks sit half a cell off the actors.
-  const bounds = screenBounds(W, H);
-  for (const [x, y] of [
-    [0, 0],
-    [70, 50],
-    [139, 99],
-  ] as const) {
-    const p = isoProject(x, y, 0, bounds);
-    const t = alignTarget(p.sx, p.sy, W, H);
-    expect(t.x).toBeCloseTo(x - W / 2 + 0.5, 9);
-    expect(t.z).toBeCloseTo(y - H / 2 + 0.5, 9);
-  }
-  // Height is the block transform's job, not the camera's.
-  expect(HEIGHT_UNIT).toBeLessThan(1);
+  expect(scene.renderer.setSize).toHaveBeenCalledWith(800, 600, false);
+  expect(scene.resize).toHaveBeenCalledWith(800 / 600);
 });

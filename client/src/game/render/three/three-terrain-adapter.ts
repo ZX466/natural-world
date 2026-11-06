@@ -1,24 +1,15 @@
-/** Bridges the shared cell rule onto the three.js terrain scene.
- *
- * Deliberately thin: `cellAppearances` decides what a cell looks like (shared
- * with the Phaser painter, so the two pictures cannot disagree), and
- * `three-terrain` decides how a block is placed. This file only converts one
- * into the other and keeps the camera glued to the Phaser camera.
- *
- * The Phaser camera remains the authority for *where the player is looking*.
- * The three camera is derived from it every frame, which is what lets
- * `pickVoxel` / `pickGround` keep operating on Phaser screen space untouched —
- * the highest-risk seam in this renderer (three historical picking accidents).
- */
-
 import type { MapStatic, VoxelEdit, WorldMirror } from '../../world-mirror';
+import * as THREE from 'three';
 import type { HeightLookup } from '../iso';
 import { cellAppearances } from '../cell-appearance';
-import { alignTarget, updateFollowCamera } from './three-projection';
+import {
+  defaultOrbit,
+  orbitBy,
+  zoomBy,
+  updateFollowCamera,
+  type OrbitPose,
+} from './three-projection';
 import { createTerrainScene, type TerrainCell, type TerrainScene } from './three-terrain';
-
-/** ISO.TW: one cell's horizontal screen extent in logical pixels. */
-const ISO_TW = 32;
 
 export interface TerrainAdapterOptions {
   readonly canvas: HTMLCanvasElement;
@@ -51,21 +42,14 @@ export function terrainCells(
 
 export interface TerrainAdapter {
   readonly scene: TerrainScene;
-  /** Rebuild block instances if the terrain changed; a no-op otherwise. */
+  readonly heightOf: HeightLookup;
+  readonly orbitPose: OrbitPose;
   sync(): void;
-  /** Follow the Phaser camera. `centreSx`/`centreSy` are the Phaser camera's
-   * visible centre in `screenBounds` space, `zoom` its zoom. */
-  syncCamera(centreSx: number, centreSy: number, zoom: number): void;
-  /** Set the drawing buffer to CSS pixels × device pixel ratio. */
+  follow(target: THREE.Vector3): void;
+  rotate(dx: number, dy: number): void;
+  zoom(delta: number): void;
   resize(width: number, height: number): void;
   dispose(): void;
-}
-
-/** One cell step in Phaser iso screen pixels at `zoom`. `ISO.TW / 2` is the
- * horizontal half-cell `isoProject` steps by, so this is the number the three
- * camera must reproduce to line up with the actors. */
-export function cellPxAtZoom(zoom: number): number {
-  return (ISO_TW / 2) * Math.max(1e-6, zoom);
 }
 
 export function createTerrainAdapter(options: TerrainAdapterOptions): TerrainAdapter {
@@ -73,10 +57,8 @@ export function createTerrainAdapter(options: TerrainAdapterOptions): TerrainAda
   const scene = (options.createScene ?? createTerrainScene)(canvas);
   let lastTerrainVersion = -1;
   let lastMap: MapStatic | null = null;
-  let mapW = 1;
-  let mapH = 1;
-  let cssWidth = 1;
-  let cssHeight = 1;
+  let pose = defaultOrbit();
+  const target = new THREE.Vector3(0, 2.3, 0);
 
   const sync = (): void => {
     const map = mirror.map;
@@ -85,8 +67,6 @@ export function createTerrainAdapter(options: TerrainAdapterOptions): TerrainAda
     if (!changedMap && mirror.terrainVersion === lastTerrainVersion) return;
     lastMap = map;
     lastTerrainVersion = mirror.terrainVersion;
-    mapW = map.w;
-    mapH = map.h;
     scene.setCells(
       terrainCells(map, mirror.structures, mirror.voxelEdits, heightOf, sampleColor),
       map.w,
@@ -94,24 +74,35 @@ export function createTerrainAdapter(options: TerrainAdapterOptions): TerrainAda
     );
   };
 
-  const syncCamera = (centreSx: number, centreSy: number, zoom: number): void => {
-    if (!Number.isFinite(centreSx) || !Number.isFinite(centreSy)) return;
-    if (!Number.isFinite(zoom) || zoom <= 0) return;
-    const target = alignTarget(centreSx, centreSy, mapW, mapH);
-    updateFollowCamera(scene.camera, cssWidth, cssHeight, target, cellPxAtZoom(zoom));
+  const follow = (point: THREE.Vector3): void => {
+    target.copy(point);
+    updateFollowCamera(scene.camera, target, pose);
+  };
+  const rotate = (dx: number, dy: number): void => {
+    pose = orbitBy(pose, dx, dy);
+    updateFollowCamera(scene.camera, target, pose);
+  };
+  const zoom = (delta: number): void => {
+    pose = zoomBy(pose, delta);
+    updateFollowCamera(scene.camera, target, pose);
   };
 
   const resize = (width: number, height: number): void => {
     if (width <= 0 || height <= 0) return;
-    cssWidth = width;
-    cssHeight = height;
     scene.renderer.setSize(width, height, false);
+    scene.resize(width / height);
   };
 
   return {
     scene,
     sync,
-    syncCamera,
+    heightOf,
+    get orbitPose() {
+      return pose;
+    },
+    follow,
+    rotate,
+    zoom,
     resize,
     dispose: () => scene.dispose(),
   };
