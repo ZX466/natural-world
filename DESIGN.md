@@ -85,9 +85,9 @@
 - SQLAlchemy 2.0 async + aiosqlite（SQLite）
 - sqlite-vec（记忆向量检索）
 - numpy（L0 统计模拟批量推进）
-- openai SDK + httpx + tenacity（OpenAI 协议通吃：OpenAI / DeepSeek / 通义 / Ollama / LM Studio）
+- openai SDK + httpx（OpenAI 协议通吃：OpenAI / DeepSeek / 通义 / Ollama / LM Studio；重试由 `sim/llm/client.py` 自管，不引第三方重试库）
 - cryptography (Fernet)（api_key 加密落库）
-- structlog / pydantic-settings
+- structlog（配置走 `os.environ`，不引 pydantic-settings）
 
 **前端**
 - TypeScript 5.7+，Vite 6
@@ -97,7 +97,7 @@
 
 **工具链**
 - Ruff / Pyright
-- pytest + pytest-asyncio + **Hypothesis**（属性测试）
+- pytest + pytest-asyncio（属性测试待真用时再引 Hypothesis）
 - ESLint + Prettier + Vitest
 - openapi-typescript（协议类型只从 FastAPI OpenAPI 生成，不手写）
 

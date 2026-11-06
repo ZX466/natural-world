@@ -57,13 +57,12 @@ logs/
 # Dot-folders: per user rule #4 ALL dot-prefixed folders stay out of git EXCEPT .orca.
 # If the repo was seeded before this rule, untrack with: git rm -r --cached <dir>
 # （用户规则 #4，2026-09-20：agent 配置目录不入 git 也不推送；但本地须存在——
-#   所有工作树都要有 .codegraph 与 .agents，.claude/.opencode/.codex 只在其对应工作树，主工作树全有）
+#   所有工作树都要有 .codegraph 与 .agents，.claude/.codex 只在其对应工作树，主工作树全有）
 .agent/
 .agents/
 .claude/
 .codex/
 .kiro/
-.opencode/
 
 # CodeGraph index (local per-machine database)
 .codegraph/

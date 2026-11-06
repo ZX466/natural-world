@@ -19,7 +19,7 @@ LLM 延迟 P95<8s（M1 验收线）是异步第三方依赖，bench 里**不做*
 |---|---|---|
 | `llm.request` | 每次发请求前 | 计数、剔除输入（**绝不记 prompt 明文**） |
 | `llm.response` | 每次成功返回 | tokens/延迟主字段 |
-| `llm.retry` | tenacity 重试时 | 重试统计 |
+| `llm.retry` | 客户端重试时（`sim/llm/client.py` 自管循环） | 重试统计 |
 | `llm.timeout` / `llm.error` | 超时/异常 | 可用性 |
 | `llm.cache_hit` | 身份锚前缀缓存命中时 | 缓存命中率（成本大头，§15） |
 | `llm.decision` | Agent 决策落地时（Intent 产生） | 端到端决策延迟（P95<8s 验收对象） |

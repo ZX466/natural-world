@@ -47,7 +47,7 @@
 | 微基准 | `pytest-benchmark` | clock/rng/entropy/pathfinding 这类纯函数、可独立调用的单元 |
 | 中/大基准 | 真实 tick loop 计时 harness | 直接驱动 `sim.core.tick()` 完整循环，`asyncio` 下测稳态吞吐与 p99；**不要**把微基准数字外推到系统级 |
 | 长跑/自转验收 | 窗口化长跑 harness（`sim/tests/bench/soak.py`） | 不再用 pytest-benchmark（min_time 校准与 7 日量纲冲突）；按窗口统计耗时 + 进程探针（RSS/句柄/GC）+ 分窗漂移判定，见 `sim/tests/bench/soak.py` 与 §4 |
-| 统计与假随机 | `Hypothesis`（§4 已有） | 属性测试配固定 seed，保证 bench 输入分布稳定 |
+| 统计与假随机 | 固定 seed 的参数表（不引 Hypothesis） | 每个 bench 显式列输入档位并固定 `seed`，保证 bench 输入分布稳定且可复跑 |
 | 报告 | pytest-benchmark `rounds`/`warmup` 参数 | 每次至少 3 轮取中位，防首轮 JIT/缓存热涨 |
 
 **确定性**：bench 全部固定 `seed`，绝不用 `random.*`（C5）；每个测试 `--benchmark-disable` 时仍能当普通单测跑（不影响 CI 时长）。

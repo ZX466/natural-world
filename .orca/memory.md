@@ -1023,8 +1023,10 @@ V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条
 **方法**
 - 查符号/调用链/影响面先用 `codegraph_explore`（显式 `projectPath`）。
 - 门禁数字同场实测，不引用旧读数；**收编后主树必须独立复跑**。
-- **删文件/依赖前先查 `DESIGN.md`**：它写死了承诺（`tests/invariants`、`tests/replay`、
-  Hypothesis/tenacity），零 grep 命中≠可删。
+- **删文件/依赖前先查 `DESIGN.md`**：它写死了承诺（`tests/invariants`、`tests/replay`
+  为保留占位），零 grep 命中≠可删。
+  **2026-11-06 用户裁定**：Hypothesis / tenacity / pydantic-settings 三个死依赖已删，
+  DESIGN §4 同步改写；**别再按旧说法把它们当「承诺」而拒绝删除，也别再引回来**。
 - 删/移文档后全树扫旧路径；用脚本抽反引号路径比对存在性最省事。
 - 测试夹具共享在 `sim/tests/conftest.py`；只在与共享版真有差异时才本地覆盖。
 - 协议版本双落点必须同改：`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts`。

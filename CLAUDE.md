@@ -43,7 +43,7 @@ and `build_block_atlas --check` (must be byte-identical).
 
 - Shared test fixtures `engine` / `store` / `session` live in `sim/tests/conftest.py` — do not re-declare them locally unless the variant genuinely differs (`InMemoryStore`, `engine(tmp_path)`).
 - Protocol version lands twice and must move together: `sim/api/ws.py::_PROTOCOL_VERSION` and `client/src/net/ws.ts::PROTOCOL_VERSION`.
-- Before deleting a file or dependency, check `DESIGN.md` — it makes written promises (test dirs `invariants/`/`replay/`, Hypothesis/tenacity) that outrank "zero grep hits".
+- Before deleting a file or dependency, check `DESIGN.md` — it makes written promises (test dirs `invariants/`/`replay/` are reserved and stay) that outrank "zero grep hits". (2026-11-06: Hypothesis/tenacity/pydantic-settings were removed by user ruling — DESIGN §4 updated to match, so do not re-add them speculatively.)
 - After deleting or moving a doc, sweep the whole tree for the old path — docs are densely cross-referenced.
 - `.orca/` is the only tracked dot-directory. Windows CRLF commit warnings are benign (`* text=auto eol=lf`).
 

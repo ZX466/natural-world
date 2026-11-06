@@ -7,10 +7,10 @@
 > （**用 `--browser chromium` 走该目录内的打包版，不得用 `--browser chrome`**——
 > 那是 channel 语义，会解析到系统安装的 Chrome；升级用 `playwright install chromium`，
 > 不要硬编码 revision；MCP 自带独立 profile，不得指向用户 `User Data`）；
-> **删除 npm 包或 venv 前必须先问用户**；点号开头的 agent 配置目录（`.agent/.agents/.claude/.codex/.kiro/.opencode/.codegraph`）
-> **不进 git、不推远程，但本地必须存在**（`.codegraph`、`.agents` 所有工作树都有；`.claude/.opencode/.codex`
-> 只在对应 agent 树；`.pi` 当前不创建，按需再补）。`.orca` 例外：`workflow.txt` / `agent-registry.md` /
-> `memory.md` 入库，`talking.txt` 与 `archive/` 本地保存。
+> **删除 npm 包或 venv 前必须先问用户**；点号开头的 agent 配置目录（`.agents/.claude/.codex/.codegraph`）
+> **不进 git、不推远程，但本地必须存在**（`.codegraph`、`.agents` 所有工作树都有；`.claude/.codex`
+> 只在对应 agent 树）。`.opencode` / `.pi` 已随六树→两树裁定移除（2026-10-20 裁定、2026-11-06 清理）。
+> `.orca` 例外：`workflow.txt` / `agent-registry.md` / `memory.md` 入库，`talking.txt` 本地保存。
 
 ## 1. 环境与初始化
 
