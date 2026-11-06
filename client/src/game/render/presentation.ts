@@ -17,6 +17,18 @@ export function rendererFromSearch(search: string): 'flat' | 'iso' {
   return new URLSearchParams(search).get('renderer') === 'flat' ? 'flat' : 'iso';
 }
 
+/** Which painter draws the ground and the blocks.
+ *
+ * Orthogonal to `rendererFromSearch`: actors, labels, bubbles, rain and the
+ * night overlay stay Phaser in every case. `three` swaps only the terrain
+ * canvas, and only on `?terrain=three`; anything else keeps the shipped Phaser
+ * painter, which is the rollback path. */
+export type TerrainBackend = 'phaser' | 'three';
+
+export function terrainFromSearch(search: string): TerrainBackend {
+  return new URLSearchParams(search).get('terrain') === 'three' ? 'three' : 'phaser';
+}
+
 /**
  * 深度分层带（2026-10-20 A 档修正：此前 actorDepth=100+footY 越过夜幕层，
  * 角色不再被夜色压暗）。

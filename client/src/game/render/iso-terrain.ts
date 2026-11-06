@@ -1,19 +1,20 @@
 import type Phaser from 'phaser';
-import type { MapStatic, WorldMirror } from '../world-mirror';
+import type { MapStatic } from '../world-mirror';
 import { ISO, depthKey, effectiveHeight, isoProject, screenBounds, type VoxelEdits } from './iso';
 import { BlockAtlas } from './block-atlas';
 import { frameOf, paintTile } from './tile-projection';
+import { createColorSampler, FALLBACK_COLOR } from './tile-color';
+import {
+  cellAppearances,
+  structureOverrides,
+  type CellAppearance,
+  type Structures,
+} from './cell-appearance';
 
 const GROUND_KEY = 'iso-ground-composite';
 const TILESET_KEY = 'god-town-16';
-const TILE = 16;
-// Structures may replace their ground gid with 0. No source pixels exist then;
-// use the same deterministic timber fallback as build_height_map.py.
-const FALLBACK_COLOR = 0x6b4f2a;
-const EDIT_COLORS = [0x8f8055, 0x8f8055, 0x8a8880, FALLBACK_COLOR] as const;
 const BANK_DARK = 0x2c1b10;
 const BANK_LIGHT = 0xf1d793;
-type Structures = WorldMirror['structures'];
 type Edits = VoxelEdits;
 const NO_EDITS: Edits = new Map();
 type HeightLookup = (x: number, y: number) => number;
@@ -25,45 +26,9 @@ interface BlockView {
   texture: string;
   phase: string | undefined;
 }
-interface SurfaceCell {
-  x: number;
-  y: number;
-  h: number;
-  color: number;
-  phase: string | undefined;
-  rubble: boolean;
-  scar: boolean;
-  bank: boolean;
-  /** The edit ledger has a row here. `color` cannot express this: EDIT_COLORS
-   * may coincide with the sampled source colour. */
-  edited: boolean;
-}
+/** The shared per-cell rule; see `cell-appearance.ts` for why it is not local. */
+type SurfaceCell = CellAppearance;
 type Rect = { left: number; top: number; right: number; bottom: number };
-
-export function sampleTileColor(
-  data: Uint8ClampedArray,
-  w: number,
-  h: number,
-  gid: number,
-): number {
-  const cols = Math.floor(w / TILE);
-  if (!Number.isInteger(gid) || gid <= 0 || gid > cols * Math.floor(h / TILE))
-    return FALLBACK_COLOR;
-  const sx = ((gid - 1) % cols) * TILE + 6;
-  const sy = Math.floor((gid - 1) / cols) * TILE + 6;
-  let r = 0,
-    g = 0,
-    b = 0;
-  for (let y = sy; y < sy + 4; y++) {
-    for (let x = sx; x < sx + 4; x++) {
-      const i = (y * w + x) * 4;
-      r += data[i]!;
-      g += data[i + 1]!;
-      b += data[i + 2]!;
-    }
-  }
-  return (Math.floor(r / 16) << 16) | (Math.floor(g / 16) << 8) | Math.floor(b / 16);
-}
 
 function shade(color: number, factor: number): string {
   const channels = [color >> 16, (color >> 8) & 255, color & 255];
@@ -220,18 +185,11 @@ export class IsoTerrain {
     full: boolean,
   ): void {
     const bounds = screenBounds(map.w, map.h);
-    const overrides = new Map<string, string>();
-    const ruins = new Set<string>();
-    for (const structure of structures.values()) {
-      if (structure.phase === 'rubble') {
-        for (const [x, y] of structure.tiles) ruins.add(`${x},${y}`);
-      }
-      if (structure.phase !== 'built' && structure.phase !== 'collapsing') continue;
-      for (const [x, y] of structure.tiles) overrides.set(`${x},${y}`, structure.phase);
-    }
     this.colors ??= this.readColors();
     const previous = this.cells;
-    const cells: SurfaceCell[] = [];
+    // The per-cell rule is shared with the three.js renderer; see
+    // `cell-appearance.ts`. Keeping it here would let the two pictures drift.
+    const cells = cellAppearances(map, structures, edits, this.heightOf, this.colors);
     let dirty: Rect | null = null;
     let changed = full;
     const includeLow = (cell: SurfaceCell) => {
@@ -245,47 +203,25 @@ export class IsoTerrain {
         bottom: Math.max(dirty?.bottom ?? -Infinity, bottom + 1),
       };
     };
-    for (let y = 0; y < map.h; y++) {
-      for (let x = 0; x < map.w; x++) {
-        const key = `${x},${y}`;
-        const phase = overrides.get(key);
-        const h = effectiveHeight(x, y, this.heightOf, structures, edits);
-        const bank = h === 1 && map.collision[y * map.w + x] === 0;
-        const edited = edits.has(key);
-        const color =
-          edited && phase === undefined
-            ? EDIT_COLORS[h]!
-            : this.colors(map.ground?.[y * map.w + x] ?? 0);
-        const cell = {
-          x,
-          y,
-          h,
-          color,
-          phase,
-          rubble: phase === undefined && ruins.has(key),
-          scar: phase === undefined && h === 1 && !bank && edits.get(key)?.action === 'dig',
-          bank,
-          edited,
-        };
-        cells.push(cell);
-        const prior = full ? undefined : previous[y * map.w + x];
-        if (prior?.h !== h || prior.color !== color || prior.edited !== edited) {
-          if (prior) includeLow(prior);
-          includeLow(cell);
-          changed = true;
-        }
-        if (
-          prior?.phase !== phase ||
-          prior?.rubble !== cell.rubble ||
-          prior?.scar !== cell.scar ||
-          prior?.bank !== cell.bank
-        )
-          changed = true;
+    for (let index = 0; index < cells.length; index++) {
+      const cell = cells[index]!;
+      const prior = full ? undefined : previous[index];
+      if (prior?.h !== cell.h || prior.color !== cell.color || prior.edited !== cell.edited) {
+        if (prior) includeLow(prior);
+        includeLow(cell);
+        changed = true;
       }
+      if (
+        prior?.phase !== cell.phase ||
+        prior?.rubble !== cell.rubble ||
+        prior?.scar !== cell.scar ||
+        prior?.bank !== cell.bank
+      )
+        changed = true;
     }
     this.lastVersion = version;
     if (!changed) return;
-    this.cells = cells;
+    this.cells = [...cells];
     if (full || dirty !== null) this.paintGround(map, bounds, full ? null : dirty);
     if (full) {
       if (this.scene.textures.exists(GROUND_KEY)) this.scene.textures.remove(GROUND_KEY);
@@ -315,7 +251,7 @@ export class IsoTerrain {
       this.destroyBlock(view);
       this.blocks.delete(key);
     }
-    this.syncRubble(map, structures, overrides, bounds, edits);
+    this.syncRubble(map, structures, structureOverrides(structures).phases, bounds, edits);
     this.syncScars(cells, bounds);
     this.syncBanks(cells, bounds);
     this.lastMap = map;
@@ -625,15 +561,7 @@ export class IsoTerrain {
     if (ctx === null) return () => FALLBACK_COLOR;
     ctx.drawImage(source, 0, 0);
     const pixels = ctx.getImageData(0, 0, source.width, source.height).data;
-    const cached = new Map<number, number>();
-    return (gid) => {
-      let color = cached.get(gid);
-      if (color === undefined) {
-        color = sampleTileColor(pixels, source.width, source.height, gid);
-        cached.set(gid, color);
-      }
-      return color;
-    };
+    return createColorSampler(pixels, source.width, source.height);
   }
 
   private destroyBlock(view: BlockView): void {

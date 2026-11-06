@@ -9,16 +9,25 @@ import Phaser from 'phaser';
 import type { WorldMirror } from './world-mirror';
 import { WorldScene } from './scenes/WorldScene';
 import { runtime } from './runtime';
+import { terrainFromSearch } from './render/presentation';
 import type { VoxelRequestMessage } from '../net/protocol';
 
 export function createGame(parent: HTMLElement, mirror: WorldMirror): Phaser.Game {
+  // `?terrain=three` draws the blocks on its own canvas underneath Phaser's, so
+  // the Phaser canvas has to be transparent and Phaser's clear colour has to
+  // disappear with it. Both stay exactly as shipped on the default path.
+  const threeTerrain = terrainFromSearch(globalThis.location?.search ?? '') === 'three';
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent,
     width: 800,
     height: 600,
     pixelArt: true,
-    backgroundColor: '#2a4032', // 批次 D8：黑边→暗绿（与草地同族，画面外不刺眼）
+    transparent: threeTerrain,
+    // Phaser clears to its background colour even when transparent, so the
+    // three canvas would never show through. Under three the clear colour is
+    // simply omitted and `transparent` takes over.
+    ...(threeTerrain ? {} : { backgroundColor: '#2a4032' }), // 批次 D8：黑边→暗绿（与草地同族，画面外不刺眼）
     scale: {
       mode: Phaser.Scale.RESIZE, // 批次 D8：画布随容器伸缩（截图里右侧全黑的根因：
       // 固定 800×600 在宽屏上居中，容器其余区域露出父 div 背景）

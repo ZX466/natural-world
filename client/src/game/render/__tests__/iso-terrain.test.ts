@@ -1,7 +1,8 @@
 import type Phaser from 'phaser';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createHeightLookup, depthKey, isoProject, screenBounds } from '../iso';
-import { IsoTerrain, sampleTileColor } from '../iso-terrain';
+import { IsoTerrain } from '../iso-terrain';
+import { sampleTileColor } from '../tile-color';
 import { WorldMirror, type MapStatic } from '../../world-mirror';
 import { rasterContext } from './raster-context';
 
