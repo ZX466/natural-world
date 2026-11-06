@@ -16,6 +16,8 @@ import { createWorldInput, type WorldInput } from './three-input';
 import { screenRay, editFromRay, groundFromRay, WALK_HEIGHT } from './three-picking';
 import { canStep } from '../../movement';
 import type { VoxelRequestMessage } from '../../../net/protocol';
+import { createVoxelCues, type VoxelCues } from './three-voxel-cues';
+import type { MovePoint } from '../../movement';
 
 export interface WorldActions {
   requestMove(x: number, y: number): boolean;
@@ -43,6 +45,10 @@ export function createThreeWorld(
   let adapter: TerrainAdapter | null = null;
   let actors: ActorLayer | null = null;
   let input: WorldInput | null = null;
+  let cues: VoxelCues | null = null;
+  let hovered: MovePoint | null = null;
+  let hoverKey = '';
+  let hoverAt = -Infinity;
   let weather: ReturnType<typeof createWeatherLayer> | null = null;
   let actorAssets: Awaited<ReturnType<typeof loadActorAssets>> | null = null;
   let previousTime = 0;
@@ -53,6 +59,8 @@ export function createThreeWorld(
   });
   worldAudio.attach(audio);
   const releaseWorld = () => {
+    cues?.dispose();
+    cues = null;
     input?.dispose();
     input = null;
     weather?.dispose();
@@ -121,6 +129,33 @@ export function createThreeWorld(
           effectiveHeight(x, y, adapter!.heightOf, mirror.structures, mirror.voxelEdits),
         );
       }
+      const pointer = input?.pointer;
+      if (pointer && !input?.orbiting) {
+        const key = `${pointer.x}:${pointer.y}:${size.width}:${size.height}:${mirror.terrainVersion}:${adapter.scene.camera.matrixWorld.elements.join(',')}`;
+        if (key !== hoverKey && time - hoverAt >= 50) {
+          const ray = screenRay(
+            adapter.scene.camera,
+            pointer.x,
+            pointer.y,
+            canvas.getBoundingClientRect(),
+          );
+          hovered = ray ? editFromRay(ray, adapter.scene.meshes) : null;
+          hoverKey = key;
+          hoverAt = time;
+        }
+      } else {
+        hovered = null;
+        hoverKey = '';
+      }
+      const ui = useUiStore.getState();
+      cues?.update(
+        hovered,
+        input?.goal ?? null,
+        ui.voxelMaterial,
+        ui.voxelInventory,
+        adapter.scene.camera,
+        ui.wsStatus === 'open',
+      );
       adapter.scene.render();
       actors?.labels(size.width, size.height, Date.now());
       weather?.update(
@@ -154,6 +189,7 @@ export function createThreeWorld(
         images,
       );
       weather = createWeatherLayer(actors.overlay, mirror);
+      cues = createVoxelCues(adapter.scene.scene, mirror, adapter.heightOf);
       const getHeight = (x: number, y: number) =>
         effectiveHeight(x, y, adapter!.heightOf, mirror.structures, mirror.voxelEdits);
       const typing = () => {
