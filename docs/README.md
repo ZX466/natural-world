@@ -78,8 +78,14 @@
 `earth-bank-2026-10-30/`（土坎 1568/0/0）、`frontend-visual-2026-10-30/`（世界宽 872→1152）、
 `snapshot-governance-2026-10-31/`（热保留 3946→9 行、events 零删除；`measure.py` 可复跑）。
 
+`.orca/audits/motion-smoothness-2026-11-07/` 只留 `REPORT.md`（本地 ignored，不入库）：
+移动连贯性的根因数值、三种方案被否的实测读数、最终方案与已知遗留。
+
 ## 3. 文档纪律
 
 - 不新建顶层文档；新增设计文档落在既有目录，并在此登记一行。
 - 同一事实只写一处：决策写 DESIGN 或对应域文档，历史文档只作为输入。
 - `t3-corpus.md`、`t4-corpus.md`、`perf/baseline-*.json`、`perf/runner.txt` 是机器读取的真相源，改动前先改测试/流程。
+- **执行计划不长期保留**：一次性的实施计划（如 `docs/superpowers/plans/`）在该轮收编后删除，
+  结论并入本域文档或 `.orca/memory.md`。考古走 `git log`。`world-liveliness-design.md` 是
+  该轮的设计真相源，计划只是它的执行单。
