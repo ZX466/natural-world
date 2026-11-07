@@ -1185,48 +1185,27 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-11-06 Round24｜Codex 已交付，待主树收编与用户验收】three.js 自由视角 A–E 已分阶段实现并提交，默认保留 Phaser。实现 HEAD `b7ac220`；文档/本快照提交号看 `git log -1`。当前无在途开发，不重复实现、不开新一轮门禁；收到新派单后再行动。
+【2026-11-07 清理｜已交付】用户直接授权删除 node_modules/.venv、冗余文档与缓存并整理记忆。本树依赖与构建缓存已删除，不自动重装；Round24 已由主树收编，仍待用户实机验收。当前无在途开发；当前提交号看 Git，不沿用旧卡里的 HEAD。
 
-### 恢复与协作
+### 恢复入口与纪律
 
-1. 先读 `.orca/workflow.txt` → **完整** `.orca/talking.txt` → 本节/registry → Git；扫完全部派单再判断是否等待。
-2. `.codegraph` 存在，理解/定位代码先 `codegraph_explore`，显式 `projectPath=E:/zxdevelop/.orca/worktrees/project7/codex`；返回的当前源码视为已读。
-3. 本树只做本地 Conventional Commits，不推远程、不改主树。Round24 特许的一次同步 **33e8658→3912f7c 已完成**，不能当后续自行同步许可。主树负责复核收编和推送。
-4. 协作只回写本树 ignored talking，永不 add；memory 只改本 §7，前缀 §§0–6 保留原字节，`git add -f` 后立即提交。全局 Codex memories 未写入。
-5. Python 用 uv；中文管道需 UTF-8，PS 重定向日志可能 UTF-16，先取原始 native exit 再读尾部。删除 npm 包/venv 先问。按 i-have-adhd 保持简短中文、下一步优先、不重复确认。
+1. `.orca/workflow.txt` → **完整** `.orca/talking.txt` → 本节/registry → Git；先确认新派单，历史计划不重做。
+2. 代码探索先 CodeGraph，`projectPath=E:/zxdevelop/.orca/worktrees/project7/codex`；本树本地 Conventional Commits，不 push、不自行同步 main。协作只写本树 talking，永不 add。
+3. memory 只改本 §7，§§0–6 原字节保留并立即 `git add -f` 提交。Python 用 uv；PS 中文用 UTF-8，先取 native exit 再读日志。按 ADHD 偏好简短中文、下一步优先、不重复确认。
+4. 依赖恢复：根目录 `uv sync --frozen`，前端 `cd client; npm ci`；根目录没有 npm 项目。清理后不要用普通 `uv run` 验证而意外重建 `.venv`。无依赖检查用 uv 显式指定系统管理解释器，并加 `python -B`。
+5. 删除依赖/venv须有用户授权；本轮已明确授权，不是未来任意删除的许可。原 world.db、备份/取证副本、素材、Git、必需 agent/CodeGraph 配置与全局工具缓存保留。浏览器仍须明确授权，只用 ms-playwright Chromium；私库需隔离 world/anchor/profile，原库不用于实验。
 
-### Round24 实现与证据
+### 本次整理结果
 
-| 阶段 | 本地提交 | 结果 |
-|---|---|---|
-| A | `d03f806` | PerspectiveCamera、天空/雾、单位方块、单世界 canvas；默认 fov60/pitch12/请求距离8 |
-| B | `03ab898` | 原资源 billboard、动画/朝向/同格偏移/名字/气泡、天气与音频；默认 yaw225，近墙避碰会缩短或抬高视角 |
-| C | `8fa3f56` | 独立高1移动平面与最近实例编辑 raycast；真实地图3947可走中心与旧路径对照、四方向/侧面/土坎 |
-| D | `e45a4ed` | 方块整列轮廓、材料1/2/3高度预览、服务端进度与移动目标；提示置顶以保近处可读 |
-| E | `5eacfbc` | 精确 Python Bresenham 移植、半径12源文件钉死；共用可见集合控制人物/接触阴影/名字/气泡和目标；主角淡轮廓恒可见 |
-| 审查修复 | `b7ac220` | 丢失捕获取消、逐事件世界/连接/焦点守卫；旧世界输入不向新世界发包 |
+- 移除根/前端 node_modules、.venv、client/dist、tsbuildinfo、pytest/ruff/bench 与递归 Python 缓存；27个 private-world.db 及侧文件删除。移除约1.20GiB逻辑文件；源码/锁/原库及备份哈希未变。
+- 11份受跟踪的过期计划/重复前端README退役，另删10份未跟踪的过期草稿/快照模板；有效规则留在现行规格。入口：[根README](../README.md)、[文档索引](../docs/README.md)、[清理与恢复](../docs/dev-workflow.md#7-清理与恢复)。历史受跟踪文档查 Git，不因旧文件名再次开工。
+- 本地 Markdown 链接、实现状态检查、冻结内容与删除清单验证通过；本轮无业务代码修改，未重跑全量业务测试、浏览器或模型。
+- `.orca/audits/cleanup-2026-11-07/` 保存清单、哈希与检查结果。验收JSON、报告、复核脚本和截图仍在；私库已清，重测必须新建。两级空目录 docs/superpowers/plans 与 docs/superpowers 的直接删除被自动审批拒绝（只返回 blocked by policy），已保留，不再尝试。
 
-- 基线 `3912f7c` 含主树 three 初版与既有修复，保留共享 `cell-appearance.ts`、`tile-color.ts`、旧 `voxel-picking.ts`。sim/shared/协议1.15/资源/依赖清单锁/DESIGN/registry 均未改。没有新后端感知通道。
-- 最终门禁：**vitest 537P/75files**；tsc、eslint、prettier、协议生成检查、build 全 EXIT0。最初478P/65files，A 移除过时正交对齐断言后470P；不是跳过失败用例。无后端代码改动，未为本轮重跑全量 pytest。
-- 独立全分支审查初始0Critical/2Important/1Minor；2Important 先复现 **15F/16P** 再修，focused31P、全量537P。审查只跑一轮；修复用 RED→GREEN 验证，没有二次独立复审。Minor DPR 暂缓。
-- 真浏览器仅打包版 ms-playwright Chromium。真实鼠标移动至 `(100,52)`、挖 `(100,54)` 石料0→1；HUD选石/右键放/挖回石料1→0→1、h2→可走h1，实收进度0.2。旋转不发 voxel 请求，页面/console error0；无手改镜像或假回包。
-- 原生捕获补测3次可信 lostpointercapture、每次活跃挖掘只取消一次，文本框聚焦后只发当前位置停止。精确0/149/150/180ms边界由单测覆盖；最终原生“尽早释放”耗203.8ms，不能报成150ms前实机证据。pending capture 先等 gotpointercapture；CDP发帧异步，焦点顺序用同步透明观察器读取。
-- E 真140×100地图出生名册 `(100,53)` 可见 **10/51**（含主角），街区开阔者可见、墙后者隐藏。最终运行快照原生移到 `(99,53)`：**2/57可见，4名附近NPC被墙挡**（吴秀才/严药童/葛园丁/彭花匠）；实际 Python LOS/HUMAN 对同一捕获网格与全部人物逐人完全一致。先前9/57/2是另一时刻，只保留 initial-parity 摘要，不与当前快照混用。
-- 证据 `.orca/audits/round24-2026-11-06/`：`gates.json`、`frozen.json`/`frozen-files.json`、`review.md`、`progress.md`；最终 `e-observer-three-desktop.png` / `e-observer-three-orbit.png` / `e-observer-three-1024.png` / `e-observer-default-phaser.png` 已看图，C/D原生操作与进度图保留。设计现状更新于 `docs/arch/world-liveliness-design.md` §7、`voxel-execution-spec.md` §10。
-- 浏览器后端全部显式隔离 world/anchor/profile 三库，providerNone、offline wall0，原 world.db 未读写、无付费模型。临时 backend94559/Vite89397 已 Ctrl-C 停止，8000/5173端口确认关闭；测试浏览器由 finally 关闭。审计目录按交付要求保留，属于 ignored 本地证据。
+### 已交付功能与仍保留的边界
 
-### 当前限制与闭合边界
-
-- **默认仍 Phaser**；`?terrain=three` 开完整新世界。用户主观观感、手感和默认切换未验收；本线程无参考原图，不声称逐像素对比。
-- DPR 仅创建时读取，跨屏/缩放后清晰度与GPU分配可能沿用旧值；CSS拾取正确。构建大包警告保留：JS2309.34kB/gzip572.25kB。不同硬件FPS、长GPU会话、音频亲听未验收；不将未测性能当通过。
-- 近墙抬高相机、提示置顶是为可读性所作取舍，可能改变临墙构图/产生提示覆盖。房屋仍h2实心块，有简单接触阴影，无动态光照投影、水波或塌落动画。
-- 不做E2地形消失、夜间视距修正、听嗅文案、perception出站/后端；take/give下一轮，离线不演进健康、重症不产失能的裁定仍闭合。
-- 原本树 world.db 有历史唯一创世损坏，继续禁止拿它实验。真实库存档兼容与模型内容质量不在本轮验收范围。
-
-### 历史指针（旧全文查 Git，不重做）
-
-- Round23 已由主树 `5e4e20b` 收编：B2 `424ec34`、B3/建造安全 `1738e09`。材料按请求：土/石/木=h1/h2/h3且均挡路；挖新放块返原料一份、恢复可走h1。用户已选“土高1仍挡路”，勿改回堆高2才可挖。NPC十地标/九站点/五区、开工预算/防封路及真实SQL三日证据在 `round23-2026-11-05/`；本轮未重复后端功能。
-- Round22 `1fb935d` + `c59cb00`：只有实际height1土坎glyph参与高块排序，旧picker保持；主树已收编。
-- Round20 `bb0647e`/`3012063`（主树 `66637b7`）：三处播种分支过滤、每日健康；离线/失能边界见上。Round18 `8b6b702` 与Round19 `e28e144` 已收编：profile锚点缺副本 fail-closed、有限单步L2，非多步规划；无付费质量验收。
-- Round17 `16b7eae`：物种知识门与名牌避让；Round16/15的详细知识、离线、音效、T5/soak证据及既有限制查 `.orca/audits/round16-2026-11-01/`、`round15-2026-11-01/` 和 `git log -p -- .orca/memory.md`。火声仅客户端映射，真实火场出站仍延后；不得扩成新后端火生产器。
-- 保留主树既有 ensure_schema、转述 speaker 归因、叙事缓存、历史健康分叉、保护锚点等修复；以当前源码为准，dated handoff不是许可。
+- Round24：A `d03f806`、B `03ab898`、C `8fa3f56`、D `e45a4ed`、E `5eacfbc`、输入修复 `b7ac220`、文档 `5db4005`；主树合并 `cb820bf`，本次清理起点 `6cb681a` 已含集成。main/talking 记录的独立结果：pytest3544P/121S、client537P/75files，2400例Python差分0不匹配；这是11-06历史读数，不是本轮复跑。
+- `?terrain=three` 是完整自由视角世界，默认仍 Phaser。LOS 精确移植 Python、欧氏半径12、主角恒可见；同一实测快照可见2/57、近处墙后4人，与Python逐人一致。证据仍在 round24-2026-11-06/{gates.json,review.md,e-observer.json}，规则见 world-liveliness-design §7 / voxel-execution-spec。
+- 暂缓：DPR跨屏刷新、主JS大包、房屋h2实心块、动态光照投影/水波/塌落动画，以及主观观感/听感/不同硬件长期表现；用户未亲验，不默认切 three。不补perception出站、E2地形消失或夜间视距/听嗅文案。
+- Round23 已收编：B2 `424ec34` / B3 `1738e09`，用户已选土/石/木=h1/h2/h3且均阻挡；新放块挖一次返原材料一份、恢复可走h1，勿改回土堆高2才可挖。NPC十地标/九站点/预算与防封路不重做。
+- take/give下一轮；离线不演进健康、重症不产失能、真实火场出站延后等裁定保持。更早轮次查 `git log -p -- .orca/memory.md`；保留主树既有ensure_schema、speaker归因、叙事缓存、历史健康/锚点修复，不重复实现。

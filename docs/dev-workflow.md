@@ -7,7 +7,7 @@
 > （**用 `--browser chromium` 走该目录内的打包版，不得用 `--browser chrome`**——
 > 那是 channel 语义，会解析到系统安装的 Chrome；升级用 `playwright install chromium`，
 > 不要硬编码 revision；MCP 自带独立 profile，不得指向用户 `User Data`）；
-> **删除 npm 包或 venv 前必须先问用户**；点号开头的 agent 配置目录（`.agents/.claude/.codex/.codegraph`）
+> **删除 npm 包或 venv 须有用户授权**，用户已明确要求本轮删除时不重复确认；点号开头的 agent 配置目录（`.agents/.claude/.codex/.codegraph`）
 > **不进 git、不推远程，但本地必须存在**（`.codegraph`、`.agents` 所有工作树都有；`.claude/.codex`
 > 只在对应 agent 树）。`.opencode` / `.pi` 已随六树→两树裁定移除（2026-10-20 裁定、2026-11-06 清理）。
 > `.orca` 例外：`workflow.txt` / `agent-registry.md` / `memory.md` 入库，`talking.txt` 本地保存。
@@ -131,4 +131,29 @@ npm run gen:protocol:check   # 漂移检测，不一致非零退出（ci.yml 已
 - `pytest -m t4` 收集 0 用例、退出码 5：没设 key 或探针文件缺失，不是绿。
 - 前端连不上：先看 `/api/health`，再看顶栏状态；客户端断线时不做假数据。
 - `gen:protocol:check` 失败：先跑 `gen:protocol`，检查 `shared/protocol.ts` 是否被手改。
-- 构建卡住：Python 侧先 `uv sync --frozen`；前端删 `node_modules` 前先问用户。
+- 构建卡住：Python 侧先 `uv sync --frozen`；重装前端前先确认已有删除 `node_modules` 的用户授权。
+
+## 7. 清理与恢复
+
+可重建的目录包括根与前端 `node_modules/`、`.venv/`、`client/dist/`、`__pycache__/`、
+pytest/ruff/bench 缓存及 `*.tsbuildinfo`。清理前核对绝对路径在当前工作树内，不跟随符号链接或 junction，
+并检查目录内没有被 Git 跟踪的源文件。不要用 `git clean -fdx` 代替清单删除。
+
+依赖清理后按锁文件恢复，在仓库根目录执行：
+
+```powershell
+uv sync --frozen
+Push-Location client
+npm ci
+Pop-Location
+```
+
+根目录没有 npm 项目；前端依赖只在 `client/` 安装。清理任务结束前不自动重装，
+普通 `uv run` 可能重建 `.venv`，需要无依赖检查时应显式选择 uv 管理的系统解释器。
+
+审计中的 `private-world.db` 及其 WAL/SHM 是隔离实测的临时库；报告、复核脚本、门禁结果和验收截图保留。
+真实 `world.db`、原库备份/取证副本、素材原件、Git 数据和本机密钥均不属于缓存。
+全局 uv/npm/Playwright 缓存及必需的 agent/CodeGraph 配置由其他工作树共用或承担工具职责，不随本树清理删除。
+
+已完成的施工步骤从工作树移除；有效规则归入现行域文档，历史执行细节用 `git log --all -- <旧路径>`
+和 `git show <提交号>:<旧路径>` 查询。机器读取的语料、性能基线和 fixture 说明保留。
