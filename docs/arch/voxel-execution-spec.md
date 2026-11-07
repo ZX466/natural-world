@@ -275,7 +275,8 @@ npm run gen:protocol:check            # EXIT 0 硬门禁
 **2026-11-06 已触发第一条**：用户明确要求自由旋转视角观察立体建造。
 第二十四轮在 `?terrain=three` 下完成透视相机、billboard 人物、独立射线拾取、建造提示和客户端主角视野；
 共享地图、原 sprite、运行时与 React UI 继续复用，sim/shared/协议不变。
-默认仍为 Phaser，用户验收后才决定默认切换。实现与实测边界见 `world-liveliness-design.md` §7。
+**2026-11-07 用户验收通过并裁定切为默认**：不带参数即进 three 世界，`?terrain=phaser`
+退回 Phaser 等距路径（回滚开关，仍是完整可玩路径）。实现与实测边界见 `world-liveliness-design.md` §7。
 
 触发之前，等距体素作为「方块世界 + 挖建预留」的起点；§10.1 的否决记录不再代表当前路线。
 

@@ -17,12 +17,12 @@ export function rendererFromSearch(search: string): 'flat' | 'iso' {
   return new URLSearchParams(search).get('renderer') === 'flat' ? 'flat' : 'iso';
 }
 
-/** The three switch selects the complete perspective world. The default Phaser
- * flat/iso path stays available until user acceptance of the opt-in renderer. */
+/** The three world is the default since 2026-11-07 (user acceptance); the
+ * Phaser flat/iso path is the rollback switch, selected by `?terrain=phaser`. */
 export type TerrainBackend = 'phaser' | 'three';
 
 export function terrainFromSearch(search: string): TerrainBackend {
-  return new URLSearchParams(search).get('terrain') === 'three' ? 'three' : 'phaser';
+  return new URLSearchParams(search).get('terrain') === 'phaser' ? 'phaser' : 'three';
 }
 
 /**
