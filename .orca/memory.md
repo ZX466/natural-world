@@ -1185,27 +1185,26 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-11-07 清理｜已交付】用户直接授权删除 node_modules/.venv、冗余文档与缓存并整理记忆。本树依赖与构建缓存已删除，不自动重装；Round24 已由主树收编，仍待用户实机验收。当前无在途开发；当前提交号看 Git，不沿用旧卡里的 HEAD。
+【2026-11-07 行走修复｜已交付，待主树收编】产品提交 `1bfe956`，只改 three-input.ts 与其测试；当前提交号看 Git。已查清并修复按键单步停住，四项门禁与实机通过，无待续实现。本轮临时依赖/私库已清，不要再恢复环境或重做验证，除非有新派单。
 
-### 恢复入口与纪律
+### 最新交付
 
-1. `.orca/workflow.txt` → **完整** `.orca/talking.txt` → 本节/registry → Git；先确认新派单，历史计划不重做。
-2. 代码探索先 CodeGraph，`projectPath=E:/zxdevelop/.orca/worktrees/project7/codex`；本树本地 Conventional Commits，不 push、不自行同步 main。协作只写本树 talking，永不 add。
-3. memory 只改本 §7，§§0–6 原字节保留并立即 `git add -f` 提交。Python 用 uv；PS 中文用 UTF-8，先取 native exit 再读日志。按 ADHD 偏好简短中文、下一步优先、不重复确认。
-4. 依赖恢复：根目录 `uv sync --frozen`，前端 `cd client; npm ci`；根目录没有 npm 项目。清理后不要用普通 `uv run` 验证而意外重建 `.venv`。无依赖检查用 uv 显式指定系统管理解释器，并加 `python -B`。
-5. 删除依赖/venv须有用户授权；本轮已明确授权，不是未来任意删除的许可。原 world.db、备份/取证副本、素材、Git、必需 agent/CodeGraph 配置与全局工具缓存保留。浏览器仍须明确授权，只用 ms-playwright Chromium；私库需隔离 world/anchor/profile，原库不用于实验。
+- 根因：旧 `drive()`145–150只试斜向格，失败便停并记住阻挡意图。真实S先从100,53走至99,52，镜像已更新、keys仍按下、epoch不变、帧循环正常；下一斜向98,51不可走，但纵向99,51可走却没尝试。原W按5211ms走0格，S5204ms走1格/1请求。
+- 修法：保留基于权威坐标/方向/terrainVersion的去重，依次以原ports.step检查斜向、横向、纵向；三者都不通才停/报错。没有调相机/超时，也不改键位方向、Phaser、sim、协议、地图或渲染。四个225°键的轴滑动仍遵守canStep墙角语义。
+- 真机闲置复跑：S按5212ms从100,53至92,51，共9格、11条move_request（10前进意图+1松键停止，末条91,50前进未完成便取消）；W可滑至101,53，之后三个候选均堵，正常停。可信原生按键、400ms采样、真实WS与权威位置；0page/console错误，无镜像手改/假回包，API/WS均只接隔离私库。
+- 测试：新增10条先RED（10F/31旧P）再GREEN41P；typecheck/lint/prettier全0，完整Vitest547P/75files。首轮与实测并发时旧Phaser栅格用例5000ms超时（546P/1F）；暂停世界、退出浏览器后相同命令547P，未改测试/超时/配置。独立只读审查0Critical/0Important/0Minor。
+- 证据 `.orca/audits/walk-input-2026-11-07/{gates.json,review.md,before.json,after-idle.json}`；`after-idle.png`已查看。源码哈希、逐请求时间与400ms位置采样保留。主树应单独收编 `1bfe956`（2文件）；本树未同步main/未push。
 
-### 本次整理结果
+### 环境与恢复
 
-- 移除根/前端 node_modules、.venv、client/dist、tsbuildinfo、pytest/ruff/bench 与递归 Python 缓存；27个 private-world.db 及侧文件删除。移除约1.20GiB逻辑文件；源码/锁/原库及备份哈希未变。
-- 11份受跟踪的过期计划/重复前端README退役，另删10份未跟踪的过期草稿/快照模板；有效规则留在现行规格。入口：[根README](../README.md)、[文档索引](../docs/README.md)、[清理与恢复](../docs/dev-workflow.md#7-清理与恢复)。历史受跟踪文档查 Git，不因旧文件名再次开工。
-- 本地 Markdown 链接、实现状态检查、冻结内容与删除清单验证通过；本轮无业务代码修改，未重跑全量业务测试、浏览器或模型。
-- `.orca/audits/cleanup-2026-11-07/` 保存清单、哈希与检查结果。验收JSON、报告、复核脚本和截图仍在；私库已清，重测必须新建。两级空目录 docs/superpowers/plans 与 docs/superpowers 的直接删除被自动审批拒绝（只返回 blocked by policy），已保留，不再尝试。
+1. 先 workflow → **完整**talking → 本节/registry → Git。代码定位先CodeGraph，`projectPath=E:/zxdevelop/.orca/worktrees/project7/codex`。本树仅本地Conventional Commits，协作只写ignored talking，永不add。
+2. 本轮起点5179eca；派单主树e49b7c1的输入/测试及移动桥接相同，**主树已默认three，225°构图已验收**。本树旧默认不在本轮范围，验证显式用?terrain=three；收编勿把旧默认覆盖回main。主树新增motion改动不在本树重做。
+3. 开始时8000/5173有主树服务；原5173随后自行退出，才启动我方Vite25807。测试只使用我方18125后端59701，world/anchor/profile三库隔离、providerNone/offline0。两我方会话已Ctrl-C，浏览器finally关闭；原库与备份哈希仍同清理轮，不操作主树服务/真实存档。
+4. npm/uv按锁临时恢复后，已清掉本轮生成的node_modules/.venv、Python缓存与临时SQL，恢复清理状态；源码/锁/素材不变。需要新任务环境时根目录uv sync --frozen、client内npm ci；普通uv run会重建.venv。无依赖复核用uv显式系统解释器+python -B。
+5. memory只改§7、前缀§§0–6原字节保留，-f add立即提交；PS中文UTF-8，先取native exit再读日志。删除依赖需授权；当前临时环境为本轮自建并已清。浏览器需明确授权，只用ms-playwright Chromium。按ADHD偏好短中文、下一步优先、不重复确认。
 
-### 已交付功能与仍保留的边界
+### 已闭合历史与边界
 
-- Round24：A `d03f806`、B `03ab898`、C `8fa3f56`、D `e45a4ed`、E `5eacfbc`、输入修复 `b7ac220`、文档 `5db4005`；主树合并 `cb820bf`，本次清理起点 `6cb681a` 已含集成。main/talking 记录的独立结果：pytest3544P/121S、client537P/75files，2400例Python差分0不匹配；这是11-06历史读数，不是本轮复跑。
-- `?terrain=three` 是完整自由视角世界，默认仍 Phaser。LOS 精确移植 Python、欧氏半径12、主角恒可见；同一实测快照可见2/57、近处墙后4人，与Python逐人一致。证据仍在 round24-2026-11-06/{gates.json,review.md,e-observer.json}，规则见 world-liveliness-design §7 / voxel-execution-spec。
-- 暂缓：DPR跨屏刷新、主JS大包、房屋h2实心块、动态光照投影/水波/塌落动画，以及主观观感/听感/不同硬件长期表现；用户未亲验，不默认切 three。不补perception出站、E2地形消失或夜间视距/听嗅文案。
-- Round23 已收编：B2 `424ec34` / B3 `1738e09`，用户已选土/石/木=h1/h2/h3且均阻挡；新放块挖一次返原材料一份、恢复可走h1，勿改回土堆高2才可挖。NPC十地标/九站点/预算与防封路不重做。
-- take/give下一轮；离线不演进健康、重症不产失能、真实火场出站延后等裁定保持。更早轮次查 `git log -p -- .orca/memory.md`；保留主树既有ensure_schema、speaker归因、叙事缓存、历史健康/锚点修复，不重复实现。
+- 清理提交5179eca：约1.20GiB逻辑文件、21份过期文档/草稿已退役；有效规则在README/docs索引/dev-workflow。`docs/superpowers`两级空目录曾被自动审批拒删，只返回blocked by policy，保留且不重试。global memories只在用户明确要求时写允许的ad_hoc便签，本轮未新增全局记忆。
+- Round24主树已收编cb820bf，当前main已推进到默认three及motion改动；不要按旧卡再提默认切换。另案相机近墙抬高、DPR、包体、房屋h2块、动态光影/水波/塌落等不扩本轮；本次不是听感/硬件FPS/网络丢包恢复验收。
+- 材料按用户裁定土/石/木=h1/h2/h3且均挡路；新放块挖一次返原料并恢复可走h1。take/give下一轮，离线不演进健康、重症不产失能、真实火场出站延后等闭合裁定不扩展。旧轮细节查Git与已保留审计结果，不恢复已退休施工计划。
