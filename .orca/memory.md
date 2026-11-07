@@ -3,7 +3,14 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-07 移动连贯性修复后 · 主树 HEAD `6cb681a`）
+## 0. 当前状态（2026-11-07 移动连贯性修复后 · 主树 HEAD `0469bda`）
+
+- **2026-11-07 追加：测试探针打开真实 `world.db` 的根因已定位并修复**。
+  `test_m6_death_path_data.py` 的探针 `finally` 把锚点单例指回相对路径
+  `sqlite:///world.db`，而 `os.chdir` 已回仓根 ⇒ 全量门禁每跑一次就在真档上
+  `create_all`（幂等，只动 mtime；缺表就会真写）。审计钩子取证 + 新钉子
+  `test_probe_never_opens_the_repository_world_db`。详见 §3「测试收尾『还原成默认值』
+  会把真档打开」。三树 `world.db` 数据一条未变。
 
 - **主树在飞：移动连贯性修复，已实测全绿但未提交**（用户选择「保留改动，留在工作区」）。
   6 个改动文件 + 4 个新文件；`vitest 560P/0F`（78 files）· tsc/eslint/prettier/
@@ -531,6 +538,16 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
 - **`flush_for_anchor()` 读 `loop.pending_events`**：先 `drain_events()` 再调它 = 刷空列表，
   探针会假绿（我第一版就这么写的）。
 - **`advance_frame(1/60)` 推不动 tick**：时钟累积器吃小数会一直是 0；喂 ≥1 实秒才动。
+- **测试收尾「还原成默认值」会把真档打开**（2026-11-07 审计钩子取证）。
+  `test_m6_death_path_data.py::_probe_driver_write_lock` 的 `finally` 写
+  `get_anchor_store().__init__("sqlite:///world.db")`——**相对路径**，而 `os.chdir`
+  已回仓根 ⇒ 下一次 `get_anchor_store()` 在仓库真实 `world.db` 上 `create_all`。
+  全量门禁每跑一次打开一次真档；`create_all` 幂等（18 张表全在）所以只动 mtime，
+  但这是运气——缺表/迁移漂移就会真写。**纪律**：夹具收尾要**还原跑之前的状态**
+  （换单例引用、把原引用放回），不要发明默认值；`get_anchor_store` 的默认 URL 是
+  相对路径，任何在 `chdir` 之后调用它的代码都在读「当前目录的 world.db」。
+  定位手段：`sys.addaudithook` 监听 `sqlite3.connect`，按绝对路径过滤后打栈——
+  比读代码猜入口快得多。钉子：`test_probe_never_opens_the_repository_world_db`。
 
 **代码**
 - `WorldEvent.payload` 是 dict；`StructureSnapshot` 用 `phase`；`collision=True` 表示可走。
