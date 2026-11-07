@@ -3,9 +3,28 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-06 第二十四轮收编后 · 主树 HEAD `cb820bf`）
+## 0. 当前状态（2026-11-07 移动连贯性修复后 · 主树 HEAD `6cb681a`）
 
-- **主树在飞：无**。**第二十四轮已收编**（`--no-ff` 合并 `cb820bf`，codex 侧
+- **主树在飞：移动连贯性修复，已实测全绿但未提交**（用户选择「保留改动，留在工作区」）。
+  6 个改动文件 + 4 个新文件；`vitest 560P/0F`（78 files）· tsc/eslint/prettier/
+  gen:protocol/build 全 EXIT 0。证据 `.orca/audits/motion-smoothness-2026-11-07/REPORT.md`。
+- **本轮做了什么**：用户报「动作一顿一顿不连贯」。根因是**插值窗（200ms）比服务端节拍
+  （250ms/格）短 50ms 且每来快照从当前视觉位置重起** ⇒ 每格末尾空等 + 剩余帧超速 +
+  走环逐格重置（第 2 帧永远看不到）。旧实现实测 1x 冻结 19.9%、16x 冻结 98%。
+  改为**回放缓冲**（`render/motion-buffer.ts`）：存 `(到达时刻, 权威位置)` 样本，
+  画「落后一个延迟」的时刻，在**两个真实样本之间按时刻插值**。
+  **Phaser 路径（默认渲染器）有完全相同的缺陷，一并修复**。
+- **三种方案都实测过，前两种被数据否掉**：① 按样本序号插值 ⇒ 每来样本进度归零，
+  4x 下 47 帧冻结；② 纯时间轴回放 ⇒ 延迟随倍速跳变，16x→1x 人物**倒退 2.06 格**
+  （加大保留窗口反而倒退 12.06 格）。最终方案是时间轴回放 + **延迟平滑爬升**
+  （`rampDelay`，`RAMP_RATE=0.6` < 实时 ⇒ 绘制时刻单调前进）。落定后三档均 **0 冻结**、
+  速率达标、切速 `maxBackJump = 0.00`。
+- **子代理 review（19 分钟 76k tokens，0C/1H/2M/3L）**：HIGH「停顿后起步瞬跳」是真的
+  （旧实现把 10 秒间隔压进一帧），已修（到达前补锚点样本）并加回归测试；
+  LOW「传送按跳跃方向转身」「Phaser 传送阈值 2.7 格 vs three 3.0 格」也已修。
+  **明确遗留**：Phaser 路径的高度变化（脚下建房/塌房）仍会被判成「移动」而播放走环
+  ——修它要把高度从位置拆成独立通道，属下一轮。
+- **第二十四轮已收编**（`--no-ff` 合并 `cb820bf`，codex 侧
   `d03f806`..`5db4005`，零冲突）。three.js 自由视角世界由 `?terrain=three` 启用，
   **默认仍 Phaser**，默认切换须等用户验收。
 - **第二十四轮主树独立复跑（不采信 codex 自测）**：pytest **3544P/121S/72D**
@@ -30,8 +49,9 @@
   构建包 2309kB/gzip 572kB 警告 · 房屋仍 h2 实心块、无动态光照投影/水波/塌落动画 ·
   **服务端仍不发 `perception` 帧**（E 只关客户端人物视野，听嗅文案仍无来源）·
   相机默认 yaw225 且近墙会抬高（临墙构图可能高于请求 12°）· 提示置顶可能覆盖前景。
-- **下一步**：① 用户实机验收 `?terrain=three`（观感/手感/建造）→ 通过后才切默认；
-  ② 用户亲验剩余项（见 `talking.txt` 待人工验收表）。
+- **下一步**：① **提交或回退本轮连贯性修复**（用户实机看手感后决定）；
+  ② 用户实机验收 `?terrain=three`（观感/手感/建造）→ 通过后才切默认；
+  ③ 用户亲验剩余项（见 `talking.txt` 待人工验收表）。
 - **2026-11-06 清理轮（`f77fa81`）**：删掉三个零引用依赖（`pydantic-settings`/`tenacity`/
   `hypothesis`，DESIGN §4 同步改写）、`.opencode/`（61M）、`agent-registry.md` 里
   四个已不存在的工作树、`.env.example` 两个死键、两份 331M 备份库、各类缓存/构建产物。
@@ -89,239 +109,29 @@
   无外人之言则不转述；署记忆里的原说话人。实机双口径 0 自指（浏览器 39 条、事件表 136 条）。
   第一版只补 speaker 时实机仍 37/62 自指——**单测抓不到，实机才抓到**。
 
-## 0a. 上一轮（第二十一轮）记录
+## 0a. 上一轮（第二十一～二十三轮，已收编）
 
-- codex 第二十一轮 `78e5c09` 已 `--no-ff` 收编（合并提交 `1d55179`；
-  1 冲突：`memory.md` 取主树版本）。主树 D3–D6 已分三提交落地（`551f1af` / `5f890bd` / `fca7a3f`）。
-  **门禁读数（收编后主树实测）**：pytest **3486P/0F/121S**（453.34s）· ruff/format 403 ·
-  pyright 0/0/0 · client **388P/51F** + 四件 EXIT 0 · 两资产 byte-identical · lock 一致 · 协议 1.14。
-- **第二十一轮（codex，D1+D2）已收编**：成功读档按**请求保留的连接 `ControlState`**
-  重新投影 `clock`（暂停 0、否则 `effective_speed`），失败仍 fail-closed 冻结；
-  `session_state` 改**按连接定向投递**（`manager.send_to_control`），`paused` 不再从全局
-  `clock.speed == 0` 推断；`set_speed` 在暂停态也写 `speed_before_pause`。队列与执行中
-  都按 `anchor_id` 防重，重复立即 `load_failed`，`finally` 释放可重试。
-  - **收编冲突 1 处**：`.orca/memory.md`（codex 侧只有 §7 且是旧快照）→ 取主树版本。
-  - **收编时补修一处**：`single_save` 夹具只 patch `broadcast_json`，而 `session_state`
-    改成定向投递后漏帧 ⇒ 改为真 `ConnectionManager` + `_recording_socket`（与 `saved_world` 同款）。
-    这是主树自己的测试跟不上新架构，不是 codex 的缺陷。
-- **主树 D3–D6（2026-11-04，TDD，已提交）**：读档等待态改**帧驱动**（`loadPending`
-  由 `loadAnchor` 置、`full_snapshot`/`error{ref:load_anchor}`/掉线收尾清），面板出
-  「片刻后……」+ 三按钮真禁用；`session_state.notice`/`anchor` 接进面板与顶栏；
-  `set_control` 被拒补顶栏 `role="alert"` 位（白名单 bad_speed/bad_action/bad_advance）；
-  favicon 落地 + 存档默认名改「现存最大编号+1」+ 基线文件旧路径订正。
-  **清单外另补三条**：断线时 `loadAnchor` 拒发并给可见文案；读档途中掉线由 `onStatus` 收尾；
-  在途中再点一次直接丢弃（`disabled` 要等 React 重渲染才生效，双击可同帧跑完两次 onClick，
-  只有请求侧判重拦得住第二个 fork）。**自查另修一条既有泄漏**：`player_impulse` 的错误
-  分支原样透传 `msg.message`，而服务端用消息 type 当 ref ⇒ `bad_channel` 会把
-  "channel mismatch" 送进念头栏（`ws.py:995`）。
-- **已修并关闭：D1 失败读档后世界永久冻结（2026-11-04 探针实测 → codex 第二十一轮修复）**：
-  一次读档失败之后再成功读档，`load_outcome=True` / `world_source_ready=True`，但
-  `loop.clock.speed` 仍为 **0**，广播的 `session_state` 是 `{speed:1, paused:true}`，
-  而点「继续」回 `bad_action`「本来就没停。」（因为每连接 `ControlState.paused` 是 False）。
-  - 根因：失败路径 `main.py:1289-1290` 置 `world_source_ready=False` + `set_speed(0)`；
-    **成功路径 `main.py:1273` 只置回 ready，从不恢复 `clock.speed`**；而
-    `main.py:1279` 用 `loop.clock.speed == 0` 推断 `paused`（与 `ControlState` 分裂）。
-  - 既有测试 `test_projection_failure_stops_world_without_sending_success` 只锁「失败要冻」，
-    **缺「成功要解冻」**——这是同一根因的另一半（第二十一轮已补）。
-  - 可达窗口：`activated=True` 之后 `rebuild_tile_map` / `load_health_snapshot` /
-    `restore_voxel_edits` 抛错。**冻结本身是故意的 fail-closed，别为凑绿取消它。**
-- **读档恒失败缺陷已修并已提交（2026-11-03 修 / 2026-11-04 提交）**：
-  `ae20518` 后端 + `8394856` 前端 + `2db91ff` 恢复卡。门禁 pytest 3460P/0F/121S
-  （479.61s）· vitest 360P/48F · ruff/format 403 · pyright 0/0/0 · 两资产一致 · 协议 1.14。
-  详情见下（保留原记录）：
-  1. **后端 `locate_anchor` 的 `AND protected = 0` 是错的**（`fork_orchestration.py`）：
-     `protected` 只表达「不许删这个档」（`anchors-api.md` §1.4），与能否载入无关。
-     新建档必是末梢（`create_item` 写 `protected=True`），且读档成功后 `fork.py`
-     把载入的档回写为 `protected=1`（读档即成为当前游标）⇒ **「存完立刻读」与
-     「读过再读」两条主路径恒回 `load_failed`**，玩家看到「这个档读不出来了。」
-     该过滤是 `5755a62`（2026-09-28）遗留，早于 `protected` 写入路径。
-     **既有测试为何没抓到**：`saved_world` 夹具存了**两档**，旧档自动降级为
-     `protected=False` ⇒ 永远只测非末梢档。新增 `single_save`（只存一档）夹具
-     + 2 条 e2e + 1 条单元钉（RED 3 失败 → GREEN）。
-  2. **前端读档失败无任何提示**（`runtime.ts::onError`）：`ref=load_anchor` 的
-     error 帧被静默丢弃 ⇒ 点「读档」面板毫无反应（实机就是这个现象）。服务端
-     早已备好文案，只是没接到 UI。新增 `uiStore.loadError` + `SaveLoadPanel`
-     复用 `role="alert"` 提示位；`loadAnchor()` 发请求时先清旧文案；空串不渲染空框。
-     - **文案有两个来源，别混**：生产 drain 路径走 `main.py:1301` 的**硬编码
-       字面量**（`_error_frame("load_anchor", "load_failed", "这个档读不出来了。")`，
-       K16 白盒钉要求字面量）——**不过** `scan()` 终扫；`ws.py::_load_failed_frame`
-       是**同步路径**的构造器，那条才做终扫并可能产出空串。当前两处文案相同。
-     - **只认两种 code**（2026-11-03 code review）：`load_failed` / `bad_anchor` 可直显，
-       `bad_channel`（"channel mismatch"）等工程措辞走戏内兜底——否则英文原文会
-       漏进玩家面板。`onSnapshot`（世界已恢复）清 `loadError`，避免成功后仍挂着旧失败。
-  - **实机复核（隔离库 `p7verify-20261103`，ms-playwright chromium-1252）**：
-    **11/11 PASS**——存一档→立刻读／读过再读／未注册 id 面板出文案／**失败后成功
-    读档旧文案已清**／**bad_channel 未泄漏英文**／无 4xx/5xx。截图 `V1~V5`。
-    > 大库读档要重放 20s+，脚本必须**轮询等 `full_snapshot`**；死等 6s 会假红
-    >（第一次重跑就踩了，5 条假失败）。别照旧脚本的固定 `waitForTimeout`。
-  - **门禁（主树实测，code review 后重跑）**：pytest **3460 passed / 0 failed /
-    121 skipped**（469.33s，三次独立复跑同读数）· ruff/format 403 files · pyright 0/0 ·
-    vitest **360 passed / 48 files**（+7）· client 四件 EXIT 0 · 两资产 `--check` 一致 ·
-    `uv lock --check` 一致 · 协议 **1.14** 未动。
-  - 契约同步：`docs/api/anchors-api.md` §1.4 增「`protected` 与可读性无关」；
-    §4.3 订正「`load_anchor` 不返回 error 帧」的自相矛盾说法（一律走 WS error 帧）；
-    `docs/api/ws-protocol.md` §4.5 增可见位条 + `message` 只在戏内文风 code 下可直显。
-- **主树本批（2026-11-02，用户问「还有什么问题」后按建议顺序做的前三条 + 顺带一条）**：
-  1. **1A 身份锚自洽**（`villagers.py::_profile_row`）：`identity_anchor` 改与同行
-     `name`/`occupation` 同源。修前三个专属角色库里「赵铁·镖师」配锚
-     「我是赵铁柱，农人。」——`npc_l2.py:243` 把这个锚当 prompt **第一条 system
-     消息**，模型与玩家头顶名牌对不上。新增 6 条钉子。
-     **真实库（只读）实测**：54 行里严格比对 **7 行**不符，其中真缺陷 **3 行**
-     （三个专属角色）；另 4 行是合法不同形——陈默的故意长锚 + 灰/黑子/鸦
-     走 `animals.py:27` 的 `我叫{name}。`。**别把 7 当缺陷数**。
-  2. **2A 读档清心声账本**（`ws.py::monologue_history_clear()`）：`_MONO_HISTORY`
-     修前全仓无 `.clear()`，读档后旧分支最近 20 条随快照灌进新世界面板
-     （D 只过滤「别人的」，没管「旧世界的」）。新增 4 条 + 端到端 1 条。
-  3. **4A 意愿独白按动作分口径 + 扩街巷句库**：`will.py::_ACTION_TEMPLATES`
-     （5 动作 × 3 档 × **≥12 句**，与通用池同宽）+ `willingness_expression(..., action=)`；
-     `dialogue.py` 粗 2→9 / 文雅 2→7（文雅每句必带「您」）。新增 **53 条**。
-     - `action=""` 与修前逐位一致；**`move`/`build`（无专属池）也必须逐位一致**
-       ——首版只回落池、仍用 `(npc, action)` 作键，会静默换句，已修 + 钉死。
-     - 池宽**必须 ≥12**：真实库 `npc.act` rest **87,864 次**是绝对主力，
-       专属池 4 句 = 比它替换掉的 12 句通用池**更复读**，本末倒置。
-     - **命中面实测**（真实库 `npc.monologue` 60 条 thought 按同人前一动作配对）：
-       rest **33** / wander **18** / work **6** / eat 1 / request_chat 1 / move 1
-       ⇒ 新专属池覆盖 **85%**（rest+wander），`move` 几乎不产 band>0，
-       其回落修正属正确性保险而非热点。
-  4. **顺带修（同一子系统，查证时撞见）**：`npc/roles.py::role_events` 把
-     `narrate_sound` 的**完整句**（自带句号）直接拼进 `听见{clue}，…` ⇒
-     真实库 `npc.monologue` 实测：**209 条里 60 条**含「句号/问号/感叹号紧跟逗号」
-     （= thought 面**全部** 60 条，bubble 面 149 条无一命中），形态是
-     `听见传来一阵脚步声，像是奚船家。，先记在心里。`。
-     加 `_as_clause()` 只剥一层尾标点，5 条参数化钉子（RED 4 失败 → GREEN 5）。
-- **第二十轮已收编（codex `bb0647e` + `3012063` → 主树 `66637b7`）**：
-  每日健康严重度演进（`health_evolve.py`）+ 三处播种分支过滤（`seeding.py`）。
-  两条真缺口均已关闭。主树独立复跑 **3457P/0F/121S**（= 基线 3350 + 107），
-  逐条对上；冲突 2 处按预定口径解决（`villagers.py` 保留主树 1A 同源修复 +
-  采纳 codex 的 `branch_id` 形参；`memory.md` 取主树版本）。
-- **第十八+十九轮（codex，2026-11-02）：已 `--no-ff` 收编 `e28e144`**。
-  第十八轮 = 锚点读档按游标重建 `npc_profiles`（独立 profile 快照段）；
-  第十九轮 = **L2 真实调用路径接齐**（有限单步，不是多步规划器）。详见 §7 与 §1。
-  - ⚠️ **可用性变化（须知会用户）**：缺 profile 副本的**旧锚点包**现在统一
-    `corpus_mismatch`、在 hooks 前拒绝 ⇒ **旧存档读不出来**。属 fail-closed 取舍
-    （`npc.death` 只有 ID，重建不出已删的 26 列），已登记 `docs/data/schema.md §24.2`。
-    本树实测 `world.db` 里 `anchor_packages` **0 行**，所以实际影响面为零——但
-    codex 树/别的副本若有旧包会读不出来。
-  - **L2 只在「人在主角 3 格内 + 有可用模型配置 + 有身份锚」时升格**；默认 60 真实秒
-    / 每 NPC、全村 4 次/60 秒、单并发、8 秒超时、192 输出 token、单 HTTP 尝试。
-    `NPC_L2_CALLS_PER_MINUTE=0` 可一键关。**暂停/离线/历史回放零模型调用**。
-- **第十九轮（主树，2026-11-02）：A social 需求闭环 + D 心声历史私密面**。
-  用户问「模型能控制人物吗 / 心声和街巷太乱」，实测结论见 §1g；本轮只修
-  两条**真缺陷**（用户裁定 A+D，B 真接 L2 与 C 扩池未动）。
-  1. **A**：`needs.py::REMEDY_RELIEF` 加 `request_chat → social -0.3`；
-     `sim_exec.py` 开口成功后回写（与 D3「吃了才算吃」同口径）。
-     修前 social 只涨不降 ⇒ 第 0 日 0.31 / 第 1 日 0.81 / **第 2 日起恒 1.00**
-     ⇒ 全场 band 3（满屏「这活儿我实在打怵」而人实际在闲逛）。修后实测
-     第 0~5 日 band>0 恒 **2%**（修前第 2~5 日 **100%**），social 稳在 0.05。
-  2. **D**：`ws.py::_MONO_HISTORY` 改存 `(actor_id, 帧)`，
-     `monologue_history_payload` 按 `_protagonist_id(loop)` 过滤——
-     `bubble`/`plan` 广播面全可见，`thought` 只出本人视角（与 `route_monologue` 同源）。
-     修前村民/三专属角色的 thought 随每次 full_snapshot 落进陈默心之声面板
-     （20 条缓冲约 19 条是别人的）。
-  3. 新增 **13 条** pytest（`test_social_need_relief.py` 8 +
-     `test_monologue_history_privacy.py` 5），RED 9 失败 → GREEN 13 通过。
-- **第十九轮门禁（主树独立实测）**：pytest `-m "not bench"` **3114 passed / 0 failed
-  / 121 skipped**（428.88s）· ruff 385 files · format 385 files · pyright 0/0 ·
-  client gen:protocol:check/typecheck/lint/prettier EXIT 0 · vitest **353 passed / 48 files** ·
-  两资产 `--check` 逐字节一致 · `uv lock --check` 一致 · 协议 **1.14** 未动。
-  > pytest 3100 → 3114 = **+14** = 第十九轮 13 条 + `02e3b10` 的
-  > `test_A_health_seam_equal` 1 条（3100 是第十七轮收编时的读数，
-  > 早于 `npc_health` 修复那笔提交）。vitest 不变（353）——本轮零前端改动。
-- **收编后门禁（主树独立实测，2026-11-02）**：pytest **3280 passed / 0 failed / 121 skipped**
-  （419.73s）· ruff/format **394 files** · pyright 0/0 · client 四件 EXIT 0 ·
-  vitest **353 passed / 48 files** · 两资产 `--check` 逐字节一致 · `uv lock --check` 一致 ·
-  协议 **1.14**。完整表见 §1。
+> 正文已删除，考古走 `git log`。只留**收编哈希**与**仍在生效的结论**。
 
-- **main HEAD**：`git log -1 --oneline` 现测（**别记哈希**，记录本身就会产生新提交）。
-  第十八+十九轮收编 = 本文件本次提交的父提交（`--no-ff` 合并 `e28e144`）。
-- **codex HEAD**：内容交付 `3012063`（A）+ `bb0647e`（B），记录提交 `69444db`。**已收编**；codex 树仍未同步 main。
-- **第十八+十九轮：已收编**（`--no-ff` 合并 `e28e144`，merge-base `16b7eae`）。
-  - **2 处冲突**（预测 4 处；`main.py`/`fork.py` 自动合并，已复查主树修复仍在）：
-    1. `sim/npc/sim_exec.py` —— **两边都保留**：先 codex 的 `note_dialogue`（L2 降格判据），
-       再主树单次 `apply_remedy(..., "request_chat")`。codex 回执 §4 明确要求如此；
-       L2 服务侧不写 social ⇒ 不会重复扣账。
-    2. `.orca/memory.md` —— 取主树版本后补记（本节 + §7）。
-  - **自动合并后复查（第十七轮活例）**：`main.py::ensure_schema`（`:42,208`）在；
-    `fork.py::_clone_health_at_cursor`（`:559` 调用 / `:797` 定义，`02e3b10`）在；
-    `ws.py` D 的 `_MONO_HISTORY` 视角过滤（`:578,597,617`）在。三处均未丢。
-  - **收编后首跑 1 红，已修**：`test_m5_fork_replay.py::test_A_health_seam_equal`
-    （主树 `02e3b10` 钉子，codex 分支不含那笔提交 ⇒ codex 不知道这个手搓夹具）。
-    修法见 §1 注。修后 **3280P**。
-- **第十七轮：已收编**（物种知识门 + 名牌重叠）。
-  - 收编为 `--no-ff` 合并，**3 处冲突**按预定口径解决：
-    1. `sim/api/main.py` —— 取 codex 侧后**补回主树的 `ensure_schema`**（`main.py:42,208`）。
-       codex 分支自 `820c653` 起不含该提交，丢掉则真实库启动即崩。
-    2. `sim/core/persistence/social_projection.py` —— add/add，取 codex 侧（主树侧为纯子集）。
-    3. `.orca/memory.md` —— 取主树版本（codex 侧停在 10-31 旧状态），本节即补记。
-  - **自动合并未静默丢主树修复**：已核对 `evidence.py` 的 `display_name_of` 反查 +
-    重名 fail-closed、`frame.py` 过时注释订正、`main.py:346,649,668` 三处传参全部在。
-  - 主树独立复跑（**不采信自测**）：`test_species_knowledge.py` +
-    `test_m3_social_wiring.py` → **31P**；`name-labels.test.ts` → **16P**；
-    新增数对得上：pytest 3069→**3100**（+31）、vitest 337→**353**（+16）。
-- **第十六轮：已收编 + 生产已通**。原判「不可收编」的根因是
-  `witnesses` 恒空 ⇒ `knowledge` 恒 0；修法见 §1e 尾段（`display_name_of` 反查 +
-  重名 fail-closed + 真跑 `lifespan` 的集成测试）。
-  **Playwright 实机验证（隔离库）**：`knowledge` 22 行 / `relationships` 116 行 /
-  `hidden_emerge.witnesses` 有内容；挖掘、放置、移动、昼夜循环全链路正常。
-- **真实 `world.db` 已回滚**（2026-11-01 19:47）：本轮我的手写探针曾绕过 `conftest`
-  直写真实库（+741567 events / knowledge +27）。已用备份
-  `world.db.bak-20261101-150615` 覆盖，`seq 1..187857` SHA256 与备份逐字节一致
-  （`a39c046c…`），`knowledge`/`relationships` 归零，无伪造脏数据。
-  污染态另存 `world.db.polluted-20261101-194706`（已 gitignore，供取证）。
-- **协议**：**`1.14`**（第十轮挖深字段升级）；双落点同改
-  （`sim/api/ws.py::_PROTOCOL_VERSION` ↔ `client/src/net/ws.ts::PROTOCOL_VERSION`
-  ↔ `sim/tests/test_protocol_version.py::EXPECTED_VERSION` + README 徽章 + `shared/openapi.json`）。
-  第十一～十七轮均未动协议字段（渲染、UI、持久层、音效、离线、社会层内部）。
-- **两棵树**：
-  - 主树 `E:/zxdevelop/project7`（`main`）：拆单/架构/质量/收编复核/日常小改。
-  - codex 树 `E:/zxdevelop/.orca/worktrees/project7/codex`（`codex`）：复杂/跨层实现、安全合规。
-  - 只走各树 `.orca/talking.txt`；不直接对话。
-- **远程**：origin/gitee 均在 `3603ecb`（**主树领先未推**，推送仍由用户决定）。
-  现测：`git rev-list --count origin/main..main`——**不要记数字**，每提交一次它就变。
-- **在飞**：**无**。第二十轮已收编（`66637b7`）。未派：V3.5 内容包 / V4-3D。
-  第十八+十九轮**已收编**；主树 1A/2A/4A **已做完**。
-  §1g 的 C 项（扩池 + 动作语境）已由 4A 关闭。
+| 轮次 | 内容 | 收编 |
+|---|---|---|
+| 第二十三轮 | 世界可辨认性 A/B 全部落地（等距烘焙 + 气味 + prompt 尺寸订正）；实机修掉心声面板重连整屏重复 | `5e4e20b` |
+| 第二十二轮 | 土坎拾取：`pickVoxel` 增可选 `isBank(x,y)`，土坎自命中 149/448 → **448/448** | `5e4e20b` |
+| 第二十一轮 | 读档 D1/D2：成功读档按连接 `ControlState` 重投影 `clock`；`session_state` 改按连接定向投递 | `1d55179` |
 
-> **第十九轮派单的三个硬约束**（主树已查实，写给收编时的自己）：
-> 1. `NpcProfileData`（`sim/npc/model.py:40`）**没有 `identity_anchor` 字段**，
->    `_row_to_profile_data`（`npc_store.py:73`）没读那一列——L2 的硬前提，
->    必须先在 model/persistence/assemble 三层补上。
-> 2. 用户裁定实现形态 = **LLM 输出落事件、回放读事件**（不是回放跳过 L2）。
->    现有 `NPC_MONOLOGUE`/`NPC_CHAT` 已是 state 层 no-op（`world.py:237,250`），
->    新事件照这个口径走，T2 口径不变。
-> 3. 离线推进「不调用网络/墙钟」（`offline.py:37`）**必须保持**。
-> 若 codex 交半接线状态，按派单末尾「允许的垂直切片」核对其切点。
-- **第十五轮留给用户的四件事 → 2026-11-01 已完成三件**：
-  1. ~~T5 完成率阈值定线~~ → **已定 1.0**（用户裁定，见 §1b）
-  2. ~~soak 流失阈值定线~~ → **已裁定：良性保 0 + 「流失须被死亡解释」契约**（见 §1b）
-  3. ~~真实 `world.db` 正式迁移~~ → **已迁移**（备份 `world.db.bak-20261101-150615`，
-     版本 `0015_health_code`，events 187857 / snapshots 3946 零丢失）
-  4. ~~音效主观听感~~ → **2026-11-01 用户验收通过**（「音效已可以」）。至此第十五轮
-     留的四件事**全部关闭**。
-- **待人工验收**（9 条，已过 4 条，**剩 5/6/7/8/9 共 5 条**；音效另计已过）：
-  1. ~~DA-07 失能/恢复真模型长局~~ — **2026-10-31 用户验收通过**
-  2. ~~V3 画面观感~~ — **2026-10-31 用户验收通过**
-  3. ~~走路是否还飘（`INTERP_MS` 200）~~ — **2026-10-31 用户验收通过**
-  4. ~~V4a 挖放观感~~ — **2026-10-28 已通过**
-  5. V4b 三材料挖放观感（行囊土/石/木三行，为 0 不显示）
-  6. 地形可走面观感：可走 820→3947 格，房子/河/树是否还挡得住
-  7. **移动操作手感**：点击/长按/拖拽/键盘是否顺手
-     （2026-10-29 曾因拾取器用错导致「完全动不了」，单测全绿但真机是死的）
-  8. **土坎观感（第十一轮）**：1568 格隐形墙是否一眼可辨
-  9. **前端画面（第十二轮）**：侧栏收起是否顺手、小屏是否还挤压世界
+**仍在生效的结论**：
 
-> **第十九轮新增待验收（观感类，与上面 5 条同性质）**：
-> 10. **心声/街巷是否还乱**：A 修后街巷从 75.2 → 56.5 条/分钟、换屏 6.4→8.5 秒，
->     心之声面板不再被别人的内心话冲掉（D 修）。**4A 后句库 9 句（粗）+ 每动作
->     每档 ≥12 句专属独白**，动作与独白同口径。验收时看：同一场景下 rest 的人
->     还会不会嘟囔「这活儿讨价还价也没人听」（4A 前必现，4A 后不该出现）。
-> 11. **L2 是否真的「有脑子」**（第十八+十九轮收编后新增）：现在主角 3 格内的村民
->     会走模型。看两点：①升格村民的心声/对白是否明显比模板有人味；
->     ②模型失败/超时是否干净退回模板（不卡顿、不空窗、不重复说同一句）。
->     **默认预算很紧**（每 NPC 60 秒一次、全村 4 次/分钟），观察需要耐心。
-
-> **记录订正**：用户 2026-10-31 先发「1 2 3观感已验收」、随后「3都已验收」，
-> 均指验收清单**第 1/2/3 条**。我最初误记为第 8/9 条，已改回。第 8/9 条**尚未验收**。
+- **读档成功路径必须恢复 `clock.speed`**。失败路径故意 fail-closed 冻结世界（别为凑绿取消），
+  但成功路径只置回 `world_source_ready` 而不恢复 `clock.speed`，会让世界永久冻结——
+  而每连接 `ControlState.paused` 是 False，「继续」按钮回 `bad_action`。既有测试只锁
+  「失败要冻」，缺「成功要解冻」这一半。
+- **`session_state` 必须按连接定向投递**（`manager.send_to_control`），不能从全局
+  `clock.speed == 0` 推断 `paused`——两者会分裂。
+- **读档面板的文案只认两种 code**：`load_failed` / `bad_anchor` 可直显；`bad_channel`
+  等工程措辞走戏内兜底，否则英文原文漏进玩家面板。
+- **大库读档要轮询等 `full_snapshot`**（重放 20s+）；固定 `waitForTimeout` 会假红
+  （实测踩到 5 条假失败）。
+- **`protected` 只表达「不许删这个档」，与能否载入无关**（`anchors-api.md` §1.4）。
 
 ## 1. 门禁（**2026-11-03 第二十轮收编后主树独立实测**；第十六轮复核见 §1e）
 
@@ -670,245 +480,42 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
 - ~~街巷句库 2 句~~ → **4A 已修**（粗 9 / 文雅 7）。
 - 「旁人」兜底**不是缺陷**（见上方订正），保持原样。
 
-## 2-newest. 第十～十五轮（2026-10-29 → 11-01）
+## 2. 历史轮次（第五～十九轮，已全部收编）
 
-全部已收编，主树独立复核，**无在飞任务**。
+> 正文已删除（本文件纪律：考古走 `git log`）。只留**收编哈希**与**仍在生效的结论**；
+> 逐轮细节查 `git log --all --grep='第N轮'` 与 `.orca/audits/`。
 
-**第十五轮｜音效 / 离线推进 / T5 基线 / soak 取证（`47f9e80` codex → `28e8ac9` 合并）**
+| 轮次 | 日期 | 内容 | 收编 |
+|---|---|---|---|
+| 第十九轮 | 11-02 | A social 需求闭环（`request_chat → social -0.3`）+ D 心声历史私密面（thought 只出本人视角） | `e28e144` |
+| 第十八轮 | 11-02 | 锚点读档按游标重建 `npc_profiles`；L2 真实调用路径接齐（有限单步） | `e28e144` |
+| 第十七轮 | 11-01 | 物种知识门（仅 human 持有/转述）+ 名牌屏幕空间避让 | `16b7eae` |
+| 第十六轮 | 11-01 | M3 社会层根因修复（`Observation.subject` 是中文名非 rtoken ⇒ 恒空） | `ffa74bd` |
+| 第十五轮 | 11-01 | 音效（WebAudio 合成，零资产）+ 离线推进 + T5/soak 定线取证 | `28e8ac9` |
+| 第十四轮 | 10-31 | `npc_health` 写入路径接通 + 启动自愈 `ensure_schema` | `1d4bfa9` |
+| 第十三轮 | 10-31 | 快照治理（真实库 3946→9 行，events 零删） | `92fbc1b` |
+| 第十二轮 | 10-30 | 前端画面优化（世界宽 872→1152；单一可收起侧栏） | `7f89584` |
+| 第十一轮 | 10-30 | 土坎视觉区分（1568 格隐形墙 → 三道斜纹，0 误标） | `6aa0528` |
+| 第十轮 | 10-30 | 悬空修复（`walkable ⇒ h==1`），协议 1.13→**1.14** | `1895014` |
+| 第九轮 | 10-29 | 移动操作重做；主树修掉 P0「人物完全无法移动」（`pickVoxel` 误判 → `pickGround`） | `04e2175` + `b0d4341` |
+| 第八轮 | 10-29 | 地形同源重建（可走 820→3947，出生点 100% 可达） | `37e6a51` |
+| 第七轮 | 10-28 | V4b 三材料分类（土/石/木） | `ba68e88` |
+| 第五轮 | 10-26 | 挖土看得见（推翻决策 9）；碰撞真相仍是 `TileMap.collision` | — |
 
-四条「宣告收官但没做」的缺口，本轮补齐可验证部分：
+**仍在生效的结论**（从上述正文提炼，别丢）：
 
-- **音效**（`client/src/game/audio/`）：Phaser 3.87 自带 WebAudio，零新 npm 依赖、
-  零资产文件。`synth.ts` 用确定性 xorshift 噪声合成 5 种效果（step/dig/place/combat/
-  collapse）+ fire 循环氛围；`world-audio.ts` 默认 `muted: true, volume: 0.25`、
-  8 音轨上限、8 格距离衰减 `1/(1+d*0.45)`、120ms 节流、`generation` 守卫迟到解锁、
-  `audible` 门（connected && hasSnapshot && unlocked && !muted）。只消费
-  `voxel_edits`/actor 位移（≤4 格）/`combat_event`（按 rtoken+exchange+posture 去重）/
-  `mirror.lights kind==='fire'`；**明确不消费独白/thoughts/tasks**（C3 沉浸规则）。
-  `SettingsPage` 加「世界音效」开关；`WorldScene` 在 pointerdown/键盘解锁、blur 暂停。
-- **离线推进**（`sim/world/offline.py`）：见 §1b 行内详情。关键设计是**墙钟只采样一次**
-  且**水位存在控制元数据里**（`snapshots/branches.created_at`），因此不进事件流、
-  不进 `state_hash` —— 这是它能在 C5 下成立的原因。
-- **T5 / soak**：只取证不定线，见 §1b。
-
-**主树复核发现**：codex 回执称 tsc 全过，实测 `EXIT 2`（详见 §1d）。已修并复跑。
-自写 16 条不变量探针（`.orca/audits/round15-2026-11-01/main-tree-probe.py`）16/16 通过。
-
-**第十四轮｜`npc_health` 写入路径（`5d937f0` RED → `5a48f7c` 实现 → `1d4bfa9` 启动自愈）**
-
-健康档此前有模型/迁移/读路径但**零写入**。本轮接通：`NPC_HEALTH_CHANGED` 事件 →
-`_apply_projection_event` → `npc_store._project_health`（同事务 upsert，未知 NPC /
-改类别整批回滚）→ 感知触发 `evaluate_triggers` → 陈默闸门与记忆；6 条内容种子
-（2 可见 4 隐藏）；坍塌给幸存者/陈默落可见旧伤。`0015_health_code` 新增 `code` 列
-（回填旧 id 文本、NOT NULL、`(branch,npc,code)` 唯一），`attr_id` 改为
-`f"{npc_id}.health_{code}"`，fork 复制 `code` 修跨分支漂移。协议仍 **1.14**。
-
-**主树复核发现的阻断缺陷**（codex 自测没撞上，因为它用临时库）：主树 `world.db`
-是 `create_all` 建出来的，**没有 `alembic_version` 表**，而 `create_all`
-**不给已有表加列** ⇒ `npc_health.code` 永远补不上，真实存档启动直接
-`OperationalError: no such column`。修法 `ensure_schema()` 三分支自愈 +
-`script_location` 绝对化（抗 `chdir`）+ `WORLD_DB_URL` 用完还原。真实库副本实测
-code 补齐 / events **187857 零丢失** / 6 种子行 / 版本 `0015_health_code`。
-
-**第十三轮｜快照治理（`1fd362f` RED → `92fbc1b`）**
-
-DESIGN §12 三条承诺实测全部不符：每 1000 tick 一份 → 实测每 **9.1 tick** 一份
-（3946 份 / 36001 tick）；「仅留最近 8 份热 + 每日首份」→ 全仓**零**删除语句；
-「abandoned 整体冷归档」→ `is_cold` **从未**置 True。根因是 `846a052`（2026-10-21
-崩溃恢复）把落库改成 `flush_world`，事件 + 完整检查点同事务 → 每帧有事件就写一份。
-**该改动本身是对的**（解决重启丢状态），缺的是保留策略。
-
-落地：新增 `sim/core/persistence/snapshot_policy.py`（`prune_hot_snapshots` /
-`mark_branch_snapshots_cold`，用调用者 session、不自行 commit），接入 `flush_world`
-与 `SqlEventStore.write_snapshot`；`fork_from_anchor` 在**真实 head 封存**父线时同事务
-整体标冷。**不删 events 一行**（C6），不改 gzip 内容，无迁移/新依赖/新公共方法。
-
-**主树独立复算（不看 codex `acceptance.json`）**：
-
-| 项 | 主树实测 |
-|---|---|
-| 同日写 1/8/9/10/100/250/1000 次 | 行数 **1/8/9/9/9/9/9**，events 1001 行不动 |
-| 跨 3 日 1100 次写 | **11 行**（热 11），日首 tick `0/86400/172800`，最新 8 条 `172803..172810` |
-| head-fork 封存 | 行数 **9→9**，全冷，seq/tick/gzip 逐位相同，events 逐行相同，子线全热 |
-| 删中间快照后恢复 | `cutoff_seq=38` 已被删；从 tick 0 回放，`WorldCheckpoint` JSON **逐位相同** |
-| 无合格快照 | 全量重放 **逐位相同**，快照 0 份 |
-| **真实 `world.db` 副本** | **3946 行 → 9 行**，events **187857 行一行未动**，恢复 payload 3768B **逐位相同**，prune **47ms** |
-| 真实 `fork_from_anchor(kind="anchor")` + 被裁快照 | 历史点恢复**逐位相同**，父线仍 `active`，冷行 0（anchor-fork 不标冷） |
-| 稳态 flush 开销 | 带清理 **4.31ms** / 不带 **3.55ms**（+0.76ms），单独 prune **0.97ms** |
-
-> 恢复耗时 base vs pruned 是噪声（2.64/3.05/2.73s vs 2.20/2.76/2.65s）——两条路径都
-> 命中同一最新快照 tick 36001，窗口相同。**删旧快照只影响「从更早游标读档」的耗时**。
-
-**未做（诚实边界，已写进 `docs/data/event-sourcing.md`）**：冷归档只是 `is_cold` 标记、
-仍留主库；不导出独立 SQLite；不批量迁移既有存档；不声称主库已达 <2GB 硬上限。
-活动分支的旧热行在下一次快照写入时才收敛（生产库当前 3946 行，首 flush 后 → 9 行）。
-
-**第十轮｜悬空修复（`7b1d559` RED → `1895014`），协议 1.13→1.14**
-
-用户真机报「挖完建筑物悬空，人物悬在半空」。根因：服务端挖完发
-`tile_changed(gid = 静态 gid)` → 客户端判可走；客户端又本地推算渲染高度 −1。
-实测挖一次后 **4562 格**违反 `walkable ⇒ h==1`（2994 格可走却画 2 层高 = 悬空；
-1568 格可走却画 0 = 陷地下）。
-
-用户裁决：**服务端记挖深，挖到 h=1 才可走**；**跳跃不做**。落地：`VoxelEdit` 加
-`height`（结果高度 0..3 必需）、`VoxelEditedPayload.height` 可选（老事件回退推算）、
-`rebuild_tile_map` 重放 `VOXEL_EDITED` 跟踪高度、`walkable = (tile_id != 0 and height == 1)`。
-主树独立复核挖 0/1/2/3 轮：**3947 / 8326 / 11320 / 11320，0 违规**。
-
-**第十一轮｜土坎视觉区分（`46ce58e` RED → `6aa0528`）**
-
-用户报「地图仍有不可走的无障碍区域」。根因：`iso-terrain.ts` **完全不读
-`map.collision`**，只按高度画 → 阻挡但 h=1 的土坎与可走 h=1 地面渲染完全相同。
-实测 **1568 格隐形墙**，其中 269 格 4-邻接可走格（必撞）、91 格是「两片可走区之间的
-假通道」、真实出生点 (100,53) 31×31 内 135 格。
-
-**不能改成可走**：`_MATERIAL_BY_HEIGHT[1] = earth` 且 `place` 只对可走格生效
-（`voxel_exec.py:124`）—— earth 唯一来源就是「阻挡的 h=1 格」。改成可走 = earth 断源
-= 回到「只挖不放」（实测该方案仍留 142 格、土源 730→524）。**故只改渲染**。
-
-落地：`bank = (effectiveHeight == 1) && (collision == 0)` → 画三道明暗土色短斜纹
-（`#2c1b10` / `#f1d793`，亮度差 185.8，3.5x 下外纹 7px / 亮芯 3.5px），与「挖过的疤」
-（内嵌深色菱形）互斥；retained-set 池化，`changed == false` 的帧零重建。
-顺带把 `iso.ts::VoxelEdits` 与 `iso-terrain.ts::Edits` 两条类型路径收敛成
-`Pick<VoxelEdit, 'height' | 'action'>`。主树独立复核 **1568 全标 / 0 误标 / 0 漏标**。
-
-**第十二轮｜前端画面优化（用户直派，`bc6739c` RED → `7f89584`）**
-
-原双常驻侧栏压垮小屏、canvas 宽 0 且报 3 次 WebGL framebuffer 错误。改为单一可收起
-手札/存档侧栏（桌面默认手札、存档按需，小屏默认关闭、打开时覆盖而不挤压世界）。
-世界宽 1440×900 **872→1152（+32.11%）**、1024×768 **456→736（+61.40%）**、
-390×844 **0→390×688**。CanvasHost 补 ResizeObserver + `ready` 同步 + 卸载清理。
-
-> **坑（已进 §3）**：Phaser RESIZE 模式必须用 `game.scale.setParentSize`；
-> 只调 `scale.resize` 会在 refresh 时从旧 parentSize 回写，手机留下约 46px 底部空隙。
-
-**主树未复核项（诚实说明）**：第十二轮 codex 用真浏览器截的 4 张 PNG 与
-`verify-layout.cjs` 结论，主树只核对了 JSON 数值与源码 diff，**没有自己开浏览器**。
-
-## 2-new. 第九轮（2026-10-29）移动操作重做 —— codex 交付 + **主树修掉一个 P0**
-
-用户四症状里的「移动特别局限」，**地图侧已由第八轮修完**（可走 820→3947，出生点 100% 可达）。
-第九轮只做**操作侧**，codex 交付 `f74f4af`（RED 测试）+ `04e2175`（实现），主树 ff 收编零冲突。
-
-**codex 落地**：可走格短/长按即走（消死区）、拖拽合并最新目标 100ms 限频、WASD/方向键
-逻辑八向、`goalMarker` 到达/换目标/取消即清、`requestMove` 加 `wsStatus` 守卫、
-可达性 BFS 与 sim 同八邻禁穿角、墙/断路/断线给戏内提示。新增 `client/src/game/movement.ts`。
-
-**主树收编后发现并修掉 P0「人物完全无法移动」**（`b0d4341`）：
-
-根因——codex 把移动拾取从地面平面换成了 `pickVoxel`，而那是**为编辑设计**的拾取器
-（`h>=2` 优先，因为玩家看到的高方块就是要挖/放的那个）。等距投影下 h=3 方块与它
-**斜后方 2 格**的 h=1 地面顶面菱形**逐像素重合**（x−y 同、x+y 差 4、高度差 2×ISO.HH），
-于是「点空地」被判成「点房子」→ `movementFailure` 全拒 → 一个移动帧都发不出去。
-
-真实地图实测（3947 个可走格，逐格点自己顶面中心）：
-
-| 拾取 | 命中自己 | 落阻挡格 |
-|---|---|---|
-| 第八轮旧版（纯地面平面） | 0% | 0 |
-| codex `pickVoxel` | 80.7% | **763（19.3%）** |
-| `b0d4341` 的 `pickGround` | **100%** | 0 |
-
-出生点 13×13 邻域 26 个可走格里 codex 版只有 5 格点得中、**21 格落阻挡**；
-十个地标邻域最差 15%（stream_bridge）。
-
-**修法**：新增 `pickGround`（`voxel-picking.ts`）——不做遮挡判定，只把屏幕 y 下移
-`WALK_HEIGHT × ISO.HH` 再反投影；单向不变量 `walkable ⇒ h == EARTH` 保证可走面恒在这一层，
-故是**精确**反投影而非近似。防御性拒绝高度非 EARTH 的格。`WorldScene` 一次按下同问两个
-拾取器：`digTarget`（编辑）、`ground`（移动）；能挖则起计时器，短按抬手仍落回移动。
-拖拽与键盘同改走 `groundTarget`。
-
-**教训（已进 §3）**：**单测全绿 ≠ 真机能动**。codex 交付时 290 个前端测试全过、门禁全绿，
-但真实地图上 19% 的可走格根本点不中——因为测试夹具造的是「可走格与高块不重叠」的
-玩具图，而真实地图上重叠是常态。凡涉及拾取/投影的改动，**必须用真实地图数据实测命中率**。
-
-## 2a. 第八轮（2026-10-29）地形同源重建 —— main，已提交 `37e6a51`
-
-**用户症状**：障碍物可以穿过 / 移动闪现 / 移动特别局限 / 只挖不放。
-
-**根因（三条各自独立，但都指向同一个结构性缺陷）**：
-1. 源包 `Collisions` 层与 `World Blocks` **逐字节相同**，只画了三条贯穿建筑与河道的
-   直线带（820/14000 = 5.9%）。碰撞真相是它，渲染高度却由另一套 HSV 分类器独立推导
-   ⇒ **493 格可走却画成实心**（穿模）、**5752 格画成平地却不可走**（移动局限）。
-2. `place` 门槛是「目标格必须可走」，而可走面只有 820 格的窄带 ⇒ 想放东西几乎必然
-   越界拒绝；即便成功，行囊里也没有 earth。
-3. 客户端 `INTERP_MS=250` **正好等于**行走节拍 250±15ms——滑行永远差一点没走完就被下一格
-   重置起点，逐格累积落后（实测 57% 帧落后 >0.5 格，最大 1.20 格）⇒ 视觉「闪一下」。
-
-**落地**：
-- 新增 `sim/content/terrain_class.py`（唯一分类源）：逐格 16×16 HSV 占比
-  （walk/canopy/water）→ 5×5 均值滤波 4 轮 → 只留最大 4 连通块 → 作者真值挖通道。
-  一次 `classify()` 同时产出 `linhe-town.json` 的 collision 位、`linhe-height.json` 的 h、
-  以及图集基色档。
-- `build_height_map.py` 改为**委托** `build_god_town.derive_terrain`，不再自己分类；
-  `render()` 成为唯一写出路径（两处共用）。`build_block_atlas.py` 改为直接读
-  `linhe-height.json` 的 h 值，不再依赖 `classify_height`。
-- **土坎**（`_is_earth_bank`）：阻挡但瓦片本身像土面（**逐瓦片原始** walk ≥0.45，不平滑——
-  平滑会把屋顶拉成土色）且 4 邻可走 ≤2 的格标 h=1。**这是 earth 的唯一来源**：
-  若把土坎也判 stone，行囊永远挖不出土，`place` 永久缺料 = 「只挖不放」。
-- 不变量**单向**：`walkable ⇒ h==EARTH`，反向不成立（土坎可挖不可走）。
-  **做成双向会立刻回归「只挖不放」**（阻挡 h==1 变 0 格，实测已验证）。
-- `INTERP_MS` 250 → 200（节拍的 80%，留抖动余量；平均落后 0.57→0.43 格，最大 1.20→1.00）。
-
-**结果**：可走 820 → **3947**（28.2%），1 连通块，出生点可达 3947/3947，
-90/90 出生候选、10/10 地标可走，高度档 {0:1112, 1:5515, 2:4379, 3:2994}，土坎 1568。
-端到端实测：出生点旁 3 格挖土坎得 earth 1 → 平地放置成功。
-
-**连带修的测试**（旧坐标落在新分类的阻挡格上）：`test_e1_talk_to`（走廊移到行 51）、
-`test_m4d12_disperse`（不再把 50 NPC 塞同格，改用生产出生路径）、
-`test_m4d20_motion`（走廊移到 (105,56)→(111,56)，那里才有垂直抖动空间）。
-
-## 2. 第七轮成果（2026-10-28）V4b 材料分类 —— codex，已收编 `ba68e88`
-
-**问题**：`VoxelEditedPayload.material_id` 写死 `Literal["earth"]`——挖树挖石屋都只进「土」。
-主树实测可挖格（碰撞 0 且静态 h>0）**12511 格**，按静态高度正好三档：
-h=1 土 5083 / h=2 石 5102 / h=3 木 2326。
-
-**落地**：
-- `voxel_exec.py`：`_MATERIAL_BY_HEIGHT = {1: earth, 2: stone, 3: wood}`；`_validate` 返回材料，
-  `_inventory`/`_reserved` 改为三材料字典；`_pending` 存 `(action, material)`。
-- **place 消耗目标格所属材料**——挖石得石、放石耗石，往返净值 0；缺料 fail-closed
-  （`行囊里没有石料了。`，不落库）。
-- 协议 **1.13**：`VoxelInventory` 保留必需 `earth`，新增可选 `stone`/`wood`（缺省 0，仍封闭对象）。
-  `MaterialMoveReason` 不改，`MaterialBalance` 零迁移。
-- HUD 三行，为 0 不显示；**行囊仍只进 HUD，不进 prompt / 世界事件**（C3）。
-
-**主树独立验证**（不只是跑测试，另写探针实跑）：
-- h=1/2/3 各挖一次 → `material_id` 分别 earth/stone/wood，行囊 `{earth:1, stone:1, wood:1}` ✅
-- 在 h=2 格放置 → stone 1→0 ✅；再放一次 → 拒绝「行囊里没有石料了。」✅
-
-**codex 自报的告警**：全量跑有 `test_m4c_llm_driver::...test_seed_inserts_profile_and_idempotent`
-的 aiosqlite `Event loop is closed`；单独复跑 1P/1.81s 未重现，**未声称已修复**。
-主树本轮 2969P/0F 也未见该失败——按间歇性处理，若复现再查。
-
-**否决的候选**：V4a 精确深度（边角缺陷，需改协议，性价比低，用户已验收观感）/
-V3.5 内容包（需外部素材与录音管线）/ V4-3D（DESIGN §10.2 三条启动条件均不成立）。
-
-## 2b. 第五轮成果（2026-10-26）
-
-**A｜挖土看得见（推翻决策 9）** —— codex
-- `client/src/game/render/iso.ts::effectiveHeight`：`dig → max(0, h-1)`、`place → min(3, h+1)`，
-  built/collapsing footprint 仍优先返回 2。
-- 挖到 0 时**不再留悬空深色菱形疤**（主树收编解冲突时落地：`height === 0 → continue`，
-  疤贴在**降后**顶面）。
-- **碰撞真相不变**：仍是 `TileMap.collision`；dig 后仍可走、place 后仍不可走。sim 与协议 0 改动。
-- **已知近似**：`VoxelEdit` 无编辑深度字段，先 `place` 再 `dig` 可能掉两层。精确解需改协议，未做。
-
-**B｜等距渲染增量** —— codex
-- `WorldMirror.terrainVersion` 失效标记 → `WorldScene` → `IsoTerrain`，静止帧零遍历。
-- 脏区裁剪重绘，画布贴图保留；40×40 地图单格 dig 的 CPU fill **4800 → 67（-98.6%）**（codex 自测）。
-- **未测的**：浏览器实际 FPS；变更帧仍比较一次全部表面缓存，Phaser refresh 仍可能全画布上传。
-
-**C｜计划看板退役** —— main `bb871f2`
-- `state_delta.plan` 条目**全部**来自 NPC 的 defers（`sim/npc/runtime.py` → `set_plan_from_expression`），
-  文本恒为「先去别处，等会儿再回来」，不是陈默的计划。
-- 面板**直接删除**，未并入心之声（并入会把 NPC 打算误挂成陈默内心）。
-- 协议 `PlanDelta` 与 `uiStore.plans` **保留**，只撤 UI。`DESIGN.md` 三形态 → 两形态。
-
-**D｜移动不飘** —— main `bb871f2`
-- 走环原来只在「换格那一帧」推进，其余帧归站立帧 → 人物站着滑。加 `gliding` 标志修掉。
-- 镜头原来被喂新逻辑格，人物还在滑 → 镜头先跳一格。改喂**插值后的逻辑顶面**
-  （不含同格错位偏移），并去掉 0.12 跟随缓动（双重滞后）。
+- **`pickVoxel` 与 `pickGround` 是两个拾取器，别混**：前者为**编辑**设计（`h>=2` 优先），
+  后者只做地面反投影。移动必须走 `pickGround`——用 `pickVoxel` 时「点空地」会被判成
+  「点房子」（等距下 h=3 方块与其斜后方 2 格地面顶面逐像素重合），实测 19.3% 落阻挡格、
+  出生点 13×13 邻域 26 格里 21 格点不中。这是单测全绿但真机完全动不了的那次事故。
+- **土坎（阻挡的 h=1）不能改成可走**：`_MATERIAL_BY_HEIGHT[1] = earth`，`place` 只对
+  可走格生效 ⇒ earth 唯一来源就是阻挡 h=1 格。改成可走 = 土源断供。故只改渲染。
+- **快照治理已落地但只是标记**：`is_cold` 仍留主库，不导出独立 SQLite，不批量迁移既有存档；
+  活动分支旧热行在下一次快照写入时才收敛。DESIGN §12 的 <2GB 硬上限**未声称达成**。
+- **冷归档/事件不可销毁**：`FOG_REVEAL` 事件 kind 必须保留（老日志重放要能过），
+  `test_m6_content_events.py` 锁的是事件登记存在、不是迷雾功能存在——删这条测试才是错的。
+- **Phaser RESIZE 模式必须 `game.scale.setParentSize`**：只调 `scale.resize` 会在 refresh 时
+  从旧 parentSize 回写，手机留约 46px 底部空隙。
 
 ## 3. 踩坑（逐条有效）
 
