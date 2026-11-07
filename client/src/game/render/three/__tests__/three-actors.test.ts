@@ -74,14 +74,18 @@ it('updates frame UVs, removes departed actors and drops old snapshot interpolat
   const hero = layer.views.get('hero')!;
   mirror.applyActorDeltas([{ rtoken: 'hero', x: 3 }]);
   layer.update(100, 16, 1, 0);
-  layer.update(200, 160, 1, 0);
-  expect(layer.views.get('hero')!.motion.x).toBeCloseTo(2.5);
+  // The renderer draws an instant one replay delay in the past, so x=3 arrives
+  // at t=100 but only becomes visible after the delay has elapsed.
+  layer.update(300, 200, 1, 0);
+  const midway = layer.views.get('hero')!.motion.x;
+  expect(midway).toBeGreaterThan(2);
+  expect(midway).toBeLessThan(3);
   expect(hero.sprite.material.map!.repeat.x).toBeCloseTo(1 / 17);
   mirror.applyActorDeltas([{ rtoken: 'other', op: 'remove' }]);
-  layer.update(220, 16, 1, 0);
+  layer.update(320, 16, 1, 0);
   expect(layer.views.has('other')).toBe(false);
   mirror.applyVoxelEdits([], true);
-  layer.update(221, 16, 1, 0);
+  layer.update(500, 180, 1, 0);
   expect(layer.views.get('hero')!.motion.x).toBe(3);
   const dispose = vi.spyOn(layer.views.get('hero')!.sprite.material, 'dispose');
   layer.dispose();

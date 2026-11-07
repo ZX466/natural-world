@@ -125,9 +125,11 @@ export function createActorLayer(
         mirror.structures,
         mirror.voxelEdits,
       );
-      const facing =
-        actor.facing === 'n' || actor.facing === 'e' || actor.facing === 'w' ? actor.facing : 's';
-      const target = { x: actor.x, y: actor.y, height, facing } as const;
+      // The server always reports facing "s", so it cannot drive the sheet row.
+      // This layer feeds `advanceMotion` tile-space coordinates, where a one-tile
+      // step dominates any height change — inference from those deltas is correct,
+      // so leave `facing` unset and let the buffer derive it.
+      const target = { x: actor.x, y: actor.y, height } as const;
       if (!view) {
         const texture = assets.texture(key)?.clone();
         if (!texture) continue;
