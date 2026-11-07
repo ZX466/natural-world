@@ -142,8 +142,16 @@ export function createWorldInput(
     const intent = `${actor.x},${actor.y},${direction.x},${direction.y},${ports.revision()}`;
     if (intent === keyIntent) return;
     keyIntent = intent;
-    const target = { x: actor.x + direction.x, y: actor.y + direction.y };
-    if (ports.step(target)) move(target);
+    const targets = [{ x: actor.x + direction.x, y: actor.y + direction.y }];
+    if (direction.x && direction.y) {
+      // Keep the corner rule; a blocked diagonal can still slide along either axis.
+      targets.push(
+        { x: actor.x + direction.x, y: actor.y },
+        { x: actor.x, y: actor.y + direction.y },
+      );
+    }
+    const target = targets.find((point) => ports.step(point));
+    if (target) move(target);
     else {
       stop();
       keyIntent = intent;
