@@ -132,6 +132,10 @@ class VoxelRuntime:
             raise VoxelRejected("这里已有屋舍，不能动土。")
         if (x, y) in self._pending:
             raise VoxelRejected("这块地方刚动过，稍等一等。")
+        # A block under your own feet buries you: your tile turns unwalkable
+        # while you stand on it, and the sprite ends up inside the column.
+        if action == "place" and (x, y) == tuple(actor.pos):
+            raise VoxelRejected("不能站在那儿给自己砌墙。")
         if self._map().is_walkable(x, y) != (action == "place"):
             raise VoxelRejected("这块地方不用再动了。")
         if action == "place" and height != 1:
