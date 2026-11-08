@@ -3,7 +3,61 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-08 派单 codex 后 · 主树 HEAD `3bf2704`）
+## 0. 当前状态（2026-11-08 · codex 移动轮已收编 `890337e` · 3D 主角试水**未提交**）
+
+**【2026-11-08 3D 主角试水 —— 工作区有未提交改动，等用户实机验收】**
+
+用户指令「1 3 2」：① 收编 codex 移动轮 ② 3D 模型批量化/图集问题 ③ **先只把主角一个人换成 3D 试水**。
+第 ① 步已完成（`890337e`，主树独立复跑 `3625P/121S/72D EXIT 0`、vitest `685P/81F`）。
+第 ③ 步已实现并真机验证，**改动仍在工作区，未提交**：
+
+| 文件 | 状态 | 作用 |
+|---|---|---|
+| `client/src/game/render/three/avatar3d.ts` | 新增 891 行 | Gemini SDK 移植版：16 骨骼分节体素角色 |
+| `client/src/game/render/three/__tests__/avatar3d.test.ts` | 新增 161 行 / 8 条 | 尺寸、落地高度、朝向、相位、贴图朝向、tint 乘算、释放 |
+| `three-actors.ts` | +66 | `ActorLayerOptions.protagonist3d` 开关 + 6 处接入 |
+| `three-world.ts` | +10 | 按 URL 建灯光、随 `releaseWorld` 释放 |
+| `presentation.ts` | +7 | `protagonistAvatar3dFromSearch()` |
+
+**开关**：`?avatar3d=1` 才把主角换成 3D；**默认仍全员 2D**，其余 50 NPC 未动。
+
+**移植时改掉的三处（都不是照搬）**：
+1. **贴图改 `DataTexture`**（不再 `document.createElement('canvas')`）：像素图本就程序生成，
+   写 RGBA 缓冲即可。脱离 DOM ⇒ node 环境单测能跑，也是第 ② 步合并图集的入口。
+2. **`texture.flipY = true`** —— `DataTexture` 默认 **false**、`CanvasTexture` 默认 **true**。
+   我的 UV 按 canvas 约定（`1 - py/64`）算，不设 flipY 会**整张图上下颠倒**
+   （真机实测：头长在腿上、药篓花纹贴到躯干）。**这是本次踩到的最坑的一条**，已有测试钉住。
+3. **`setTint` 改为乘算**：线缆的 `tint` 语义是乘数（`0xffffff` = 不变）。直接 `color.setHex(tint)`
+   会把黑发和所有纯色配件**刷成纯白**（真机实测）。已改为 `color.copy(base).multiply(tint)`，
+   并按材质缓存基色。
+
+**光照**：three 场景**原本一盏灯都没有**（`three-terrain.ts:205` 明确写了亮度烘在顶点色里）。
+3D 角色用 `MeshLambertMaterial` 必须有灯，故新增 `createAvatarLighting()` 一组
+`HemisphereLight(2.2) + DirectionalLight(2.0)`；地形是 `MeshBasicMaterial`，**完全不受影响**。
+
+**动画口径**：相位不自己累计 delta，由 `phaseFromAnimClock(motion.animClock)` 从回放缓冲的
+**实际显示距离**换算（每格 250ms × 0.6s/格）。3D 与 2D 同源，不另起计时。
+
+**真机证据（2026-11-08，隔离空目录后端 + 打包 Chromium）**：
+- `?avatar3d=1` 页面加载 **0 错误**；主角正/背面朝向正确（黑发、五官、米色袍、蓝紫护腕、
+  红腰带、深棕靴、背篓、右手药锄）；两帧走路对比腿部姿态明显不同（动画生效）。
+- 其他 NPC 全部仍是 2D 图集，未受影响。
+- 隔离后端 `world.db` 落在 `_scratch_avatar3d/` 空目录，**未触碰真实库**；验证后已删。
+- 关闭时控制台出现 12 条 `ERR_CONNECTION_REFUSED`——**是我停掉后端/vite 之后**的重连失败
+  （时间戳 208s+，页面运行期 0 错误），与代码无关。
+
+**门禁（全部真跑，EXIT 0）**：主树 pytest `3625P/121S/72D`（465.96s 与 474.00s 两次）、
+vitest `696P/82F`、typecheck、lint、prettier、gen:protocol:check、ruff、ruff format、pyright。
+
+**下一步（用户「1 3 2」的第 ② 步）**：Gemini 包的批量化/图集问题——
+(a) 不是真骨骼动画（无 `Bone`/`Skeleton`/`SkinnedMesh`，21 个 `Group` + 手写 `_evaluatePose`）；
+(b) 无批处理（23 次 `addPart` ⇒ 每角色 46 个 mesh = 50 人约 2300 draw call）；
+(c) 各自生成 64×64 贴图，spec 声称的 512×512 共享图集**并未实现**；
+(d) 预览用 three r128，项目是 0.180.0。铺到 50 人前必须先解决 (b)(c)。
+
+**更早的状态（已收编，留作上下文）**：
+
+## 0b. codex 移动轮派单与收编（2026-11-08 已完成）
 
 - **2026-11-08 已派 codex 树四项**（用户裁定「这些问题和跳跃都交给 codex 树」）：
   ① 人物朝向行号写反（真 bug）② 走/跑分离 ③ 走环与位移速度脱钩

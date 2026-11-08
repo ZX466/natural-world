@@ -25,6 +25,13 @@ export function terrainFromSearch(search: string): TerrainBackend {
   return new URLSearchParams(search).get('terrain') === 'phaser' ? 'phaser' : 'three';
 }
 
+/** 3D 主角试水开关（2026-11-08）。默认关：只有 `?avatar3d=1` 才把主角一个人
+ *  换成分节体素模型，其余人保持已验收的 2D 图集。铺开到全部 NPC 要等图集
+ *  合并与实例化落地（见 `docs/arch/character-model-3d-plan.md`）。 */
+export function protagonistAvatar3dFromSearch(search: string): boolean {
+  return new URLSearchParams(search).get('avatar3d') === '1';
+}
+
 /**
  * 深度分层带（2026-10-20 A 档修正：此前 actorDepth=100+footY 越过夜幕层，
  * 角色不再被夜色压暗）。

@@ -6,6 +6,8 @@ import { createTerrainAdapter, type TerrainAdapter } from './three-terrain-adapt
 import { loadTerrainAssets } from './three-assets';
 import { worldOf } from './three-projection';
 import { createActorLayer, type ActorLayer } from './three-actors';
+import { createAvatarLighting } from './avatar3d';
+import { protagonistAvatar3dFromSearch } from '../presentation';
 import { loadActorAssets } from './three-actor-assets';
 import { useUiStore } from '../../../store/uiStore';
 import { WebAudioSynth } from '../../audio/synth';
@@ -54,6 +56,7 @@ export function createThreeWorld(
   let weather: ReturnType<typeof createWeatherLayer> | null = null;
   let actorAssets: Awaited<ReturnType<typeof loadActorAssets>> | null = null;
   let previousTime = 0;
+  let releaseLighting: (() => void) | null = null;
   let audioContext: AudioContext | null = null;
   const audio = new WebAudioSynth(() => {
     audioContext ??= new AudioContext();
@@ -61,6 +64,8 @@ export function createThreeWorld(
   });
   worldAudio.attach(audio);
   const releaseWorld = () => {
+    releaseLighting?.();
+    releaseLighting = null;
     cues?.dispose();
     cues = null;
     input?.dispose();
@@ -185,13 +190,18 @@ export function createThreeWorld(
       if (disposed) return;
       adapter = createTerrainAdapter({ canvas, mirror, ...assets });
       adapter.resize(size.width, size.height);
+      const protagonist3d = protagonistAvatar3dFromSearch(globalThis.location?.search ?? '');
       actors = createActorLayer(
         adapter.scene.scene,
         adapter.scene.camera,
         mirror,
         adapter.heightOf,
         images,
+        { protagonist3d },
       );
+      // Lambert materials need light; the terrain's baked vertex colours do not,
+      // so this rig only ever affects the 3D avatars.
+      if (protagonist3d) releaseLighting = createAvatarLighting(adapter.scene.scene);
       weather = createWeatherLayer(actors.overlay, mirror);
       cues = createVoxelCues(adapter.scene.scene, mirror, adapter.heightOf);
       const baseHeight = adapter.heightOf;

@@ -23,6 +23,7 @@ import { placeBubble, selectBubbleNames } from '../bubbles';
 import { worldOf } from './three-projection';
 import { visibleActorTokens } from '../visibility';
 import { flightTarget, gaitCadenceMs } from '../../locomotion';
+import { createAvatar, phaseFromAnimClock, type Avatar3D } from './avatar3d';
 
 export interface TextImage {
   texture: THREE.Texture;
@@ -35,12 +36,22 @@ export interface ActorAssets {
 }
 export interface ActorView {
   readonly key: string;
+  /** The billboard. With a 3D avatar this stays as the label anchor only and its
+   *  material is switched off, so every screen-space layout rule keeps working. */
   readonly sprite: THREE.Sprite;
   readonly shadow: THREE.Mesh;
+  /** Present only for the protagonist while the 3D trial flag is on. */
+  avatar: Avatar3D | null;
   silhouette: THREE.Sprite | null;
   label: THREE.Sprite | null;
   name: string | undefined;
   motion: ActorMotion;
+}
+
+export interface ActorLayerOptions {
+  /** Swap the protagonist's billboard for a segmented voxel avatar. Trial only:
+   *  everyone else keeps the shipped 2D sheets until the batching work lands. */
+  readonly protagonist3d?: boolean;
 }
 
 export function createActorLayer(
@@ -49,7 +60,9 @@ export function createActorLayer(
   mirror: WorldMirror,
   heightOf: HeightLookup,
   assets: ActorAssets,
+  options: ActorLayerOptions = {},
 ) {
+  const protagonist3d = options.protagonist3d === true;
   const views = new Map<string, ActorView>();
   const bubbles = new Map<string, THREE.Sprite>();
   const overlay = new THREE.Scene();
@@ -81,6 +94,10 @@ export function createActorLayer(
   };
   const destroyView = (view: ActorView) => {
     scene.remove(view.sprite, view.shadow);
+    if (view.avatar) {
+      scene.remove(view.avatar.root);
+      view.avatar.dispose();
+    }
     if (view.silhouette) {
       scene.remove(view.silhouette);
       view.silhouette.material.dispose();
@@ -160,10 +177,22 @@ export function createActorLayer(
         );
         shadow.rotation.x = -Math.PI / 2;
         scene.add(sprite, shadow);
+        // The trial swaps only the protagonist. `key` stays 'protagonist' so the
+        // rest of the layer (labels, silhouette, stack offsets) is untouched.
+        const avatar =
+          protagonist3d && rtoken === mirror.protagonist ? createAvatar('chenmo') : null;
+        if (avatar) {
+          scene.add(avatar.root);
+          // The billboard becomes an invisible anchor: `labels` projects
+          // `sprite.position` upward by `scale.y`, so the layout keeps working
+          // without a second anchor path.
+          sprite.material.visible = false;
+        }
         view = {
           key,
           sprite,
           shadow,
+          avatar,
           silhouette: null,
           name: undefined,
           label: null,
@@ -184,6 +213,27 @@ export function createActorLayer(
         view.motion.height,
         world.z + offset.dy / 16,
       );
+      if (view.avatar) {
+        // The replay buffer already decided where and how fast the actor is
+        // drawn; the avatar only reads those results, so 3D and 2D never drift.
+        view.avatar.setPosition(
+          view.sprite.position.x,
+          view.sprite.position.y,
+          view.sprite.position.z,
+        );
+        view.avatar.setFacing(view.motion.facing);
+        view.avatar.setPhase(phaseFromAnimClock(view.motion.animClock));
+        view.avatar.setAnim(
+          view.motion.airborne
+            ? 'jump'
+            : view.motion.animClock >= 0
+              ? (actor.gait ?? 'walk')
+              : 'idle',
+        );
+        view.avatar.setJumpProgress(actor.jump?.active ? actor.jump.progress : null);
+        view.avatar.setTint(actor.tint ?? 0xffffff);
+        view.avatar.update(delta / 1000);
+      }
       view.shadow.position.set(
         view.sprite.position.x,
         (view.motion.airborne
@@ -200,7 +250,14 @@ export function createActorLayer(
       view.sprite.material.color.setHex(actor.tint ?? 0xffffff);
       view.sprite.material.opacity = key.startsWith('fauna_') && actor.anim === 'rest' ? 0.5 : 1;
       view.sprite.visible = view.shadow.visible = shown.has(rtoken);
-      if (rtoken === mirror.protagonist && !view.silhouette) {
+      if (view.avatar) {
+        view.avatar.root.visible = shown.has(rtoken);
+        // The billboard is the label anchor: it must keep a position but never
+        // paint, so it never draws a second copy of the hero.
+        view.sprite.visible = false;
+        view.avatar.setXray(shown.has(rtoken));
+      }
+      if (rtoken === mirror.protagonist && !view.silhouette && !view.avatar) {
         // A faint second pass marks only the player's own occluded pixels.
         // Other people retain ordinary depth testing and never get this pass.
         view.silhouette = new THREE.Sprite(
@@ -223,7 +280,7 @@ export function createActorLayer(
         view.silhouette.position.copy(view.sprite.position);
         view.silhouette.scale.copy(view.sprite.scale);
       }
-      if (!key.startsWith('fauna_')) {
+      if (!key.startsWith('fauna_') && !view.avatar) {
         const sheet =
           key === 'protagonist'
             ? CHENMO_SHEET
@@ -267,7 +324,10 @@ export function createActorLayer(
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
     for (const [rtoken, view] of views) {
       if (view.label) view.label.visible = false;
-      if (!view.sprite.visible) continue;
+      // A 3D avatar's billboard is a hidden anchor, so its own visibility says
+      // nothing about whether the actor is on screen.
+      const onScreen = view.avatar ? view.avatar.root.visible : view.sprite.visible;
+      if (!onScreen) continue;
       const actor = mirror.actors.get(rtoken)!;
       const head = view.sprite.position
         .clone()

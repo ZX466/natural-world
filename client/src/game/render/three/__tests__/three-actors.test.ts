@@ -3,7 +3,7 @@ import { expect, it, vi } from 'vitest';
 import { WorldMirror } from '../../../world-mirror';
 import { createActorLayer } from '../three-actors';
 
-function setup() {
+function setup(protagonist3d = false) {
   const mirror = new WorldMirror();
   mirror.setMap({ w: 5, h: 6, tileset: 'grid', collision: new Uint8Array(30).fill(1) });
   mirror.protagonist = 'hero';
@@ -36,14 +36,21 @@ function setup() {
   camera.updateMatrixWorld(true);
   const scene = new THREE.Scene();
   const texture = new THREE.DataTexture(new Uint8Array(272 * 256 * 4), 272, 256);
-  const layer = createActorLayer(scene, camera, mirror, () => 1, {
-    texture: () => texture,
-    text: (value: string) => ({
-      texture: new THREE.Texture(),
-      width: value.length * 12,
-      height: 20,
-    }),
-  });
+  const layer = createActorLayer(
+    scene,
+    camera,
+    mirror,
+    () => 1,
+    {
+      texture: () => texture,
+      text: (value: string) => ({
+        texture: new THREE.Texture(),
+        width: value.length * 12,
+        height: 20,
+      }),
+    },
+    { protagonist3d },
+  );
   return { mirror, camera, scene, texture, layer };
 }
 
@@ -134,6 +141,67 @@ it('updates frame UVs, removes departed actors and drops old snapshot interpolat
   layer.dispose();
   expect(scene.children).toHaveLength(0);
   expect(dispose).toHaveBeenCalled();
+});
+
+it('leaves every actor on the shipped billboard path when the trial flag is off', () => {
+  const { layer } = setup(false);
+  layer.update(0, 16, 1, 0);
+  for (const view of layer.views.values()) expect(view.avatar).toBeNull();
+  expect(layer.views.get('hero')!.sprite.visible).toBe(true);
+});
+
+it('swaps only the protagonist for a 3D avatar and keeps the label anchored', () => {
+  const { layer } = setup(true);
+  layer.update(0, 16, 1, 0);
+  layer.labels(800, 800, 1000);
+  const hero = layer.views.get('hero')!;
+  const other = layer.views.get('other')!;
+  expect(hero.avatar).not.toBeNull();
+  expect(other.avatar).toBeNull();
+  // The billboard survives as a hidden anchor so the shared screen-space label
+  // layout keeps projecting from `sprite.position` + `scale.y`.
+  expect(hero.sprite.visible).toBe(false);
+  expect(hero.avatar!.root.position.y).toBeCloseTo(hero.sprite.position.y);
+  expect(hero.avatar!.root.visible).toBe(true);
+  expect(hero.label!.visible).toBe(true);
+  // The 3D hero no longer runs the sheet UV math, but the NPC still does.
+  // repeat.x is one 16px cell over the atlas width, not one over the column count.
+  expect(other.sprite.material.map!.repeat.x).toBeCloseTo(16 / 272);
+});
+
+it('hides the 3D protagonist together with its label when it is occluded', () => {
+  const { layer, mirror } = setup(true);
+  const collision = new Uint8Array(400).fill(1);
+  collision[212] = 0;
+  mirror.setMap({ w: 20, h: 20, tileset: 'grid', collision });
+  mirror.applySnapshot(
+    [
+      {
+        rtoken: 'hero',
+        x: 10,
+        y: 10,
+        facing: 's',
+        sprite: 'protagonist',
+        anim: 'idle',
+        name: '陈默',
+      },
+      {
+        rtoken: 'other',
+        x: 11,
+        y: 10,
+        facing: 's',
+        sprite: 'villager',
+        anim: 'idle',
+        name: '近人',
+      },
+    ],
+    [],
+  );
+  layer.update(0, 16, 1, 0);
+  layer.labels(800, 800, 1000);
+  expect(layer.views.get('hero')!.avatar!.root.visible).toBe(true);
+  // A 3D actor has no sheet silhouette pass; the outline takes its place.
+  expect(layer.views.get('hero')!.silhouette).toBeNull();
 });
 
 it('projects names and active bubbles with shared screen-space layout', () => {
