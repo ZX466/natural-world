@@ -3,33 +3,54 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-08 · codex 移动轮已收编 `890337e` · 3D 主角试水**未提交**）
+## 0. 当前状态（2026-11-08 · codex 移动轮已收编 `890337e` · 3D 主角试水已改 SkinnedMesh，**未提交**）
 
 **【2026-11-08 3D 主角试水 —— 工作区有未提交改动，等用户实机验收】**
 
 用户指令「1 3 2」：① 收编 codex 移动轮 ② 3D 模型批量化/图集问题 ③ **先只把主角一个人换成 3D 试水**。
-第 ① 步已完成（`890337e`，主树独立复跑 `3625P/121S/72D EXIT 0`、vitest `685P/81F`）。
-第 ③ 步已实现并真机验证，**改动仍在工作区，未提交**：
+第 ① 步已完成（`890337e`，主树独立复跑 `3625P/121S/72D EXIT 0`）。
+第 ③ 步与第 ② 步已合并实现，**改动仍在工作区，未提交**：
 
 | 文件 | 状态 | 作用 |
 |---|---|---|
-| `client/src/game/render/three/avatar3d.ts` | 新增 891 行 | Gemini SDK 移植版：16 骨骼分节体素角色 |
-| `client/src/game/render/three/__tests__/avatar3d.test.ts` | 新增 161 行 / 8 条 | 尺寸、落地高度、朝向、相位、贴图朝向、tint 乘算、释放 |
-| `three-actors.ts` | +66 | `ActorLayerOptions.protagonist3d` 开关 + 6 处接入 |
-| `three-world.ts` | +10 | 按 URL 建灯光、随 `releaseWorld` 释放 |
+| `client/src/game/render/three/avatar3d.ts` | 新增 ~1040 行 | Gemini SDK 移植版，**真 `SkinnedMesh`**：16 骨骼 / 1 mesh / 1 图集 |
+| `client/src/game/render/three/__tests__/avatar3d.test.ts` | 新增 14 条 | mesh 数、图集共享、NPC 名字映射、骨骼刚性权重、尺寸、落地、朝向、相位、flipY、顶点色、tint、光照隔离、**无描边**、释放 |
+| `three-actors.ts` | +~80 | `ActorLayerOptions.protagonist3d` 开关 + 建图集 + 每帧驱动 |
+| `three-world.ts` | +12 | 按 URL 建灯光、随 `releaseWorld` 释放 |
 | `presentation.ts` | +7 | `protagonistAvatar3dFromSearch()` |
+| `__tests__/three-actors.test.ts` | +3 条 | 开关关闭全 2D；开启只换主角且标签锚点仍在；遮挡时标签跟着隐藏 |
 
 **开关**：`?avatar3d=1` 才把主角换成 3D；**默认仍全员 2D**，其余 50 NPC 未动。
 
-**移植时改掉的三处（都不是照搬）**：
-1. **贴图改 `DataTexture`**（不再 `document.createElement('canvas')`）：像素图本就程序生成，
-   写 RGBA 缓冲即可。脱离 DOM ⇒ node 环境单测能跑，也是第 ② 步合并图集的入口。
-2. **`texture.flipY = true`** —— `DataTexture` 默认 **false**、`CanvasTexture` 默认 **true**。
-   我的 UV 按 canvas 约定（`1 - py/64`）算，不设 flipY 会**整张图上下颠倒**
-   （真机实测：头长在腿上、药篓花纹贴到躯干）。**这是本次踩到的最坑的一条**，已有测试钉住。
-3. **`setTint` 改为乘算**：线缆的 `tint` 语义是乘数（`0xffffff` = 不变）。直接 `color.setHex(tint)`
-   会把黑发和所有纯色配件**刷成纯白**（真机实测）。已改为 `color.copy(base).multiply(tint)`，
-   并按材质缓存基色。
+**形态换掉了（这就是第 ② 步的答案）**。Gemini SDK 原样是 21 个 `Group` + 23 次 `addPart`
+⇒ **每角色 46 个 mesh**（本体 + 描边各一份），50 人约 **2300 draw call**，且每个角色各自
+`document.createElement('canvas')` 生成 64×64 贴图（spec 声称的 512×512 共享图集**根本没实现**）。
+改为：
+
+1. **真 `SkinnedMesh`**：16 根 `Bone`（hips / spine / head / 两臂两段 / 两腿两段 / 四个配件槽），
+   所有零件几何按骨骼 bind 矩阵烘进**一份** `BufferGeometry`，`skinWeight` 全 1（刚性蒙皮）。
+   ⇒ **每角色 1 个 draw call**，51 人约 **51 次**（2D 路径约 50 次，同一量级）。
+2. **共享图集**：19 个预设（`chenmo` + `villager` + 17 个 GOD 名）打进一张 **512×256**
+   `DataTexture`，8 列 × 4 行 × 64px。每个角色只换 UV，不换材质/贴图。
+3. **纯色件走顶点色**：发髻、腰带、药篓、锄柄原本各需一个材质，现在采样图集里的白块 ×
+   顶点色，一份 `MeshLambertMaterial` 全覆盖。`setTint` 因此**回归 `color.setHex`**——
+   顶点色承载基色，材质色是纯乘数，白 = 不变。
+4. **配件建时烘死**（发髻、背篓、药锄不参与动画），不再每帧挂/摘。
+
+**踩到的两个坑**：
+1. **`DataTexture` 默认 `flipY = false`，`CanvasTexture` 默认 `true`**。我的 UV 按 canvas
+   约定（`1 - py/H`）算，不设 `flipY = true` 会**整张图上下颠倒**（真机实测：头长在腿上、
+   药篓花纹贴到躯干）。**本次最坑的一条**，已有测试钉住。
+2. **SDK 的预设键是 `god_villager_01..17`，游戏里的 sprite 键是 `GOD_SPRITE_POOL` 里的名字**。
+   不建映射的话每个 NPC 都会**静默回退到主角配色**。已导出同序的 `GOD_SPRITE_POOL` 副本，
+   并加测试断言 17 个 tile 互不相同。
+
+**3D 描边：主动不提供（重要，别当缺口）**。2D 路径的「穿墙剪影」用同位置 Sprite +
+`GreaterDepth`：那张 sprite 是**平面**，深度处处相等，只在真被挡住时显色。3D 网格自身
+有前后深度差，同样的比较会让被身体挡住的胳膊透出来——**真机上就是整个人套了个黄罩子**。
+改成外扩会在零件交界处露黄边；模板缓冲版本依赖严格两遍渲染顺序，判为脆弱。
+**宁可没有，也不留一个错的视觉**，理由写在 `avatar3d.ts` 模块头里，并有测试断言
+`'setXray' in avatar === false`。要做对属于独立一轮。
 
 **光照**：three 场景**原本一盏灯都没有**（`three-terrain.ts:205` 明确写了亮度烘在顶点色里）。
 3D 角色用 `MeshLambertMaterial` 必须有灯，故新增 `createAvatarLighting()` 一组
@@ -38,22 +59,21 @@
 **动画口径**：相位不自己累计 delta，由 `phaseFromAnimClock(motion.animClock)` 从回放缓冲的
 **实际显示距离**换算（每格 250ms × 0.6s/格）。3D 与 2D 同源，不另起计时。
 
-**真机证据（2026-11-08，隔离空目录后端 + 打包 Chromium）**：
-- `?avatar3d=1` 页面加载 **0 错误**；主角正/背面朝向正确（黑发、五官、米色袍、蓝紫护腕、
-  红腰带、深棕靴、背篓、右手药锄）；两帧走路对比腿部姿态明显不同（动画生效）。
+**真机证据（2026-11-08 终态，隔离空目录后端 + 打包 Chromium）**：
+- `?avatar3d=1` 页面运行 **0 错误 / 0 警告**；**无黄罩子**，黑发、五官、米色袍、蓝紫护腕、
+  红腰带、深棕靴、背篓、右手药锄全部正确；走路帧腿部姿态明显摆动。
+- 屏幕上偶尔出现的**白色线框盒不是模型问题**，是鼠标悬停的格子光标
+  （`three-voxel-cues.ts` 的 `EdgesGeometry`），移开鼠标即消失。
 - 其他 NPC 全部仍是 2D 图集，未受影响。
-- 隔离后端 `world.db` 落在 `_scratch_avatar3d/` 空目录，**未触碰真实库**；验证后已删。
-- 关闭时控制台出现 12 条 `ERR_CONNECTION_REFUSED`——**是我停掉后端/vite 之后**的重连失败
-  （时间戳 208s+，页面运行期 0 错误），与代码无关。
+- 隔离后端 `world.db` 落在 `_scratch_avatar3d/` 空目录，**未触碰真实库**。
+- 关闭时控制台的 `ERR_CONNECTION_REFUSED` 是**停掉后端/vite 之后**的重连失败，与代码无关。
 
-**门禁（全部真跑，EXIT 0）**：主树 pytest `3625P/121S/72D`（465.96s 与 474.00s 两次）、
-vitest `696P/82F`、typecheck、lint、prettier、gen:protocol:check、ruff、ruff format、pyright。
+**门禁（终态全部真跑，EXIT 0）**：pytest `3625P/121S/72D`（427.79s）、vitest `702P/82F`、
+typecheck、lint、prettier、gen:protocol:check、ruff、ruff format、pyright（0 errors）。
 
-**下一步（用户「1 3 2」的第 ② 步）**：Gemini 包的批量化/图集问题——
-(a) 不是真骨骼动画（无 `Bone`/`Skeleton`/`SkinnedMesh`，21 个 `Group` + 手写 `_evaluatePose`）；
-(b) 无批处理（23 次 `addPart` ⇒ 每角色 46 个 mesh = 50 人约 2300 draw call）；
-(c) 各自生成 64×64 贴图，spec 声称的 512×512 共享图集**并未实现**；
-(d) 预览用 three r128，项目是 0.180.0。铺到 50 人前必须先解决 (b)(c)。
+**下一步**：① 用户实机验收 3D 主角手感；② 通过后再决定是否铺到 50 NPC（形态已就绪，
+只需把 `createAvatar(preset, atlas)` 从主角扩到全员，并按 `actor.sprite` 取预设）；
+③ 提交本轮改动。
 
 **更早的状态（已收编，留作上下文）**：
 

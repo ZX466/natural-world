@@ -1,8 +1,25 @@
 import * as THREE from 'three';
-import { expect, it } from 'vitest';
-import { createAvatar, createAvatarLighting, phaseFromAnimClock } from '../avatar3d';
+import { afterEach, expect, it } from 'vitest';
+import {
+  GOD_SPRITE_POOL,
+  createAvatar,
+  createAvatarAtlas,
+  createAvatarLighting,
+  phaseFromAnimClock,
+  type AvatarAtlas,
+} from '../avatar3d';
 
-/** Box3.setFromObject counts hidden meshes too; a switched-off accessory must
+let atlas: AvatarAtlas | null = null;
+function sharedAtlas(): AvatarAtlas {
+  atlas ??= createAvatarAtlas();
+  return atlas;
+}
+afterEach(() => {
+  atlas?.dispose();
+  atlas = null;
+});
+
+/** Box3.setFromObject counts hidden meshes too; a switched-off outline must
  *  not inflate the measured silhouette. */
 function visibleBox(root: THREE.Object3D): THREE.Box3 {
   const box = new THREE.Box3();
@@ -13,10 +30,57 @@ function visibleBox(root: THREE.Object3D): THREE.Box3 {
   return box;
 }
 
-it('builds a 1.80-tall avatar rooted at the feet with no DOM canvas', () => {
+it('draws one skinned mesh per avatar, not one per body part', () => {
+  // The source SDK emitted 46 meshes (body + outline per part), i.e. ~2346 draw
+  // calls at 51 actors. The whole point of this shape is to collapse that.
+  const avatar = createAvatar('chenmo', sharedAtlas());
+  const meshes: THREE.Mesh[] = [];
+  avatar.root.traverse((node) => {
+    if (node instanceof THREE.Mesh) meshes.push(node);
+  });
+  expect(meshes).toHaveLength(1);
+  expect(avatar.mesh).toBeInstanceOf(THREE.SkinnedMesh);
+  expect(avatar.mesh.material).toBeInstanceOf(THREE.MeshLambertMaterial);
+  avatar.dispose();
+});
+
+it('shares one atlas texture across every avatar', () => {
+  const shared = sharedAtlas();
+  const a = createAvatar('chenmo', shared);
+  const b = createAvatar('god_villager_ali', shared);
+  expect((a.mesh.material as THREE.MeshLambertMaterial).map).toBe(shared.texture);
+  expect((b.mesh.material as THREE.MeshLambertMaterial).map).toBe(shared.texture);
+  expect(shared.texture.image.width).toBeGreaterThan(256);
+  a.dispose();
+  b.dispose();
+});
+
+it('gives every real NPC sprite key its own atlas tile', () => {
+  // The SDK keyed presets by `god_villager_01`..`17`, but the game's sprite keys
+  // are names. A mismatch would silently paint every NPC as the protagonist.
+  const shared = sharedAtlas();
+  const tiles = new Set(GOD_SPRITE_POOL.map((id) => shared.tileOf(id)));
+  expect(tiles.size).toBe(GOD_SPRITE_POOL.length);
+  expect(tiles.has(shared.tileOf('chenmo'))).toBe(false);
+  expect(shared.tileOf('nonexistent')).toBe(shared.tileOf('chenmo'));
+});
+
+it('binds a 16-bone skeleton with rigid weights', () => {
+  const avatar = createAvatar('chenmo', sharedAtlas());
+  const skeleton = avatar.mesh.skeleton;
+  expect(skeleton.bones).toHaveLength(16);
+  const weights = avatar.mesh.geometry.getAttribute('skinWeight');
+  const indices = avatar.mesh.geometry.getAttribute('skinIndex');
+  for (let i = 0; i < weights.count; i++) {
+    expect(weights.getX(i)).toBe(1);
+    expect(indices.getX(i)).toBeLessThan(16);
+  }
+  avatar.dispose();
+});
+
+it('builds a 1.80-tall body rooted at the feet with no DOM canvas', () => {
   // No accessories: the body itself must be exactly the 2D collision box.
-  const plain = createAvatar('villager');
-  // DataTexture means this runs in node with no document at all.
+  const plain = createAvatar('villager', sharedAtlas());
   plain.update(1 / 60);
   const plainBox = visibleBox(plain.root);
   expect(plainBox.min.y).toBeCloseTo(0, 2);
@@ -31,7 +95,7 @@ it('builds a 1.80-tall avatar rooted at the feet with no DOM canvas', () => {
 
   // 陈默的发髻长在头顶之上，所以总高会超过 1.80——SDK 的头顶挂点 1.95 正是
   // 按「头顶 + 发髻」留的余量，这里把它钉住，防止以后把配件塞进身体高度里。
-  const hero = createAvatar('chenmo');
+  const hero = createAvatar('chenmo', sharedAtlas());
   hero.update(1 / 60);
   const heroBox = visibleBox(hero.root);
   expect(heroBox.min.y).toBeCloseTo(0, 2);
@@ -41,17 +105,16 @@ it('builds a 1.80-tall avatar rooted at the feet with no DOM canvas', () => {
 });
 
 it('places the feet exactly on the given block top', () => {
-  const avatar = createAvatar('chenmo');
+  const avatar = createAvatar('chenmo', sharedAtlas());
   avatar.setPosition(10, 2, 15);
   avatar.update(0);
   expect(avatar.root.position.y).toBe(2);
-  const box = visibleBox(avatar.root);
-  expect(box.min.y).toBeCloseTo(2, 2);
+  expect(visibleBox(avatar.root).min.y).toBeCloseTo(2, 2);
   avatar.dispose();
 });
 
 it('turns toward the world facing, not the camera azimuth', () => {
-  const avatar = createAvatar('chenmo');
+  const avatar = createAvatar('chenmo', sharedAtlas());
   avatar.setFacing('e');
   // The smoothing is per-frame; 40 frames is well past the settle time.
   for (let i = 0; i < 40; i++) avatar.update(1 / 60);
@@ -63,9 +126,8 @@ it('turns toward the world facing, not the camera azimuth', () => {
 });
 
 it('drives the walk cycle from the displayed distance, not wall clock', () => {
-  // Same animClock must produce the same pose regardless of how many frames ran.
-  const a = createAvatar('chenmo');
-  const b = createAvatar('chenmo');
+  const a = createAvatar('chenmo', sharedAtlas());
+  const b = createAvatar('chenmo', sharedAtlas());
   a.setAnim('walk');
   b.setAnim('walk');
   a.setPhase(phaseFromAnimClock(250));
@@ -77,6 +139,50 @@ it('drives the walk cycle from the displayed distance, not wall clock', () => {
   expect(phaseFromAnimClock(500)).toBeCloseTo(1.2);
   a.dispose();
   b.dispose();
+});
+
+it('flips the pixel rows like a canvas texture so the atlas is not upside down', () => {
+  // DataTexture defaults flipY=false; CanvasTexture defaults true. The paint
+  // routine writes top-down and the UV helper does `1 - py/H`, so without the
+  // flip the face lands on the legs (seen on the real machine 2026-11-08).
+  const shared = sharedAtlas();
+  expect(shared.texture.flipY).toBe(true);
+  expect(shared.texture.magFilter).toBe(THREE.NearestFilter);
+  expect(shared.texture.generateMipmaps).toBe(false);
+});
+
+it('carries flat part colours in vertex colours so one material covers them', () => {
+  // Hair, belt and the gourd used to need their own materials; they now ride in
+  // the merged geometry's colour attribute against a white atlas swatch.
+  const avatar = createAvatar('chenmo', sharedAtlas());
+  const colors = avatar.mesh.geometry.getAttribute('color');
+  expect(colors).toBeDefined();
+  const seen = new Set<string>();
+  for (let i = 0; i < colors.count; i++)
+    seen.add(new THREE.Color(colors.getX(i), colors.getY(i), colors.getZ(i)).getHexString());
+  // White (textured parts) plus 陈默's flat accessories: red bun band, the gourd,
+  // the herb basket and the tool handle. The hair black comes from the atlas
+  // tile, not from vertex colour, so it is deliberately absent here.
+  expect(seen.size).toBeGreaterThan(1);
+  expect(seen.has('ffffff')).toBe(true);
+  expect(seen.has('c43c3c')).toBe(true); // belt band + gourd
+  expect(seen.has('5a6b49')).toBe(true); // herb basket
+  expect(seen.has('6d4a2f')).toBe(true); // tool handle
+  avatar.dispose();
+});
+
+it('multiplies the wire tint instead of replacing colours', () => {
+  // The wire sends 0xffffff for "no tint". Vertex colours carry the palette, so
+  // material.color is a pure multiplier and white leaves everything untouched.
+  const avatar = createAvatar('chenmo', sharedAtlas());
+  const material = avatar.mesh.material as THREE.MeshLambertMaterial;
+  avatar.setTint(0xffffff);
+  expect(material.color.getHex()).toBe(0xffffff);
+  avatar.setTint(0x000000);
+  expect(material.color.getHex()).toBe(0);
+  avatar.setTint(0xffffff);
+  expect(material.color.getHex()).toBe(0xffffff);
+  avatar.dispose();
 });
 
 it('only lights materials that opt into lighting, so the terrain tone is untouched', () => {
@@ -95,67 +201,27 @@ it('only lights materials that opt into lighting, so the terrain tone is untouch
   scene.clear();
 });
 
-it('flips the pixel rows like a canvas texture so the atlas is not upside down', () => {
-  // DataTexture defaults flipY=false; CanvasTexture defaults true. The paint
-  // routine writes top-down and the UV helper does `1 - py/64`, so without the
-  // flip the face lands on the legs (seen on the real machine 2026-11-08).
-  const avatar = createAvatar('chenmo');
-  let texture: THREE.DataTexture | undefined;
+it('ships no see-through silhouette until it can be done correctly', () => {
+  // The 2D path marks occluded pixels with a same-depth GreaterDepth sprite,
+  // which works because a sprite is flat. On a real mesh the body's own back
+  // faces are behind its front faces, so the same comparison painted a yellow
+  // shell around the whole avatar on the real machine. Better absent than wrong.
+  const avatar = createAvatar('chenmo', sharedAtlas());
+  expect('setXray' in avatar).toBe(false);
+  const meshes: THREE.Mesh[] = [];
   avatar.root.traverse((node) => {
-    if (node instanceof THREE.Mesh && node.material instanceof THREE.MeshLambertMaterial)
-      texture ??= node.material.map as THREE.DataTexture;
+    if (node instanceof THREE.Mesh) meshes.push(node);
   });
-  expect(texture).toBeDefined();
-  expect(texture!.flipY).toBe(true);
-  expect(texture!.magFilter).toBe(THREE.NearestFilter);
-  expect(texture!.generateMipmaps).toBe(false);
+  expect(meshes).toHaveLength(1);
   avatar.dispose();
 });
 
-it('multiplies the wire tint instead of replacing each material colour', () => {
-  // The wire sends 0xffffff for "no tint". Assigning it onto `color` would paint
-  // the hair and every accessory solid white; it has to be a multiplier. The
-  // textured body material legitimately stays white (its colour tints the map).
-  const flatColors = (avatar: ReturnType<typeof createAvatar>) => {
-    const found = new Set<string>();
-    avatar.root.traverse((node) => {
-      if (!(node instanceof THREE.Mesh)) return;
-      const material = node.material;
-      if (material instanceof THREE.MeshLambertMaterial && !material.map)
-        found.add(material.color.getHexString());
-    });
-    return found;
-  };
-  const avatar = createAvatar('chenmo');
-  avatar.setTint(0xffffff);
-  const untinted = flatColors(avatar);
-  expect(untinted.size).toBeGreaterThan(1);
-  expect(untinted.has('ffffff')).toBe(false);
-  expect(untinted.has('171717')).toBe(true);
-
-  avatar.setTint(0x000000);
-  for (const color of flatColors(avatar)) expect(color).toBe('000000');
-
-  // Restoring white must restore the original palette exactly.
-  avatar.setTint(0xffffff);
-  expect(flatColors(avatar)).toEqual(untinted);
-  avatar.dispose();
-});
-
-it('disposes every geometry and material it created', () => {
-  const avatar = createAvatar('chenmo');
-  const geometries = new Set<THREE.BufferGeometry>();
-  const materials = new Set<THREE.Material>();
-  avatar.root.traverse((node) => {
-    if (!(node instanceof THREE.Mesh)) return;
-    geometries.add(node.geometry);
-    for (const material of Array.isArray(node.material) ? node.material : [node.material])
-      materials.add(material);
-  });
-  expect(geometries.size).toBeGreaterThan(10);
+it('disposes the geometry, materials and skeleton it created', () => {
+  const avatar = createAvatar('chenmo', sharedAtlas());
   const disposed: string[] = [];
-  for (const geometry of geometries) geometry.addEventListener('dispose', () => disposed.push('g'));
-  for (const material of materials) material.addEventListener('dispose', () => disposed.push('m'));
+  avatar.mesh.geometry.addEventListener('dispose', () => disposed.push('geometry'));
+  (avatar.mesh.material as THREE.Material).addEventListener('dispose', () => disposed.push('body'));
   avatar.dispose();
-  expect(disposed).toHaveLength(geometries.size + materials.size);
+  expect(disposed).toContain('geometry');
+  expect(disposed).toContain('body');
 });

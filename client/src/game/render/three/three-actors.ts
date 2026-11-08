@@ -23,7 +23,7 @@ import { placeBubble, selectBubbleNames } from '../bubbles';
 import { worldOf } from './three-projection';
 import { visibleActorTokens } from '../visibility';
 import { flightTarget, gaitCadenceMs } from '../../locomotion';
-import { createAvatar, phaseFromAnimClock, type Avatar3D } from './avatar3d';
+import { createAvatar, createAvatarAtlas, phaseFromAnimClock, type Avatar3D } from './avatar3d';
 
 export interface TextImage {
   texture: THREE.Texture;
@@ -63,6 +63,9 @@ export function createActorLayer(
   options: ActorLayerOptions = {},
 ) {
   const protagonist3d = options.protagonist3d === true;
+  // One atlas for the whole world: 19 presets in a single 512×256 texture, so
+  // every 3D actor shares one material map instead of generating its own.
+  const avatarAtlas = protagonist3d ? createAvatarAtlas() : null;
   const views = new Map<string, ActorView>();
   const bubbles = new Map<string, THREE.Sprite>();
   const overlay = new THREE.Scene();
@@ -180,7 +183,7 @@ export function createActorLayer(
         // The trial swaps only the protagonist. `key` stays 'protagonist' so the
         // rest of the layer (labels, silhouette, stack offsets) is untouched.
         const avatar =
-          protagonist3d && rtoken === mirror.protagonist ? createAvatar('chenmo') : null;
+          avatarAtlas && rtoken === mirror.protagonist ? createAvatar('chenmo', avatarAtlas) : null;
         if (avatar) {
           scene.add(avatar.root);
           // The billboard becomes an invisible anchor: `labels` projects
@@ -255,7 +258,6 @@ export function createActorLayer(
         // The billboard is the label anchor: it must keep a position but never
         // paint, so it never draws a second copy of the hero.
         view.sprite.visible = false;
-        view.avatar.setXray(shown.has(rtoken));
       }
       if (rtoken === mirror.protagonist && !view.silhouette && !view.avatar) {
         // A faint second pass marks only the player's own occluded pixels.
@@ -406,6 +408,7 @@ export function createActorLayer(
     dispose() {
       clear();
       shadowGeometry.dispose();
+      avatarAtlas?.dispose();
     },
   };
 }
