@@ -11,20 +11,26 @@ it('rendererFromSearch keeps its two modes and ignores terrain', () => {
   expect(rendererFromSearch('?renderer=flat&terrain=three')).toBe('flat');
 });
 
-it('terrainFromSearch defaults to the Phaser painter', () => {
-  // Default must stay the shipped path: the flat/iso renderers are rollback
-  // insurance and must not change because three.js exists.
-  expect(terrainFromSearch('')).toBe('phaser');
-  expect(terrainFromSearch('?terrain=phaser')).toBe('phaser');
-  expect(terrainFromSearch('?terrain=banana')).toBe('phaser');
-  expect(terrainFromSearch('?renderer=flat')).toBe('phaser');
+it('terrainFromSearch defaults to the three world', () => {
+  // The user accepted the perspective world on 2026-11-07, so it is now what
+  // the game boots into; the Phaser painter is the rollback path, not the
+  // default. `?renderer=` must not move this switch.
+  expect(terrainFromSearch('')).toBe('three');
+  expect(terrainFromSearch('?renderer=flat')).toBe('three');
+  expect(terrainFromSearch('?renderer=iso')).toBe('three');
+  expect(terrainFromSearch('?terrain=banana')).toBe('three');
 });
 
-it('terrainFromSearch opts into three only on the exact word', () => {
+it('terrainFromSearch falls back to Phaser only on the exact word', () => {
+  expect(terrainFromSearch('?terrain=phaser')).toBe('phaser');
+  expect(terrainFromSearch('?renderer=iso&terrain=phaser')).toBe('phaser');
+  expect(terrainFromSearch('?renderer=flat&terrain=phaser')).toBe('phaser');
+  expect(terrainFromSearch('?terrain=Phaser')).toBe('three');
+});
+
+it('terrainFromSearch accepts the explicit three word too', () => {
   expect(terrainFromSearch('?terrain=three')).toBe('three');
   expect(terrainFromSearch('?renderer=iso&terrain=three')).toBe('three');
-  expect(terrainFromSearch('?terrain=Three')).toBe('phaser');
-  expect(terrainFromSearch('?terrain=three.js')).toBe('phaser');
 });
 
 it('the two switches are independent', () => {

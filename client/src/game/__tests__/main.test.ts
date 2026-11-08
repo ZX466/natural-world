@@ -5,8 +5,14 @@
  * 但全仓无监听者，runtime.requestMove 零调用 → 点击移动整链失效。
  * 本钉锁死：createGame 必须把该事件桥到 runtime.requestMove。
  * 纯 node 环境：phaser/runtime/world-mirror 全 mock，无需 DOM。
+ *
+ * 2026-11-07：three 世界成为默认渲染器后，这条桥只存在于 Phaser 路径
+ * （three 走 `WorldActions` 端口，不 emit 事件）。所以本文件必须显式用
+ * `?terrain=phaser` 起场景，否则会掉进 three 分支去找 `document`。
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+
+const PHASER_SEARCH = '?terrain=phaser';
 
 type MoveHandler = (
   payload: {
@@ -24,6 +30,8 @@ describe('createGame move_request bridge', () => {
   beforeEach(() => {
     handlers.clear();
     vi.resetModules();
+    // 本组钉的是 Phaser 路径的事件桥；three 是默认渲染器，必须显式退回。
+    vi.stubGlobal('location', { search: PHASER_SEARCH });
 
     // mock phaser：捕获 game.events.on 注册；Scene 基类 noop
     vi.doMock('phaser', () => {
@@ -68,6 +76,7 @@ describe('createGame move_request bridge', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('注册 client:move_request 监听并转发到 runtime.requestMove', async () => {

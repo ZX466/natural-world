@@ -15,7 +15,8 @@ import { createThreeWorld } from './render/three/three-world';
 import type { WorldGame } from './world-game';
 
 export function createGame(parent: HTMLElement, mirror: WorldMirror): WorldGame {
-  // The opt-in world owns its own canvas; the default keeps Phaser.
+  // The three world owns its own canvas and is the default; `?terrain=phaser`
+  // is the rollback switch back to the Phaser painter.
   const threeTerrain = terrainFromSearch(globalThis.location?.search ?? '') === 'three';
   if (threeTerrain) return createThreeWorld(parent, mirror, runtime);
   const game = new Phaser.Game({

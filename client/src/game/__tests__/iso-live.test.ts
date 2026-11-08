@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorldMirror } from '../world-mirror';
+import { CHENMO_SHEET, GOD_SHEET, VILLAGER_SHEET } from '../render/actors';
 import { createHeightLookup, depthKey, isoProject, screenBounds } from '../render/iso';
 import { actorDepth, labelY, aboveSurface } from '../render/presentation';
 import { useUiStore } from '../../store/uiStore';
@@ -39,8 +40,7 @@ type ActorView = {
   sprite: View;
   shadow: View;
   label: View;
-  lastFacing: string;
-  animClockMs: number;
+  motion: { facing: string; animClock: number };
 };
 
 function setup(mode: 'flat' | 'iso' = 'iso') {
@@ -94,6 +94,36 @@ function setup(mode: 'flat' | 'iso' = 'iso') {
 
 beforeEach(() => useUiStore.setState({ speed: 1 }));
 
+const FRAME = 1000 / 60;
+/** 1x 服务端节拍 250ms，恰好 15 个 60fps 渲染帧。 */
+const FRAMES_PER_TILE = 15;
+
+/**
+ * 逐帧驱动场景，维护单调时钟。
+ *
+ * 回放缓冲恒定落后一格（15 帧），所以直接跳时间戳会被误判成「已经停步」——
+ * 真实行走必须逐帧喂，每格恰好 15 帧（250ms）。
+ */
+function makeDriver(internal: { syncActorViews(delta: number, time: number): void }) {
+  let time = 0;
+  return {
+    frames(count: number): void {
+      for (let i = 0; i < count; i++) {
+        internal.syncActorViews(FRAME, time);
+        time += FRAME;
+      }
+    },
+    /**
+     * 走完一格：先按一格 15 帧推进（旧位置），到达后才把 actor 摆到新位置，
+     * 下一帧同步时记录为新的权威样本。节拍因此严格是 250ms 一格。
+     */
+    step(actor: { x: number; y: number }, axis: 'x' | 'y', position: number): void {
+      this.frames(FRAMES_PER_TILE);
+      actor[axis] = position;
+    },
+  };
+}
+
 it('spawns billboard feet at the effective top with a shared depth and contact shadow', () => {
   const { internal } = setup();
   internal.syncActorViews(0, 0);
@@ -117,16 +147,20 @@ it('uses the same built/collapsing/rubble height changes for actor feet and came
   const { internal, mirror, camera } = setup();
   mirror.applyStructures([{ rtoken: 'house', x: 2, y: 1, phase: 'built' }]);
   internal.syncActorViews(0, 1000);
+  internal.syncActorViews(0, 1250);
   internal.syncCamera();
   const built = isoProject(2, 1, 2, screenBounds(4, 4));
   expect(internal.views.get('hero')!.sprite.y).toBe(built.sy);
   expect(camera.startFollow.mock.calls.at(-1)?.[0]).toMatchObject({ x: built.sx, y: built.sy });
   mirror.applyStructures([{ rtoken: 'house', x: 2, y: 1, phase: 'collapsing' }]);
-  internal.syncActorViews(0, 1100);
+  internal.syncActorViews(0, 1500);
+  internal.syncActorViews(0, 1750);
   internal.syncCamera();
   expect(internal.views.get('hero')!.sprite.y).toBe(built.sy);
   mirror.applyStructures([{ rtoken: 'house', x: 2, y: 1, phase: 'rubble' }]);
-  internal.syncActorViews(0, 1200);
+  internal.syncActorViews(0, 2000);
+  // 高度变化和位移一样走回放缓冲：延迟过去之前脚只走了一部分。等延迟走完再断言。
+  internal.syncActorViews(0, 2500);
   internal.syncCamera();
   expect(internal.views.get('hero')!.sprite.y).toBe(isoProject(2, 1, 3, screenBounds(4, 4)).sy);
   expect(camera.startFollow.mock.calls.at(-1)?.[0].y).toBe(internal.views.get('hero')!.sprite.y);
@@ -162,44 +196,53 @@ it('follows the logical top without crowd offsets and pads the diamond bounds by
   expect(camera.stopFollow).toHaveBeenCalledTimes(1);
 });
 
-it('keeps the walk cycle running for the whole glide, not just the frame a cell changes', () => {
+it('keeps the walk cycle running across tiles instead of restarting it every glide', () => {
   const { internal, mirror } = setup();
-  internal.syncActorViews(16, 0);
+  const driver = makeDriver(internal);
+  driver.frames(1);
   const view = internal.views.get('hero')!;
-  // 一格走 250ms；delta 只在换格那一帧到达，其余 14 帧都在插值途中。
-  mirror.actors.get('hero')!.y = 2;
-  internal.syncActorViews(16, 16); // 换格帧：开始滑行
-  const atSnap = view.animClockMs;
-  internal.syncActorViews(16, 48);
-  internal.syncActorViews(16, 80);
-  // 修前：moved 只看「本帧换格」，其余帧归 -1 → 站立帧滑行 = 飘。
-  expect(view.animClockMs).toBeGreaterThan(atSnap);
-  // 滑行途中必须是走环帧 0（row0south × 17 列），不是站立帧 1。
+  const actor = mirror.actors.get('hero')!;
+  // 连续走 3 格：缓冲恒定落后一格，整段行走动画钟都在推进。
+  driver.step(actor, 'y', 2);
+  driver.step(actor, 'y', 3);
+  const midway = view.motion.animClock;
+  expect(midway).toBeGreaterThanOrEqual(0);
+  driver.step(actor, 'y', 4);
+  expect(view.motion.animClock).toBeGreaterThan(midway);
+  // 滑行途中必须是走环帧（朝南 row0 × 17 列），不是站立帧 1。
   expect(view.sprite.setFrame).toHaveBeenLastCalledWith(0);
 });
 
-it('returns to the standing frame once the glide lands', () => {
+it('returns to the standing frame once the actor stops and the buffer drains', () => {
   const { internal, mirror } = setup();
-  internal.syncActorViews(16, 0);
+  const driver = makeDriver(internal);
+  driver.frames(1);
   const view = internal.views.get('hero')!;
-  mirror.actors.get('hero')!.y = 2;
-  internal.syncActorViews(16, 16);
-  internal.syncActorViews(16, 300); // k 早已到 1
-  expect(view.animClockMs).toBe(-1);
+  const actor = mirror.actors.get('hero')!;
+  driver.step(actor, 'y', 2);
+  driver.step(actor, 'y', 3);
+  expect(view.motion.animClock).toBeGreaterThanOrEqual(0);
+  // 目标不再变化：落后一格的位置到点后回站立帧。
+  driver.frames(FRAMES_PER_TILE + 5);
+  expect(view.motion.animClock).toBe(-1);
   expect(view.sprite.setFrame).toHaveBeenLastCalledWith(1);
 });
 
 it('moves the iso camera with the glide instead of snapping a cell ahead', () => {
   const { internal, mirror, camera } = setup();
-  internal.syncActorViews(16, 0);
+  const driver = makeDriver(internal);
+  driver.frames(1);
   internal.syncCamera();
   const target = camera.startFollow.mock.calls.at(-1)?.[0] as { x: number; y: number };
   const before = { x: target.x, y: target.y };
-  mirror.actors.get('hero')!.y = 2;
-  internal.syncActorViews(16, 48); // 换格帧：滑行开始
-  internal.syncActorViews(16, 96); // 滑行到 ~19%
+  const actor = mirror.actors.get('hero')!;
+  // 按真实节拍走两格，再停在第二格中途：缓冲落后一格，此刻正插值于
+  // (2,2) → (2,3) 之间 —— 既已离开起点，也还没到终点。
+  driver.step(actor, 'y', 2);
+  driver.step(actor, 'y', 3);
+  driver.frames(8);
   internal.syncCamera();
-  const dest = isoProject(2, 2, 1, screenBounds(4, 4));
+  const dest = isoProject(2, 3, 1, screenBounds(4, 4));
   expect(target.y).toBeGreaterThan(before.y);
   expect(target.y).toBeLessThan(dest.sy); // 跟着人物滑，不提前跳到新格
 });
@@ -246,20 +289,26 @@ describe.each(['flat', 'iso'] as const)('%s interaction and movement', (mode) =>
           token === 'animal' && pose === 'rest' ? 0.5 : 1,
         );
       }
-      actor.x = 1;
-      internal.syncActorViews(150, 150);
+      // 逐帧走 3 格：缓冲落后一格，滑行全程播走环，不许落回站立帧（站着滑 = 飘）。
+      const driver = makeDriver(internal);
+      driver.frames(1);
+      driver.step(actor, 'x', 1);
+      driver.step(actor, 'x', 2);
+      driver.step(actor, 'x', 3);
       const view = internal.views.get(token)!;
-      expect(view.sprite.setFrame).toHaveBeenLastCalledWith(eastStart);
-      actor.x = 2;
-      internal.syncActorViews(150, 300);
-      expect(view.sprite.setFrame).toHaveBeenLastCalledWith(token === 'animal' ? 0 : eastStart + 1);
-      internal.syncActorViews(16, 316);
-      expect(view.lastFacing).toBe('e');
-      // 仍在滑行（k<1）→ 必须继续播走环，不许落回站立帧（站着滑 = 飘）。
-      expect(view.animClockMs).toBeGreaterThanOrEqual(0);
-      // 滑行到点后回到站立帧。
-      internal.syncActorViews(16, 700);
-      expect(view.animClockMs).toBe(-1);
+      expect(view.motion.facing).toBe('e');
+      expect(view.motion.animClock).toBeGreaterThanOrEqual(0);
+      // 走环帧必须落在朝东这一行的帧区间内（素材行宽 = cols）。
+      if (token !== 'animal') {
+        const sheet =
+          token === 'hero' ? CHENMO_SHEET : token === 'god' ? GOD_SHEET : VILLAGER_SHEET;
+        const frame = (view.sprite.setFrame.mock.calls as unknown as [number][]).at(-1)?.[0];
+        expect(frame).toBeGreaterThanOrEqual(eastStart);
+        expect(frame).toBeLessThan(eastStart + sheet.framesPerRow);
+      }
+      // 停步后缓冲排空 → 回到站立帧。
+      driver.frames(FRAMES_PER_TILE + 5);
+      expect(view.motion.animClock).toBe(-1);
       expect(view.sprite.setFrame).toHaveBeenLastCalledWith(eastStart + standCol);
     },
   );
@@ -298,12 +347,14 @@ describe.each(['flat', 'iso'] as const)('%s interaction and movement', (mode) =>
 
   it('preserves four-way facing, the existing walk clock, and animation frames', () => {
     const { internal, mirror } = setup(mode);
-    internal.syncActorViews(0, 0);
-    mirror.actors.get('hero')!.x = 3;
-    internal.syncActorViews(16, 100);
-    internal.syncActorViews(0, 350);
+    const driver = makeDriver(internal);
+    driver.frames(1);
+    const actor = mirror.actors.get('hero')!;
+    // 逐帧向东走 1 格（2→3），再让缓冲排空落到终点。
+    driver.step(actor, 'x', 3);
+    driver.frames(FRAMES_PER_TILE + 5);
     const view = internal.views.get('hero')!;
-    expect(view.lastFacing).toBe('e');
+    expect(view.motion.facing).toBe('e');
     expect(view.sprite.setFrame).toHaveBeenCalledWith(34); // 陈默朝东走环首帧：row2 × 17列。
     const target = mode === 'iso' ? isoProject(3, 1, 1, screenBounds(4, 4)) : { sx: 56, sy: 24 };
     expect({ x: view.sprite.x, y: view.sprite.y }).toEqual({ x: target.sx, y: target.sy });

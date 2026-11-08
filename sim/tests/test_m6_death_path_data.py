@@ -330,11 +330,18 @@ def _probe_driver_write_lock() -> tuple[bool, int]:
     previous_cwd = Path.cwd()
     tmp = tempfile.mkdtemp(prefix="m6a1-probe-")
     failures = 0
+    # 探针要临时换掉两个单例；收尾必须**还原探针跑之前的样子**，不是发明一个默认值。
+    # 旧写法把锚点单例就地 `__init__` 回相对路径 `sqlite:///world.db`，而 `os.chdir` 已经
+    # 回到仓根 ⇒ 下一次 `get_anchor_store()` 在**仓库真实 world.db** 上 `create_all`
+    # （2026-11-07 审计钩子定位到这条 `finally`；全量门禁每跑一次就打开一次真档）。
+    # 现在改为**替换单例引用**（不就地改），收尾原样放回；此前从未建过单例时放一个
+    # 内存库占位——比「放回 None 让下一个人去打开相对路径默认值」安全。
+    previous_store = anchors_mod._anchor_store
     try:
         os.chdir(tmp)
         os.environ["LZ_MASTER_KEY"] = "t" * 44
         get_profile_store().__init__(f"sqlite:///{tmp}/settings.db")
-        anchors_mod.get_anchor_store().__init__(f"sqlite:///{tmp}/world.db")
+        anchors_mod._anchor_store = anchors_mod.AnchorStore(f"sqlite:///{tmp}/world.db")
         conn = sqlite3.connect(f"{tmp}/world.db")
         conn.execute(
             "INSERT OR IGNORE INTO branches (id, status, is_current, created_at)"
@@ -356,7 +363,9 @@ def _probe_driver_write_lock() -> tuple[bool, int]:
             os.chdir(previous_cwd)
         # 探针跑过真 app ⇒ WS 注册表与锚点 store 单例都被它动过；**不许漏给别的钉**。
         reset_anchor_registry()
-        anchors_mod.get_anchor_store().__init__("sqlite:///world.db")
+        anchors_mod._anchor_store = (
+            previous_store if previous_store is not None else anchors_mod.AnchorStore("sqlite://")
+        )
 
 
 class TestDriverFixtureSelfRestore:
@@ -403,3 +412,49 @@ class TestDriverFixtureSelfRestore:
         """探针必须缓存（每例重跑真 app 会把门禁拖成分钟级）。"""
         first = _driver_lock_present()
         assert _driver_lock_probe is first
+
+    def test_probe_never_opens_the_repository_world_db(self, monkeypatch) -> None:
+        """探针收尾**不许**把单例指回相对路径 `sqlite:///world.db`。
+
+        那条 `finally` 原本的意思是「别把临时库漏给别的钉」，写成相对路径却恰好相反：
+        `os.chdir` 已恢复到仓根，于是下一次 `get_anchor_store()` 会在**仓库真实
+        `world.db`** 上 `Base.metadata.create_all`——全量门禁每跑一次就打开一次真档
+        （2026-11-07 用审计钩子定位：`sqlite3.connect` 的栈顶就是本文件 `finally`）。
+
+        真实库当时没坏，只是因为 18 张表和全部索引都在（`create_all` 是幂等的
+        `CREATE TABLE IF NOT EXISTS`）；但「建表语句打在一个 187 万字节的玩家存档上」
+        这件事本身就不该发生——缺一张表或一次迁移漂移就会静默改档。
+
+        收尾的正确做法是**还原探针跑之前的状态**，不是发明一个新的默认值。
+        """
+        import sys as sys_mod
+
+        from sim.api import anchors as anchors_mod
+
+        real_init = anchors_mod.AnchorStore.__init__
+        seen: list[tuple[str, str]] = []
+
+        def recording_init(self, db_url="sqlite:///world.db", create_tables=True):
+            seen.append((db_url, str(Path.cwd())))
+            real_init(self, db_url, create_tables)
+
+        monkeypatch.setattr(anchors_mod.AnchorStore, "__init__", recording_init)
+        monkeypatch.setattr(sys_mod.modules[__name__], "_driver_lock_probe", None)
+        _probe_driver_write_lock()
+
+        def resolves_to_repo_world_db(db_url: str, cwd: str) -> bool:
+            prefix = "sqlite:///"
+            if not db_url.startswith(prefix):
+                return False
+            raw = db_url[len(prefix) :]
+            if raw.startswith(("/", "\\")) or (len(raw) > 1 and raw[1] == ":"):
+                path = Path(raw)
+            else:
+                path = Path(cwd) / raw
+            return path.resolve() == (REPO_ROOT / "world.db").resolve()
+
+        offending = [pair for pair in seen if resolves_to_repo_world_db(*pair)]
+        assert offending == [], (
+            f"探针打开了仓库真实 world.db（{len(offending)} 次）：{offending}——"
+            "收尾必须还原探针跑之前的单例状态，不许写相对路径默认值"
+        )

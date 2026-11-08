@@ -279,6 +279,25 @@ def test_dig_yields_each_cells_static_height_material_and_credits_separate_stock
     assert runtime.snapshot()["inventory"] == {"earth": 1, "stone": 1, "wood": 1}
 
 
+def test_place_on_the_actors_own_tile_is_rejected():
+    """Burying yourself is not an edit the player asked for.
+
+    A block under the actor's feet turns their own tile unwalkable while they
+    stand on it: the sprite is inside the block, and that tile is lost until
+    they dig it back out from a neighbouring cell. Reported 2026-11-07 after
+    the three.js world let a right-click on the hero place a wood column at
+    height 3 on top of them.
+    """
+    runtime, state, maps, _, _, _commit = setup_runtime()
+    runtime.observe(stock_events())
+    hero = state.entities["chenmo"].pos
+    with pytest.raises(VoxelRejected):
+        runtime.request("place", hero[0], hero[1], state, material="earth")
+    # Nothing was reserved or consumed, and the tile stayed walkable.
+    assert runtime.snapshot()["inventory"] == {"earth": 1, "stone": 1, "wood": 1}
+    assert maps[0].is_walkable(hero[0], hero[1])
+
+
 @pytest.mark.parametrize(("height", "material"), [(1, "earth"), (2, "stone"), (3, "wood")])
 def test_place_on_a_walkable_surface_requires_earth_after_each_yield(height, material):
     runtime, state, maps, _, _, commit = setup_runtime(heights={(2, 1): height})

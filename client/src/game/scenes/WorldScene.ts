@@ -24,14 +24,13 @@ import type { WorldMirror } from '../world-mirror';
 import {
   facingRow,
   walkFrameFor,
-  advanceAnimClock,
   inferFacing,
   VILLAGER_SHEET,
   CHENMO_SHEET,
   GOD_SHEET,
   GOD_SPRITE_KEYS,
-  type Facing,
 } from '../render/actors';
+import { advanceMotion, TELEPORT_TILES, type ActorMotion } from '../render/actor-motion';
 import {
   assignStackOffsets,
   actorDepth,
@@ -67,13 +66,9 @@ const MOVE_KEYS = new Set([
   'ArrowRight',
 ]);
 // 批次 D1：插值窗口基于行走节拍（sim 侧 15 tick/格 @1x = 250ms/格）。
-// 2026-10-28「移动闪现」修：窗口原先**正好等于**节拍 250ms——服务端每格
-// 250±15ms 到达，抖动使滑行永远差一点没走完，下一格又重置起点，于是逐格
-// 累积落后（实测 57% 帧落后 >0.5 格，最大 1.20 格），攒够距离再被追上 =
-// 视觉上「闪一下」。取节拍的 80%（200ms）留出抖动余量：滑行在下一格到达前
-// 必然走完，多出的时间是站立帧而不是负债（实测平均落后 0.43 格、最大 1.00）。
-// 16x 快进时 sim 节奏加快，帧到得更密，窗口按倍速缩短自然适配。
-const INTERP_MS = 200;
+// 位置插值统一由 `advanceMotion`（回放缓冲）负责：恒定落后一个节拍，
+// 零空等帧。旧实现这里是固定 200ms 窗（节拍的 80%），每格从当前视觉
+// 位置重起 —— 每格末段人物静止、其余帧超速追赶，就是「一顿一顿」。
 // 2026-10-12 D6-D8 换图：GOD 桃花源缩半图集（build_god_town.py 产物，
 // 2240×1600 = 140 列 @16px）。gid 1-based，id%140/id/140 换算在 renderTileset。
 const TILESET_KEY = 'god-town-16';
@@ -84,30 +79,21 @@ type Renderer = 'flat' | 'iso';
 
 interface ActorView {
   sprite: Phaser.GameObjects.Sprite;
-  /** 快照对快照插值基准（D20 漂移修）：上一快照的逻辑格 + 到达时刻——
-   *  精灵在 [snapAtMs, snapAtMs+INTERP_MS) 内从 prev 线性走到最新快照格，
-   *  到点即停；修前是帧对帧指数逼近（永远落后渐近=滑行漂移感）。
-   *  窗口须短于行走节拍，否则逐格累积落后（见 INTERP_MS 注释）。 */
-  fromX: number;
-  fromY: number;
-  snapAtMs: number;
-  /** 是否正在滑行（换格那一帧置真，插值走完置假）。
-   *  出生帧不算滑行——否则初始 fromX 与投影目标不等会被误判成走路。 */
-  gliding: boolean;
+  /**
+   * 位置插值状态（与 three.js 路径共用 `advanceMotion` 的回放缓冲）。
+   * 顶点按像素喂入：逻辑顶面投影后的屏幕坐标。旧实现的固定 200ms 窗
+   * 比服务端 250ms 节拍短、且每格从当前视觉位置重起 → 每格末段空等、
+   * 其余帧超速追赶（用户报的「一顿一顿」）。缓冲改为按到达时刻插值、
+   * 恒定落后一格：零空等帧、速率恒等于服务端。
+   */
+  motion: ActorMotion;
   /** 本帧插值后的**逻辑顶面**屏幕坐标（不含同格错位偏移），供镜头跟随。
    *  镜头跟逻辑格会让镜头先走一格、人再追上来（观感=被拽着飘）。 */
   logicX: number;
   logicY: number;
-  /** 滑行起点的逻辑顶面（换格帧记录；与 fromX/fromY 同批） */
-  fromLogicX: number;
-  fromLogicY: number;
   /** 上一帧逻辑格（anim/facing 推断输入，R2） */
   prevX: number;
   prevY: number;
-  /** walk 动画钟（位移中累加 delta；静止归 -1=站立帧） */
-  animClockMs: number;
-  /** H-3：最后非零朝向（停下沿用，不转身） */
-  lastFacing: 'n' | 'e' | 's' | 'w';
   /** D10：头顶戏内名（快照 actor.name；无 name 的 actor 无此对象） */
   label: Phaser.GameObjects.Text | null;
   /** A 档：脚下接触阴影（重叠时也能看出各自站位） */
@@ -966,52 +952,52 @@ export class WorldScene extends Phaser.Scene {
             : null;
         view = {
           sprite,
-          fromX: iso ? top.sx : actor.x,
-          fromY: iso ? top.sy : actor.y,
-          snapAtMs: 0,
-          gliding: false,
+          motion: advanceMotion(
+            undefined,
+            { x: top.sx, y: top.sy, height: 0 },
+            timeMs,
+            delta,
+            useUiStore.getState().speed,
+            TILE,
+          ),
           logicX: iso ? top.sx : actor.x * TILE + TILE / 2,
           logicY: iso ? top.sy : actor.y * TILE + TILE / 2,
-          fromLogicX: iso ? top.sx : actor.x * TILE + TILE / 2,
-          fromLogicY: iso ? top.sy : actor.y * TILE + TILE / 2,
           prevX: actor.x,
           prevY: actor.y,
-          animClockMs: -1,
-          lastFacing: 's' as Facing,
           label,
           shadow,
         };
         this.views.set(rtoken, view);
         if (isProtagonist && !iso) this.cameras.main.startFollow(sprite, true, 0.12, 0.12);
       }
-      // D20 漂移修：快照对快照插值——逻辑格变化时以「此刻」为起点、
-      // 从上一快照格线性走到新快照格（插值窗走完，到点即停）；
-      // 修前的帧对帧指数逼近每帧只走剩余距离的 t 比例 → 永远落后
-      // 目标渐近=滑行漂移感。位置未变时保持原地（不重复计时）。
-      // 2026-10-12 移动手感修：插值窗按当前倍速缩放——sim 每格 15 tick
-      // 是游戏时恒定，1x=250ms；16x=15.6ms，固定 250ms 窗在倍速下逐帧
-      // 重置起点 → 永远追不上下一格=滑行。窗=max(帧预算, 15000/speed ms)。
-      if (view.prevX !== actor.x || view.prevY !== actor.y) {
-        view.fromX = view.sprite.x;
-        view.fromY = view.sprite.y;
-        view.fromLogicX = view.logicX;
-        view.fromLogicY = view.logicY;
-        view.snapAtMs = timeMs;
-        view.gliding = true;
-      }
-      const speed = useUiStore.getState().speed;
-      const interpMs = Math.max(1000 / 60, INTERP_MS / speed);
-      const k = Math.min(1, (timeMs - view.snapAtMs) / interpMs);
+      // 位置插值：回放缓冲（与 three.js 路径同一份 `advanceMotion`）。
+      // 顶点用**逻辑顶面**投影后的屏幕坐标，按到达时刻排队；渲染落后一格，
+      // 逐帧在相邻两个真实样本间线性插值 ⇒ 不空等、不超速。
       const stack = stackOffsets.get(rtoken) ?? { dx: 0, dy: 0 };
       const top = this.projectSurface(actor.x, actor.y);
-      const targetX = top.sx + stack.dx;
-      const targetY = top.sy + stack.dy;
-      view.sprite.x = view.fromX + (targetX - view.fromX) * k;
-      view.sprite.y = view.fromY + (targetY - view.fromY) * k;
-      // 逻辑顶面插值（无同格错位）：镜头跟这个，跟人物同步而不是跟着逻辑格跳。
-      view.logicX = view.fromLogicX + (top.sx - view.fromLogicX) * k;
-      view.logicY = view.fromLogicY + (top.sy - view.fromLogicY) * k;
-      if (k >= 1) view.gliding = false;
+      // 朝向在**格子空间**推断：像素投影里高度变化会淹没一格位移，
+      // 从投影增量推朝向会把平地上的行走误判成朝北。零位移沿用上次朝向。
+      const movedTile = view.prevX !== actor.x || view.prevY !== actor.y;
+      // 传送不是迈步：位移方向指向的是重连/加载落点，按它转身会让角色原地旋一圈。
+      const jumped =
+        movedTile && Math.hypot(actor.x - view.prevX, actor.y - view.prevY) > TELEPORT_TILES;
+      const facing =
+        movedTile && !jumped
+          ? inferFacing(actor.x - view.prevX, actor.y - view.prevY, view.motion.facing)
+          : view.motion.facing;
+      view.motion = advanceMotion(
+        view.motion,
+        { x: top.sx, y: top.sy, height: 0, facing },
+        timeMs,
+        delta,
+        useUiStore.getState().speed,
+        TILE,
+      );
+      view.sprite.x = view.motion.x + stack.dx;
+      view.sprite.y = view.motion.y + stack.dy;
+      // 逻辑顶面（无同格错位）：镜头跟这个，与人物同一帧同一点。
+      view.logicX = view.motion.x;
+      view.logicY = view.motion.y;
       // A 档：深度随脚底（插值后）位置更新——靠下的人自然压住靠上的人。
       // 精灵 origin(0.5,1)，sprite.y 即脚底世界像素。
       const footDepth = iso ? depthKey(actor.x, actor.y) + 1 : actorDepth(view.sprite.y);
@@ -1020,17 +1006,9 @@ export class WorldScene extends Phaser.Scene {
       view.shadow?.setDepth(footDepth - (iso ? 0.5 : 1));
       // R2：位移推断 anim/facing → 帧号（D10：villager 4 列帧表启用行走环；
       // 修前恒帧 0——素材有 4×8 走环/劳作表却只画迈步中间帧，人群看着呆滞）
-      // 位移只在换格那一帧为真；插值途中（k<1）人物其实在滑动，
-      // 若只按换格帧判走环，其余帧全是站立帧 = 站着滑过去的「飘」。
-      // 走环条件改为「本帧位置真的变了」：换格帧或滑行未到点。
-      const moved = view.prevX !== actor.x || view.prevY !== actor.y;
-      // H-2：walk 累加/idle 归 -1（修前写反 → 循环死在第 0 帧）
-      view.animClockMs = advanceAnimClock(view.animClockMs, moved || view.gliding, delta);
-      // 零位移沿用 lastFacing（停下不转身）。
-      if (moved) {
-        view.lastFacing = inferFacing(actor.x - view.prevX, actor.y - view.prevY, view.lastFacing);
-      }
-      const row = facingRow(view.lastFacing);
+      // 走环条件由 `advanceMotion` 按「本帧渲染位置是否真的变了」判定，
+      // 插值途中持续为真 ⇒ 整段行走走环连续，不再逐格回站立帧。
+      const row = facingRow(view.motion.facing);
       // 当前人物素材没有独立姿势行；按图集几何统一选择走环或站立帧。
       const sheet =
         rtoken === this.mirror.protagonist
@@ -1040,7 +1018,7 @@ export class WorldScene extends Phaser.Scene {
             : VILLAGER_SHEET;
       const isFauna = actor.sprite.startsWith('fauna_');
       view.sprite.setAlpha(isFauna && actor.anim === 'rest' ? 0.5 : 1);
-      view.sprite.setFrame(isFauna ? 0 : walkFrameFor(sheet, row, view.animClockMs));
+      view.sprite.setFrame(isFauna ? 0 : walkFrameFor(sheet, row, view.motion.animClock));
       view.prevX = actor.x;
       view.prevY = actor.y;
     }

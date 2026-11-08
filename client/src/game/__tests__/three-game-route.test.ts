@@ -19,3 +19,21 @@ it('hands the whole world to three without creating a Phaser overlay canvas', as
   expect(game).toBe(data.three);
   expect(data.phaser).not.toHaveBeenCalled();
 });
+
+it('boots the three world when the URL says nothing at all', async () => {
+  // three is the default since the 2026-11-07 acceptance; a bare URL must not
+  // fall back to Phaser.
+  vi.stubGlobal('location', { search: '' });
+  const { createGame } = await import('../main');
+  const game = createGame({} as HTMLElement, {} as Parameters<typeof createGame>[1]);
+  expect(game).toBe(data.three);
+  expect(data.phaser).not.toHaveBeenCalled();
+});
+
+it('still routes to Phaser when ?terrain=phaser is asked for explicitly', async () => {
+  vi.stubGlobal('location', { search: '?terrain=phaser' });
+  const { createGame } = await import('../main');
+  const game = createGame({} as HTMLElement, {} as Parameters<typeof createGame>[1]);
+  expect(game).not.toBe(data.three);
+  expect(data.phaser).toHaveBeenCalledTimes(1);
+});
