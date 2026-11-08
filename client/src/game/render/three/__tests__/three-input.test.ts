@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createWorldInput, movementDirection } from '../three-input';
+import { createWorldInput, movementDirection, type WorldInputPorts } from '../three-input';
+import { canStep, type MovePoint } from '../../../movement';
+import type { MapStatic } from '../../../world-mirror';
 
 class Canvas extends EventTarget {
   setPointerCapture() {}
@@ -19,9 +21,12 @@ function setup(blocked = false) {
     typing = false,
     enabled = true,
     allowed = true,
-    revision = 0;
+    revision = 0,
+    azimuth = 0;
+  let hero = { x: 3, y: 3 };
   let ground = { x: 3, y: 2 };
-  const move = vi.fn(() => true),
+  const move = vi.fn<WorldInputPorts['move']>(() => true),
+    step = vi.fn<WorldInputPorts['step']>(() => allowed),
     voxel = vi.fn(),
     rotate = vi.fn(),
     zoom = vi.fn();
@@ -34,13 +39,13 @@ function setup(blocked = false) {
     pickEdit: () => ({ x: 4, y: 3 }),
     pickGround: () => ground,
     blocked: () => blocked,
-    hero: () => ({ x: 3, y: 3 }),
-    step: () => allowed,
+    hero: () => hero,
+    step,
     revision: () => revision,
     enabled: () => enabled,
     typing: () => typing,
     epoch: () => stamp,
-    azimuth: () => 0,
+    azimuth: () => azimuth,
   };
   const input = createWorldInput(canvas as unknown as HTMLCanvasElement, ports, keyboard);
   const pointer = (button = 0, x = 100, y = 100) => ({
@@ -54,11 +59,21 @@ function setup(blocked = false) {
     keyboard,
     input,
     move,
+    step,
     voxel,
     rotate,
     zoom,
     pointer,
     error: ports.error,
+    get hero() {
+      return hero;
+    },
+    arrive(point: MovePoint) {
+      hero = point;
+    },
+    turn(degrees: number) {
+      azimuth = degrees;
+    },
     block() {
       allowed = false;
     },
@@ -160,6 +175,98 @@ it('does not spam a held blocked key and retries when collision changes', () => 
   fixture.unblock();
   fixture.input.tick();
   expect(fixture.move).toHaveBeenCalledWith({ x: 3, y: 2 });
+  fixture.input.dispose();
+});
+
+function walkingMap(...walkable: MovePoint[]): MapStatic {
+  const map = { w: 7, h: 7, tileset: 'test', collision: new Uint8Array(49) };
+  for (const point of walkable) map.collision[point.y * map.w + point.x] = 1;
+  return map;
+}
+
+const defaultDirections = [
+  ['KeyW', { x: 1, y: 1 }],
+  ['KeyS', { x: -1, y: -1 }],
+  ['KeyA', { x: 1, y: -1 }],
+  ['KeyD', { x: -1, y: 1 }],
+] as const;
+
+it.each(defaultDirections)(
+  'slides %s horizontally when its default diagonal is blocked',
+  (key, d) => {
+    const fixture = setup();
+    fixture.turn(225);
+    expect(movementDirection(new Set([key]), 225)).toEqual(d);
+    const horizontal = { x: 3 + d.x, y: 3 };
+    const vertical = { x: 3, y: 3 + d.y };
+    const map = walkingMap(fixture.hero, horizontal, vertical);
+    fixture.step.mockImplementation((point) => canStep(map, fixture.hero, point));
+    dispatch(fixture.keyboard, 'keydown', { code: key });
+    expect(fixture.move).toHaveBeenCalledExactlyOnceWith(horizontal);
+    expect(fixture.error).not.toHaveBeenCalled();
+    fixture.input.dispose();
+  },
+);
+
+it.each(defaultDirections)(
+  'slides %s vertically without cutting a blocked diagonal corner',
+  (key, d) => {
+    const fixture = setup();
+    fixture.turn(225);
+    const diagonal = { x: 3 + d.x, y: 3 + d.y };
+    const vertical = { x: 3, y: 3 + d.y };
+    const map = walkingMap(fixture.hero, diagonal, vertical);
+    expect(canStep(map, fixture.hero, diagonal)).toBe(false);
+    fixture.step.mockImplementation((point) => canStep(map, fixture.hero, point));
+    dispatch(fixture.keyboard, 'keydown', { code: key });
+    expect(fixture.move).toHaveBeenCalledExactlyOnceWith(vertical);
+    expect(fixture.error).not.toHaveBeenCalled();
+    fixture.input.dispose();
+  },
+);
+
+it('continues a held key for three acknowledged cells through a diagonal and axial corridor', () => {
+  const fixture = setup();
+  fixture.turn(225);
+  const map = walkingMap(
+    fixture.hero,
+    { x: 2, y: 3 },
+    { x: 3, y: 2 },
+    { x: 2, y: 2 },
+    { x: 2, y: 1 },
+    { x: 2, y: 0 },
+  );
+  fixture.step.mockImplementation((point) => canStep(map, fixture.hero, point));
+  dispatch(fixture.keyboard, 'keydown', { code: 'KeyS' });
+  for (const [index, position] of [
+    { x: 2, y: 2 },
+    { x: 2, y: 1 },
+  ].entries()) {
+    for (let frame = 0; frame < 5; frame++) fixture.input.tick();
+    expect(fixture.move).toHaveBeenCalledTimes(index + 1);
+    fixture.arrive(position);
+    fixture.input.tick();
+  }
+  expect(fixture.move.mock.calls).toEqual([[{ x: 2, y: 2 }], [{ x: 2, y: 1 }], [{ x: 2, y: 0 }]]);
+  expect(fixture.error).not.toHaveBeenCalled();
+  fixture.input.dispose();
+});
+
+it('reports a diagonal obstruction once only when both axes are blocked and retries a changed map', () => {
+  const fixture = setup();
+  fixture.turn(225);
+  const map = walkingMap(fixture.hero, { x: 4, y: 4 });
+  fixture.step.mockImplementation((point) => canStep(map, fixture.hero, point));
+  dispatch(fixture.keyboard, 'keydown', { code: 'KeyW' });
+  for (let frame = 0; frame < 20; frame++) fixture.input.tick();
+  dispatch(fixture.keyboard, 'keydown', { code: 'KeyW', repeat: true });
+  expect(fixture.error).toHaveBeenCalledTimes(1);
+  expect(fixture.move).not.toHaveBeenCalled();
+  map.collision[3 * map.w + 4] = 1;
+  fixture.unblock();
+  fixture.input.tick();
+  expect(fixture.move).toHaveBeenCalledExactlyOnceWith({ x: 4, y: 3 });
+  expect(fixture.error).toHaveBeenCalledTimes(1);
   fixture.input.dispose();
 });
 
