@@ -68,6 +68,49 @@ it('uses billboards with feet on world height and projection-dependent apparent 
   expect(apparentHeight(hero)).toBeGreaterThan(apparentHeight(other));
 });
 
+it('stands at authoritative elevation even when terrain presentation has not refreshed', () => {
+  const { layer, mirror } = setup();
+  mirror.applyActorDeltas([{ rtoken: 'hero', elevation: 3, gait: 'walk' }]);
+  layer.update(0, 16, 1, 0);
+  const hero = layer.views.get('hero')!;
+  expect(hero.sprite.position.y).toBe(3);
+  expect(hero.motion.height).toBe(3);
+});
+
+it('renders the server flight through the replay buffer while the shadow stays on support', () => {
+  const { layer, mirror } = setup();
+  layer.update(0, 16, 1, 0);
+  const jump = {
+    rtoken: 'flight',
+    start_x: 2,
+    start_y: 3,
+    goal_x: 3,
+    goal_y: 3,
+    start_height: 1,
+    target_height: 2,
+    progress: 0,
+    active: true,
+    duration: 0.6,
+    arc_height: 1.5,
+  };
+  mirror.applyActorDeltas([{ rtoken: 'hero', elevation: 1, gait: 'run', jump }]);
+  layer.update(100, 100, 1, 0);
+  mirror.applyActorDeltas([{ rtoken: 'hero', jump: { ...jump, progress: 0.5 } }]);
+  layer.update(400, 300, 1, 0);
+  mirror.applyActorDeltas([
+    { rtoken: 'hero', x: 3, elevation: 2, jump: { ...jump, progress: 1, active: false } },
+  ]);
+  layer.update(700, 100, 1, 0);
+  const hero = layer.views.get('hero')!;
+  expect(hero.motion.airborne).toBe(true);
+  expect(hero.sprite.position.y).toBeGreaterThan(2);
+  expect(hero.shadow.position.y).toBeCloseTo(1.008);
+  expect(hero.motion.animClock).toBe(-1);
+  layer.update(1100, 100, 1, 0);
+  expect(hero.sprite.position.y).toBe(2);
+  expect(hero.motion.airborne).toBe(false);
+});
+
 it('updates frame UVs, removes departed actors and drops old snapshot interpolation', () => {
   const { layer, mirror, scene } = setup();
   layer.update(0, 16, 1, 0);

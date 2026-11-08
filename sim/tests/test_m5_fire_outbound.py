@@ -18,7 +18,7 @@
 
 | 组 | 状态 | 钉的是 |
 |---|---|---|
-| ① `TestSnapshotZeroDrift` | 今天即绿 | 产物零 fire；帧 type 闭合集 15 项；paths 零火灾路由 |
+| ① `TestSnapshotZeroDrift` | 今天即绿 | 产物零 fire；帧 type 闭合集 18 项；paths 零火灾路由 |
 | ② `TestLightKindFreeString` | 今天即绿 | `Light.kind` 自由 string；`kind="fire"` 过既有形状 |
 | ③ `TestEventStreamNotFrameType` | skip-locked | fire kind **只在** `PAYLOAD_MODELS`，零进快照 |
 | ④ `TestNoFireLiteralInApiLayer` | 今天即绿 | **白盒负钉**：`sim/api/*.py` 字面量零 `fire` |
@@ -55,7 +55,7 @@ SNAPSHOT = REPO_ROOT / "shared" / "openapi.json"
 GENERATED = REPO_ROOT / "shared" / "protocol.ts"
 API_DIR = REPO_ROOT / "sim" / "api"
 
-#: 现有 WS 帧 type 闭合集（原 15 项 + V4a 1.12 挖放双消息，非火灾出站面）。
+#: 现有 WS 帧 type 闭合集（原 15 项 + 1.12 挖放双消息 + 1.16 跳跃请求）。
 #: 抄自快照当日值——**新增帧即红**（D-10/K12 §2 论证 A：事件 kind 不是帧 type）。
 WS_FRAME_TYPES: frozenset[str] = frozenset(
     {
@@ -63,6 +63,7 @@ WS_FRAME_TYPES: frozenset[str] = frozenset(
         "set_control",
         "load_anchor",
         "move_request",
+        "jump_request",
         "voxel_request",
         "voxel_state",
         "sync_request",
@@ -178,7 +179,7 @@ class TestSnapshotZeroDrift:
             assert "fire" not in text, f"{path.name} 出现 fire 字面量——批次 D 出站面被扩了？"
 
     def test_ws_frame_type_set_unchanged(self) -> None:
-        """WS 帧 type 判别器映射仍 15 项闭合集，且零 fire——新增帧即红。"""
+        """WS 帧 type 判别器映射为获批的 18 项闭合集，且零 fire——新增帧即红。"""
         mapping = _snapshot()["components"]["schemas"]["WsMessage"]["discriminator"]["mapping"]
         assert set(mapping) == set(WS_FRAME_TYPES), (
             f"WS 帧 type 集变了：新增 {sorted(set(mapping) - WS_FRAME_TYPES)}/"

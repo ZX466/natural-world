@@ -9,7 +9,8 @@
 
 - **来源钉**：`entity_count` = `len(loop.state.entities)`（`WorldState.entities` 字典），
   **不是** `npc_profiles` 行数、**不含** `matter_state`；soak 源码零表查询。
-- **结构钉**：`EntityState` 有 `entity_id/pos/path/incapacitated_until`，没有 lod、alive/dead
+- **结构钉**：`EntityState` 有 `entity_id/pos/path/incapacitated_until/gait/jump`，
+  没有 lod、alive/dead
   ⇒ 计数里没有 LOD 维度、也没有「死了但还被数」这个形态的**现状**载体。
 - **增删钉**：只有 `world.create` 往字典里插键；`move` 事件与 tick 内移动只改既有键的字段
   ⇒ 今天 `end == start` 恒真的是因为**没有删除路径**，不是因为死亡不计数。
@@ -66,8 +67,15 @@ class TestEntityCountSource:
             assert banned not in src, f"soak.py 引用了 {banned}（计数口径被换掉过？）"
 
     def test_entity_state_has_no_lod_nor_alive_field(self) -> None:
-        """DA-07 登记失能期限；字段集仍封闭，失能不是死亡或 LOD 过滤。"""
-        assert set(EntityState.model_fields) == {"entity_id", "pos", "path", "incapacitated_until"}
+        """失能期限和 1.16 运动状态不引入死亡或 LOD 过滤；字段集仍封闭。"""
+        assert set(EntityState.model_fields) == {
+            "entity_id",
+            "pos",
+            "path",
+            "incapacitated_until",
+            "gait",
+            "jump",
+        }
 
     def test_incapacitated_protagonist_still_counts_as_an_entity(self) -> None:
         from sim.core.events import agent_incapacitated_event

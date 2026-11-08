@@ -876,14 +876,14 @@ class TestErrorCodeVocabulary:
 
 
 class TestDispatchRegistration:
-    """§7 #18：C→S 五类消息在白名单与 channel 表成对注册（防落单 → bad_channel）。"""
+    """C→S 八类消息在白名单与 channel 表成对注册（防落单 → bad_channel）。"""
 
     def test_all_client_types_paired(self):
         from sim.api import ws as ws_mod
 
         allowed = ws_mod._ALLOWED_CLIENT_TYPES
         channels = ws_mod._CHANNEL_FOR
-        expected = {"move_request", "set_control", "sync_request", "hello"}
+        expected = {"move_request", "jump_request", "set_control", "sync_request", "hello"}
         expected |= {"player_impulse", "load_anchor", "voxel_request"}
         assert allowed == expected, f"白名单缺项：{expected - allowed}"
         assert channels.keys() == expected, "channel 表与白名单必须一一对应（防 §2.2 落单）"
@@ -896,6 +896,7 @@ class TestDispatchRegistration:
         assert ch["load_anchor"] == "session"
         assert ch["voxel_request"] == "render"
         assert ch["move_request"] == "render"
+        assert ch["jump_request"] == "render"
         assert ch["set_control"] == "control"
         assert ch["sync_request"] == "session"
         assert ch["hello"] == "session"

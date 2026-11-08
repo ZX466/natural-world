@@ -14,6 +14,7 @@ import {
   depthKey,
   effectiveHeight,
   isoProject,
+  isoUnproject,
   screenBounds,
 } from '../render/iso';
 import { IsoTerrain } from '../render/iso-terrain';
@@ -31,6 +32,8 @@ import {
   GOD_SPRITE_KEYS,
 } from '../render/actors';
 import { advanceMotion, TELEPORT_TILES, type ActorMotion } from '../render/actor-motion';
+import type { SampledPoint } from '../render/motion-buffer';
+import { flightTarget, gaitCadenceMs } from '../locomotion';
 import {
   assignStackOffsets,
   actorDepth,
@@ -50,7 +53,7 @@ import {
   type NameLabelCandidate,
 } from '../render/presentation';
 import { useUiStore } from '../../store/uiStore';
-import { canStep, type MovePoint } from '../movement';
+import { canStep, standable, type MovePoint } from '../movement';
 
 const PIXEL_SCALE = 3.5; // A 档：3x→3.5x（人物更可辨，缓解小片区人群拥挤观感）
 const TILE = 16;
@@ -76,6 +79,16 @@ const TILESET_KEY = 'god-town-16';
 const TILESET_COLS = 140;
 const GROUND_KEY = 'ground-composite'; // 预拼地面 CanvasTexture 键
 type Renderer = 'flat' | 'iso';
+type Gait = 'walk' | 'run';
+
+const flatDistanceInTiles = (from: SampledPoint, to: SampledPoint): number =>
+  Math.hypot(to.x - from.x, to.y - from.y) / TILE;
+
+function isoDistanceInTiles(from: SampledPoint, to: SampledPoint): number {
+  const dx = (to.x - from.x) / (ISO.TW / 2);
+  const dy = (to.y - from.y + (to.z - from.z) * ISO.HH) / (ISO.TH / 2);
+  return Math.hypot((dx + dy) / 2, (dy - dx) / 2);
+}
 
 interface ActorView {
   sprite: Phaser.GameObjects.Sprite;
@@ -135,11 +148,14 @@ export class WorldScene extends Phaser.Scene {
   private lastVoxelSignature = '';
   private lastVoxelMap: WorldMirror['map'] = null;
   private movementGoal: MovePoint | null = null;
+  private movementGoalGait: Gait = 'walk';
   private movementOrigin: MovePoint | null = null;
   private pendingDrag: MovePoint | null = null;
   private lastDragCell = '';
   private lastDragAt = -Infinity;
   private movementKeys = new Set<string>();
+  private shiftHeld = false;
+  private jumpHeld = false;
   private lastKeyboardIntent = '';
   private inputMap: WorldMirror['map'];
   private inputReset: number;
@@ -194,8 +210,15 @@ export class WorldScene extends Phaser.Scene {
     });
     worldAudio.attach(audio);
     this.events.once('shutdown', () => worldAudio.detach(audio));
+    const heightAt = createHeightLookup(this.cache?.json.get('linhe-height'));
+    this.heightAt = heightAt;
+    const mirror = this.mirror;
+    // Runtime retains this lookup across Scene disposal; only immutable asset
+    // data and the current mirror are captured, never the Scene or its cache.
+    mirror.setHeightLookup((x, y) =>
+      effectiveHeight(x, y, heightAt, mirror.structures, mirror.voxelEdits),
+    );
     if (this.renderMode === 'iso') {
-      this.heightAt = createHeightLookup(this.cache.json.get('linhe-height'));
       this.isoTerrain = new IsoTerrain(this, this.heightAt);
       this.events.once('shutdown', () => {
         this.isoTerrain?.destroy();
@@ -398,7 +421,19 @@ export class WorldScene extends Phaser.Scene {
   private groundTarget(pointer: Phaser.Input.Pointer): { x: number; y: number } | null {
     const map = this.mirror.map;
     if (map === null) return null;
-    if (this.renderMode === 'iso')
+    const actor = this.mirror.actors.get(this.mirror.protagonist ?? '');
+    const heightOf = (x: number, y: number) => this.mirror.heightAt(x, y);
+    const elevation = actor ? (actor.elevation ?? heightOf(actor.x, actor.y)) : 1;
+    const canStand = (x: number, y: number) => standable(map, { x, y }, heightOf, elevation);
+    if (this.renderMode === 'iso') {
+      if (elevation > 1) {
+        const target = isoUnproject(
+          pointer.worldX,
+          pointer.worldY + elevation * ISO.HH,
+          screenBounds(map.w, map.h),
+        );
+        return canStand(target.x, target.y) ? target : null;
+      }
       return pickGround(
         pointer.worldX,
         pointer.worldY,
@@ -406,17 +441,23 @@ export class WorldScene extends Phaser.Scene {
         map.h,
         (x, y) =>
           effectiveHeight(x, y, this.heightAt, this.mirror.structures, this.mirror.voxelEdits),
-        (x, y) => map.collision[y * map.w + x] === 1,
+        canStand,
       );
+    }
     const x = Math.floor(pointer.worldX / TILE),
       y = Math.floor(pointer.worldY / TILE);
     if (x < 0 || y < 0 || x >= map.w || y >= map.h) return null;
-    return map.collision[y * map.w + x] === 1 ? { x, y } : null;
+    return canStand(x, y) ? { x, y } : null;
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+    if (this.airborne()) return;
     this.cancelVoxelInput();
-    if (this.movementKeys.size) this.cancelMovement();
+    if (this.movementKeys.size) {
+      this.movementKeys.clear();
+      this.lastKeyboardIntent = '';
+      this.stopMovement();
+    }
     const map = this.mirror.map;
     if (map === null || this.mirror.protagonist === null) {
       useUiStore.getState().setVoxelError('这会儿走不了。');
@@ -460,6 +501,7 @@ export class WorldScene extends Phaser.Scene {
       if (
         this.voxelPress !== press ||
         press.version !== this.mirror.voxelSnapshotVersion ||
+        this.airborne() ||
         !current ||
         current.collision[digTarget.y * current.w + digTarget.x] !== 0
       )
@@ -471,6 +513,10 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private handlePointerUp(pointer: Phaser.Input.Pointer): void {
+    if (this.airborne()) {
+      this.cancelVoxelInput();
+      return;
+    }
     const press = this.voxelPress;
     if (press === null || pointer.id !== press.id) return;
     if (press.version !== this.mirror.voxelSnapshotVersion) {
@@ -490,6 +536,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
+    if (this.airborne()) return;
     this.placementHover = this.voxelTarget(pointer);
     const press = this.voxelPress;
     if (!press || pointer.id !== press.id) return;
@@ -513,6 +560,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private flushDragTarget(force = false): void {
+    if (this.airborne()) return;
     const target = this.pendingDrag;
     if (!target) return;
     const key = `${target.x},${target.y}`;
@@ -551,18 +599,23 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private handlePointer(pointer: Phaser.Input.Pointer): void {
+    if (this.airborne()) return;
     const ground = this.groundTarget(pointer);
     if (ground) this.requestMovement(ground);
     else useUiStore.getState().setVoxelError('那处走不过去。');
   }
 
   private requestMovement(target: MovePoint): void {
-    this.game.events.emit('client:move_request', target, (accepted: boolean) => {
+    if (this.airborne()) return;
+    const gait = this.movementGait();
+    const request = gait === 'run' ? { ...target, gait } : target;
+    this.game.events.emit('client:move_request', request, (accepted: boolean) => {
       if (!accepted) return;
       this.goalMarker?.setVisible(false);
       const actor = this.mirror.actors.get(this.mirror.protagonist ?? '');
       this.movementOrigin = actor ? { x: actor.x, y: actor.y } : null;
       this.movementGoal = target;
+      this.movementGoalGait = gait;
       if (actor?.x === target.x && actor.y === target.y) {
         this.movementGoal = null;
         return;
@@ -586,7 +639,8 @@ export class WorldScene extends Phaser.Scene {
   private movementCode(event: KeyboardEvent): string {
     return (
       event.code ||
-      ({ w: 'KeyW', a: 'KeyA', s: 'KeyS', d: 'KeyD' }[event.key?.toLowerCase()] ?? event.key)
+      ({ w: 'KeyW', a: 'KeyA', s: 'KeyS', d: 'KeyD', ' ': 'Space' }[event.key?.toLowerCase()] ??
+        event.key)
     );
   }
 
@@ -596,6 +650,44 @@ export class WorldScene extends Phaser.Scene {
       x: Number(has('KeyD', 'ArrowRight')) - Number(has('KeyA', 'ArrowLeft')),
       y: Number(has('KeyS', 'ArrowDown')) - Number(has('KeyW', 'ArrowUp')),
     };
+  }
+
+  private movementGait(): Gait {
+    return this.shiftHeld ? 'run' : 'walk';
+  }
+
+  private airborne(): boolean {
+    return this.mirror.actors.get(this.mirror.protagonist ?? '')?.jump?.active ?? false;
+  }
+
+  private resendMovementGait(): void {
+    if (this.movementKeys.size) this.driveKeyboard();
+    else if (this.movementGoal) this.requestMovement(this.movementGoal);
+  }
+
+  private requestJump(): void {
+    if (this.airborne()) return;
+    const actor = this.mirror.actors.get(this.mirror.protagonist ?? '');
+    if (!actor || !this.mirror.map) {
+      useUiStore.getState().setVoxelError('这会儿走不了。');
+      return;
+    }
+    const gait = this.movementGait();
+    const distance = gait === 'run' ? 2 : 1;
+    const direction = this.movementDirection();
+    // Landing and the swept trajectory are checked by Runtime and sim. A bank
+    // stays blocked to walking, while its top can still be a legal jump target.
+    this.game.events.emit(
+      'client:jump_request',
+      {
+        x: actor.x + direction.x * distance,
+        y: actor.y + direction.y * distance,
+        gait,
+      },
+      (accepted: boolean) => {
+        if (accepted) this.stopMovement(false);
+      },
+    );
   }
 
   private handleMovementKeyDown(event: KeyboardEvent): void {
@@ -613,6 +705,21 @@ export class WorldScene extends Phaser.Scene {
       this.cancelMovement();
       return;
     }
+    if (code === 'ShiftLeft' || code === 'ShiftRight' || code === 'Shift') {
+      if (this.shiftHeld) return;
+      this.shiftHeld = true;
+      this.resendMovementGait();
+      return;
+    }
+    if (typeof event.shiftKey === 'boolean') this.shiftHeld = event.shiftKey;
+    if (code === 'Space') {
+      event.preventDefault();
+      if (event.repeat || this.jumpHeld) return;
+      this.jumpHeld = true;
+      this.cancelVoxelInput();
+      this.requestJump();
+      return;
+    }
     if (!MOVE_KEYS.has(code)) return;
     event.preventDefault();
     if (event.repeat || this.movementKeys.has(code)) return;
@@ -622,7 +729,20 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private handleMovementKeyUp(event: KeyboardEvent): void {
-    if (!this.movementKeys.delete(this.movementCode(event))) return;
+    const code = this.movementCode(event);
+    if (code === 'Space') {
+      this.jumpHeld = false;
+      return;
+    }
+    if (code === 'ShiftLeft' || code === 'ShiftRight' || code === 'Shift') {
+      const held = event.shiftKey ?? false;
+      if (held === this.shiftHeld) return;
+      this.shiftHeld = held;
+      if (this.typingMovement()) this.cancelMovement();
+      else this.resendMovementGait();
+      return;
+    }
+    if (!this.movementKeys.delete(code)) return;
     if (this.typingMovement()) {
       this.cancelMovement();
       return;
@@ -635,6 +755,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private driveKeyboard(): void {
+    if (this.airborne()) return;
     const actor = this.mirror.actors.get(this.mirror.protagonist ?? '');
     const map = this.mirror.map;
     const direction = this.movementDirection();
@@ -646,16 +767,30 @@ export class WorldScene extends Phaser.Scene {
       this.stopMovement();
       return;
     }
-    const intent = `${actor.x},${actor.y},${direction.x},${direction.y},${this.mirror.terrainVersion}`;
+    const gait = this.movementGait();
+    const intent = `${actor.x},${actor.y},${direction.x},${direction.y},${gait},${this.mirror.terrainVersion},${this.mirror.locomotionRevision}`;
     if (intent === this.lastKeyboardIntent) return;
     this.lastKeyboardIntent = intent;
     const target = { x: actor.x + direction.x, y: actor.y + direction.y };
-    if (!canStep(map, actor, target)) {
+    if (
+      !canStep(
+        map,
+        actor,
+        target,
+        (x, y) => this.mirror.heightAt(x, y),
+        actor.elevation ?? this.mirror.heightAt(actor.x, actor.y),
+      )
+    ) {
       this.stopMovement();
       useUiStore.getState().setVoxelError('那处挡着路。');
       return;
     }
-    if (this.movementGoal?.x === target.x && this.movementGoal.y === target.y) return;
+    if (
+      this.movementGoal?.x === target.x &&
+      this.movementGoal.y === target.y &&
+      this.movementGoalGait === gait
+    )
+      return;
     this.requestMovement(target);
   }
 
@@ -665,13 +800,15 @@ export class WorldScene extends Phaser.Scene {
     this.movementOrigin = null;
     this.goalMarker?.setVisible(false);
     const actor = this.mirror.actors.get(this.mirror.protagonist ?? '');
-    if (sendStop && hadGoal && actor)
+    if (sendStop && hadGoal && actor && !this.airborne())
       this.game.events.emit('client:move_request', { x: actor.x, y: actor.y }, () => {});
   }
 
   private cancelMovement(sendStop = true): void {
     this.cancelVoxelInput(sendStop);
     this.movementKeys.clear();
+    this.shiftHeld = false;
+    this.jumpHeld = false;
     this.lastKeyboardIntent = '';
     this.stopMovement(sendStop);
   }
@@ -697,6 +834,12 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
     const actor = this.mirror.actors.get(this.mirror.protagonist ?? '');
+    if (this.airborne()) {
+      this.cancelVoxelInput();
+      this.stopMovement(false);
+      this.lastKeyboardIntent = '';
+      return;
+    }
     if (actor && this.movementGoal?.x === actor.x && this.movementGoal.y === actor.y)
       this.stopMovement(false);
     if (this.movementKeys.size) this.driveKeyboard();
@@ -884,6 +1027,28 @@ export class WorldScene extends Phaser.Scene {
       [...this.mirror.actors].map(([rtoken, a]) => ({ rtoken, x: a.x, y: a.y })),
     );
     for (const [rtoken, actor] of this.mirror.actors) {
+      const height =
+        actor.elevation ??
+        effectiveHeight(
+          actor.x,
+          actor.y,
+          this.heightAt,
+          this.mirror.structures,
+          this.mirror.voxelEdits,
+        );
+      const point = this.projectMotionPoint(actor.x, actor.y, height);
+      const top = { sx: point.x, sy: point.y };
+      const flight = flightTarget(actor.jump, (x, y, elevation) =>
+        this.projectMotionPoint(x, y, elevation),
+      );
+      const target = {
+        x: top.sx,
+        y: top.sy,
+        height: point.z,
+        cadenceMs: gaitCadenceMs(actor.gait),
+        distanceInTiles: iso ? isoDistanceInTiles : flatDistanceInTiles,
+        ...(flight ? { flight } : {}),
+      };
       let view = this.views.get(rtoken);
       if (view === undefined) {
         const isProtagonist = rtoken === this.mirror.protagonist;
@@ -899,7 +1064,6 @@ export class WorldScene extends Phaser.Scene {
               ? 'protagonist'
               : 'villager'
             : actor.sprite;
-        const top = this.projectSurface(actor.x, actor.y);
         const initialDepth = iso
           ? depthKey(actor.x, actor.y) + 1
           : actorDepth((actor.y + 1) * TILE);
@@ -954,7 +1118,7 @@ export class WorldScene extends Phaser.Scene {
           sprite,
           motion: advanceMotion(
             undefined,
-            { x: top.sx, y: top.sy, height: 0 },
+            target,
             timeMs,
             delta,
             useUiStore.getState().speed,
@@ -974,7 +1138,6 @@ export class WorldScene extends Phaser.Scene {
       // 顶点用**逻辑顶面**投影后的屏幕坐标，按到达时刻排队；渲染落后一格，
       // 逐帧在相邻两个真实样本间线性插值 ⇒ 不空等、不超速。
       const stack = stackOffsets.get(rtoken) ?? { dx: 0, dy: 0 };
-      const top = this.projectSurface(actor.x, actor.y);
       // 朝向在**格子空间**推断：像素投影里高度变化会淹没一格位移，
       // 从投影增量推朝向会把平地上的行走误判成朝北。零位移沿用上次朝向。
       const movedTile = view.prevX !== actor.x || view.prevY !== actor.y;
@@ -987,7 +1150,7 @@ export class WorldScene extends Phaser.Scene {
           : view.motion.facing;
       view.motion = advanceMotion(
         view.motion,
-        { x: top.sx, y: top.sy, height: 0, facing },
+        { ...target, facing },
         timeMs,
         delta,
         useUiStore.getState().speed,
@@ -1002,7 +1165,8 @@ export class WorldScene extends Phaser.Scene {
       // 精灵 origin(0.5,1)，sprite.y 即脚底世界像素。
       const footDepth = iso ? depthKey(actor.x, actor.y) + 1 : actorDepth(view.sprite.y);
       view.sprite.setDepth(footDepth);
-      view.shadow?.setPosition(view.sprite.x, view.sprite.y - (iso ? 0 : 1));
+      const support = this.projectSupport(view.motion);
+      view.shadow?.setPosition(support.sx + stack.dx, support.sy + stack.dy - (iso ? 0 : 1));
       view.shadow?.setDepth(footDepth - (iso ? 0.5 : 1));
       // R2：位移推断 anim/facing → 帧号（D10：villager 4 列帧表启用行走环；
       // 修前恒帧 0——素材有 4×8 走环/劳作表却只画迈步中间帧，人群看着呆滞）
@@ -1112,16 +1276,56 @@ export class WorldScene extends Phaser.Scene {
     this.cameras.main.setZoom(PIXEL_SCALE);
   }
 
-  private projectSurface(x: number, y: number): { sx: number; sy: number } {
-    if (this.renderMode === 'flat') return { sx: x * TILE + TILE / 2, sy: y * TILE + TILE / 2 };
+  private projectMotionPoint(x: number, y: number, height: number): SampledPoint {
+    const point = this.projectSurface(x, y, height);
+    // Flat mode retains its 2D tile-centre feet. Its vertical component is
+    // elevation above that tile, so only the airborne lift moves the sprite.
+    const support =
+      this.renderMode === 'flat'
+        ? effectiveHeight(x, y, this.heightAt, this.mirror.structures, this.mirror.voxelEdits)
+        : 0;
+    return { x: point.sx, y: point.sy, z: height - support };
+  }
+
+  private projectSupport(motion: ActorMotion): { sx: number; sy: number } {
+    if (this.renderMode === 'flat') return { sx: motion.x, sy: motion.y + motion.height * ISO.HH };
+    const map = this.mirror.map;
+    const bounds = map ? screenBounds(map.w, map.h) : screenBounds();
+    const dx = (motion.x - bounds.originX) / (ISO.TW / 2);
+    const dy = (motion.y + motion.height * ISO.HH - bounds.originY) / (ISO.TH / 2);
+    const x = (dx + dy) / 2;
+    const y = (dy - dx) / 2;
+    const height = effectiveHeight(
+      Math.round(x),
+      Math.round(y),
+      this.heightAt,
+      this.mirror.structures,
+      this.mirror.voxelEdits,
+    );
+    return this.projectSurface(x, y, height);
+  }
+
+  private projectSurface(
+    x: number,
+    y: number,
+    height = effectiveHeight(x, y, this.heightAt, this.mirror.structures, this.mirror.voxelEdits),
+  ): { sx: number; sy: number } {
+    if (this.renderMode === 'flat') {
+      const support = effectiveHeight(
+        x,
+        y,
+        this.heightAt,
+        this.mirror.structures,
+        this.mirror.voxelEdits,
+      );
+      return {
+        sx: x * TILE + TILE / 2,
+        sy: y * TILE + TILE / 2 - (height - support) * ISO.HH,
+      };
+    }
     const map = this.mirror.map;
     const bounds = map === null ? undefined : screenBounds(map.w, map.h);
-    return isoProject(
-      x,
-      y,
-      effectiveHeight(x, y, this.heightAt, this.mirror.structures, this.mirror.voxelEdits),
-      bounds,
-    );
+    return isoProject(x, y, height, bounds);
   }
 
   private syncOverlay(): void {

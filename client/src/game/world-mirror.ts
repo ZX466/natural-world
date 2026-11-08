@@ -6,6 +6,7 @@
  * codex 意见 9：ws 重连时必须全量重置本镜像（防增量丢失造成表现层幻觉）。
  */
 import type { components } from '@shared/protocol';
+import { copyJump, sameJump, validElevation } from './locomotion';
 
 type Actor = components['schemas']['Actor'];
 type ActorDelta = components['schemas']['ActorDelta'];
@@ -25,6 +26,9 @@ export interface MirrorActor {
   tint?: number | undefined;
   /** 批次 D10：戏内显示名（协议 1.4 可选字段；头顶名字供数） */
   name?: string | undefined;
+  elevation?: number | undefined;
+  gait?: 'walk' | 'run' | undefined;
+  jump?: Actor['jump'] | undefined;
 }
 
 export interface MirrorLight {
@@ -55,6 +59,8 @@ export class WorldMirror {
   voxelSnapshotVersion = 0;
   /** Presentation changes only; idle frames and dig progress need no terrain comparison. */
   terrainVersion = 0;
+  locomotionRevision = 0;
+  private heightLookup: ((x: number, y: number) => number) | null = null;
   private baseCollision: Uint8Array | null = null;
   private baseGround: Uint16Array | null = null;
   /** 主角 rtoken（M0 第一个 actor 即主角；M1 由协议显式指定） */
@@ -67,6 +73,40 @@ export class WorldMirror {
   bubbles = new Map<string, { text: string; expiresAt: number }>();
   /** 批次 E7：结构投影（rtoken → {tiles, phase}；delta upsert / 快照全量） */
   structures = new Map<string, { tiles: [number, number][]; phase: string }>();
+
+  setHeightLookup(lookup: (x: number, y: number) => number): void {
+    this.heightLookup = lookup;
+  }
+
+  heightAt(x: number, y: number): number {
+    if (this.heightLookup) return this.heightLookup(x, y);
+    return this.map &&
+      x >= 0 &&
+      y >= 0 &&
+      x < this.map.w &&
+      y < this.map.h &&
+      this.map.collision[y * this.map.w + x] === 1
+      ? 1
+      : 0;
+  }
+
+  private poseFields(target: MirrorActor, data: Partial<Actor>): void {
+    let changed = false;
+    if (validElevation(data.elevation) && data.elevation !== target.elevation) {
+      target.elevation = data.elevation;
+      changed = true;
+    }
+    if ((data.gait === 'walk' || data.gait === 'run') && data.gait !== target.gait) {
+      target.gait = data.gait;
+      changed = true;
+    }
+    if (data.jump !== undefined) {
+      const jump = copyJump(data.jump);
+      if (!sameJump(target.jump, jump)) changed = true;
+      target.jump = jump;
+    }
+    if (changed) this.locomotionRevision++;
+  }
 
   /** E7：结构增量 upsert（同 rtoken 重声明=覆盖；相位即最新）。
    *  op/x/y/phase 按生成类型可选——缺省按 add/built 兜底（服务端总是带齐）。 */
@@ -131,7 +171,11 @@ export class WorldMirror {
     if (weather) this.weather = { ...weather };
     this.actors.clear();
     for (const a of actors) {
-      this.actors.set(a.rtoken, { ...a });
+      const actor: MirrorActor = { ...a };
+      if (!validElevation(a.elevation)) delete actor.elevation;
+      if (a.gait !== 'walk' && a.gait !== 'run') delete actor.gait;
+      if (a.jump !== undefined) actor.jump = copyJump(a.jump);
+      this.actors.set(a.rtoken, actor);
     }
     this.lights.clear();
     for (const l of lights) {
@@ -154,7 +198,7 @@ export class WorldMirror {
       }
       const cur = this.actors.get(d.rtoken);
       if (d.op === 'add' || cur === undefined) {
-        this.actors.set(d.rtoken, {
+        const actor: MirrorActor = {
           rtoken: d.rtoken,
           x: d.x ?? 0,
           y: d.y ?? 0,
@@ -163,7 +207,9 @@ export class WorldMirror {
           anim: d.anim ?? 'idle',
           tint: d.tint,
           name: d.name,
-        });
+        };
+        this.poseFields(actor, d);
+        this.actors.set(d.rtoken, actor);
         continue;
       }
       if (d.x !== undefined) cur.x = d.x;
@@ -173,6 +219,7 @@ export class WorldMirror {
       if (d.anim !== undefined) cur.anim = d.anim;
       if (d.tint !== undefined) cur.tint = d.tint;
       if (d.name !== undefined) cur.name = d.name;
+      this.poseFields(cur, d);
     }
   }
 

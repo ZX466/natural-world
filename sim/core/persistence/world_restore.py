@@ -148,7 +148,14 @@ def expand_world(payload: dict[str, Any], window: Sequence[Mapping[str, Any]]) -
         loop = WorldCheckpoint(state=WorldState()).make_loop()
     for row in window:
         event = WorldEvent.model_validate(row)
-        loop.replay_until(max(loop.state.tick, event.tick - 1))
+        # New player commands and flight facts are recorded at the completed
+        # frontier. Legacy events retain their pre-tick application convention.
+        completed_frontier = event.event_type in {
+            EventKind.JUMP_STARTED,
+            EventKind.JUMP_LANDED,
+        } or (event.event_type is EventKind.MOVE and event.payload.get("gait") in ("walk", "run"))
+        frontier = event.tick if completed_frontier else event.tick - 1
+        loop.replay_until(max(loop.state.tick, frontier))
         loop.enqueue(event)
         if event.event_type is EventKind.COMBAT_SCALE_CHANGE:
             active = CombatScaleChangePayload.model_validate(event.payload).entering

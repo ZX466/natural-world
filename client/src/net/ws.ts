@@ -42,14 +42,14 @@ function useControlState(speed: number, paused: boolean): void {
 }
 
 /**
- * WS 信封 `v`（versioning.md §1：major.minor，当前 1.2）。
+ * WS 信封 `v`（versioning.md §1：major.minor，当前值见下方常量）。
  * 必须与 sim 侧 `sim/api/ws.py::_PROTOCOL_VERSION` 一致——此前两处各写各的
  * （sim 0.1 / client 0.1）已漂移，P05 统一为 1.0（kilo K03：前端以 sim 为准）；
  * 1.1（裁 34-1 甲案）/ 1.2（M6-K2 诊断面进快照）升版后由
  * `sim/tests/test_protocol_version.py` 的跨树钉锁死
  * （本文件是**第二落点**，真相源在 ws.py；改一处必改另一处）。
  */
-const PROTOCOL_VERSION = '1.15';
+const PROTOCOL_VERSION = '1.16';
 
 export type WsStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
 
@@ -84,6 +84,7 @@ export class WsClient {
   private closedByUser = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private authenticated = false;
+  private snapshotReady = false;
   private pendingMessages: Record<string, unknown>[] = [];
 
   constructor(
@@ -92,6 +93,11 @@ export class WsClient {
     private readonly cb: WsCallbacks,
   ) {}
 
+  /** Side-effectful actor inputs wait for an authenticated, current world. */
+  get worldReady(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN && this.authenticated && this.snapshotReady;
+  }
+
   connect(): void {
     this.closedByUser = false;
     this.open();
@@ -99,6 +105,7 @@ export class WsClient {
 
   private open(): void {
     this.authenticated = false;
+    this.snapshotReady = false;
     this.pendingMessages = [];
     this.cb.onStatus(this.attempt === 0 ? 'connecting' : 'reconnecting');
     const ws = new WebSocket(this.url);
@@ -139,6 +146,7 @@ export class WsClient {
     ws.onclose = () => {
       if (this.ws !== ws) return;
       this.authenticated = false;
+      this.snapshotReady = false;
       this.pendingMessages = [];
       this.cb.onStatus('closed');
       if (!this.closedByUser) this.scheduleReconnect();
@@ -188,6 +196,7 @@ export class WsClient {
         if (msg.monologue_history) {
           this.cb.onMonologueHistory?.(msg.monologue_history as readonly MonologueMessage[]);
         }
+        this.snapshotReady = true;
         this.cb.onSnapshot(msg);
         break;
       case 'state_delta':
@@ -285,6 +294,7 @@ export class WsClient {
   close(): void {
     this.closedByUser = true;
     this.authenticated = false;
+    this.snapshotReady = false;
     this.pendingMessages = [];
     if (this.timer !== null) clearTimeout(this.timer);
     this.ws?.close();

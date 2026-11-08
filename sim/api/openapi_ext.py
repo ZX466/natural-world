@@ -83,6 +83,44 @@ _SUB_SCHEMAS: dict[str, dict[str, Any]] = {
         "（ws-protocol.md §5 / 裁 21-A）",
     },
     "Facing": {"type": "string", "enum": ["n", "e", "s", "w"]},
+    "JumpVisual": {
+        "type": "object",
+        "description": "服务端权威跳跃表现；落地后保留 active=false/progress=1 的描述"
+        "至下次跳跃或恢复，"
+        "不得用已完成描述锁住后续地面行走；不含内部 tick、seq 或起始时间戳",
+        "required": [
+            "rtoken",
+            "start_x",
+            "start_y",
+            "goal_x",
+            "goal_y",
+            "start_height",
+            "target_height",
+            "progress",
+            "active",
+            "duration",
+            "arc_height",
+        ],
+        "properties": {
+            "rtoken": {"type": "string", "description": "不透明跳跃表现替身，不含内部标识或时序"},
+            "start_x": {"type": "integer", "minimum": 0},
+            "start_y": {"type": "integer", "minimum": 0},
+            "goal_x": {"type": "integer", "minimum": 0},
+            "goal_y": {"type": "integer", "minimum": 0},
+            "start_height": {"type": "integer", "minimum": 0, "maximum": 3},
+            "target_height": {"type": "integer", "minimum": 0, "maximum": 3},
+            "progress": {"type": "number", "minimum": 0, "maximum": 1},
+            "active": {"type": "boolean"},
+            "duration": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 4,
+                "description": "1x 下的游戏秒时长；由服务端决定",
+            },
+            "arc_height": {"type": "number", "exclusiveMinimum": 0, "maximum": 2},
+        },
+        "additionalProperties": False,
+    },
     "Actor": {
         "type": "object",
         "required": ["rtoken", "sprite", "x", "y", "facing", "anim"],
@@ -97,6 +135,9 @@ _SUB_SCHEMAS: dict[str, dict[str, Any]] = {
             # D10（协议 1.4）：戏内显示名（可选）——名字是戏内事实可出站
             # （D8 感知真名同源裁定）；头顶名字供数。entity_id 仍禁出站。
             "name": {"type": "string", "description": "戏内显示名（头顶名字供数；未装配则缺省）"},
+            "elevation": {"type": "integer", "minimum": 0, "maximum": 3},
+            "gait": {"type": "string", "enum": ["walk", "run"]},
+            "jump": {"oneOf": [{"$ref": "#/components/schemas/JumpVisual"}, {"type": "null"}]},
         },
         "additionalProperties": False,
     },
@@ -112,7 +153,10 @@ _SUB_SCHEMAS: dict[str, dict[str, Any]] = {
             "facing": {"$ref": "#/components/schemas/Facing"},
             "anim": {"type": "string"},
             "tint": {"type": "integer"},
-            "name": {"type": "string"},
+            "name": {"type": "string", "description": "戏内显示名（头顶名字供数；未装配则缺省）"},
+            "elevation": {"type": "integer", "minimum": 0, "maximum": 3},
+            "gait": {"type": "string", "enum": ["walk", "run"]},
+            "jump": {"oneOf": [{"$ref": "#/components/schemas/JumpVisual"}, {"type": "null"}]},
         },
         "additionalProperties": False,
     },
@@ -326,10 +370,33 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
         {
             "target_x": {"type": "integer", "description": "目标格 X（整数格坐标）"},
             "target_y": {"type": "integer", "description": "目标格 Y（整数格坐标）"},
+            "gait": {
+                "type": "string",
+                "enum": ["walk", "run"],
+                "description": "可选步态；省略保持旧版移动语义",
+            },
         },
         ["target_x", "target_y"],
-        description="玩家点击寻路：客户端只发目标格坐标，sim 负责寻路并驱动主角；"
+        description="玩家寻路：客户端只发目标格坐标与可选步态，sim 负责寻路并驱动主角；"
         "无 rtoken（服务端知道主角是谁）",
+    ),
+    "JumpRequestMessage": _member(
+        "render",
+        "jump_request",
+        {
+            "target_x": {"type": "integer", "minimum": 0},
+            "target_y": {"type": "integer", "minimum": 0},
+            # Schema default would make openapi-typescript emit a required field.
+            # Keep omission valid on the wire and document the server default.
+            "gait": {
+                "type": "string",
+                "enum": ["walk", "run"],
+                "description": "可选步态；省略按 walk 处理",
+            },
+        },
+        ["target_x", "target_y"],
+        description="请求跳至目标格；起跳、落地、高度、时长均由服务端裁决；"
+        "客户端不得指定实体、elevation 或 duration",
     ),
     "SyncRequestMessage": _envelope(
         "session", "sync_request", {"reason": {"type": "string"}}, ["reason"]
@@ -350,6 +417,10 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
             "combat": _oneof_null({"$ref": "#/components/schemas/CombatInfo"}),
             # M7（1.3）：time 权威帧（R3）——快照必带
             "time": {"$ref": "#/components/schemas/TimeInfo"},
+            "monologue_history": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/MonologueMessage"},
+            },
         },
         # 快照口径：combat optional（可为 null=无战斗）
         ["map", "lights", "actors", "structures", "weather", "time"],
@@ -592,6 +663,7 @@ _TYPE_OF: dict[str, str] = {
     "SetControlMessage": "set_control",
     "LoadAnchorMessage": "load_anchor",
     "MoveRequestMessage": "move_request",
+    "JumpRequestMessage": "jump_request",
     "SyncRequestMessage": "sync_request",
     "FullSnapshotMessage": "full_snapshot",
     "StateDeltaMessage": "state_delta",

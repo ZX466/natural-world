@@ -209,8 +209,9 @@ it('keeps the walk cycle running across tiles instead of restarting it every gli
   expect(midway).toBeGreaterThanOrEqual(0);
   driver.step(actor, 'y', 4);
   expect(view.motion.animClock).toBeGreaterThan(midway);
-  // 滑行途中必须是走环帧（朝南 row0 × 17 列），不是站立帧 1。
-  expect(view.sprite.setFrame).toHaveBeenLastCalledWith(0);
+  // 连续走环覆盖朝南 row0 的三帧；具体末帧由实际位移决定。
+  const frames = (view.sprite.setFrame.mock.calls as unknown as [number][]).map(([frame]) => frame);
+  expect(new Set(frames)).toEqual(new Set([0, 1, 2]));
 });
 
 it('returns to the standing frame once the actor stops and the buffer drains', () => {

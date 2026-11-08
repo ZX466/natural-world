@@ -22,8 +22,9 @@ export type PlayerImpulseMessage = Schemas['PlayerImpulseMessage'];
  *  终态回 `control_ack{action:"fast_forward"}` + 全量快照）。 */
 export type SetControlMessage = Schemas['SetControlMessage'];
 export type LoadAnchorMessage = Schemas['LoadAnchorMessage'];
-/** 玩家点击寻路：客户端只发目标格坐标，sim 寻路并驱动主角；无 rtoken。 */
+/** 玩家寻路：只发目标格与可选步态，sim 寻路并驱动主角；无 rtoken。 */
 export type MoveRequestMessage = Schemas['MoveRequestMessage'];
+export type JumpRequestMessage = Schemas['JumpRequestMessage'];
 export type VoxelRequestMessage = Schemas['VoxelRequestMessage'];
 export type SyncRequestMessage = Schemas['SyncRequestMessage'];
 
@@ -46,6 +47,7 @@ export type WsErrorMessage = Schemas['WsErrorMessage'];
 // ── render 子结构（含 rtoken 不透明替身）──────────────────────
 export type Actor = Schemas['Actor'];
 export type ActorDelta = Schemas['ActorDelta'];
+export type JumpVisual = Schemas['JumpVisual'];
 export type Structure = Schemas['Structure'];
 /** 计划看板一项（M5-K10）：rtoken 替身 + text 第一人称计划文本；见 ws-protocol.md §4.1 */
 export type PlanDelta = Schemas['PlanDelta'];

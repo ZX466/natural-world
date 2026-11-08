@@ -21,7 +21,8 @@ import type { MovePoint } from '../../movement';
 import { pointVisible } from '../visibility';
 
 export interface WorldActions {
-  requestMove(x: number, y: number): boolean;
+  requestMove(x: number, y: number, gait?: 'walk' | 'run'): boolean;
+  requestJump(x: number, y: number, gait?: 'walk' | 'run'): boolean;
   requestVoxel(
     action: VoxelRequestMessage['action'],
     x: number,
@@ -193,8 +194,14 @@ export function createThreeWorld(
       );
       weather = createWeatherLayer(actors.overlay, mirror);
       cues = createVoxelCues(adapter.scene.scene, mirror, adapter.heightOf);
+      const baseHeight = adapter.heightOf;
       const getHeight = (x: number, y: number) =>
-        effectiveHeight(x, y, adapter!.heightOf, mirror.structures, mirror.voxelEdits);
+        effectiveHeight(x, y, baseHeight, mirror.structures, mirror.voxelEdits);
+      mirror.setHeightLookup(getHeight);
+      const elevation = () => {
+        const actor = mirror.actors.get(mirror.protagonist ?? '');
+        return actor?.elevation ?? (actor ? getHeight(actor.x, actor.y) : WALK_HEIGHT);
+      };
       const typing = () => {
         const active = document.activeElement as HTMLElement | null;
         return (
@@ -205,7 +212,9 @@ export function createThreeWorld(
         );
       };
       input = createWorldInput(canvas, {
-        move: (point) => actions.requestMove(point.x, point.y),
+        move: (point) => actions.requestMove(point.x, point.y, input?.running ? 'run' : 'walk'),
+        jump: (point) => actions.requestJump(point.x, point.y, input?.running ? 'run' : 'walk'),
+        airborne: () => !!mirror.actors.get(mirror.protagonist ?? '')?.jump?.active,
         voxel: (action, point) =>
           actions.requestVoxel(
             action,
@@ -219,7 +228,7 @@ export function createThreeWorld(
         },
         pickGround: (x, y) => {
           const ray = screenRay(adapter!.scene.camera, x, y, canvas.getBoundingClientRect());
-          return ray && mirror.map ? groundFromRay(ray, mirror.map, getHeight) : null;
+          return ray && mirror.map ? groundFromRay(ray, mirror.map, getHeight, elevation()) : null;
         },
         blocked: (point) => mirror.map?.collision[point.y * mirror.map.w + point.x] !== 1,
         hero: () => mirror.actors.get(mirror.protagonist ?? '') ?? null,
@@ -228,8 +237,7 @@ export function createThreeWorld(
           return !!(
             actor &&
             mirror.map &&
-            getHeight(point.x, point.y) === WALK_HEIGHT &&
-            canStep(mirror.map, actor, point)
+            canStep(mirror.map, actor, point, getHeight, elevation())
           );
         },
         enabled: () =>
@@ -238,7 +246,7 @@ export function createThreeWorld(
           mirror.actors.has(mirror.protagonist ?? ''),
         typing,
         epoch: () => `${mirror.resetCount}:${mirror.voxelSnapshotVersion}`,
-        revision: () => mirror.terrainVersion,
+        revision: () => mirror.terrainVersion + mirror.locomotionRevision,
         azimuth: () => adapter!.orbitPose.azimuth,
         rotate: (dx, dy) => adapter!.rotate(dx, dy),
         zoom: (delta) => adapter!.zoom(delta),

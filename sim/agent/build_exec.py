@@ -235,10 +235,7 @@ class BuildRuntime:
                     integrity=progressed.integrity,
                 )
             )
-            out.extend(
-                tile_changed_event(tick, x, y, 0)  # tile_id=0：墙体占位（前端图集语义定）
-                for x, y in site.tiles
-            )
+            out.extend(tile_changed_event(tick, x, y, 0, height=2) for x, y in site.tiles)
             # 占格生效（frozen map → with_collision 重建引用）
             for x, y in site.tiles:
                 self.tile_map = self.tile_map.with_collision(x, y, walkable=False)

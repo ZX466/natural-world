@@ -43,7 +43,7 @@ def test_default_bus_covers_all_enabled_event_kinds():
 def test_health_payload_is_private_and_validated():
     payload_model = ev.NpcHealthChangedPayload
     event = health_event(hidden=True)
-    assert event.event_type is list(EventKind)[-1]
+    assert event.event_type is EventKind.NPC_HEALTH_CHANGED
     assert set(event.payload) <= {
         "npc_id",
         "category",

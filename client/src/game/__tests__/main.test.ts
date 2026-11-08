@@ -18,6 +18,7 @@ type MoveHandler = (
   payload: {
     x: number;
     y: number;
+    gait?: 'walk' | 'run';
     action?: 'dig_start' | 'dig_cancel' | 'place';
     material?: 'earth' | 'stone' | 'wood';
   },
@@ -66,7 +67,7 @@ describe('createGame move_request bridge', () => {
 
     // mock runtime：捕获 requestMove 调用
     vi.doMock('../runtime', () => ({
-      runtime: { requestMove: vi.fn(), requestVoxel: vi.fn() },
+      runtime: { requestMove: vi.fn(), requestJump: vi.fn(), requestVoxel: vi.fn() },
     }));
     // mock mirror（仅类型依赖，无行为）
     vi.doMock('../world-mirror', () => ({
@@ -91,8 +92,23 @@ describe('createGame move_request bridge', () => {
     const { runtime } = await import('../runtime');
     const payload = { x: 7, y: 9 };
     for (const cb of listeners!) cb(payload);
-    expect(runtime.requestMove).toHaveBeenCalledWith(7, 9);
+    expect(runtime.requestMove).toHaveBeenCalledWith(7, 9, 'walk');
   });
+
+  it.each(['client:move_request', 'client:jump_request'] as const)(
+    'forwards the selected run gait and admission result through %s',
+    async (event) => {
+      const { createGame } = await import('../main');
+      createGame({} as HTMLElement, {} as Parameters<typeof createGame>[1]);
+      const { runtime } = await import('../runtime');
+      const request = event === 'client:move_request' ? runtime.requestMove : runtime.requestJump;
+      vi.mocked(request).mockReturnValue(true);
+      const result = vi.fn();
+      for (const cb of handlers.get(event)!) cb({ x: 7, y: 9, gait: 'run' }, result);
+      expect(request).toHaveBeenCalledWith(7, 9, 'run');
+      expect(result).toHaveBeenLastCalledWith(true);
+    },
+  );
 
   it('forwards voxel gestures through the runtime without adding control fields', async () => {
     const { createGame } = await import('../main');

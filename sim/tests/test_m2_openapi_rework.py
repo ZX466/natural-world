@@ -350,16 +350,19 @@ class TestHttpRoutes:
 class TestRegression:
     """既有锚不回退（test_openapi_ext.py 8 用例的承重断言子集）。"""
 
-    def test_ws_union_14_members_intact(self, schemas: dict) -> None:
-        """原 15 消息 + 1.12 挖放双消息，仍严格封闭成员数。"""
+    def test_ws_union_current_members_intact(self, schemas: dict) -> None:
+        """原 15 消息 + 1.12 挖放双消息 + 1.16 跳跃请求，成员仍严格封闭。"""
         union = schemas["WsMessage"]
-        assert len(union["oneOf"]) == 17
-        assert len(union["discriminator"]["mapping"]) == 17
+        mapping = union["discriminator"]["mapping"]
+        assert len(union["oneOf"]) == len(mapping) == 18
+        assert mapping["jump_request"] == "#/components/schemas/JumpRequestMessage"
+        assert {member["$ref"] for member in union["oneOf"]} == set(mapping.values())
 
     def test_snapshot_required_now_matches_k3(self, schemas: dict) -> None:
         """旧锚（combat 在 required）被 K3 推翻：required 不再含 combat。"""
         snap = schemas["FullSnapshotMessage"]
         assert "combat" not in snap["required"]
+        assert "monologue_history" not in snap["required"]
         assert set(snap["properties"]) == {
             "v",
             "ws_seq",
@@ -373,4 +376,5 @@ class TestRegression:
             "weather",
             "combat",
             "time",  # M7（1.3）
+            "monologue_history",  # 既有可选心声历史，与快照源/生产者对齐
         }

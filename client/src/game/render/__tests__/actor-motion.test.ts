@@ -1,9 +1,33 @@
 import { expect, it } from 'vitest';
 import { CHENMO_SHEET, walkFrameFor } from '../actors';
-import { advanceMotion, cameraFacing, replayDelayMs, TILE_CADENCE_MS_1X } from '../actor-motion';
+import {
+  advanceMotion,
+  cameraFacing,
+  replayDelayMs,
+  TILE_CADENCE_MS_1X,
+  type MotionTarget,
+} from '../actor-motion';
 
 const FRAME = 1000 / 60;
 const NOMINAL_STEP = FRAME / TILE_CADENCE_MS_1X; // 每渲染帧应走的格数（1x）
+
+it.each([4, 16])(
+  'counts a whole displayed step after idle at %sx and sparse render frames',
+  (speed) => {
+    const target = { x: 0, y: 0, height: 1, cadenceMs: 500 };
+    let state = advanceMotion(undefined, target, 0, 200, speed);
+    state = advanceMotion(state, { ...target, x: 2 }, 1000, 200, speed);
+    state = advanceMotion(state, { ...target, x: 2 }, 1200, 200, speed);
+    expect(state.x).toBe(2);
+    expect(state.animClock).toBeCloseTo(2 * TILE_CADENCE_MS_1X);
+    state = advanceMotion(state, { ...target, x: 2 }, 1400, 200, speed);
+    expect(state.animClock).toBe(-1);
+    state = advanceMotion(state, { ...target, x: 3 }, 1600, 200, speed);
+    state = advanceMotion(state, { ...target, x: 3 }, 1800, 200, speed);
+    expect(state.x).toBe(3);
+    expect(state.animClock).toBeCloseTo(TILE_CADENCE_MS_1X);
+  },
+);
 
 /**
  * Feeds the authoritative target the way the server does: one tile every
@@ -187,4 +211,253 @@ it.each([
   ['e', 90, 's'],
 ] as const)('selects the camera-relative %s frame at yaw %i', (facing, yaw, expected) => {
   expect(cameraFacing(facing, yaw)).toBe(expected);
+});
+
+it.each([
+  [1, 500, 533],
+  [4, 500, 158],
+  [16, 500, 64.25],
+  [1, 250, 283],
+  [4, 250, 95.5],
+  [16, 250, 48.625],
+])('uses %ix speed and %ims cadence for a %ims replay delay', (speed, cadence, delay) => {
+  expect(replayDelayMs(speed, cadence)).toBe(delay);
+});
+
+it('advances the leg clock by all displayed distance from the first walking frame', () => {
+  let state = advanceMotion(undefined, { x: 0, y: 0, height: 1 }, 0, FRAME, 1);
+  state = advanceMotion(state, { x: 1, y: 0, height: 1 }, 250, FRAME, 1);
+  const firstStep = advanceMotion(state, { x: 1, y: 0, height: 1 }, 400, FRAME, 1);
+  expect(firstStep.x).toBeGreaterThan(0);
+  expect(firstStep.animClock).toBeCloseTo((firstStep.x - state.x) * 250);
+  const nextStep = advanceMotion(firstStep, { x: 1, y: 0, height: 1 }, 500, 100, 1);
+  expect(nextStep.animClock - firstStep.animClock).toBeCloseTo((nextStep.x - firstStep.x) * 250);
+});
+
+it('uses the supplied inverse-projection distance for stride and teleport classification', () => {
+  const distanceInTiles: NonNullable<MotionTarget['distanceInTiles']> = (from, to) => {
+    const dx = (to.x - from.x) / 16;
+    const dy = (to.y - from.y + 12 * (to.z - from.z)) / 8;
+    return Math.hypot((dx + dy) / 2, (dy - dx) / 2);
+  };
+  let state = advanceMotion(
+    undefined,
+    { x: 0, y: -12, height: 1, distanceInTiles },
+    0,
+    FRAME,
+    1,
+    16,
+  );
+  state = advanceMotion(state, { x: 0, y: -120, height: 10, distanceInTiles }, 250, FRAME, 1, 16);
+  expect(state.samples).toHaveLength(2);
+  state = advanceMotion(state, { x: 0, y: -120, height: 10, distanceInTiles }, 600, FRAME, 1, 16);
+  expect(state.animClock).toBe(-1);
+  state = advanceMotion(state, { x: 16, y: -112, height: 10, distanceInTiles }, 850, FRAME, 1, 16);
+  const first = advanceMotion(
+    state,
+    { x: 16, y: -112, height: 10, distanceInTiles },
+    950,
+    FRAME,
+    1,
+    16,
+  );
+  const next = advanceMotion(
+    first,
+    { x: 16, y: -112, height: 10, distanceInTiles },
+    1050,
+    100,
+    1,
+    16,
+  );
+  expect(next.animClock - first.animClock).toBeCloseTo(((next.x - first.x) / 16) * 250);
+});
+
+it('buffers legal four-tile sample batches at 16x while still snapping large resets', () => {
+  let state = advanceMotion(undefined, { x: 0, y: 0, height: 1 }, 0, FRAME, 16);
+  state = advanceMotion(state, { x: 4, y: 0, height: 1 }, 62.5, FRAME, 16);
+  expect(state.samples).toHaveLength(2);
+  expect(state.x).toBeLessThan(4);
+  state = advanceMotion(state, { x: 4, y: 0, height: 1 }, 62.5 + FRAME, FRAME, 16);
+  expect(state.x).toBeGreaterThan(0);
+  expect(state.x).toBeLessThan(4);
+  const reset = advanceMotion(state, { x: 1000, y: 0, height: 1 }, 125, FRAME, 16);
+  expect(reset.samples).toHaveLength(1);
+  expect(reset.x).toBe(1000);
+  expect(reset.animClock).toBe(-1);
+  const slow = advanceMotion(undefined, { x: 0, y: 0, height: 1 }, 0, FRAME, 1);
+  expect(advanceMotion(slow, { x: 4, y: 0, height: 1 }, 250, FRAME, 1).x).toBe(4);
+});
+
+const jump: NonNullable<MotionTarget['flight']> = {
+  id: 'jump-1',
+  progress: 0,
+  start: { x: 0, y: 0, z: 1 },
+  end: { x: 2, y: 0, z: 3 },
+  arc: { x: 0, y: 0, z: 1 },
+  active: true,
+  durationMs: 600,
+};
+
+it('replays a dense 600ms flight through the full 533ms walk delay with idle legs', () => {
+  let state = advanceMotion(undefined, { x: 0, y: 0, height: 1, cadenceMs: 500 }, 0, 10, 1);
+  for (let time = 10; time <= 2200; time += 10) {
+    const elapsed = Math.max(0, Math.min(600, Math.floor((time - 1000) / 20) * 20));
+    const progress = elapsed / 600;
+    const flight = time >= 1000 ? { ...jump, progress, active: progress < 1 } : undefined;
+    state = advanceMotion(
+      state,
+      {
+        x: progress === 1 ? 2 : 0,
+        y: 0,
+        height: progress === 1 ? 3 : 1,
+        cadenceMs: 500,
+        ...(flight ? { flight } : {}),
+      },
+      time,
+      10,
+      1,
+    );
+    const shownProgress = Math.max(0, Math.min(1, (time - 533 - 1000) / 600));
+    expect(state.x).toBeCloseTo(2 * shownProgress, 8);
+    expect(state.height).toBeCloseTo(
+      1 + 2 * shownProgress + 4 * shownProgress * (1 - shownProgress),
+      8,
+    );
+    if (shownProgress > 0 && shownProgress < 1) expect(state.animClock).toBe(-1);
+    expect(state.samples.length).toBeLessThanOrEqual(128);
+    if (time === 1600) expect(state.samples.length).toBeGreaterThan(8);
+  }
+  expect(state.x).toBe(2);
+  expect(state.height).toBe(3);
+});
+
+it('reconstructs an entirely completed fast flight once from its certified endpoints', () => {
+  let state = advanceMotion(undefined, { x: 0, y: 0, height: 1, cadenceMs: 500 }, 0, FRAME, 16);
+  const target = {
+    x: 2,
+    y: 0,
+    height: 3,
+    cadenceMs: 500,
+    flight: { ...jump, active: false, progress: 1 },
+  };
+  state = advanceMotion(state, target, 100, FRAME, 16);
+  expect(state.samples.some((sample) => sample.flight?.progress === 0 && sample.at === 62.5)).toBe(
+    true,
+  );
+  state = advanceMotion(state, target, 150, 50, 16);
+  expect(state.x).toBeCloseTo(1.24);
+  expect(state.height).toBeCloseTo(3.1824);
+  expect(state.animClock).toBe(-1);
+  state = advanceMotion(state, target, 200, 50, 16);
+  expect(state.x).toBe(2);
+  expect(state.height).toBe(3);
+});
+
+it.each([4, 16])(
+  'replays a %ix flight that only delivered its launch and landing samples',
+  (speed) => {
+    let state = advanceMotion(
+      undefined,
+      { x: 0, y: 0, height: 1, cadenceMs: 500 },
+      0,
+      FRAME,
+      speed,
+    );
+    state = advanceMotion(
+      state,
+      { x: 0, y: 0, height: 1, cadenceMs: 500, flight: jump },
+      1000,
+      FRAME,
+      speed,
+    );
+    const duration = 600 / speed;
+    const target = {
+      x: 2,
+      y: 0,
+      height: 3,
+      cadenceMs: 500,
+      flight: { ...jump, progress: 1, active: false },
+    };
+    state = advanceMotion(state, target, 1000 + duration, FRAME, speed);
+    const middle = 1000 + replayDelayMs(speed, 500) + duration / 2;
+    state = advanceMotion(state, target, middle, FRAME, speed);
+    expect(state.x).toBeCloseTo(1);
+    expect(state.height).toBeCloseTo(3);
+    expect(state.airborne).toBe(true);
+    expect(state.animClock).toBe(-1);
+    state = advanceMotion(state, target, middle + duration, FRAME, speed);
+    expect(state.x).toBe(2);
+    expect(state.height).toBe(3);
+    expect(state.airborne).toBe(false);
+  },
+);
+
+it('keeps the displayed path monotone while switching walk/run cadences and world speeds', () => {
+  let state = advanceMotion(undefined, { x: 0, y: 0, height: 1, cadenceMs: 500 }, 0, FRAME, 1);
+  let distance = 0;
+  for (let frame = 1; frame <= 600; frame++) {
+    const now = frame * FRAME;
+    const speed = now < 3000 ? 1 : now < 5000 ? 16 : now < 7000 ? 4 : 1;
+    const cadenceMs = now < 3000 || (now >= 5000 && now < 7000) ? 500 : 250;
+    distance += (FRAME * speed) / cadenceMs;
+    const next = advanceMotion(
+      state,
+      { x: Math.floor(distance), y: 0, height: 1, cadenceMs },
+      now,
+      FRAME,
+      speed,
+    );
+    expect(next.x).toBeGreaterThanOrEqual(state.x);
+    state = next;
+  }
+});
+
+it('initializes a fresh view at its current pose without replaying persisted completed metadata', () => {
+  const state = advanceMotion(
+    undefined,
+    { x: 10, y: 4, height: 1, flight: { ...jump, active: false, progress: 1 } },
+    10000,
+    FRAME,
+    1,
+  );
+  expect({ x: state.x, y: state.y, height: state.height }).toEqual({ x: 10, y: 4, height: 1 });
+  expect(state.samples).toEqual([{ at: 10000, x: 10, y: 4, z: 1 }]);
+});
+
+it('does not clamp later walking to the endpoint of persisted completed flight metadata', () => {
+  let state = advanceMotion(undefined, { x: 0, y: 0, height: 1, cadenceMs: 500 }, 0, FRAME, 1);
+  const completed = { ...jump, active: false, progress: 1 };
+  state = advanceMotion(
+    state,
+    { x: 2, y: 0, height: 3, cadenceMs: 500, flight: completed },
+    600,
+    FRAME,
+    1,
+  );
+  for (let time = 620; time <= 2200; time += 20)
+    state = advanceMotion(
+      state,
+      { x: time < 1500 ? 2 : 3, y: 0, height: 3, cadenceMs: 500, flight: completed },
+      time,
+      20,
+      1,
+    );
+  expect(state.x).toBe(3);
+  expect(state.height).toBe(3);
+  expect(state.samples.at(-1)?.flight).toBeUndefined();
+});
+
+it('holds paused flight progress indefinitely and only advances after a newer received phase', () => {
+  let state = advanceMotion(undefined, { x: 0, y: 0, height: 1 }, 0, FRAME, 1);
+  const paused = { x: 0, y: 0, height: 1, flight: { ...jump, progress: 0.5 } };
+  state = advanceMotion(state, paused, 300, FRAME, 1);
+  state = advanceMotion(state, paused, 2000, FRAME, 0);
+  expect({ x: state.x, y: state.y, height: state.height }).toEqual({ x: 1, y: 0, height: 3 });
+  expect(state.animClock).toBe(-1);
+  const resumed = { ...paused, flight: { ...jump, progress: 0.75 } };
+  state = advanceMotion(state, resumed, 2300, FRAME, 1);
+  state = advanceMotion(state, resumed, 5000, FRAME, 0);
+  expect(state.x).toBe(1.5);
+  expect(state.height).toBe(3.25);
+  expect(state.animClock).toBe(-1);
 });

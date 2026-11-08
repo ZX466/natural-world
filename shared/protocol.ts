@@ -224,7 +224,11 @@ export type components = {
   schemas: {
     readonly Actor: {
       readonly anim: string;
+      readonly elevation?: number;
       readonly facing: components['schemas']['Facing'];
+      /** @enum {string} */
+      readonly gait?: 'walk' | 'run';
+      readonly jump?: components['schemas']['JumpVisual'] | null;
       /** @description 戏内显示名（头顶名字供数；未装配则缺省） */
       readonly name?: string;
       readonly rtoken: components['schemas']['RToken'];
@@ -235,7 +239,11 @@ export type components = {
     };
     readonly ActorDelta: {
       readonly anim?: string;
+      readonly elevation?: number;
       readonly facing?: components['schemas']['Facing'];
+      /** @enum {string} */
+      readonly gait?: 'walk' | 'run';
+      readonly jump?: components['schemas']['JumpVisual'] | null;
       /** @description 戏内显示名（头顶名字供数；未装配则缺省） */
       readonly name?: string;
       /** @enum {string} */
@@ -356,6 +364,41 @@ export type components = {
       readonly v: string;
       readonly ws_seq: number;
     };
+    /** @description 请求跳至目标格；起跳、落地、高度、时长均由服务端裁决；客户端不得指定实体、elevation 或 duration */
+    readonly JumpRequestMessage: {
+      /** @enum {string} */
+      readonly channel: 'render';
+      /**
+       * @description 可选步态；省略按 walk 处理
+       * @enum {string}
+       */
+      readonly gait?: 'walk' | 'run';
+      readonly target_x: number;
+      readonly target_y: number;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      readonly type: 'jump_request';
+      readonly v: string;
+      readonly ws_seq: number;
+    };
+    /** @description 服务端权威跳跃表现；落地后保留 active=false/progress=1 的描述至下次跳跃或恢复，不得用已完成描述锁住后续地面行走；不含内部 tick、seq 或起始时间戳 */
+    readonly JumpVisual: {
+      readonly active: boolean;
+      readonly arc_height: number;
+      /** @description 1x 下的游戏秒时长；由服务端决定 */
+      readonly duration: number;
+      readonly goal_x: number;
+      readonly goal_y: number;
+      readonly progress: number;
+      /** @description 不透明跳跃表现替身，不含内部标识或时序 */
+      readonly rtoken: string;
+      readonly start_height: number;
+      readonly start_x: number;
+      readonly start_y: number;
+      readonly target_height: number;
+    };
     readonly Light: {
       readonly flicker: number;
       readonly kind: string;
@@ -428,10 +471,15 @@ export type components = {
       /** @enum {string} */
       readonly form: 'bubble' | 'thought' | 'plan';
     };
-    /** @description 玩家点击寻路：客户端只发目标格坐标，sim 负责寻路并驱动主角；无 rtoken（服务端知道主角是谁） */
+    /** @description 玩家寻路：客户端只发目标格坐标与可选步态，sim 负责寻路并驱动主角；无 rtoken（服务端知道主角是谁） */
     readonly MoveRequestMessage: {
       /** @enum {string} */
       readonly channel: 'render';
+      /**
+       * @description 可选步态；省略保持旧版移动语义
+       * @enum {string}
+       */
+      readonly gait?: 'walk' | 'run';
       /** @description 目标格 X（整数格坐标） */
       readonly target_x: number;
       /** @description 目标格 Y（整数格坐标） */
@@ -752,6 +800,7 @@ export type components = {
       | components['schemas']['SetControlMessage']
       | components['schemas']['LoadAnchorMessage']
       | components['schemas']['MoveRequestMessage']
+      | components['schemas']['JumpRequestMessage']
       | components['schemas']['SyncRequestMessage']
       | components['schemas']['FullSnapshotMessage']
       | components['schemas']['StateDeltaMessage']

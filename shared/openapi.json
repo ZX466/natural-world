@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "临河镇 协议（mock，待 sim 起服务后由 FastAPI /api/openapi.json 取代）",
-    "version": "1.15",
+    "version": "1.16",
     "description": "接口/兼容性域（kilo TASK-002）。WS 消息 + HTTP 端点 schema 一并定义于 components/schemas，经 openapi-typescript 生成 shared/protocol.ts。出戏边界：tick/seed/seq/branch_id/内部 entity_id/source_id/raw 数值属性 一律不出现；render 通道用 rtoken 不透明替身（见 ws-protocol.md §5）。切换点见 docs/api/codegen.md。"
   },
   "paths": {
@@ -651,6 +651,28 @@
           "name": {
             "type": "string",
             "description": "戏内显示名（头顶名字供数；未装配则缺省）"
+          },
+          "elevation": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "gait": {
+            "type": "string",
+            "enum": [
+              "walk",
+              "run"
+            ]
+          },
+          "jump": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/JumpVisual"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -692,6 +714,28 @@
           "name": {
             "type": "string",
             "description": "戏内显示名（头顶名字供数；未装配则缺省）"
+          },
+          "elevation": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "gait": {
+            "type": "string",
+            "enum": [
+              "walk",
+              "run"
+            ]
+          },
+          "jump": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/JumpVisual"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -1100,7 +1144,7 @@
       },
       "MoveRequestMessage": {
         "type": "object",
-        "description": "玩家点击寻路：客户端只发目标格坐标，sim 负责寻路并驱动主角；无 rtoken（服务端知道主角是谁）",
+        "description": "玩家寻路：客户端只发目标格坐标与可选步态，sim 负责寻路并驱动主角；无 rtoken（服务端知道主角是谁）",
         "required": [
           "v",
           "ws_seq",
@@ -1136,6 +1180,14 @@
           "target_y": {
             "type": "integer",
             "description": "目标格 Y（整数格坐标）"
+          },
+          "gait": {
+            "type": "string",
+            "enum": [
+              "walk",
+              "run"
+            ],
+            "description": "可选步态；省略保持旧版移动语义"
           }
         },
         "additionalProperties": false
@@ -1798,6 +1850,9 @@
             "$ref": "#/components/schemas/MoveRequestMessage"
           },
           {
+            "$ref": "#/components/schemas/JumpRequestMessage"
+          },
+          {
             "$ref": "#/components/schemas/SyncRequestMessage"
           },
           {
@@ -1844,6 +1899,7 @@
             "set_control": "#/components/schemas/SetControlMessage",
             "load_anchor": "#/components/schemas/LoadAnchorMessage",
             "move_request": "#/components/schemas/MoveRequestMessage",
+            "jump_request": "#/components/schemas/JumpRequestMessage",
             "sync_request": "#/components/schemas/SyncRequestMessage",
             "full_snapshot": "#/components/schemas/FullSnapshotMessage",
             "state_delta": "#/components/schemas/StateDeltaMessage",
@@ -2490,6 +2546,125 @@
           }
         },
         "additionalProperties": false
+      },
+      "JumpVisual": {
+        "type": "object",
+        "description": "服务端权威跳跃表现；落地后保留 active=false/progress=1 的描述至下次跳跃或恢复，不得用已完成描述锁住后续地面行走；不含内部 tick、seq 或起始时间戳",
+        "required": [
+          "rtoken",
+          "start_x",
+          "start_y",
+          "goal_x",
+          "goal_y",
+          "start_height",
+          "target_height",
+          "progress",
+          "active",
+          "duration",
+          "arc_height"
+        ],
+        "properties": {
+          "rtoken": {
+            "type": "string",
+            "description": "不透明跳跃表现替身，不含内部标识或时序"
+          },
+          "start_x": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "start_y": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "goal_x": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "goal_y": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "start_height": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "target_height": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "progress": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "duration": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 4,
+            "description": "1x 下的游戏秒时长；由服务端决定"
+          },
+          "arc_height": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 2
+          }
+        },
+        "additionalProperties": false
+      },
+      "JumpRequestMessage": {
+        "type": "object",
+        "required": [
+          "v",
+          "ws_seq",
+          "channel",
+          "type",
+          "target_x",
+          "target_y"
+        ],
+        "properties": {
+          "v": {
+            "type": "string"
+          },
+          "ws_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "render"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "jump_request"
+            ]
+          },
+          "target_x": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "target_y": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "gait": {
+            "type": "string",
+            "enum": [
+              "walk",
+              "run"
+            ],
+            "description": "可选步态；省略按 walk 处理"
+          }
+        },
+        "additionalProperties": false,
+        "description": "请求跳至目标格；起跳、落地、高度、时长均由服务端裁决；客户端不得指定实体、elevation 或 duration"
       }
     }
   }

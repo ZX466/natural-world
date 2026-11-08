@@ -37,8 +37,21 @@ export function createGame(parent: HTMLElement, mirror: WorldMirror): WorldGame 
   });
   game.events.on(
     'client:move_request',
-    ({ x, y }: { x: number; y: number }, result?: (accepted: boolean) => void) => {
-      const accepted = runtime.requestMove(x, y);
+    (
+      { x, y, gait = 'walk' }: { x: number; y: number; gait?: 'walk' | 'run' },
+      result?: (accepted: boolean) => void,
+    ) => {
+      const accepted = runtime.requestMove(x, y, gait);
+      result?.(accepted);
+    },
+  );
+  game.events.on(
+    'client:jump_request',
+    (
+      { x, y, gait = 'walk' }: { x: number; y: number; gait?: 'walk' | 'run' },
+      result?: (accepted: boolean) => void,
+    ) => {
+      const accepted = runtime.requestJump(x, y, gait);
       result?.(accepted);
     },
   );
