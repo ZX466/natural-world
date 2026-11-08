@@ -220,7 +220,7 @@ export function createActorLayer(
               : VILLAGER_SHEET;
         const frame = walkFrameFor(
           sheet,
-          facingRow(cameraFacing(view.motion.facing, azimuth)),
+          facingRow(sheet, cameraFacing(view.motion.facing, azimuth)),
           view.motion.animClock,
         );
         const texture = view.sprite.material.map!;

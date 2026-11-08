@@ -270,9 +270,9 @@ it('cleans reset views and recreates them directly at the projected surface', ()
 
 describe.each(['flat', 'iso'] as const)('%s interaction and movement', (mode) => {
   it.each([
-    ['hero', 'protagonist', 1, 34],
+    ['hero', 'protagonist', 1, 17],
     ['god', 'god_villager_taocunzhang', 1, 6],
-    ['villager', 'villager', 0, 8],
+    ['villager', 'villager', 0, 4],
     ['animal', 'fauna_deer', 0, 0],
   ] as const)(
     'preserves visible standing and walking frames for %s',
@@ -355,7 +355,7 @@ describe.each(['flat', 'iso'] as const)('%s interaction and movement', (mode) =>
     driver.frames(FRAMES_PER_TILE + 5);
     const view = internal.views.get('hero')!;
     expect(view.motion.facing).toBe('e');
-    expect(view.sprite.setFrame).toHaveBeenCalledWith(34); // 陈默朝东走环首帧：row2 × 17列。
+    expect(view.sprite.setFrame).toHaveBeenCalledWith(17); // 陈默朝东走环首帧：row1 × 17列。
     const target = mode === 'iso' ? isoProject(3, 1, 1, screenBounds(4, 4)) : { sx: 56, sy: 24 };
     expect({ x: view.sprite.x, y: view.sprite.y }).toEqual({ x: target.sx, y: target.sy });
   });

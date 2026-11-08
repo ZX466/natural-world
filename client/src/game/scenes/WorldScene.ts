@@ -1008,7 +1008,6 @@ export class WorldScene extends Phaser.Scene {
       // 修前恒帧 0——素材有 4×8 走环/劳作表却只画迈步中间帧，人群看着呆滞）
       // 走环条件由 `advanceMotion` 按「本帧渲染位置是否真的变了」判定，
       // 插值途中持续为真 ⇒ 整段行走走环连续，不再逐格回站立帧。
-      const row = facingRow(view.motion.facing);
       // 当前人物素材没有独立姿势行；按图集几何统一选择走环或站立帧。
       const sheet =
         rtoken === this.mirror.protagonist
@@ -1016,6 +1015,7 @@ export class WorldScene extends Phaser.Scene {
           : GOD_SPRITE_KEYS.includes(view.sprite.texture.key)
             ? GOD_SHEET
             : VILLAGER_SHEET;
+      const row = facingRow(sheet, view.motion.facing);
       const isFauna = actor.sprite.startsWith('fauna_');
       view.sprite.setAlpha(isFauna && actor.anim === 'rest' ? 0.5 : 1);
       view.sprite.setFrame(isFauna ? 0 : walkFrameFor(sheet, row, view.motion.animClock));

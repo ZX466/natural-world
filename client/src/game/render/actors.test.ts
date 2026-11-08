@@ -11,6 +11,7 @@ import {
   walkFrameFor,
   facingRow,
   CHENMO_SHEET,
+  VILLAGER_SHEET,
   GOD_SHEET,
   GOD_SPRITE_KEYS,
 } from './actors';
@@ -53,8 +54,8 @@ describe('advanceAnimClock（H-2 修复钉）', () => {
 describe('陈默帧表（C-2 修复钉：17 列线性换算）', () => {
   it('站立帧 = row*17 + 1（col 1 = 步-站-步 中帧）', () => {
     expect(walkFrameFor(CHENMO_SHEET, 0, -1)).toBe(1); // 朝南站立
-    expect(walkFrameFor(CHENMO_SHEET, 1, -1)).toBe(18); // 朝北站立（修前=4 全透明 → 主角消失）
-    expect(walkFrameFor(CHENMO_SHEET, 2, -1)).toBe(35); // 朝东
+    expect(walkFrameFor(CHENMO_SHEET, 1, -1)).toBe(18); // 朝东
+    expect(walkFrameFor(CHENMO_SHEET, 2, -1)).toBe(35); // 朝北站立
     expect(walkFrameFor(CHENMO_SHEET, 3, -1)).toBe(52); // 朝西
   });
   it('walk 环在行内 0..2 循环，不跨行', () => {
@@ -63,16 +64,27 @@ describe('陈默帧表（C-2 修复钉：17 列线性换算）', () => {
     expect(walkFrameFor(CHENMO_SHEET, 1, 300)).toBe(19);
     expect(walkFrameFor(CHENMO_SHEET, 1, 450)).toBe(17); // 回卷
   });
-  it('facingRow 映射（下/上/右/左 = 0/1/2/3）', () => {
-    expect(facingRow('s')).toBe(0);
-    expect(facingRow('n')).toBe(1);
-    expect(facingRow('e')).toBe(2);
-    expect(facingRow('w')).toBe(3);
+  it('facingRow 按 chenmo 行序选择下/右/上/左 = 0/1/2/3', () => {
+    expect(facingRow(CHENMO_SHEET, 'n')).toBe(2);
+    expect(facingRow(CHENMO_SHEET, 's')).toBe(0);
+    expect(facingRow(CHENMO_SHEET, 'e')).toBe(1);
+    expect(facingRow(CHENMO_SHEET, 'w')).toBe(3);
   });
 });
 
 describe('walkFrameFor（D10：villager 4 列帧表）', () => {
-  const VILLAGER = { cols: 4, framesPerRow: 4 } as const;
+  const VILLAGER = {
+    cols: 4,
+    framesPerRow: 4,
+    rows: { s: 0, e: 1, n: 2, w: 3 },
+  } as const;
+
+  it('facingRow 按 villager 行序选择下/右/上/左 = 0/1/2/3', () => {
+    expect(facingRow(VILLAGER_SHEET, 'n')).toBe(2);
+    expect(facingRow(VILLAGER_SHEET, 's')).toBe(0);
+    expect(facingRow(VILLAGER_SHEET, 'e')).toBe(1);
+    expect(facingRow(VILLAGER_SHEET, 'w')).toBe(3);
+  });
 
   it('站立帧 = row*4 + 0（col 0 站立）', () => {
     expect(walkFrameFor(VILLAGER, 0, -1)).toBe(0);
@@ -87,7 +99,12 @@ describe('walkFrameFor（D10：villager 4 列帧表）', () => {
     expect(walkFrameFor(VILLAGER, 1, 600)).toBe(4); // 回卷
   });
   it('chenmo 几何经同一入口结果不变（单入口防两套换算漂移）', () => {
-    const CHENMO = { cols: 17, framesPerRow: 3, standCol: 1 } as const;
+    const CHENMO = {
+      cols: 17,
+      framesPerRow: 3,
+      standCol: 1,
+      rows: { s: 0, e: 1, n: 2, w: 3 },
+    } as const;
     expect(walkFrameFor(CHENMO, 0, -1)).toBe(1);
     expect(walkFrameFor(CHENMO, 1, 150)).toBe(18);
   });
@@ -95,7 +112,18 @@ describe('walkFrameFor（D10：villager 4 列帧表）', () => {
 
 describe('GOD 古风外观池（2026-10-12 D1-D5 接入）', () => {
   it('几何 3 列 3 帧 standCol 1（48×128 产物实证）', () => {
-    expect(GOD_SHEET).toEqual({ cols: 3, framesPerRow: 3, standCol: 1 });
+    expect(GOD_SHEET).toEqual({
+      cols: 3,
+      framesPerRow: 3,
+      standCol: 1,
+      rows: { s: 0, n: 1, e: 2, w: 3 },
+    });
+  });
+  it('facingRow 保留 GOD 行序下/上/右/左 = 0/1/2/3', () => {
+    expect(facingRow(GOD_SHEET, 'n')).toBe(1);
+    expect(facingRow(GOD_SHEET, 's')).toBe(0);
+    expect(facingRow(GOD_SHEET, 'e')).toBe(2);
+    expect(facingRow(GOD_SHEET, 'w')).toBe(3);
   });
   it('池 17 张且 key 与后端 slug 同名（D4 红线：无军事/名人词面）', () => {
     expect(GOD_SPRITE_KEYS).toHaveLength(17);
@@ -104,11 +132,11 @@ describe('GOD 古风外观池（2026-10-12 D1-D5 接入）', () => {
     }
   });
   it('GOD 站立 = row*3+1；走环行内 0..2 循环', () => {
-    expect(walkFrameFor(GOD_SHEET, facingRow('s'), -1)).toBe(0 * 3 + 1);
-    expect(walkFrameFor(GOD_SHEET, facingRow('n'), -1)).toBe(1 * 3 + 1);
-    expect(walkFrameFor(GOD_SHEET, facingRow('e'), 0)).toBe(2 * 3 + 0);
-    expect(walkFrameFor(GOD_SHEET, facingRow('e'), 150)).toBe(2 * 3 + 1);
-    expect(walkFrameFor(GOD_SHEET, facingRow('e'), 300)).toBe(2 * 3 + 2);
-    expect(walkFrameFor(GOD_SHEET, facingRow('e'), 450)).toBe(2 * 3 + 0); // 回卷
+    expect(walkFrameFor(GOD_SHEET, facingRow(GOD_SHEET, 's'), -1)).toBe(0 * 3 + 1);
+    expect(walkFrameFor(GOD_SHEET, facingRow(GOD_SHEET, 'n'), -1)).toBe(1 * 3 + 1);
+    expect(walkFrameFor(GOD_SHEET, facingRow(GOD_SHEET, 'e'), 0)).toBe(2 * 3 + 0);
+    expect(walkFrameFor(GOD_SHEET, facingRow(GOD_SHEET, 'e'), 150)).toBe(2 * 3 + 1);
+    expect(walkFrameFor(GOD_SHEET, facingRow(GOD_SHEET, 'e'), 300)).toBe(2 * 3 + 2);
+    expect(walkFrameFor(GOD_SHEET, facingRow(GOD_SHEET, 'e'), 450)).toBe(2 * 3 + 0); // 回卷
   });
 });
