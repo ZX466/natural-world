@@ -834,26 +834,32 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-11-07 行走修复｜已交付，待主树收编】产品提交 `1bfe956`，只改 three-input.ts 与其测试；当前提交号看 Git。已查清并修复按键单步停住，四项门禁与实机通过，无待续实现。本轮临时依赖/私库已清，不要再恢复环境或重做验证，除非有新派单。
+【2026-11-08 走跑/跳跃｜已交付待主树收编】朝向2b40a37；跨层实现2a513a0；3D人物待决方案0667842。本轮派单五项均已交付，模型只出文档。本节提交号看Git；下一步由主树复核收编，勿再次同步main或重做实现。
 
-### 最新交付
+### 最新交付与证据
 
-- 根因：旧 `drive()`145–150只试斜向格，失败便停并记住阻挡意图。真实S先从100,53走至99,52，镜像已更新、keys仍按下、epoch不变、帧循环正常；下一斜向98,51不可走，但纵向99,51可走却没尝试。原W按5211ms走0格，S5204ms走1格/1请求。
-- 修法：保留基于权威坐标/方向/terrainVersion的去重，依次以原ports.step检查斜向、横向、纵向；三者都不通才停/报错。没有调相机/超时，也不改键位方向、Phaser、sim、协议、地图或渲染。四个225°键的轴滑动仍遵守canStep墙角语义。
-- 真机闲置复跑：S按5212ms从100,53至92,51，共9格、11条move_request（10前进意图+1松键停止，末条91,50前进未完成便取消）；W可滑至101,53，之后三个候选均堵，正常停。可信原生按键、400ms采样、真实WS与权威位置；0page/console错误，无镜像手改/假回包，API/WS均只接隔离私库。
-- 测试：新增10条先RED（10F/31旧P）再GREEN41P；typecheck/lint/prettier全0，完整Vitest547P/75files。首轮与实测并发时旧Phaser栅格用例5000ms超时（546P/1F）；暂停世界、退出浏览器后相同命令547P，未改测试/超时/配置。独立只读审查0Critical/0Important/0Minor。
-- 证据 `.orca/audits/walk-input-2026-11-07/{gates.json,review.md,before.json,after-idle.json}`；`after-idle.png`已查看。源码哈希、逐请求时间与400ms位置采样保留。主树应单独收编 `1bfe956`（2文件）；本树未同步main/未push。
+- 按图集映射朝向；Three原生W显示chenmo背面第2行。Shift跑、松开走，玩家walk30/run15tick每格；NPC/legacy仍15，60tick/s与离线/战斗时间尺未改。
+- Space无方向原地跳、有方向walk1/run2格；最大升降2高度，36逻辑tick，弧高1.5。真实Three地图h1→h2/h3→站稳→h1四段通过；Phaser iso/flat两路径各上/下两段通过。全程打包Chromium、原生键、真实WS和私库，无镜像手改/假回包，0页面/控制台错误。flat保留旧2D脚位，用相对高度画弧。
+- 走环仅按回放缓冲实际显示位移推进，walk500/run250ms逻辑节拍；4x/16x四种走跑各至少8个真实移动渲染帧，步相增量/(显示距离×250)均约1。稀疏帧从idle开始也计入完整首段距离，避免反复停在首帧。此为功能证据，不是硬件FPS或网络丢包验收。
+- 自跑最终pytest 3625P/121S/72D、561既有警告，EXIT0（474.94s）；Vitest685P/81files，EXIT0；ruff/check+format、pyright、codegen、typecheck、eslint、prettier、build均0。两项terrain --check逐字节0。独立审查最终0Critical/0Important/0Minor；两项Important已先RED再修复。
+- 证据`.orca/audits/locomotion-2026-11-08/{gates.json,review.md,browser.json,browser-fast.json,browser-phaser.json,private-event-counts.json}`及截图/原生退出码。最终全量pytest使用pytest_private保护插件：拒开根world.db，fallback anchor/profile也在本轮私目录。原库哈希同protected-before.json；未改锁文件、原图或地形产物。
+
+### 关键设计与不可回退的修复
+
+1. 一列一表面：standing elevation由SurfaceMap事件投影推导，不另存易与地形分叉的height标量。EntityState只增可选gait/jump，None不序列化，旧JSON/hash夹具与NPC600tick哈希原样通过；新运动状态有意进入hash，无SQL列迁移。完成的jump描述保留给延迟回放，active=false才是真落地，不可每帧重播旧goal。
+2. C4事件：actor.jump_started/landed记录权威结果，起跳取消地面path，空中不被MOVE打断，落地重验当前轨迹/支撑。高块仍collision=false，仅显式同高度路径能站走；h1土坎仍不可步行、可挖、可跳上其顶，不把单向不变量改成双向。材料土/石/木=h1/h2/h3且均阻挡，新放块一挖还原材料/可走h1。
+3. 新gait MOVE去掉冗余当前格头；legacy路径头/相位不改。新gait MOVE与JUMP_STARTED/LANDED记完成frontier，expand_world只对它们回放至event.tick，legacy仍tick-1；不可撤回这项分派。真实迈步后再次move/stop/jump的三条SQL冷尾回放回归已覆盖；LAND在_tick_once递增state.tick后发出。
+4. SurfaceMap即时观察未flush事件，重建/寻路/落点/Actor高度同源。结构终态即时派生恢复tile并缓存同一对象，flush复用identity，提交成功才释放；否则会晚一拍落地，或覆盖同帧后续voxel编辑。已测终态t35/落地t36、后续h3编辑、失败重试、历史一致、无重复与对象释放。恢复tile显式携带高度，水面不误变h2。
+5. 协议1.16双版本常量+FastAPI info+OpenAPI快照/生成类型一致；move.gait可选、jump_request及Actor elevation/gait/jump可选。公开跳跃只含可观察端点/高度/进度/时长/opaque token，不出tick/seed/entity_id。新请求由this-connection full_snapshot后的worldReady门控；live schema补齐已有monologue_history，40份WS schema逐字段一致。
 
 ### 环境与恢复
 
-1. 先 workflow → **完整**talking → 本节/registry → Git。代码定位先CodeGraph，`projectPath=E:/zxdevelop/.orca/worktrees/project7/codex`。本树仅本地Conventional Commits，协作只写ignored talking，永不add。
-2. 本轮起点5179eca；派单主树e49b7c1的输入/测试及移动桥接相同，**主树已默认three，225°构图已验收**。本树旧默认不在本轮范围，验证显式用?terrain=three；收编勿把旧默认覆盖回main。主树新增motion改动不在本树重做。
-3. 开始时8000/5173有主树服务；原5173随后自行退出，才启动我方Vite25807。测试只使用我方18125后端59701，world/anchor/profile三库隔离、providerNone/offline0。两我方会话已Ctrl-C，浏览器finally关闭；原库与备份哈希仍同清理轮，不操作主树服务/真实存档。
-4. npm/uv按锁临时恢复后，已清掉本轮生成的node_modules/.venv、Python缓存与临时SQL，恢复清理状态；源码/锁/素材不变。需要新任务环境时根目录uv sync --frozen、client内npm ci；普通uv run会重建.venv。无依赖复核用uv显式系统解释器+python -B。
-5. memory只改§7、前缀§§0–6原字节保留，-f add立即提交；PS中文UTF-8，先取native exit再读日志。删除依赖需授权；当前临时环境为本轮自建并已清。浏览器需明确授权，只用ms-playwright Chromium。按ADHD偏好短中文、下一步优先、不重复确认。
+- 先workflow→完整talking→本节/registry→Git；代码先CodeGraph并传本树projectPath。本轮起点51d1e2f已由主树同步，之后未再merge/rebase main、未push；只写本地Conventional Commits，ignored talking永不add。
+- npm/uv按锁恢复以完成派单；依赖保留供复核，普通uv run会创建.venv。需要重装时根目录uv sync --frozen、client内npm ci；不因旧清理快照再次删除环境。删除依赖需用户当次授权。
+- 我方Vite5173与私库后端18125已结束；浏览器finally关闭，临时私库/构建缓存保留：递归清理命令被自动审批拒绝（blocked by policy，无更具体理由），未重试删除。审计脚本、读数、截图保留。只停验证过命令行身份的我方PID，不动主树/用户服务。三库必须一起隔离；测试结束绝不把单例.__init__重置到相对默认真档。
+- memory仅改本节，§§0–6原字节前缀保留并核验；写后立即-f add+提交。PS用UTF-8，先保存native exit。global memories本轮未写；旧轮细节查Git和既有审计。
 
-### 已闭合历史与边界
+### 下一步与范围
 
-- 清理提交5179eca：约1.20GiB逻辑文件、21份过期文档/草稿已退役；有效规则在README/docs索引/dev-workflow。`docs/superpowers`两级空目录曾被自动审批拒删，只返回blocked by policy，保留且不重试。global memories只在用户明确要求时写允许的ad_hoc便签，本轮未新增全局记忆。
-- Round24主树已收编cb820bf，当前main已推进到默认three及motion改动；不要按旧卡再提默认切换。另案相机近墙抬高、DPR、包体、房屋h2块、动态光影/水波/塌落等不扩本轮；本次不是听感/硬件FPS/网络丢包恢复验收。
-- 材料按用户裁定土/石/木=h1/h2/h3且均挡路；新放块挖一次返原料并恢复可走h1。take/give下一轮，离线不演进健康、重症不产失能、真实火场出站延后等闭合裁定不扩展。旧轮细节查Git与已保留审计结果，不恢复已退休施工计划。
+- 主树收编2b40a37、2a513a0、0667842及本节提交后独立复核；3D人物见docs/arch/character-model-3d-plan.md，明确NOT IMPLEMENTED，待用户选档。未下载模型/工具/素材、未实施新模型。
+- 相机近墙、DPR、包体、房屋h2块、动态光影/水波/塌落玩法另案；take/give、离线不演进健康、重症不产失能、真实火场出站与perception设计均不扩本轮。未做听感/硬件性能验收，不把自动化证据冒充用户观感认可。
