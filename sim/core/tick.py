@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 from sim.core.clock import GameClock
 from sim.core.entropy import EntropyMixer
-from sim.core.events import WorldEvent, combat_scale_event, move_event
+from sim.core.events import Gait, WorldEvent, combat_scale_event, move_event
 from sim.core.rng import RngRegistry
 from sim.core.world import EventBus, TickContext, WorldState
 from sim.world.chaos import ENCOUNTER_STREAM, ChaosState, encounter_due
@@ -24,7 +24,7 @@ _MOVE_TICKS_PER_TILE = 15  # 批次 D1：行走节拍（1x 下 60/15 = 4 格/秒
 # 16x 下 64 格/秒——倍速快进语义，视觉瞬移属预期）
 
 
-def entity_move_phase(entity_id: str) -> int:
+def entity_move_phase(entity_id: str, interval: int = _MOVE_TICKS_PER_TILE) -> int:
     """实体行走相位（确定性纯函数，无 RNG 流）：id 哈希散布进 [0, 节拍)。
 
     作用：不同实体在同一 tick 内交错迈步（无全员齐步脉冲）；同 id 恒同相位
@@ -32,7 +32,7 @@ def entity_move_phase(entity_id: str) -> int:
     """
     import zlib
 
-    return zlib.crc32(entity_id.encode()) % _MOVE_TICKS_PER_TILE
+    return zlib.crc32(entity_id.encode()) % interval
 
 
 # 感知装配钩子签名：(state, tick_events) -> dict[rtoken, frame]。
@@ -78,6 +78,7 @@ class TickLoop:
     pending_broadcast_events: list[WorldEvent] = field(default_factory=list)
     # 交换边界的表现通知（交换内序、实体、姿态）；不进入世界状态或结算。
     pending_combat_visuals: list[tuple[int, str, str]] = field(default_factory=list)
+    _event_observers: list[Callable[[WorldEvent], None]] = field(default_factory=list, repr=False)
 
     def advance_frame(self, real_dt: float) -> int:
         """喂入真实秒数，推进 0..N 个 tick（catch-up 封顶）。返回推进数。"""
@@ -96,6 +97,12 @@ class TickLoop:
         self._run_perception()
         # 预留挂载点（M1+：L1 效用 / Intent 执行时二次校验）
         self.state = self.state.model_copy(update={"tick": self.state.tick + 1})
+        # Completion facts belong to the completed frontier, after this tick's
+        # terrain/NPC facts. The persisted event tick must equal that frontier.
+        from sim.world.locomotion import landing_events
+
+        for event in landing_events(self.state, self.state.tick, self.pathfinder):
+            self.enqueue(event)
 
     def _maybe_daily_reseed(self) -> None:
         """每日天气熵注入（DESIGN §11；M5 批次 A 的「inject 生产接线」兑现）。
@@ -140,6 +147,10 @@ class TickLoop:
     def attach_perception(self, hook: PerceptionHook) -> None:
         """注入感知装配钩子：签名 (state, tick_events) -> dict[rtoken, frame]。"""
         self._perception_hook = hook
+
+    def attach_event_observer(self, observer: Callable[[WorldEvent], None]) -> None:
+        """Keep derived terrain at the same event cursor, including unflushed facts."""
+        self._event_observers.append(observer)
 
     def attach_entropy(self, hook: Callable[[str, int], WorldEvent]) -> None:
         """Attach external entropy collector; material remains event-only."""
@@ -229,13 +240,39 @@ class TickLoop:
         路径耗尽不发事件；每格一次 MOVE 不必要——移动是 tick 内插值（路径段
         事件已含全部信息），此步只更新位置。
         """
+        for entity_id, entity in self.state.entities.items():
+            if entity.jump is not None and entity.jump.airborne:
+                self.pending_delta_entity_ids.add(entity_id)
         moved: dict[str, object] = {}
         for entity_id, entity in self.state.entities.items():
-            if not entity.path or entity.incapacitated_until is not None:
+            if (
+                not entity.path
+                or entity.incapacitated_until is not None
+                or (entity.jump is not None and entity.jump.airborne)
+            ):
                 continue
-            if (self.state.tick + entity_move_phase(entity_id)) % _MOVE_TICKS_PER_TILE != 0:
+            interval = 30 if entity.gait == "walk" else _MOVE_TICKS_PER_TILE
+            if (self.state.tick + entity_move_phase(entity_id, interval)) % interval != 0:
                 continue
             nxt = entity.path[0]
+            if (
+                entity.gait is not None
+                and self.pathfinder is not None
+                and not self.pathfinder.can_step(
+                    entity.pos, nxt, elevation=self.pathfinder.height_at(*entity.pos)
+                )
+            ):
+                self.enqueue(
+                    move_event(
+                        self.state.tick,
+                        entity_id,
+                        entity.pos,
+                        entity.pos,
+                        (entity.pos,),
+                        gait=entity.gait,
+                    )
+                )
+                continue
             rest = entity.path[1:]
             moved[entity_id] = entity.model_copy(update={"pos": nxt, "path": rest})
             self.pending_delta_entity_ids.add(entity_id)
@@ -250,12 +287,15 @@ class TickLoop:
             raise ValueError("重放不能倒退")
         entities = dict(self.state.entities)
         for entity_id, entity in entities.items():
-            if entity.incapacitated_until is not None:
+            if entity.incapacitated_until is not None or (
+                entity.jump is not None and entity.jump.airborne
+            ):
                 continue
+            interval = 30 if entity.gait == "walk" else _MOVE_TICKS_PER_TILE
             first = self.state.tick + (
-                -(self.state.tick + entity_move_phase(entity_id)) % _MOVE_TICKS_PER_TILE
+                -(self.state.tick + entity_move_phase(entity_id, interval)) % interval
             )
-            steps = min(len(entity.path), max(0, (tick - 1 - first) // _MOVE_TICKS_PER_TILE + 1))
+            steps = min(len(entity.path), max(0, (tick - 1 - first) // interval + 1))
             if steps:
                 entities[entity_id] = entity.model_copy(
                     update={"pos": entity.path[steps - 1], "path": entity.path[steps:]}
@@ -282,12 +322,22 @@ class TickLoop:
         ):
             self.chaos = self.chaos.adverse(event.event_type.value)
         self.pending_events.append(event)
+        for observer in self._event_observers:
+            observer(event)
         if event.event_type in (EventKind.AGENT_INCAPACITATED, EventKind.AGENT_RECOVERED):
+            self.pending_delta_entity_ids.add(str(event.payload["entity_id"]))
+        if event.event_type in (EventKind.JUMP_STARTED, EventKind.JUMP_LANDED) or (
+            event.event_type is EventKind.MOVE and event.payload.get("gait") is not None
+        ):
             self.pending_delta_entity_ids.add(str(event.payload["entity_id"]))
         for d in result.derived:
             self.pending_events.append(d)
+            for observer in self._event_observers:
+                observer(d)
 
-    def issue_move(self, entity_id: str, path: list[tuple[int, int]]) -> WorldEvent:
+    def issue_move(
+        self, entity_id: str, path: list[tuple[int, int]], *, gait: Gait | None = None
+    ) -> WorldEvent:
         """便捷入口：外部请求移动（如 WS 的 move_intent）→ 路径段 MOVE 事件。
 
         payload 白名单与 start/goal 一致性校验在 move_event 工厂内强制。
@@ -296,11 +346,12 @@ class TickLoop:
             msg = "空路径"
             raise ValueError(msg)
         event = move_event(
-            tick=self.state.tick + 1,
+            tick=self.state.tick if gait is not None else self.state.tick + 1,
             actor_id=entity_id,
             start=path[0],
             goal=path[-1],
             path=tuple(path),
+            gait=gait,
         )
         self.enqueue(event)
         return event

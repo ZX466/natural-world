@@ -6,9 +6,22 @@ import json
 import pytest
 from fastapi import WebSocket
 
-from sim.api import main, ws
+from sim.api import anchors as anchors_api
+from sim.api import main, settings, ws
 from sim.api.anchors import AnchorStore
-from sim.core.events import npc_death_event
+from sim.core.events import npc_death_event, tile_changed_event
+
+
+@pytest.fixture(autouse=True)
+def isolated_api_stores(tmp_path, monkeypatch, isolated_world_database):
+    db_url = f"sqlite:///{tmp_path / 'world.db'}"
+    anchors = AnchorStore(db_url)
+    profiles = settings.ProfileStore(db_url)
+    monkeypatch.setattr(anchors_api, "_anchor_store", anchors)
+    monkeypatch.setattr(settings, "_profile_store", profiles)
+    yield
+    anchors._engine.dispose()
+    profiles._engine.dispose()
 
 
 def _recording_socket(frames, incoming=()) -> WebSocket:
@@ -185,6 +198,40 @@ async def test_reloading_a_previously_loaded_anchor(single_save):
     assert app.state.load_outcomes[-1] == (anchor_id, True), "二次读档不得因 protected 回写而失败"
 
 
+async def test_historical_load_restores_terrain_and_rebinds_live_surface_observer(single_save):
+    app, anchor_id, _ = single_save
+    loop = app.state.loop
+    x, y = main.SPAWN_TILE
+    assert app.state.pathfinder.height_at(x, y) == 1
+    assert app.state.tile_map.is_walkable(x, y)
+
+    # Same-tick edits after the saved sequence must be excluded from its child line.
+    loop.enqueue(tile_changed_event(loop.state.tick, x, y, 0, height=3))
+    assert app.state.surface.height_at(x, y) == 3
+    assert app.state.pathfinder.height_at(x, y) == 3
+    assert not app.state.tile_map.is_walkable(x, y)
+    await app.state.flush_for_anchor()
+
+    ws.handle_client_message(
+        {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id},
+        loop,
+        app.state.pathfinder,
+        main.manager.controls()[0],
+    )
+    await app.state.drain_pending_loads()
+    assert app.state.load_outcomes[-1] == (anchor_id, True)
+    assert app.state.surface.height_at(x, y) == 1
+    assert app.state.pathfinder.height_at(x, y) == 1
+    assert app.state.tile_map.is_walkable(x, y)
+
+    loop.enqueue(tile_changed_event(loop.state.tick, x, y, 0, height=2))
+    assert app.state.surface.height_at(x, y) == 2
+    assert app.state.pathfinder.height_at(x, y) == 2
+    assert not app.state.tile_map.is_walkable(x, y)
+    await app.state.flush_for_anchor()
+    assert app.state.surface.height_at(x, y) == 2
+
+
 async def test_queued_load_does_not_confirm_with_the_old_world(saved_world):
     app, anchor_id, _, _, _ = saved_world
     reply = ws.handle_client_message(
@@ -358,10 +405,10 @@ async def test_decision_started_before_load_cannot_execute_in_restored_world(
 async def test_projection_failure_stops_world_without_sending_success(saved_world, monkeypatch):
     app, anchor_id, _, _, frames = saved_world
 
-    async def failed_map(*args, **kwargs):
+    async def failed_surface(*args, **kwargs):
         raise RuntimeError("synthetic projection failure")
 
-    monkeypatch.setattr(main, "rebuild_tile_map", failed_map)
+    monkeypatch.setattr(main, "rebuild_surface", failed_surface)
     ws.handle_client_message(
         {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id},
         app.state.loop,
@@ -409,12 +456,12 @@ async def test_projection_failure_then_success_restores_requesting_control(
             app.state.pathfinder,
             control,
         )
-    real_map = main.rebuild_tile_map
+    real_surface = main.rebuild_surface
 
-    async def failed_map(*args, **kwargs):
+    async def failed_surface(*args, **kwargs):
         raise RuntimeError("synthetic projection failure")
 
-    monkeypatch.setattr(main, "rebuild_tile_map", failed_map)
+    monkeypatch.setattr(main, "rebuild_surface", failed_surface)
     ws.handle_client_message(
         {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id},
         loop,
@@ -427,7 +474,7 @@ async def test_projection_failure_then_success_restores_requesting_control(
     assert loop.clock.speed == 0
     assert [frame["type"] for frame in frames] == ["error"]
 
-    monkeypatch.setattr(main, "rebuild_tile_map", real_map)
+    monkeypatch.setattr(main, "rebuild_surface", real_surface)
     ws.handle_client_message(
         {"type": "load_anchor", "channel": "session", "anchor_id": recovery_anchor},
         loop,
@@ -521,14 +568,14 @@ async def test_duplicate_queued_load_returns_error_without_another_fork(saved_wo
 async def test_duplicate_in_flight_load_is_rejected(saved_world, monkeypatch):
     app, anchor_id, _, _, _ = saved_world
     entered, release = asyncio.Event(), asyncio.Event()
-    real_map = main.rebuild_tile_map
+    real_surface = main.rebuild_surface
 
-    async def held_map(*args, **kwargs):
+    async def held_surface(*args, **kwargs):
         entered.set()
         await release.wait()
-        return await real_map(*args, **kwargs)
+        return await real_surface(*args, **kwargs)
 
-    monkeypatch.setattr(main, "rebuild_tile_map", held_map)
+    monkeypatch.setattr(main, "rebuild_surface", held_surface)
     raw = {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id}
     args = (app.state.loop, app.state.pathfinder, main.manager.controls()[0])
     assert ws.handle_client_message(raw, *args) is None
@@ -613,12 +660,12 @@ async def test_fault_gate_blocks_control_but_accepts_authenticated_recovery(
 ):
     app, anchor_id, _, _, _ = saved_world
     recovery_anchor = await _other_saved_anchor(app, anchor_id)
-    real_map = main.rebuild_tile_map
+    real_surface = main.rebuild_surface
 
-    async def failed_map(*args, **kwargs):
+    async def failed_surface(*args, **kwargs):
         raise RuntimeError("synthetic projection failure")
 
-    monkeypatch.setattr(main, "rebuild_tile_map", failed_map)
+    monkeypatch.setattr(main, "rebuild_surface", failed_surface)
     ws.handle_client_message(
         {"type": "load_anchor", "channel": "session", "anchor_id": anchor_id},
         app.state.loop,
@@ -627,7 +674,7 @@ async def test_fault_gate_blocks_control_but_accepts_authenticated_recovery(
     )
     await app.state.drain_pending_loads()
     assert not app.state.world_source_ready
-    monkeypatch.setattr(main, "rebuild_tile_map", real_map)
+    monkeypatch.setattr(main, "rebuild_surface", real_surface)
     incoming = iter(
         [
             {"type": "load_anchor", "channel": "session", "anchor_id": recovery_anchor},

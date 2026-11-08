@@ -22,6 +22,7 @@ import {
 import { placeBubble, selectBubbleNames } from '../bubbles';
 import { worldOf } from './three-projection';
 import { visibleActorTokens } from '../visibility';
+import { flightTarget, gaitCadenceMs } from '../../locomotion';
 
 export interface TextImage {
   texture: THREE.Texture;
@@ -118,18 +119,21 @@ export function createActorLayer(
         views.delete(rtoken);
         view = undefined;
       }
-      const height = effectiveHeight(
-        actor.x,
-        actor.y,
-        heightOf,
-        mirror.structures,
-        mirror.voxelEdits,
-      );
+      const height =
+        actor.elevation ??
+        effectiveHeight(actor.x, actor.y, heightOf, mirror.structures, mirror.voxelEdits);
       // The server always reports facing "s", so it cannot drive the sheet row.
       // This layer feeds `advanceMotion` tile-space coordinates, where a one-tile
       // step dominates any height change — inference from those deltas is correct,
       // so leave `facing` unset and let the buffer derive it.
-      const target = { x: actor.x, y: actor.y, height } as const;
+      const flight = flightTarget(actor.jump, (x, y, z) => ({ x, y, z }));
+      const target = {
+        x: actor.x,
+        y: actor.y,
+        height,
+        cadenceMs: gaitCadenceMs(actor.gait),
+        ...(flight ? { flight } : {}),
+      } as const;
       if (!view) {
         const texture = assets.texture(key)?.clone();
         if (!texture) continue;
@@ -182,7 +186,15 @@ export function createActorLayer(
       );
       view.shadow.position.set(
         view.sprite.position.x,
-        view.motion.height + 0.008,
+        (view.motion.airborne
+          ? effectiveHeight(
+              Math.floor(view.motion.x + 0.5),
+              Math.floor(view.motion.y + 0.5),
+              heightOf,
+              mirror.structures,
+              mirror.voxelEdits,
+            )
+          : view.motion.height) + 0.008,
         view.sprite.position.z,
       );
       view.sprite.material.color.setHex(actor.tint ?? 0xffffff);
@@ -220,7 +232,7 @@ export function createActorLayer(
               : VILLAGER_SHEET;
         const frame = walkFrameFor(
           sheet,
-          facingRow(cameraFacing(view.motion.facing, azimuth)),
+          facingRow(sheet, cameraFacing(view.motion.facing, azimuth)),
           view.motion.animClock,
         );
         const texture = view.sprite.material.map!;

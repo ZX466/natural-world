@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import type { MapStatic } from '../../world-mirror';
 import type { MovePoint } from '../../movement';
+import { standable } from '../../movement';
 import type { HeightLookup } from '../iso';
 import { cellOf } from './three-projection';
 
@@ -39,8 +40,11 @@ export function groundFromRay(
   ray: THREE.Ray,
   map: MapStatic,
   heightOf: HeightLookup,
+  elevation = WALK_HEIGHT,
 ): MovePoint | null {
-  const point = ray.intersectPlane(walkPlane, new THREE.Vector3());
+  const plane =
+    elevation === WALK_HEIGHT ? walkPlane : new THREE.Plane(new THREE.Vector3(0, 1, 0), -elevation);
+  const point = ray.intersectPlane(plane, new THREE.Vector3());
   if (!point) return null;
   const cell = cellOf(point, map.w, map.h);
   if (
@@ -52,9 +56,7 @@ export function groundFromRay(
     cell.y >= map.h
   )
     return null;
-  return map.collision[cell.y * map.w + cell.x] === 1 && heightOf(cell.x, cell.y) === WALK_HEIGHT
-    ? cell
-    : null;
+  return standable(map, cell, heightOf, elevation) ? cell : null;
 }
 
 export function editFromRay(ray: THREE.Ray, meshes: readonly THREE.Object3D[]): MovePoint | null {

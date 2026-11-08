@@ -18,6 +18,10 @@ from sim.core.events import (
     AgentRecoveredPayload,
     CombatScaleChangePayload,
     EventKind,
+    Gait,
+    JumpLandedPayload,
+    JumpMotion,
+    JumpStartedPayload,
     MovePayload,
     WorldCreatePayload,
     WorldEvent,
@@ -26,6 +30,23 @@ from sim.core.events import (
 logger = structlog.get_logger(__name__)
 
 ApplyFn = Callable[["WorldState", WorldEvent, "TickContext"], "ApplyResult"]
+
+
+class JumpState(JumpMotion):
+    """Retain the last landed descriptor so delayed renderers can finish the arc."""
+
+    landed_at: int | None = Field(default=None, ge=0)
+    landed_pos: tuple[int, int] | None = None
+    landed_height: int | None = Field(default=None, ge=0, le=3)
+
+    @property
+    def airborne(self) -> bool:
+        return self.landed_at is None
+
+    def progress_at(self, tick: int) -> float:
+        return (
+            min(1.0, max(0.0, (tick - self.started_at) / self.duration)) if self.airborne else 1.0
+        )
 
 
 class EntityState(BaseModel):
@@ -38,6 +59,8 @@ class EntityState(BaseModel):
     path: tuple[tuple[int, int], ...] = ()  # 剩余路径（路径段事件粒度，m0-core §11.3）
     # 健康时省略，保持旧 WorldState/存档哈希；失能时随内部检查点保存。
     incapacitated_until: int | None = Field(default=None, ge=0)
+    gait: Gait | None = None
+    jump: JumpState | None = None
 
     @model_serializer(mode="wrap")
     def serialize_state(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
@@ -45,6 +68,10 @@ class EntityState(BaseModel):
         data = handler(self)
         if self.incapacitated_until is None:
             data.pop("incapacitated_until", None)
+        if self.gait is None:
+            data.pop("gait", None)
+        if self.jump is None:
+            data.pop("jump", None)
         return data
 
 
@@ -137,11 +164,57 @@ def _apply_move(state: WorldState, event: WorldEvent, ctx: TickContext) -> Apply
     if entity is None:
         msg = f"未知实体: {p.entity_id}"
         raise ValueError(msg)
-    if entity.incapacitated_until is not None:
+    if entity.incapacitated_until is not None or (entity.jump is not None and entity.jump.airborne):
         return ApplyResult(state=state)
-    new_entity = entity.model_copy(update={"path": p.path})
+    changes: dict[str, Any] = {"path": p.path}
+    if p.gait is not None:
+        if p.start != entity.pos:
+            raise ValueError("player path starts at a stale position")
+        changes.update(gait=p.gait, path=p.path[1:])
+    new_entity = entity.model_copy(update=changes)
     new_state = state.model_copy(update={"entities": {**state.entities, p.entity_id: new_entity}})
     return ApplyResult(state=new_state)
+
+
+def _apply_jump_started(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    p = JumpStartedPayload.model_validate(event.payload)
+    actor = state.entities.get(p.entity_id)
+    if actor is None:
+        raise ValueError("unknown jumping entity")
+    if actor.incapacitated_until is not None or (actor.jump is not None and actor.jump.airborne):
+        return ApplyResult(state=state)
+    if p.start != actor.pos or p.started_at != event.tick:
+        raise ValueError("jump does not start at the authoritative position/tick")
+    jump = JumpState.model_validate(p.model_dump(exclude={"entity_id", "gait"}))
+    actor = actor.model_copy(update={"jump": jump, "gait": p.gait, "path": ()})
+    return ApplyResult(
+        state=state.model_copy(update={"entities": {**state.entities, p.entity_id: actor}})
+    )
+
+
+def _apply_jump_landed(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
+    p = JumpLandedPayload.model_validate(event.payload)
+    actor = state.entities.get(p.entity_id)
+    if actor is None or actor.jump is None or not actor.jump.airborne:
+        raise ValueError("landing has no active flight")
+    flight = actor.jump
+    if p.start != flight.start or p.started_at != flight.started_at:
+        raise ValueError("landing belongs to a different flight")
+    if p.reason == "landed" and (
+        p.goal != flight.goal
+        or p.target_height != flight.target_height
+        or event.tick < flight.started_at + flight.duration
+    ):
+        raise ValueError("landing is not the certified endpoint")
+    if p.reason == "obstructed" and p.goal != flight.start:
+        raise ValueError("obstructed jump must return to its departure")
+    flight = flight.model_copy(
+        update={"landed_at": event.tick, "landed_pos": p.goal, "landed_height": p.target_height}
+    )
+    actor = actor.model_copy(update={"pos": p.goal, "path": (), "jump": flight})
+    return ApplyResult(
+        state=state.model_copy(update={"entities": {**state.entities, p.entity_id: actor}})
+    )
 
 
 def _apply_combat_scale(state: WorldState, event: WorldEvent, ctx: TickContext) -> ApplyResult:
@@ -178,7 +251,9 @@ def _apply_agent_recovered(state: WorldState, event: WorldEvent, ctx: TickContex
     actor = state.entities.get(p.entity_id)
     if actor is None or actor.incapacitated_until is None or event.tick < actor.incapacitated_until:
         raise ValueError("invalid recovery state")
-    actor = actor.model_copy(update={"incapacitated_until": None, "pos": p.pos, "path": ()})
+    actor = actor.model_copy(
+        update={"incapacitated_until": None, "pos": p.pos, "path": (), "jump": None}
+    )
     return ApplyResult(
         state=state.model_copy(update={"entities": {**state.entities, p.entity_id: actor}})
     )
@@ -372,6 +447,8 @@ def build_default_bus() -> EventBus:
     bus.register(EventKind.AGENT_INCAPACITATED, _apply_agent_incapacitated)
     bus.register(EventKind.AGENT_RECOVERED, _apply_agent_recovered)
     bus.register(EventKind.MOVE, _apply_move)
+    bus.register(EventKind.JUMP_STARTED, _apply_jump_started)
+    bus.register(EventKind.JUMP_LANDED, _apply_jump_landed)
     bus.register(EventKind.COMBAT_SCALE_CHANGE, _apply_combat_scale)
     bus.register(EventKind.ENTROPY_INJECT, _apply_entropy_inject)
     bus.register(EventKind.TILE_CHANGED, _apply_tile_changed)

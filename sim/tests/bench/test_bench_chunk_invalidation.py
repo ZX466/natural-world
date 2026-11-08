@@ -24,7 +24,7 @@ import structlog
 
 from sim.core.events import EventKind, matter_event, move_event
 from sim.world.map import CHUNK_SIZE, Chunk, TileMap
-from sim.world.pathfinding import Pathfinder, event_tile_position
+from sim.world.pathfinding import Pathfinder, PathKey, event_tile_position
 
 from .thresholds import CHUNK_EVENT_SCAN_LIMIT_MS, CHUNK_INVALIDATION_TICK_LIMIT_MS
 
@@ -152,7 +152,7 @@ class _InvalidationBenchWorld:
         真实键空间在 48×48 上最多 2116 个唯一 (start, goal)，够不到
         `PathCache.max_entries=4096` —— 上界档位用合成条目打满缓存。
         """
-        entries: dict[tuple[tuple[int, int], tuple[int, int]], tuple] = {}
+        entries: dict[PathKey, tuple[tuple[tuple[int, int], ...], frozenset[tuple[int, int]]]] = {}
         for i in range(n_entries):
             key = ((i % 4096, (i // 4096) % 4096), (i % 4096 + 1, (i // 4096) % 4096 + 1))
             entries[key] = ((), frozenset({(i % n_chunks, (i // n_chunks) % 16)}))

@@ -14,7 +14,16 @@ from collections.abc import Sequence
 from enum import StrEnum
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from sim.npc.hidden import HiddenCategory
 
@@ -91,6 +100,11 @@ class EventKind(StrEnum):
     AGENT_RECOVERED = "agent.recovered"
     VOXEL_EDITED = "voxel.edited"
     NPC_HEALTH_CHANGED = "npc.health.changed"
+    JUMP_STARTED = "actor.jump_started"
+    JUMP_LANDED = "actor.jump_landed"
+
+
+type Gait = Literal["walk", "run"]
 
 
 # ---------------------------------------------------------------------------
@@ -111,6 +125,14 @@ class MovePayload(BaseModel):
     start: tuple[int, int]
     goal: tuple[int, int]
     path: tuple[tuple[int, int], ...]
+    gait: Gait | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_legacy(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data = handler(self)
+        if self.gait is None:
+            data.pop("gait", None)
+        return data
 
 
 class WorldCreatePayload(BaseModel):
@@ -156,6 +178,14 @@ class TileChangedPayload(BaseModel):
     x: int
     y: int
     tile_id: int
+    height: int | None = Field(default=None, strict=True, ge=0, le=3)
+
+    @model_serializer(mode="wrap")
+    def serialize_legacy(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data = handler(self)
+        if self.height is None:
+            data.pop("height", None)
+        return data
 
 
 class VoxelEditedPayload(BaseModel):
@@ -600,6 +630,53 @@ class FogRevealPayload(BaseModel):
     chunks: tuple[tuple[int, int], ...]
 
 
+_JUMP_COORD = Annotated[int, Field(strict=True, ge=0)]
+type JumpPosition = tuple[_JUMP_COORD, _JUMP_COORD]
+
+
+class JumpMotion(BaseModel):
+    """A certified flight, expressed only in logical ticks and column heights."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    start: JumpPosition
+    goal: JumpPosition
+    start_height: int = Field(strict=True, ge=0, le=3)
+    target_height: int = Field(strict=True, ge=1, le=3)
+    started_at: int = Field(strict=True, ge=0)
+    duration: int = Field(default=36, strict=True, ge=1, le=240)
+    arc_height: float = Field(default=1.5, strict=True, gt=0, le=2, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def bounded_flight(self) -> JumpMotion:
+        if max(abs(a - b) for a, b in zip(self.start, self.goal, strict=True)) > 2:
+            raise ValueError("jump is too far")
+        if abs(self.target_height - self.start_height) > 2:
+            raise ValueError("jump changes height too far")
+        return self
+
+
+class JumpStartedPayload(JumpMotion):
+    entity_id: str = Field(min_length=1, max_length=128)
+    gait: Gait = "walk"
+
+    @model_validator(mode="after")
+    def gait_reach(self) -> JumpStartedPayload:
+        reach = 2 if self.gait == "run" else 1
+        if max(abs(a - b) for a, b in zip(self.start, self.goal, strict=True)) > reach:
+            raise ValueError("jump exceeds gait reach")
+        return self
+
+
+class JumpLandedPayload(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    entity_id: str = Field(min_length=1, max_length=128)
+    start: JumpPosition
+    goal: JumpPosition
+    target_height: int = Field(strict=True, ge=0, le=3)
+    started_at: int = Field(strict=True, ge=0)
+    reason: Literal["landed", "obstructed"] = "landed"
+
+
 class WorldEvent(BaseModel):
     """不可变事件 — 唯一写路径的载体（C4）。
 
@@ -660,6 +737,8 @@ def move_event(
     goal: tuple[int, int],
     path: tuple[tuple[int, int], ...],
     branch_id: str = "main",
+    *,
+    gait: Gait | None = None,
 ) -> WorldEvent:
     """路径段移动事件。path 白名单一致性校验：首=start、末=goal。"""
     if not path or path[0] != start or path[-1] != goal:
@@ -667,13 +746,72 @@ def move_event(
         last = path[-1] if path else None
         msg = f"路径与起终点不一致: start={start} goal={goal} path[0]={first} path[-1]={last}"
         raise ValueError(msg)
-    p = MovePayload(entity_id=actor_id, start=start, goal=goal, path=path)
+    p = MovePayload(entity_id=actor_id, start=start, goal=goal, path=path, gait=gait)
     return WorldEvent(
         branch_id=branch_id,
         tick=tick,
         event_type=EventKind.MOVE,
         actor_id=actor_id,
         payload=p.model_dump(mode="json"),
+    )
+
+
+def jump_started_event(
+    tick: int,
+    entity_id: str,
+    start: tuple[int, int],
+    goal: tuple[int, int],
+    start_height: int,
+    target_height: int,
+    *,
+    gait: Gait = "walk",
+    duration: int = 36,
+    branch_id: str = "main",
+) -> WorldEvent:
+    payload = JumpStartedPayload(
+        entity_id=entity_id,
+        start=start,
+        goal=goal,
+        start_height=start_height,
+        target_height=target_height,
+        started_at=tick,
+        duration=duration,
+        gait=gait,
+    )
+    return WorldEvent(
+        tick=tick,
+        branch_id=branch_id,
+        event_type=EventKind.JUMP_STARTED,
+        actor_id=entity_id,
+        payload=payload.model_dump(mode="json"),
+    )
+
+
+def jump_landed_event(
+    tick: int,
+    entity_id: str,
+    start: tuple[int, int],
+    goal: tuple[int, int],
+    target_height: int,
+    started_at: int,
+    *,
+    reason: Literal["landed", "obstructed"] = "landed",
+    branch_id: str = "main",
+) -> WorldEvent:
+    payload = JumpLandedPayload(
+        entity_id=entity_id,
+        start=start,
+        goal=goal,
+        target_height=target_height,
+        started_at=started_at,
+        reason=reason,
+    )
+    return WorldEvent(
+        tick=tick,
+        branch_id=branch_id,
+        event_type=EventKind.JUMP_LANDED,
+        actor_id=entity_id,
+        payload=payload.model_dump(mode="json"),
     )
 
 
@@ -703,9 +841,9 @@ def entropy_event(tick: int, stream: str, payload_hex: str, branch_id: str = "ma
 
 
 def tile_changed_event(
-    tick: int, x: int, y: int, tile_id: int, branch_id: str = "main"
+    tick: int, x: int, y: int, tile_id: int, branch_id: str = "main", *, height: int | None = None
 ) -> WorldEvent:
-    p = TileChangedPayload(x=x, y=y, tile_id=tile_id)
+    p = TileChangedPayload(x=x, y=y, tile_id=tile_id, height=height)
     return WorldEvent(
         branch_id=branch_id,
         tick=tick,

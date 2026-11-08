@@ -1,11 +1,13 @@
 import { expect, it } from 'vitest';
 import {
   HISTORY_SAMPLES,
+  MAX_HISTORY_SAMPLES,
   newestSample,
   pushSample,
   rampDelay,
   sampleAt,
   type TimedSample,
+  type FlightSample,
 } from '../motion-buffer';
 
 const at = (t: number, x: number, y = 0, z = 1): TimedSample => ({ at: t, x, y, z });
@@ -85,4 +87,83 @@ it('ramps the delay toward its nominal value without overshooting', () => {
   expect(rampDelay(249, 250, 16)).toBe(250);
   // A zero-length frame changes nothing.
   expect(rampDelay(100, 250, 0)).toBe(100);
+});
+
+it('retains the predecessor of a requested replay span when observations are dense', () => {
+  let samples: readonly TimedSample[] = [];
+  for (let time = 0; time <= 600; time += 20)
+    samples = pushSample(samples, at(time, time / 100), 3, HISTORY_SAMPLES, 533);
+  expect(samples.length).toBeGreaterThan(HISTORY_SAMPLES);
+  expect(samples[0]!.at).toBe(60);
+  expect(samples[1]!.at).toBe(80);
+  expect(sampleAt(samples, 67).x).toBeCloseTo(0.67);
+});
+
+it('bounds dense history while retaining both sides of the replay instant', () => {
+  let samples: readonly TimedSample[] = [];
+  for (let time = 0; time <= 2000; time++)
+    samples = pushSample(samples, at(time, time / 100), 3, HISTORY_SAMPLES, 533);
+  expect(MAX_HISTORY_SAMPLES).toBe(128);
+  expect(samples.length).toBeLessThanOrEqual(MAX_HISTORY_SAMPLES);
+  expect(samples[0]!.at).toBeLessThanOrEqual(1467);
+  expect(samples[1]!.at).toBeGreaterThan(1467);
+  expect(newestSample(samples).at).toBe(2000);
+  expect(sampleAt(samples, 1467).x).toBeCloseTo(14.67);
+});
+
+const flight: FlightSample = {
+  id: 'jump-1',
+  progress: 0,
+  start: { x: 0, y: 0, z: 1 },
+  end: { x: 2, y: 0, z: 3 },
+  arc: { x: 0, y: 0, z: 1 },
+};
+
+it('interpolates certified flight progress and evaluates the arc between matching endpoints', () => {
+  const samples = [
+    { ...at(0, 0), flight },
+    { ...at(600, 2, 0, 3), flight: { ...flight, progress: 1 } },
+  ];
+  expect(sampleAt(samples, 0)).toEqual({ x: 0, y: 0, z: 1, airborne: false });
+  expect(sampleAt(samples, 150)).toEqual({ x: 0.5, y: 0, z: 2.25, airborne: true });
+  expect(sampleAt(samples, 300)).toEqual({ x: 1, y: 0, z: 3, airborne: true });
+  expect(sampleAt(samples, 600)).toEqual({ x: 2, y: 0, z: 3, airborne: false });
+  expect(sampleAt(samples, 900)).toEqual({ x: 2, y: 0, z: 3, airborne: false });
+});
+
+it('uses the same arc math for projected pixel geometry', () => {
+  const projected = {
+    ...flight,
+    start: { x: 0, y: 0, z: 0 },
+    end: { x: 32, y: 0, z: 0 },
+    arc: { x: 0, y: -24, z: 0 },
+  };
+  const samples = [
+    { ...at(0, 0, 0, 0), flight: projected },
+    { ...at(600, 32, 0, 0), flight: { ...projected, progress: 1 } },
+  ];
+  expect(sampleAt(samples, 150)).toEqual({ x: 8, y: -18, z: 0, airborne: true });
+});
+
+it.each([
+  { ...flight, id: 'another-flight', progress: 1 },
+  { ...flight, arc: { x: 0, y: 0, z: 2 }, progress: 1 },
+])('does not join flights with different identities or geometry', (after) => {
+  expect(
+    sampleAt(
+      [
+        { ...at(0, 0), flight },
+        { ...at(600, 2, 0, 3), flight: after },
+      ],
+      300,
+    ),
+  ).toEqual({ x: 1, y: 0, z: 2 });
+});
+
+it('holds received flight progress without extrapolating through a pause', () => {
+  const samples = [
+    { ...at(0, 0), flight },
+    { ...at(300, 1, 0, 3), flight: { ...flight, progress: 0.5 } },
+  ];
+  expect(sampleAt(samples, 10000)).toEqual({ x: 1, y: 0, z: 3, airborne: true });
 });

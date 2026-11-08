@@ -22,7 +22,8 @@ sim/api/ws  (FastAPI WebSocket 网关)
 
 ## 2. 信封格式
 
-当前协议 **1.15**：`full_snapshot` / `state_delta` 的可选 `voxel_edits` 行为
+当前协议 **1.16**：人物新增可选 `elevation`/`gait`/`jump` 与 `jump_request`（§4.1），旧快照可继续缺省这些字段。
+既有 `full_snapshot` / `state_delta` 的可选 `voxel_edits` 行为
 `{x,y,action,gid,height,material?}`；`material` 为 earth/stone/wood，缺省 earth。
 `voxel_request` 的可选 `material` 只在 place 时指定扣料，缺省 earth。
 放土/石/木分别为阻挡的高度 1/2/3；新放置块挖一次返还原材料一份，恢复可走高度 1。
@@ -34,7 +35,7 @@ sim/api/ws  (FastAPI WebSocket 网关)
 
 ```jsonc
 {
-  "v": 1,                  // 协议版本（见 versioning.md）；协商后全程不变
+  "v": "1.16",             // 协议版本（见 versioning.md）；协商后全程不变
   "ws_seq": 412,           // 传输序号：本端发出帧的递增计数，仅用于丢帧/乱序检测
   "channel": "render",     // render | narrative | control | session | error
   "type": "state_delta",   // 见 §3 消息清单
@@ -52,7 +53,8 @@ sim/api/ws  (FastAPI WebSocket 网关)
 |---|---|---|---|
 | `player_impulse` | control | 念头注入（玩家唯一主动动作，M4） | M4 |
 | `set_control` | control | 暂停 / 倍速（1x/4x/16x） | M0 |
-| `move_request` | render | 玩家点击寻路：只发目标格 `{target_x,target_y}`（整数格坐标），sim 寻路驱动主角；无 rtoken（服务端知道主角是谁） | M0 |
+| `move_request` | render | 目标格 `{target_x,target_y,gait?}`；gait 为 walk/run，省略沿用当前步态；尚未设置步态时保留旧版节拍；服务端寻路，无 rtoken | M0 / 1.16 |
+| `jump_request` | render | 目标格 `{target_x,target_y,gait?}`，坐标非负整数，gait 省略按 walk；起跳与落地均由服务端裁决，不传实体/高度/时长 | 1.16 |
 | `load_anchor` | session | 载入玩家档（触发世界分叉+重放，见 §12） | M5 |
 | `sync_request` | session | 请求全量 `full_snapshot`（重连/丢帧补救） | M0 |
 
@@ -79,6 +81,28 @@ sim/api/ws  (FastAPI WebSocket 网关)
 > 标记 `[render-only]` 的字段只供 Phaser 渲染、绝不进 React 文本；标记 `[narrative]` 的只供 React、绝不含数值。
 
 ### 4.1 render 通道（喂 Phaser）
+
+#### 人物走、跑与跳跃（1.16）
+
+- 输入约定：按住 Shift 请求 `gait:"run"`，松开请求 `gait:"walk"`；Space 发起 `jump_request`。客户端只表达目标与步态，不在本地决定站立高度、跨块可达性或落地结果；既有 NPC 与离线推进的时间尺度不由此全局修改。
+- `JumpRequestMessage` 为封闭对象，必填信封 `v/ws_seq/channel/type` 与 `target_x/target_y`；坐标为非负整数，`channel:"render"`、`type:"jump_request"`，唯一可选载荷为 walk/run 的 `gait`，省略按 walk。禁止客户端指定 `elevation`、`duration`、`entity_id` 或 `rtoken`。`MoveRequestMessage.gait` 同样可选；省略时沿用角色当前步态，旧存档及尚未设置步态的角色继续使用原有 15 tick/格。新客户端普通行走显式发送 walk（30 tick/格），跑步发送 run（15 tick/格）。
+- `Actor` / `ActorDelta` 的新增字段全部可选：`elevation` 为整数 0..3（角色站立支撑高度），`gait` 为 walk/run，`jump` 为 `JumpVisual | null`。旧全量快照缺省这些字段时按既有地形/站立表现处理，步态缺省沿用旧版渲染节拍；增量缺省字段表示保持原值，显式 `jump:null` 清除描述。
+
+`JumpVisual` 是服务端投影的封闭渲染子结构，以下字段全部必填：
+
+| 字段 | 类型与边界 | 含义 |
+|---|---|---|
+| `rtoken` | 不透明字符串 | 关联跳跃表现用替身，不能反查实体或内部时序 |
+| `start_x/start_y/goal_x/goal_y` | 整数 ≥0 | 起跳与落地目标格 |
+| `start_height/target_height` | 整数 0..3 | 起落支撑面高度 |
+| `progress` | 数值 0..1 | 服务端权威进度 |
+| `active` | 布尔 | 是否仍在跳跃过程 |
+| `duration` | 数值 >0 且 ≤4 | 1x 下的游戏秒时长，由服务端决定 |
+| `arc_height` | 数值 >0 且 ≤2 | 服务端决定的表现弧高，单位与渲染高度一致 |
+
+描述内没有世界 `tick`、事件 `seq`、开始时间戳或真实实体标识。落地后服务器保留最后一次描述（`active:false, progress:1`），直到下一次跳跃或恢复清除；接收方必须允许后续普通行走继续更新位置，不能反复把角色拉回该描述的 `goal`。跳跃与走环使用同一回放时刻，`duration` 不直接绑定收包墙钟，也不作为客户端写回世界的依据。
+
+`WsClient.send` 对 jump/move 采用同一鉴权与丢弃策略：socket 已 OPEN 但尚未鉴权时暂存，收到 `hello_ack` 后先同步再发送；断线清空暂存，离线发送不排队。`onStatus('open')` 表示收到 `hello_ack`，并不代表已有当前世界。只读 `worldReady` 仅在连接 OPEN、已鉴权且本连接的 `full_snapshot` 成功应用后为 true；新连接、关闭或重连时复位，旧连接帧不能使它恢复。Runtime 在 `worldReady` 前拒绝发起跳跃，防止用旧镜像选择落点；通用控制命令的队列行为不变。
 
 #### full_snapshot.data
 
@@ -295,7 +319,7 @@ sim/api/ws  (FastAPI WebSocket 网关)
 - message 保持戏内文风（§19 不静默丢弃、不用系统措辞）；code 供客户端逻辑分支，不向玩家显示。
 - **`code` 一律小写 snake_case**（M5-K4 §5.1 统一口径；实现已是此风格，本节样例原写 `IMPULSE_TOO_LONG` 已订正）。全量 code 词表见 `ws-dispatch-proposal.md` §5.1。
 - 三原则：**不静默丢弃**（非法输入必回 error 帧，不 `return None`）；**不泄露内部真相**（§5 禁出字段不出现在 `message`）；**不断线**（`load_anchor` 失败等只回 error，连接保持）。
-- **客户端消费面**：`ref` 决定哪个 UI 位显示——`player_impulse` → 念头栏错误行，`move_request`/`voxel_request` → 世界内提示，`load_anchor` → 存档面板提示（`SaveLoadPanel` 的 `role="alert"` 行），`set_control` → 顶栏提示位（`TopBar` 的 `role="alert"`）。**玩家发起、失败后需要玩家重新决策的 ref 必须有可见位**——玩家可发起的五种 ref（`move_request`/`voxel_request`/`set_control`/`player_impulse`/`load_anchor`）现全部有位（`hello` 的 auth 失败属连接级、随即断线，不在此列）。（2026-11-03 修：`load_anchor` 此前被静默丢弃，读档失败时点按钮毫无反应；2026-11-04 修：`set_control` 的六条戏内文案此前无落点。）
+- **客户端消费面**：`ref` 决定哪个 UI 位显示——`player_impulse` → 念头栏错误行，`move_request`/`jump_request`/`voxel_request` → 世界内提示，`load_anchor` → 存档面板提示（`SaveLoadPanel` 的 `role="alert"` 行），`set_control` → 顶栏提示位（`TopBar` 的 `role="alert"`）。**玩家发起、失败后需要玩家重新决策的 ref 必须有可见位**——六种 ref 为 `move_request`/`jump_request`/`voxel_request`/`set_control`/`player_impulse`/`load_anchor`；`hello` 的 auth 失败属连接级、随即断线，不在此列。（2026-11-03 修：`load_anchor` 此前被静默丢弃，读档失败时点按钮毫无反应；2026-11-04 修：`set_control` 的六条戏内文案此前无落点。）
 - **`message` 只在戏内文风 code 下才可直接显示**：`bad_channel`（"channel mismatch"）与 `unknown_type`（"unsupported message type"）是**工程措辞**，客户端必须按 `code` 白名单放行（`load_failed`/`bad_anchor` 可直显），其余走戏内兜底文案——否则英文原文会漏进玩家可见位。`set_control` 的白名单是 `bad_speed`/`bad_action`/`bad_advance`，兜底「这会儿调不了。」
 
 ## 5. 出戏边界（逐条可查）

@@ -73,7 +73,7 @@ from sim.api.voxel_view import (
 )
 from sim.core.calendar import TICKS_PER_GAME_HOUR, game_time
 from sim.core.clock import MAX_CATCHUP_REAL_SECONDS
-from sim.core.events import EventKind, WorldEvent
+from sim.core.events import EventKind, Gait, WorldEvent
 from sim.core.tick import TickLoop
 from sim.llm.prompts.banned_words import scan
 from sim.world.map import TileMap
@@ -88,7 +88,7 @@ logger = structlog.get_logger(__name__)
 #: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
 #: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
 #: PlanDelta 封闭）；1.2 = 批次 E 只读诊断面进协议快照（M6-K2）——登记见 versioning.md §7。
-_PROTOCOL_VERSION = "1.15"
+_PROTOCOL_VERSION = "1.16"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 _VOXEL_RUNTIME: VoxelRuntime | None = None
 
@@ -117,6 +117,7 @@ def voxel_state_payload(state: dict[str, Any] | None = None) -> dict[str, Any] |
 _ALLOWED_CLIENT_TYPES = {
     "voxel_request",
     "move_request",
+    "jump_request",
     "set_control",
     "sync_request",
     "hello",
@@ -524,6 +525,43 @@ def _fauna_actor_rows(loop: TickLoop, tile_map: TileMap | None = None) -> list[d
     ]
 
 
+def _locomotion_fields(loop: TickLoop, entity_id: str) -> dict[str, Any]:
+    entity = loop.state.entities[entity_id]
+    flight = entity.jump
+    if entity.gait is None and flight is None:
+        return {}
+    if loop.pathfinder is not None and loop.pathfinder.height_of is not None:
+        elevation = loop.pathfinder.height_at(*entity.pos)
+    elif flight is not None:
+        elevation = flight.start_height if flight.airborne else flight.landed_height
+    else:
+        elevation = 1
+    fields: dict[str, Any] = {"elevation": elevation, "gait": entity.gait or "walk", "jump": None}
+    if flight is not None:
+        goal = flight.goal if flight.airborne else flight.landed_pos
+        height = flight.target_height if flight.airborne else flight.landed_height
+        assert goal is not None and height is not None
+        elapsed = (
+            (flight.landed_at - flight.started_at)
+            if flight.landed_at is not None
+            else flight.duration
+        )
+        fields["jump"] = {
+            "rtoken": _rtoken(f"jump:{entity_id}:{flight.started_at}"),
+            "start_x": flight.start[0],
+            "start_y": flight.start[1],
+            "goal_x": goal[0],
+            "goal_y": goal[1],
+            "start_height": flight.start_height,
+            "target_height": height,
+            "progress": flight.progress_at(loop.state.tick),
+            "active": flight.airborne,
+            "duration": min(flight.duration, max(1, elapsed)) / 60,
+            "arc_height": flight.arc_height,
+        }
+    return fields
+
+
 def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
     """全量快照（full_snapshot）。rtoken 替身；无 tick/seed/内部 id。
 
@@ -541,6 +579,7 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
             "facing": "s",
             "sprite": sprite_name_of(entity_id),
             "anim": _anim_of(entity_id),  # D14：动作姿势账本（缺省 idle）
+            **_locomotion_fields(loop, entity_id),
         }
         name = _display_name_of(entity_id)
         if name is not None:
@@ -743,6 +782,7 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
             "rtoken": _rtoken(entity_id),
             "x": entity.pos[0],
             "y": entity.pos[1],
+            **_locomotion_fields(loop, entity_id),
         }
         name = _display_name_of(entity_id)
         if name is not None:
@@ -899,6 +939,20 @@ def _tileset_name(tile_map: TileMap) -> str:
     return "zelda_like_v1" if (tile_map.width, tile_map.height) == (96, 96) else "grid"
 
 
+class MoveRequestFields(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    target_x: int = Field(strict=True)
+    target_y: int = Field(strict=True)
+    gait: Gait | None = None
+
+
+class JumpRequestFields(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    target_x: int = Field(strict=True, ge=0)
+    target_y: int = Field(strict=True, ge=0)
+    gait: Gait = "walk"
+
+
 class VoxelRequestFields(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     action: Literal["dig_start", "dig_cancel", "place"]
@@ -1000,6 +1054,8 @@ def handle_client_message(
         return _handle_voxel_request(raw, loop, ctrl)
     if msg_type == "move_request":
         return _handle_move_request(raw, loop, pf)
+    if msg_type == "jump_request":
+        return _handle_jump_request(raw, loop, pf, ctrl)
     if msg_type == "hello":
         # W6：hello 是鉴权握手。token 对 → 确认；错/缺 → auth_error（客户端应重连取新 token）
         if check_hello_auth(raw):
@@ -1056,21 +1112,69 @@ def _handle_move_request(
     protagonist_id = _protagonist_id(loop)
     if protagonist_id is None:
         return None  # 主角不存在是世界态问题，非客户端输入缺陷
-    tx, ty = raw.get("target_x"), raw.get("target_y")
-    # bool 是 int 子类：JSON true/false 会被当 1/0 送寻路（codex P3 #1）
-    if not (
-        isinstance(tx, int)
-        and isinstance(ty, int)
-        and not isinstance(tx, bool)
-        and not isinstance(ty, bool)
-    ):
-        return _error_frame("move_request", _ERROR_BAD_TARGET, "那个地方去不了。")
     try:
-        path = pf.find(loop.state.entities[protagonist_id].pos, (tx, ty))
+        request = MoveRequestFields.model_validate(
+            {k: v for k, v in raw.items() if k not in {"v", "ws_seq", "type", "channel"}}
+        )
+        if "gait" in raw and raw["gait"] not in ("walk", "run"):
+            raise ValueError("invalid gait")
+    except (ValidationError, ValueError):
+        return _error_frame("move_request", _ERROR_BAD_TARGET, "那个地方去不了。")
+    entity = loop.state.entities[protagonist_id]
+    if entity.jump is not None and entity.jump.airborne:
+        return None
+    gait = request.gait or entity.gait
+    goal = (request.target_x, request.target_y)
+    try:
+        if goal == entity.pos and gait is not None:
+            path = (entity.pos,)
+        else:
+            path = pf.find(
+                entity.pos, goal, elevation=pf.height_at(*entity.pos) if gait is not None else None
+            )
     except ValueError:
         return None  # 不可达/不可通行：静默忽略（客户端已预检，§4 权衡结论）
-    loop.issue_move(protagonist_id, list(path))
+    loop.issue_move(protagonist_id, list(path), gait=gait)
     return None
+
+
+def _handle_jump_request(
+    raw: dict[str, Any], loop: TickLoop, pf: Pathfinder, control: ControlState
+) -> dict[str, Any]:
+    from sim.world.locomotion import plan_jump
+
+    protagonist_id = _protagonist_id(loop)
+    try:
+        request = JumpRequestFields.model_validate(
+            {k: v for k, v in raw.items() if k not in {"v", "ws_seq", "type", "channel"}}
+        )
+        if protagonist_id is None:
+            raise ValueError("missing player")
+        event = plan_jump(
+            loop.state, protagonist_id, (request.target_x, request.target_y), request.gait, pf
+        )
+    except (ValidationError, ValueError):
+        return _error_frame("jump_request", _ERROR_BAD_TARGET, "那处跳不过去。")
+    if _VOXEL_RUNTIME is not None:
+        _VOXEL_RUNTIME.cancel(control)
+    loop.enqueue(event)
+    entity = loop.state.entities[protagonist_id]
+    # Do not consume the global structure/voxel delta ledgers for a private reply.
+    return {
+        "type": "state_delta",
+        "channel": "render",
+        "v": _PROTOCOL_VERSION,
+        "ws_seq": 0,
+        "actors": [
+            {
+                "rtoken": _rtoken(protagonist_id),
+                "x": entity.pos[0],
+                "y": entity.pos[1],
+                **_locomotion_fields(loop, protagonist_id),
+            }
+        ],
+        "time": _time_payload(loop.state.tick),
+    }
 
 
 def _handle_sync_request(loop: TickLoop, pf: Pathfinder) -> dict[str, Any]:
@@ -1512,6 +1616,7 @@ def fork_notice(anchor_name: str) -> str:
 
 
 _CHANNEL_FOR = {
+    "jump_request": "render",
     "voxel_request": "render",
     "move_request": "render",
     "set_control": "control",

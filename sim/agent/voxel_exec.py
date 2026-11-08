@@ -114,7 +114,11 @@ class VoxelRuntime:
         ):
             raise VoxelRejected("那处地方碰不到。")
         actor = state.entities.get(PLAYER)
-        if actor is None or actor.incapacitated_until is not None:
+        if (
+            actor is None
+            or actor.incapacitated_until is not None
+            or (actor.jump is not None and actor.jump.airborne)
+        ):
             raise VoxelRejected("此刻手上使不上劲。")
         if (
             not self._map().in_bounds(x, y)
@@ -236,7 +240,7 @@ class VoxelRuntime:
                 to_ref=STOCK if action == "dig" else "world:tile",
                 reason="dig_yield" if action == "dig" else "place_consumed",
             ),
-            tile_changed_event(tick, x, y, gid),
+            tile_changed_event(tick, x, y, gid, height=height),
         ]
 
     def _stop_paths(self, state: WorldState, tick: int) -> list[WorldEvent]:

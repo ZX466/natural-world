@@ -42,7 +42,7 @@ from sim.api.ws import (
 )
 from sim.core.events import (
     EventKind,
-    TileChangedPayload,
+    WorldEvent,
     move_event,
     tile_changed_event,
     world_create_event,
@@ -53,6 +53,7 @@ from sim.core.rng import RngRegistry
 from sim.core.tick import TickLoop
 from sim.core.world import WorldState, build_default_bus
 from sim.world.map import TileMap
+from sim.world.surface import SurfaceMap
 
 logger = structlog.get_logger()
 
@@ -119,28 +120,33 @@ def _default_map() -> TileMap:
     return _fallback_map()
 
 
-async def rebuild_tile_map(branch_store: Any) -> TileMap:
-    """从静态底图与本分支的瓦片事件重建碰撞，不继承旧分支内存图。"""
-    from sim.core.events import TileChangedPayload, VoxelEditedPayload
-
-    tile_map = _default_map()
-    voxel_heights: dict[tuple[int, int], int] = {}
+async def rebuild_surface(branch_store: Any) -> SurfaceMap:
+    """Rebuild both support heights and ground collision at one bounded cursor."""
     height_of = None
+
+    def base_height(x: int, y: int) -> int:
+        nonlocal height_of
+        if height_of is None:
+            height_of = _voxel_height_lookup()
+        return height_of(x, y)
+
+    surface = SurfaceMap(_default_map(), base_height)
     if branch_store is not None:
-        for event in await branch_store.read_branch_history():
-            if event["event_type"] == EventKind.VOXEL_EDITED.value:
-                edit = VoxelEditedPayload.model_validate(event["payload"])
-                if height_of is None:
-                    height_of = _voxel_height_lookup()
-                pos = (edit.x, edit.y)
-                voxel_heights[pos] = edit.result_height(voxel_heights.get(pos, height_of(*pos)))
-            elif event["event_type"] == "tile_changed":
-                payload = TileChangedPayload.model_validate(event["payload"])
-                height = voxel_heights.get((payload.x, payload.y), 1)
-                tile_map = tile_map.with_collision(
-                    payload.x, payload.y, walkable=payload.tile_id != 0 and height == 1
+        for row in await branch_store.read_branch_history():
+            if row["event_type"] in {EventKind.VOXEL_EDITED.value, EventKind.TILE_CHANGED.value}:
+                surface.apply(
+                    WorldEvent(
+                        tick=int(row["tick"]),
+                        event_type=EventKind(row["event_type"]),
+                        payload=row["payload"],
+                    )
                 )
-    return tile_map
+    return surface
+
+
+async def rebuild_tile_map(branch_store: Any) -> TileMap:
+    """Compatibility entry point for ground-only consumers."""
+    return (await rebuild_surface(branch_store)).tile_map
 
 
 #: 需要补发 tile 还原事件的结构终态（起点 STARTED/CHECKPOINT 不改占格）。
@@ -167,6 +173,8 @@ def _with_structure_tile_restore(
     events: list[Any],
     structures: Any,
     tile_map: TileMap,
+    *,
+    observed_restores: dict[int, tuple[WorldEvent, tuple[WorldEvent, ...]]] | None = None,
 ) -> list[Any]:
     """P-6：坍塌/拆除后补发逐格 `tile_changed(tile_id=静态原值)`。
 
@@ -175,11 +183,18 @@ def _with_structure_tile_restore(
     后地面恢复成它本来的样子（草地仍可行走、水面仍不可走）。
 
     `structures` 必须是**事件应用前**的快照（调用方在 observe 之前调用）。
+    已即时投影的还原对象按原事件身份复用，避免 flush 再次覆盖其后的地形编辑。
     """
     out: list[Any] = []
+    static_map = None
+    height_of = None
     for event in events:
         out.append(event)
         if event.event_type not in _TILE_RESTORING_KINDS:
+            continue
+        cached = observed_restores.get(id(event)) if observed_restores is not None else None
+        if cached is not None and cached[0] is event:
+            out.extend(cached[1])
             continue
         sid = str(event.payload.get("structure_id", ""))
         snapshot = getattr(structures, "get", lambda _k: None)(sid)
@@ -187,12 +202,21 @@ def _with_structure_tile_restore(
             continue
         # 逐格还原到**该格**的静态原值（不能共用首格值）。
         for x, y in snapshot.tiles:
+            if static_map is None:
+                static_map = _default_map()
+            if static_map.is_walkable(x, y):
+                height = 1
+            else:
+                if height_of is None:
+                    height_of = _voxel_height_lookup()
+                height = height_of(x, y)
             out.append(
                 tile_changed_event(
                     event.tick,
                     x,
                     y,
                     _ground_tile_id(tile_map, x, y),
+                    height=height,
                     branch_id=event.branch_id,
                 )
             )
@@ -333,9 +357,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     offline_from = (
         await last_recorded_at(store, current_branch) if current_branch is not None else offline_now
     )
-    tile_map = await rebuild_tile_map(
+    surface = await rebuild_surface(
         NpcStore(store, branch_id=current_branch) if current_branch is not None else None
     )
+    tile_map = surface.tile_map
+    app.state.surface = surface
     # C06-③：感知挂载进 tick 固定执行序第 3 步（帧键=rtoken，WS 不广播）
     # 批次 D8：感知叙事接真名（rtoken→戏内名映射；名册 villagers + 陈默）。
     # 名字是戏内事实可出站；映射后 prompt 说「赵铁柱正朝这边走」而非「rt-…」。
@@ -369,6 +395,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
     )
 
+    # Retain each raw event too: an id cannot be reused before its batch commits.
+    observed_restores: dict[int, tuple[WorldEvent, tuple[WorldEvent, ...]]] = {}
+
     async def on_flush(
         events: list[Any], *, checkpoint_at: float | None = None, force_checkpoint: bool = False
     ) -> None:
@@ -383,7 +412,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # 正好是派生需要的「该结构占着哪些格」。
         # 收编 codex DA-01/DA-02：落库改走 flush_world（事件 + 完整世界检查点
         # 同事务），但**派生必须先做**，派生后的完整列表才是本批真相。
-        events = _with_structure_tile_restore(events, maintenance.structures, tile_map)
+        events = _with_structure_tile_restore(
+            events, maintenance.structures, tile_map, observed_restores=observed_restores
+        )
+        if surface.observe_unseen(events):
+            _sync_surface()
+            loop.pending_delta_entity_ids.update(
+                eid for eid, actor in loop.state.entities.items() if actor.gait is not None
+            )
         if any(event.event_type is EventKind.AGENT_INCAPACITATED for event in events):
             # 失能前已在途的 LLM 结果不能在醒来后继续执行旧计划。
             world_revision += 1
@@ -408,6 +444,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             checkpoint_at=checkpoint_at,
             force_checkpoint=force_checkpoint,
         )
+        surface.mark_flushed(events)
+        for event in events:
+            observed_restores.pop(id(event), None)
         npc_l2.observe(events)
         health_changed = any(
             event.event_type in {EventKind.NPC_HEALTH_CHANGED, EventKind.NPC_DEATH}
@@ -430,16 +469,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             refresh_hidden_states(
                 hidden_states, await NpcStore(store, branch_id=branch_id).materialize_hidden()
             )
-        if any(event.event_type is EventKind.TILE_CHANGED for event in events):
-            # 落库成功后增量消费本批瓦片真相，不能只等下一次读档重建。
-            for event in events:
-                if event.event_type is EventKind.TILE_CHANGED:
-                    tile = TileChangedPayload.model_validate(event.payload)
-                    tile_map = tile_map.with_collision(tile.x, tile.y, walkable=tile.tile_id != 0)
-            app.state.tile_map = tile_map
-            build_runtime.tile_map = tile_map
-            pathfinder.observe_map(tile_map)
-            pathfinder.cache.entries.clear()
+        # Terrain already follows enqueued facts; inventory still commits below.
         voxel_runtime.observe(events)
         voxel_gateway.apply_voxel_events(
             events,
@@ -572,7 +602,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         npc_runtime,
         await PowerStore(store, branch_id=current_branch or "main").materialize(None),
     )
-    pathfinder = Pathfinder(tile_map)
+    pathfinder = Pathfinder(tile_map, height_of=lambda x, y: surface.height_at(x, y))
     app.state.pathfinder = pathfinder
     loop.pathfinder = pathfinder
     loop.fauna_enabled = True
@@ -650,7 +680,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             pathfinder.observe_map(tile_map)
             if any(event.event_type is EventKind.STRUCTURE_COMPLETED for event in events):
                 for entity_id, entity in sorted(state.entities.items()):
-                    if any(not tile_map.is_walkable(*pos) for pos in entity.path):
+                    if entity.gait is None and any(
+                        not tile_map.is_walkable(*pos) for pos in entity.path
+                    ):
                         events.append(
                             move_event(tick, entity_id, entity.pos, entity.pos, (entity.pos,))
                         )
@@ -1168,7 +1200,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         return None
 
     async def _drain_loads() -> bool:
-        nonlocal demography, tile_map, world_revision, npc_runtime
+        nonlocal demography, tile_map, surface, world_revision, npc_runtime
         nonlocal health_evolution, health_snapshot_day
         """driver 每帧调用：执行 pending fork（事件循环内，可 await）。
 
@@ -1276,7 +1308,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 maintenance.ledger = await branch_store.materialize_matter()
                 maintenance.structures = await branch_store.materialize_structures()
                 restore_structures(maintenance.structures)
-                tile_map = await rebuild_tile_map(branch_store)
+                surface = await rebuild_surface(branch_store)
+                tile_map = surface.tile_map
+                app.state.surface = surface
                 app.state.tile_map = tile_map
                 build_runtime.tile_map = tile_map
                 # P-2：工地账本纯内存，清零后须从**本分支**事件流恢复在建工地
@@ -1401,6 +1435,35 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     app.state.voxel_runtime = voxel_runtime
     voxel_gateway.set_voxel_runtime(voxel_runtime)
+
+    def _sync_surface() -> None:
+        nonlocal tile_map
+        tile_map = surface.tile_map
+        app.state.tile_map = tile_map
+        app.state.surface = surface
+        build_runtime.tile_map = tile_map
+        pathfinder.observe_map(tile_map)
+        pathfinder.cache.entries.clear()
+
+    def _observe_surface(event: WorldEvent) -> None:
+        terrain_events: tuple[WorldEvent, ...] = (event,)
+        if event.event_type in _TILE_RESTORING_KINDS:
+            # Landing sees the terminal now; flush later persists these same objects.
+            terrain_events = tuple(
+                _with_structure_tile_restore([event], maintenance.structures, tile_map)[1:]
+            )
+            observed_restores[id(event)] = (event, terrain_events)
+        for terrain_event in terrain_events:
+            if surface.observe(terrain_event):
+                _sync_surface()
+                pos = (terrain_event.payload["x"], terrain_event.payload["y"])
+                loop.pending_delta_entity_ids.update(
+                    eid
+                    for eid, actor in loop.state.entities.items()
+                    if actor.gait is not None and actor.pos == pos
+                )
+
+    loop.attach_event_observer(_observe_surface)
     # Maintenance receives the tick being processed; editing uses completed-tick time.
     loop.attach_maintenance(lambda state, tick: voxel_runtime.tick(state, tick + 1))
     # 全部确定性钩子已就位；后台模型和 WS 驱动尚未启动，离线期间只有 L1/引擎运行。
@@ -1470,7 +1533,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 raise result
 
 
-app = FastAPI(title="临河镇 sim", version="1.15", lifespan=lifespan)
+app = FastAPI(title="临河镇 sim", version="1.16", lifespan=lifespan)
 app.include_router(settings_router)
 app.include_router(anchors_router)  # M5-K7：玩家档读路径（落库 → WS 查表集供数）
 
@@ -1597,7 +1660,13 @@ async def ws_endpoint(ws: WebSocket) -> None:
                     "auth_error",
                     "authentication required",
                 )
-            elif msg_type in {"move_request", "set_control", "player_impulse", "voxel_request"}:
+            elif msg_type in {
+                "move_request",
+                "jump_request",
+                "set_control",
+                "player_impulse",
+                "voxel_request",
+            }:
                 async with app.state.world_write_lock:
                     if not getattr(app.state, "world_source_ready", True):
                         reply = _error_frame(msg_type, "bad_action", "此刻动不了。")

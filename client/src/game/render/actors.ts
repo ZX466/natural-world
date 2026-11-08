@@ -20,12 +20,12 @@ export function advanceAnimClock(current: number, moved: boolean, deltaMs: numbe
   return current < 0 ? 0 : current + deltaMs;
 }
 
-/** facing → 图集行号（素材帧布局实测：下/上/右/左 = 0/1/2/3）。 */
-export function facingRow(facing: Facing): number {
-  return { n: 1, e: 2, s: 0, w: 3 }[facing];
+/** facing → 当前图集的行号（各套素材的朝向行序不同）。 */
+export function facingRow(sheet: SheetGeometry, facing: Facing): number {
+  return sheet.rows[facing];
 }
 
-/** C-2：chenmo.png 272×256 = **17 列**×16 行 @16px——Phaser spritesheet 线性帧号
+/** C-2：chenmo.png 272×256 = **17 列 × 8 行 @16×32**——Phaser spritesheet 线性帧号
  *  f = col + row*COLS。此前按 3 列算（row*3）→ 帧号全落表第 0 行，朝北 idle
  *  命中全透明帧（主角消失）。COLS 与 png 实宽绑定，换素材必同改。
  *  D10：具体数值搬进 CHENMO_SHEET（几何单源）。 */
@@ -34,6 +34,8 @@ export function facingRow(facing: Facing): number {
 export interface SheetGeometry {
   /** 图集列数（png 宽 ÷ 16px；Phaser 线性帧号的行进因子） */
   cols: number;
+  /** 素材实测的朝向行号 */
+  rows: Readonly<Record<Facing, number>>;
   /** 行内参与 walk 环的帧数 */
   framesPerRow: number;
   /** 站立帧所在列（chenmo=1 中帧；villager=0） */
@@ -41,17 +43,32 @@ export interface SheetGeometry {
 }
 
 /** chenmo 几何（17 列 × 步-站-步） */
-export const CHENMO_SHEET: SheetGeometry = { cols: 17, framesPerRow: 3, standCol: 1 };
+export const CHENMO_SHEET: SheetGeometry = {
+  cols: 17,
+  rows: { s: 0, e: 1, n: 2, w: 3 },
+  framesPerRow: 3,
+  standCol: 1,
+};
 /** villager 几何（NPC_test.png 64×128；帧 16×32——2026-10-12「有头没身」修正：
  *  此前按 16px 帧算 4×8 行是错的，实为 **4 列 × 4 行 @16×32**。每行 4 帧全参与
- *  行走环，行序 下/上/右/左（R0-R3）。16×32 素材无独立劳作姿势行（D14 的
+ *  行走环，行序 下/右/上/左（R0-R3）。16×32 素材无独立劳作姿势行（D14 的
  *  R4-7 姿势行在 32px 帧几何下不存在——静止姿势退化为朝向站立帧）。 */
-export const VILLAGER_SHEET: SheetGeometry = { cols: 4, framesPerRow: 4, standCol: 0 };
+export const VILLAGER_SHEET: SheetGeometry = {
+  cols: 4,
+  rows: { s: 0, e: 1, n: 2, w: 3 },
+  framesPerRow: 4,
+  standCol: 0,
+};
 
 /** GOD 古风外观池几何（build_god_characters.py 产物 48×128 = 3 列 × 4 行 @16×32；
- *  源 96×128@32×32 缩半+行序重排为 下/上/右/左——与 facingRow 直接对齐）。
+ *  源 96×128@32×32 缩半+行序重排为 下/上/右/左）。
  *  2026-10-12 D1-D5 裁决接入：D4 只摘平民，军事/名人不入池。 */
-export const GOD_SHEET: SheetGeometry = { cols: 3, framesPerRow: 3, standCol: 1 };
+export const GOD_SHEET: SheetGeometry = {
+  cols: 3,
+  rows: { s: 0, n: 1, e: 2, w: 3 },
+  framesPerRow: 3,
+  standCol: 1,
+};
 
 /** GOD 池 texture key（与后端 villagers.GOD_SPRITE_POOL 同名——
  *  sprite_for_entity 单一真相源，两端清单漂移 = 兜底 villager 皮）。 */

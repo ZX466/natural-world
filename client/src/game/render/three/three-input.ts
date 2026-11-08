@@ -4,6 +4,8 @@ import type { VoxelRequestMessage } from '../../../net/protocol';
 
 export interface WorldInputPorts {
   move(point: MovePoint): boolean;
+  jump?(point: MovePoint): boolean;
+  airborne?(): boolean;
   voxel(action: VoxelRequestMessage['action'], point: MovePoint): void;
   rotate(dx: number, dy: number): void;
   zoom(delta: number): void;
@@ -52,6 +54,8 @@ export function createWorldInput(
 ) {
   const abort = new AbortController();
   const keys = new Set<string>();
+  const shifts = new Set<string>();
+  let running = false;
   let epoch = ports.epoch();
   let timer: ReturnType<typeof setTimeout> | null = null;
   let goal: MovePoint | null = null;
@@ -78,11 +82,13 @@ export function createWorldInput(
     timer = null;
   };
   const sameWorld = () => epoch === ports.epoch() && ports.enabled();
+  const airborne = () => ports.airborne?.() ?? false;
   const voxel = (action: VoxelRequestMessage['action'], point: MovePoint) => {
-    if (sameWorld() && (action === 'dig_cancel' || !ports.typing())) ports.voxel(action, point);
+    if (sameWorld() && (action === 'dig_cancel' || (!ports.typing() && !airborne())))
+      ports.voxel(action, point);
   };
   const stop = () => {
-    if (goal && sameWorld()) {
+    if (goal && sameWorld() && !airborne()) {
       const actor = ports.hero();
       if (actor) ports.move(actor);
     }
@@ -90,10 +96,10 @@ export function createWorldInput(
     keyIntent = '';
   };
   const move = (point: MovePoint | null) => {
-    if (point && sameWorld() && !ports.typing() && ports.move(point)) goal = point;
+    if (point && sameWorld() && !ports.typing() && !airborne() && ports.move(point)) goal = point;
   };
   const flushDrag = (force = false) => {
-    if (!pendingDrag || (!force && Date.now() - lastDragAt < 100)) return;
+    if (airborne() || !pendingDrag || (!force && Date.now() - lastDragAt < 100)) return;
     const key = `${pendingDrag.x},${pendingDrag.y}`;
     if (key !== lastMove) {
       move(pendingDrag);
@@ -113,6 +119,8 @@ export function createWorldInput(
     const canSend = send && sameWorld();
     release(canSend);
     keys.clear();
+    shifts.clear();
+    running = false;
     pointer = null;
     if (canSend) stop();
     else {
@@ -134,12 +142,29 @@ export function createWorldInput(
     }
     return true;
   };
+  const isShift = (code: string) => code === 'ShiftLeft' || code === 'ShiftRight';
+  const syncShift = (event: KeyboardEvent, down: boolean) => {
+    const before = running;
+    if (isShift(event.code)) {
+      if (down) shifts.add(event.code);
+      else shifts.delete(event.code);
+    }
+    if (typeof event.shiftKey === 'boolean') {
+      // Focus can return with Shift already held, without a fresh Shift-down.
+      // Native event modifiers also recover a Shift-up lost during blur.
+      running = event.shiftKey;
+      if (!running) shifts.clear();
+    } else if (isShift(event.code)) running = shifts.size > 0;
+    return before !== running;
+  };
+  const intentFor = (actor: MovePoint, direction: MovePoint) =>
+    `${actor.x},${actor.y},${direction.x},${direction.y},${ports.revision()},${running ? 'run' : 'walk'}`;
   const drive = () => {
-    if (!active()) return;
+    if (!active() || airborne()) return;
     const actor = ports.hero();
     const direction = movementDirection(keys, ports.azimuth());
     if (!actor || (!direction.x && !direction.y)) return;
-    const intent = `${actor.x},${actor.y},${direction.x},${direction.y},${ports.revision()}`;
+    const intent = intentFor(actor, direction);
     if (intent === keyIntent) return;
     keyIntent = intent;
     const targets = [{ x: actor.x + direction.x, y: actor.y + direction.y }];
@@ -158,13 +183,18 @@ export function createWorldInput(
       ports.error('那处挡着路。');
     }
   };
+  const resendPace = () => {
+    if (keys.size) drive();
+    else if (goal) move(goal);
+  };
   canvas.addEventListener('contextmenu', (event) => event.preventDefault(), {
     signal: abort.signal,
   });
   canvas.addEventListener(
     'pointerdown',
     (event) => {
-      if (![0, 1, 2].includes(event.button) || !active()) return;
+      if (![0, 1, 2].includes(event.button) || !active() || (event.button === 0 && airborne()))
+        return;
       release(true);
       pointer = { x: event.clientX, y: event.clientY };
       const edit = ports.pickEdit(pointer.x, pointer.y);
@@ -195,7 +225,7 @@ export function createWorldInput(
       }
       timer = setTimeout(() => {
         timer = null;
-        if (!active() || press !== current || !edit) return;
+        if (!active() || airborne() || press !== current || !edit) return;
         stop();
         current.digging = true;
         voxel('dig_start', edit);
@@ -281,9 +311,40 @@ export function createWorldInput(
         cancel();
         return;
       }
-      if (!moveKeys.has(event.code)) return;
+      const paceChanged = syncShift(event, true);
+      if (isShift(event.code)) {
+        if (paceChanged) resendPace();
+        return;
+      }
+      if (event.code === 'Space') {
+        event.preventDefault();
+        if (event.repeat || airborne()) return;
+        const actor = ports.hero();
+        if (!actor) return;
+        const direction = movementDirection(keys, ports.azimuth());
+        const distance = running ? 2 : 1;
+        const target = {
+          x: actor.x + direction.x * distance,
+          y: actor.y + direction.y * distance,
+        };
+        if (ports.jump?.(target)) {
+          release(true);
+          goal = null;
+          // Until a flight/landing/error changes the authoritative revision,
+          // a held direction must not immediately send a ground move again.
+          keyIntent = intentFor(actor, direction);
+        }
+        return;
+      }
+      if (!moveKeys.has(event.code)) {
+        if (paceChanged) resendPace();
+        return;
+      }
       event.preventDefault();
-      if (event.repeat || keys.has(event.code)) return;
+      if (event.repeat || keys.has(event.code)) {
+        if (paceChanged) resendPace();
+        return;
+      }
       release(true);
       keys.add(event.code);
       drive();
@@ -295,7 +356,11 @@ export function createWorldInput(
     (raw) => {
       const event = raw as KeyboardEvent;
       if (!active()) return;
-      if (!keys.delete(event.code)) return;
+      const paceChanged = syncShift(event, false);
+      if (!keys.delete(event.code)) {
+        if (paceChanged) resendPace();
+        return;
+      }
       if (!keys.size) stop();
       else drive();
     },
@@ -303,6 +368,9 @@ export function createWorldInput(
   );
   keyboard.addEventListener('blur', () => cancel(), { signal: abort.signal });
   return {
+    get running() {
+      return running;
+    },
     get goal() {
       return goal;
     },
@@ -314,7 +382,7 @@ export function createWorldInput(
     },
     cancel,
     tick() {
-      if (!active()) return;
+      if (!active() || airborne()) return;
       const actor = ports.hero();
       if (goal && actor?.x === goal.x && actor.y === goal.y) goal = null;
       if (keys.size) drive();

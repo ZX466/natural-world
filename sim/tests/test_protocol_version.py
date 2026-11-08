@@ -6,17 +6,13 @@
 让下一次升版不再是靠记忆。
 
 **钉的四条**：
-1. **防回退**：sim 常量必须是 `1.1`（升 minor 是登记事件，不是随手改）；
+1. **防回退**：sim 常量必须是当前登记版本（升 minor 是登记事件，不是随手改）；
 2. **跨树防漂移**：前端常量与 sim 常量**逐字相等**（白盒读 `ws.ts` 源码，不 import TS）；
 3. **信封取自常量**：帧构造点（`snapshot_payload` 等）不得硬写 `"1.0"` 这类字面量；
-4. **登记一致性**：`versioning.md` §7 必须有 1.1 行，且登记的三个 minor 变更与代码事实相符
-   （`fast_forward` action / `GET /api/anchors/current` / `PlanDelta` 封闭 schema /
-   `GET /{anchor_id}`）。
+4. **登记一致性**：`versioning.md` §7 必须有当前版本行，既有及新增契约关键词保留。
 
-**已知刻意不钉的一条**：`shared/openapi.json` 的 `info.version` 仍是 FastAPI 默认 `1.0.0`——
-**它不是 WS 协议版本的真相源**（versioning §5 说「双处记录」，但 HTTP 侧未接同源常量）。
-本单所有权不含 `shared/`（红线：版本升动物理快照会让 `gen-protocol --check` 失去门禁意义），
-故只断言 **major 一致**（同为 1.x），把「HTTP 侧接同源」登记为待办，见本文件末尾说明。
+live OpenAPI 与快照 `info.version` 也必须精确等于当前登记版本；不再仅校验 major。
+早期 HTTP 版本未接同源的历史记录保留在 versioning.md，不能作为当前漂移例外。
 """
 
 from __future__ import annotations
@@ -32,8 +28,8 @@ WS_TS = REPO_ROOT / "client" / "src" / "net" / "ws.ts"
 SNAPSHOT = REPO_ROOT / "shared" / "openapi.json"
 VERSIONING = REPO_ROOT / "docs" / "api" / "versioning.md"
 
-#: 当前版本（1.1=裁 34-1 甲案三个 minor；1.2=M6-K2 诊断面进快照，仍是 minor）。
-EXPECTED_VERSION = "1.15"
+#: 当前登记版本；1.16 新增可选步态、高度与跳跃表现/请求。
+EXPECTED_VERSION = "1.16"
 
 #: 登记在 §7 的 minor 变更关键词（doc 同步钉用，避免「登记与代码各说各话」）。
 REGISTERED_MINOR_KEYWORDS = (
@@ -46,6 +42,10 @@ REGISTERED_MINOR_KEYWORDS = (
     "AnchorMaterializationStatus",
     "Actor.name",
     "MonologueMessage.name",
+    "jump_request",
+    "gait",
+    "elevation",
+    "JumpVisual",
 )
 
 
@@ -80,6 +80,18 @@ class TestProtocolVersion:
             == snapshot["components"]["schemas"]["VoxelInventory"]
         )
 
+    def test_live_full_snapshot_schema_matches_the_authoritative_protocol_snapshot(self):
+        from sim.api.main import app
+
+        snapshot = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
+        schema = app.openapi()["components"]["schemas"]["FullSnapshotMessage"]
+        assert schema == snapshot["components"]["schemas"]["FullSnapshotMessage"]
+        assert "monologue_history" not in schema["required"]
+        assert schema["properties"]["monologue_history"] == {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/MonologueMessage"},
+        }
+
     def test_inventory_schema_adds_optional_materials_without_opening_extra_fields(
         self,
     ):
@@ -94,7 +106,7 @@ class TestProtocolVersion:
             assert schema["properties"][material]["minimum"] == 0
 
     def test_sim_version_is_expected(self) -> None:
-        """sim 侧常量 = `1.1`（防回退：降版会让新前端按旧契约解析）。"""
+        """sim 侧常量为当前登记版本，防止新版字段被按旧契约解析。"""
         assert _PROTOCOL_VERSION == EXPECTED_VERSION, (
             f"协议版本 = {_PROTOCOL_VERSION}，应为 {EXPECTED_VERSION}"
             "——升/降版是登记事件（versioning §7），不是随手改"
@@ -129,24 +141,23 @@ class TestProtocolVersion:
             "帧构造点的 v 用量少于 8——新增帧时是否漏了信封？"
         )
 
-    def test_snapshot_info_version_major_matches(self) -> None:
-        """`info.version` 与 WS 版本 **major 一致**（刻刻意：HTTP 侧未接同源常量，见文件末尾）。"""
+    def test_snapshot_info_version_matches(self) -> None:
+        """Current snapshot, client envelope and live spec use one registered version."""
         info = json.loads(SNAPSHOT.read_text(encoding="utf-8"))["info"]
-        ws_major = _PROTOCOL_VERSION.split(".")[0]
-        assert str(info.get("version", "")).startswith(f"{ws_major}."), (
-            f"快照 info.version={info.get('version')!r} 与 WS major {ws_major} 不同源"
+        assert info.get("version") == EXPECTED_VERSION == _client_version() == _PROTOCOL_VERSION, (
+            f"快照 info.version={info.get('version')!r} 与 WS {_PROTOCOL_VERSION} 不同源"
         )
 
 
 class TestRegistrationSync:
     def test_section7_has_1_1_row(self) -> None:
-        """§7 变更登记表必须有 `1.1` 行（登记缺失 = 升版没走流程）。"""
+        """§7 变更登记表必须有当前版本行。"""
         assert f"| {EXPECTED_VERSION} |" in _registration_section(), (
             f"versioning.md §7 缺 {EXPECTED_VERSION} 行——升版必须登记（§7）"
         )
 
     def test_section7_lists_three_minor_changes(self) -> None:
-        """1.1 行的登记须点名三个 minor 变更（关键词齐 ⇒ 登记不是空话）。"""
+        """既有与新增 minor 契约关键词都须在登记中可追溯。"""
         section = _registration_section()
         missing = [kw for kw in REGISTERED_MINOR_KEYWORDS if kw not in section]
         assert missing == [], f"§7 登记缺关键词：{missing}"
@@ -165,11 +176,7 @@ class TestRegistrationSync:
 
 
 # ---------------------------------------------------------------------------
-# 待办（不在本单所有权，随下一轮 versioning 单处理）
+# 版本落点纪律
 # ---------------------------------------------------------------------------
-# 1. **`info.version` 未接同源常量**：versioning §5 写「`shared/openapi.json` 的 `info.version`
-#    与 WS 信封 `v` 双处记录版本」，但 HTTP 侧是 FastAPI 默认 `1.0.0`，与 WS 版本无联动。
-#    要接成同源需改 FastAPI app 的 `version=`（`sim/api/main.py`）——那是**另一个落点**，
-#    且会改动快照（本单红线：版本升不动物理快照）。故本单只断言 major 一致。
-# 2. **前端升版未跑类型面门禁**：`PROTOCOL_VERSION` 是普通常量（非生成的协议类型），
-#    前端侧无编译期校验；本文件的跨树钉是唯一守卫 ⇒ **改版本必跑本文件**。
+# `PROTOCOL_VERSION` 是普通常量，不由协议类型生成；改版本必须运行本文件，
+# 同时检查 live/快照 info.version、前后端信封及变更登记，再跑生成物漂移检查。

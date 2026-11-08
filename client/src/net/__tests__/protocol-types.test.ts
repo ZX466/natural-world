@@ -28,6 +28,8 @@ import type {
   LoadAnchorMessage,
   SyncRequestMessage,
   MoveRequestMessage,
+  JumpRequestMessage,
+  JumpVisual,
   PerceptionMessage,
   MonologueMessage,
   ImpulseFeedbackMessage,
@@ -100,6 +102,51 @@ describe('ws-protocol 类型与出戏边界', () => {
     expectTypeOf<MoveRequestMessage>().not.toHaveProperty('entity_id');
     // 属于 WsMessage 判别联合
     expectTypeOf<MoveRequestMessage>().toMatchTypeOf<WsMessage>();
+  });
+
+  it('1.16 locomotion requests keep gait optional and expose only target coordinates', () => {
+    expectTypeOf<MoveRequestMessage['gait']>().toEqualTypeOf<'walk' | 'run' | undefined>();
+    expectTypeOf<JumpRequestMessage['gait']>().toEqualTypeOf<'walk' | 'run' | undefined>();
+    expectTypeOf<JumpRequestMessage['type']>().toEqualTypeOf<'jump_request'>();
+    expectTypeOf<JumpRequestMessage['channel']>().toEqualTypeOf<'render'>();
+    expectTypeOf<JumpRequestMessage['target_x']>().toEqualTypeOf<number>();
+    expectTypeOf<JumpRequestMessage['target_y']>().toEqualTypeOf<number>();
+    expectTypeOf<JumpRequestMessage>().toMatchTypeOf<WsMessage>();
+    expectTypeOf<JumpRequestMessage>().not.toHaveProperty('elevation');
+    expectTypeOf<JumpRequestMessage>().not.toHaveProperty('duration');
+    expectTypeOf<JumpRequestMessage>().not.toHaveProperty('entity_id');
+    const legacyJump = {
+      type: 'jump_request',
+      channel: 'render',
+      target_x: 1,
+      target_y: 2,
+    } satisfies Omit<JumpRequestMessage, 'v' | 'ws_seq'>;
+    expectTypeOf(legacyJump).toMatchTypeOf<Omit<JumpRequestMessage, 'v' | 'ws_seq'>>();
+  });
+
+  it('1.16 actor pose additions are optional and jump has no internal clock', () => {
+    expectTypeOf<Actor['elevation']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<ActorDelta['elevation']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<Actor['gait']>().toEqualTypeOf<'walk' | 'run' | undefined>();
+    expectTypeOf<ActorDelta['gait']>().toEqualTypeOf<'walk' | 'run' | undefined>();
+    expectTypeOf<Actor['jump']>().toEqualTypeOf<JumpVisual | null | undefined>();
+    expectTypeOf<ActorDelta['jump']>().toEqualTypeOf<JumpVisual | null | undefined>();
+    expectTypeOf<JumpVisual['rtoken']>().toEqualTypeOf<string>();
+    expectTypeOf<JumpVisual['duration']>().toEqualTypeOf<number>();
+    expectTypeOf<JumpVisual['active']>().toEqualTypeOf<boolean>();
+    expectTypeOf<JumpVisual>().not.toHaveProperty('tick');
+    expectTypeOf<JumpVisual>().not.toHaveProperty('seq');
+    expectTypeOf<JumpVisual>().not.toHaveProperty('start_time');
+    expectTypeOf<JumpVisual>().not.toHaveProperty('entity_id');
+    const legacyActor = {
+      rtoken: 'opaque',
+      sprite: 'villager',
+      x: 1,
+      y: 2,
+      facing: 's',
+      anim: 'idle',
+    } satisfies Actor;
+    expectTypeOf(legacyActor).toMatchTypeOf<Actor>();
   });
 
   it('WsMessage 是判别联合，按 type 收窄', () => {
@@ -293,6 +340,7 @@ describe('ws-protocol 类型与出戏边界', () => {
       | 'set_control'
       | 'load_anchor'
       | 'move_request'
+      | 'jump_request'
       | 'voxel_request'
       | 'voxel_state'
       | 'sync_request'

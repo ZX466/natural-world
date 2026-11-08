@@ -21,7 +21,16 @@
  * 16x), which shrinks automatically as the world speeds up.
  */
 import { advanceAnimClock, inferFacing, type Facing } from './actors';
-import { newestSample, pushSample, rampDelay, sampleAt, type TimedSample } from './motion-buffer';
+import {
+  HISTORY_SAMPLES,
+  newestSample,
+  pushSample,
+  rampDelay,
+  sampleAt,
+  type FlightSample,
+  type SampledPoint,
+  type TimedSample,
+} from './motion-buffer';
 
 /** Authoritative tile cadence at 1x (60 tick/s ÷ 15 tick/tile, `sim/core/tick.py`). */
 export const TILE_CADENCE_MS_1X = 250;
@@ -40,14 +49,19 @@ export const TELEPORT_TILES = 3;
 export const REPLAY_JITTER_SLACK_MS = 33;
 
 /** Nominal delay between the newest observation and what the renderer shows. */
-export const replayDelayMs = (speed: number): number =>
-  (TILE_CADENCE_MS_1X * REPLAY_DELAY_CADENCES) / Math.max(1, speed) + REPLAY_JITTER_SLACK_MS;
+export const replayDelayMs = (speed: number, cadenceMs = TILE_CADENCE_MS_1X): number =>
+  (cadenceMs * REPLAY_DELAY_CADENCES) / Math.max(1, speed) + REPLAY_JITTER_SLACK_MS;
 
 export interface MotionTarget {
   readonly x: number;
   readonly y: number;
   readonly height: number;
   readonly facing?: Facing;
+  /** Logical 1x tile cadence; absent callers retain the legacy 250ms cadence. */
+  readonly cadenceMs?: number;
+  /** Caller-supplied inverse projection; z is height in the caller's units. */
+  readonly distanceInTiles?: (from: SampledPoint, to: SampledPoint) => number;
+  readonly flight?: FlightSample & { readonly active: boolean; readonly durationMs: number };
 }
 
 export interface ActorMotion extends MotionTarget {
@@ -56,9 +70,12 @@ export interface ActorMotion extends MotionTarget {
   /** Oldest first, always ending with the newest authoritative sample. */
   readonly samples: readonly TimedSample[];
   /** How far behind the newest sample the renderer currently draws, in ms.
-   *  Ramps toward `replayDelayMs(speed)` so a speed change never moves the
+   *  Ramps toward `replayDelayMs(speed, cadenceMs)` so a speed change never moves the
    *  drawn instant backwards. */
   readonly delayMs: number;
+  /** Completed public descriptors persist; consume each flight's final phase once. */
+  readonly seenFlight?: Pick<FlightSample, 'id' | 'progress'>;
+  readonly airborne?: boolean;
 }
 
 /**
@@ -70,8 +87,8 @@ export interface ActorMotion extends MotionTarget {
  *
  * `unitsPerTile` is how many of the caller's units one world tile spans: 1 for
  * the three.js layer (which works in tiles), `TILE` for Phaser's pixel space.
- * It only scales the teleport threshold — the interpolation itself is unit
- * agnostic.
+ * It scales the fallback stride/teleport distance metric; callers with a
+ * projection can supply `distanceInTiles`. Interpolation stays unit agnostic.
  */
 export function advanceMotion(
   previous: ActorMotion | undefined,
@@ -86,42 +103,106 @@ export function advanceMotion(
   // arrives late would otherwise leave the drawn instant past the newest
   // sample, holding the actor for a frame. It is a constant rather than a
   // function of `delta` so a dropped frame does not inflate the lag.
-  const nominalDelay = replayDelayMs(speed);
-  const sample: TimedSample = { at: now, x: target.x, y: target.y, z: target.height };
+  const cadenceMs = target.cadenceMs ?? TILE_CADENCE_MS_1X;
+  const nominalDelay = replayDelayMs(speed, cadenceMs);
+  const incoming = target.flight;
+  const seen = previous?.seenFlight;
+  const newFlight = incoming !== undefined && incoming.id !== seen?.id;
+  const progress = incoming
+    ? Math.max(0, Math.min(1, Math.max(incoming.progress, newFlight ? 0 : (seen?.progress ?? 0))))
+    : 0;
+  // A reconnect/fresh snapshot starts at its current pose. Only an existing
+  // view replays a newly observed completed descriptor, which certifies a
+  // whole flight that may have finished between two snapshots at high speed.
+  const flight: FlightSample | undefined =
+    incoming &&
+    (incoming.active || progress === 1) &&
+    (previous !== undefined || incoming.active) &&
+    (newFlight || (seen?.progress ?? 0) < 1)
+      ? {
+          id: incoming.id,
+          progress,
+          start: incoming.start,
+          end: incoming.end,
+          arc: incoming.arc,
+        }
+      : undefined;
+  const seenFlight = incoming ? { id: incoming.id, progress } : seen;
+  const observation: TimedSample = {
+    at: now,
+    x: target.x,
+    y: target.y,
+    z: target.height,
+    ...(flight ? { flight } : {}),
+  };
+  const point: SampledPoint = flight ? sampleAt([observation], now) : observation;
+  const sample: TimedSample = { ...observation, x: point.x, y: point.y, z: point.z };
 
   if (previous === undefined)
     return {
-      x: target.x,
-      y: target.y,
-      height: target.height,
+      x: point.x,
+      y: point.y,
+      height: point.z,
       facing: target.facing ?? 's',
       animClock: -1,
       samples: [sample],
       delayMs: nominalDelay,
+      ...(seenFlight ? { seenFlight } : {}),
+      ...(point.airborne !== undefined ? { airborne: point.airborne } : {}),
     };
 
   const delay = rampDelay(previous.delayMs, nominalDelay, delta);
   const last = newestSample(previous.samples);
-  const moved = last.x !== target.x || last.y !== target.y || last.z !== target.height;
-  const jumpLimit = TELEPORT_TILES * unitsPerTile;
-  const teleported = moved && Math.hypot(target.x - last.x, target.y - last.y) > jumpLimit;
+  const distanceInTiles =
+    target.distanceInTiles ??
+    ((from: SampledPoint, to: SampledPoint) =>
+      Math.hypot(to.x - from.x, to.y - from.y) / unitsPerTile);
+  const moved = last.x !== sample.x || last.y !== sample.y || last.z !== sample.z;
+  // Snapshots can batch several legal tiles at 16x. Admit only the distance
+  // that could fit in this observed interval, with a bounded speed allowance;
+  // the original three-tile threshold stays exact at 1x.
+  const batchTiles = speed > 1 ? Math.ceil(((now - last.at) * speed) / cadenceMs) + 1 : 0;
+  const jumpLimit = Math.max(
+    TELEPORT_TILES,
+    Math.min(TELEPORT_TILES * Math.max(1, speed), batchTiles),
+  );
+  const teleported = moved && !flight && distanceInTiles(last, sample) > jumpLimit;
 
   let samples: readonly TimedSample[] = previous.samples;
-  if (moved) {
+  if (teleported) {
+    samples = [sample];
+  } else if (flight && newFlight) {
+    const startAt = now - (incoming!.durationMs * flight.progress) / Math.max(1, speed);
+    samples = samples.filter((entry) => entry.at < startAt);
+    samples = pushSample(
+      samples,
+      {
+        at: startAt,
+        ...flight.start,
+        flight: { ...flight, progress: 0 },
+      },
+      Infinity,
+      HISTORY_SAMPLES,
+      delay,
+    );
+    if (flight.progress > 0)
+      samples = pushSample(samples, sample, Infinity, HISTORY_SAMPLES, delay);
+  } else if (moved || (flight && flight.progress !== last.flight?.progress)) {
     // Anchor the segment one delay before the arrival. Without it the drawn
     // instant can fall inside a segment spanning an arbitrary gap — an actor
     // that stood still for seconds would have its whole move compressed into
     // the last frame or two and pop a full tile. Anchoring also covers a late
     // arrival, whose glide would otherwise be skipped entirely.
-    if (last.at < now - delay) samples = [{ at: now - delay, x: last.x, y: last.y, z: last.z }];
-    samples = pushSample(samples, sample, jumpLimit);
-  } else if (teleported) {
-    samples = [sample];
+    if (last.at < now - delay) samples = [{ ...last, at: now - delay }];
+    samples = pushSample(samples, sample, Infinity, HISTORY_SAMPLES, delay);
   }
 
   const shown = sampleAt(samples, now - delay);
-  const walked =
-    !teleported && (Math.abs(shown.x - previous.x) > 1e-9 || Math.abs(shown.y - previous.y) > 1e-9);
+  const displayedDistance = distanceInTiles(
+    { x: previous.x, y: previous.y, z: previous.height },
+    shown,
+  );
+  const walked = !teleported && !shown.airborne && displayedDistance > 1e-9;
   // `target.facing` wins when the caller knows the walk direction. Phaser feeds
   // projected pixels, where a height change moves y far more than a tile moves
   // x — inferring facing from those deltas would turn a level walk uphill into
@@ -132,16 +213,24 @@ export function advanceMotion(
   const facing =
     target.facing ??
     (moved && !teleported
-      ? inferFacing(target.x - last.x, target.y - last.y, previous.facing)
+      ? inferFacing(sample.x - last.x, sample.y - last.y, previous.facing)
       : previous.facing);
   return {
     x: shown.x,
     y: shown.y,
     height: shown.z,
     facing,
-    animClock: advanceAnimClock(previous.animClock, walked, delta),
+    // A sparse frame can display an entire step after idle. Its distance still
+    // counts; resetting that first step to zero would pin every batch to frame 0.
+    animClock: advanceAnimClock(
+      Math.max(0, previous.animClock),
+      walked,
+      displayedDistance * TILE_CADENCE_MS_1X,
+    ),
     samples,
     delayMs: delay,
+    ...(seenFlight ? { seenFlight } : {}),
+    ...(shown.airborne !== undefined ? { airborne: shown.airborne } : {}),
   };
 }
 

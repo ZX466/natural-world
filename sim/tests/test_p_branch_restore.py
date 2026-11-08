@@ -16,16 +16,19 @@ from __future__ import annotations
 import pytest
 
 from sim.agent.build_exec import BuildRuntime
+from sim.api import main
 from sim.api.main import _ground_tile_id, _with_structure_tile_restore
 from sim.core.events import (
     WorldEvent,
     structure_collapsed_event,
     structure_removed_event,
     structure_started_event,
+    tile_changed_event,
 )
 from sim.npc.fire_runtime import FireRuntime
 from sim.tests.test_p_rebuild_tile_map_contract import make_open_map
 from sim.world.structure import StructurePhase, StructureSnapshot
+from sim.world.surface import SurfaceMap
 
 pytestmark = pytest.mark.t1
 
@@ -202,6 +205,47 @@ def test_restore_uses_each_tiles_own_ground_value() -> None:
     }
     assert tiles[2] == 7
     assert tiles[3] == 0
+
+
+@pytest.mark.parametrize(
+    "terminal",
+    [
+        structure_collapsed_event(700, structure_id="s1", cause="decay"),
+        structure_removed_event(700, structure_id="s1", reason="demolished"),
+    ],
+    ids=["collapsed", "removed"],
+)
+def test_structure_restore_preserves_water_and_ground_support_heights(
+    terminal: WorldEvent, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sim.world.map import CHUNK_SIZE
+
+    base = make_open_map()
+    key = base.chunk_of(3, 2)
+    chunk = base.chunks[key]
+    ground = list(chunk.ground)
+    ground[2 * CHUNK_SIZE + 3] = 0
+    base = base.model_copy(
+        update={"chunks": {**base.chunks, key: chunk.model_copy(update={"ground": tuple(ground)})}}
+    ).with_collision(3, 2, False)
+    monkeypatch.setattr(main, "_default_map", lambda: base)
+    monkeypatch.setattr(main, "_voxel_height_lookup", lambda: lambda x, y: 0)
+
+    surface = SurfaceMap(base, lambda x, y: 0)
+    footprint = ((2, 2), (3, 2))
+    for x, y in footprint:
+        surface.apply(tile_changed_event(100, x, y, 0, height=2))
+    assert not surface.tile_map.is_walkable(2, 2), "structure covers the original grass"
+    restored = _with_structure_tile_restore(
+        [terminal], {"s1": _snapshot(footprint)}, surface.tile_map
+    )
+    for event in restored:
+        surface.apply(event)
+
+    assert surface.height_at(2, 2) == 1
+    assert surface.tile_map.is_walkable(2, 2)
+    assert surface.height_at(3, 2) == 0, "restored water must not become a jumpable block"
+    assert not surface.tile_map.is_walkable(3, 2)
 
 
 def test_non_terminal_structures_pass_through_untouched() -> None:

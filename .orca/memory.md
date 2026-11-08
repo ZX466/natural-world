@@ -855,57 +855,33 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-11-08 新派单｜Codex 执行中】已由主树代为同步 main（本树 HEAD `51d1e2f`），
-代码与主树逐字节一致。本轮派单四项 + 一份方案文档：① 人物朝向行号写反
-（`facingRow` 一张表套三套图集，实测行序不同）② 走/跑分离 ③ 走环与位移速度脱钩
-④ **跳跃（用户裁定：可跳上 h2/h3 高块）** ⑤ 2D→3D 模型**只出方案不动代码**。
-派单全文见本树 `.orca/talking.txt` 第二节。注意跳跃的硬前提：`EntityState` 与协议
-都无 height 字段，加字段会改 `state_hash`；`walkable ⇒ HEIGHT_EARTH` 单向不变量
-**不得**双向化。历史 Round24 快照：three.js 自由视角 A–E 已交付并被主树收编
-（`cb820bf`），默认已切 three（`e49b7c1`）。
+【2026-11-08 走跑/跳跃｜已交付待主树收编】朝向2b40a37；跨层实现2a513a0；3D人物待决方案0667842。本轮派单五项均已交付，模型只出文档。本节提交号看Git；下一步由主树复核收编，勿再次同步main或重做实现。
+历史 Round24 快照：three.js 自由视角 A–E 已交付并被主树收编（`cb820bf`），默认已切 three（`e49b7c1`）。
 
-### 恢复与协作
+### 最新交付与证据
 
-1. 先读 `.orca/workflow.txt` → **完整** `.orca/talking.txt` → 本节/registry → Git；扫完全部派单再判断是否等待。
-2. `.codegraph` 存在，理解/定位代码先 `codegraph_explore`，显式 `projectPath=E:/zxdevelop/.orca/worktrees/project7/codex`；返回的当前源码视为已读。
-3. 本树只做本地 Conventional Commits，不推远程、不改主树。Round24 特许的一次同步 **33e8658→3912f7c 已完成**，不能当后续自行同步许可。主树负责复核收编和推送。
-4. 协作只回写本树 ignored talking，永不 add；memory 只改本 §7，前缀 §§0–6 保留原字节，`git add -f` 后立即提交。全局 Codex memories 未写入。
-5. Python 用 uv；中文管道需 UTF-8，PS 重定向日志可能 UTF-16，先取原始 native exit 再读尾部。删除 npm 包/venv 先问。按 i-have-adhd 保持简短中文、下一步优先、不重复确认。
+- 按图集映射朝向；Three原生W显示chenmo背面第2行。Shift跑、松开走，玩家walk30/run15tick每格；NPC/legacy仍15，60tick/s与离线/战斗时间尺未改。
+- Space无方向原地跳、有方向walk1/run2格；最大升降2高度，36逻辑tick，弧高1.5。真实Three地图h1→h2/h3→站稳→h1四段通过；Phaser iso/flat两路径各上/下两段通过。全程打包Chromium、原生键、真实WS和私库，无镜像手改/假回包，0页面/控制台错误。flat保留旧2D脚位，用相对高度画弧。
+- 走环仅按回放缓冲实际显示位移推进，walk500/run250ms逻辑节拍；4x/16x四种走跑各至少8个真实移动渲染帧，步相增量/(显示距离×250)均约1。稀疏帧从idle开始也计入完整首段距离，避免反复停在首帧。此为功能证据，不是硬件FPS或网络丢包验收。
+- 自跑最终pytest 3625P/121S/72D、561既有警告，EXIT0（474.94s）；Vitest685P/81files，EXIT0；ruff/check+format、pyright、codegen、typecheck、eslint、prettier、build均0。两项terrain --check逐字节0。独立审查最终0Critical/0Important/0Minor；两项Important已先RED再修复。
+- 证据`.orca/audits/locomotion-2026-11-08/{gates.json,review.md,browser.json,browser-fast.json,browser-phaser.json,private-event-counts.json}`及截图/原生退出码。最终全量pytest使用pytest_private保护插件：拒开根world.db，fallback anchor/profile也在本轮私目录。原库哈希同protected-before.json；未改锁文件、原图或地形产物。
 
-### Round24 实现与证据
+### 关键设计与不可回退的修复
 
-| 阶段 | 本地提交 | 结果 |
-|---|---|---|
-| A | `d03f806` | PerspectiveCamera、天空/雾、单位方块、单世界 canvas；默认 fov60/pitch12/请求距离8 |
-| B | `03ab898` | 原资源 billboard、动画/朝向/同格偏移/名字/气泡、天气与音频；默认 yaw225，近墙避碰会缩短或抬高视角 |
-| C | `8fa3f56` | 独立高1移动平面与最近实例编辑 raycast；真实地图3947可走中心与旧路径对照、四方向/侧面/土坎 |
-| D | `e45a4ed` | 方块整列轮廓、材料1/2/3高度预览、服务端进度与移动目标；提示置顶以保近处可读 |
-| E | `5eacfbc` | 精确 Python Bresenham 移植、半径12源文件钉死；共用可见集合控制人物/接触阴影/名字/气泡和目标；主角淡轮廓恒可见 |
-| 审查修复 | `b7ac220` | 丢失捕获取消、逐事件世界/连接/焦点守卫；旧世界输入不向新世界发包 |
+1. 一列一表面：standing elevation由SurfaceMap事件投影推导，不另存易与地形分叉的height标量。EntityState只增可选gait/jump，None不序列化，旧JSON/hash夹具与NPC600tick哈希原样通过；新运动状态有意进入hash，无SQL列迁移。完成的jump描述保留给延迟回放，active=false才是真落地，不可每帧重播旧goal。
+2. C4事件：actor.jump_started/landed记录权威结果，起跳取消地面path，空中不被MOVE打断，落地重验当前轨迹/支撑。高块仍collision=false，仅显式同高度路径能站走；h1土坎仍不可步行、可挖、可跳上其顶，不把单向不变量改成双向。材料土/石/木=h1/h2/h3且均阻挡，新放块一挖还原材料/可走h1。
+3. 新gait MOVE去掉冗余当前格头；legacy路径头/相位不改。新gait MOVE与JUMP_STARTED/LANDED记完成frontier，expand_world只对它们回放至event.tick，legacy仍tick-1；不可撤回这项分派。真实迈步后再次move/stop/jump的三条SQL冷尾回放回归已覆盖；LAND在_tick_once递增state.tick后发出。
+4. SurfaceMap即时观察未flush事件，重建/寻路/落点/Actor高度同源。结构终态即时派生恢复tile并缓存同一对象，flush复用identity，提交成功才释放；否则会晚一拍落地，或覆盖同帧后续voxel编辑。已测终态t35/落地t36、后续h3编辑、失败重试、历史一致、无重复与对象释放。恢复tile显式携带高度，水面不误变h2。
+5. 协议1.16双版本常量+FastAPI info+OpenAPI快照/生成类型一致；move.gait可选、jump_request及Actor elevation/gait/jump可选。公开跳跃只含可观察端点/高度/进度/时长/opaque token，不出tick/seed/entity_id。新请求由this-connection full_snapshot后的worldReady门控；live schema补齐已有monologue_history，40份WS schema逐字段一致。
 
-- 基线 `3912f7c` 含主树 three 初版与既有修复，保留共享 `cell-appearance.ts`、`tile-color.ts`、旧 `voxel-picking.ts`。sim/shared/协议1.15/资源/依赖清单锁/DESIGN/registry 均未改。没有新后端感知通道。
-- 最终门禁：**vitest 537P/75files**；tsc、eslint、prettier、协议生成检查、build 全 EXIT0。最初478P/65files，A 移除过时正交对齐断言后470P；不是跳过失败用例。无后端代码改动，未为本轮重跑全量 pytest。
-- 独立全分支审查初始0Critical/2Important/1Minor；2Important 先复现 **15F/16P** 再修，focused31P、全量537P。审查只跑一轮；修复用 RED→GREEN 验证，没有二次独立复审。Minor DPR 暂缓。
-- 真浏览器仅打包版 ms-playwright Chromium。真实鼠标移动至 `(100,52)`、挖 `(100,54)` 石料0→1；HUD选石/右键放/挖回石料1→0→1、h2→可走h1，实收进度0.2。旋转不发 voxel 请求，页面/console error0；无手改镜像或假回包。
-- 原生捕获补测3次可信 lostpointercapture、每次活跃挖掘只取消一次，文本框聚焦后只发当前位置停止。精确0/149/150/180ms边界由单测覆盖；最终原生“尽早释放”耗203.8ms，不能报成150ms前实机证据。pending capture 先等 gotpointercapture；CDP发帧异步，焦点顺序用同步透明观察器读取。
-- E 真140×100地图出生名册 `(100,53)` 可见 **10/51**（含主角），街区开阔者可见、墙后者隐藏。最终运行快照原生移到 `(99,53)`：**2/57可见，4名附近NPC被墙挡**（吴秀才/严药童/葛园丁/彭花匠）；实际 Python LOS/HUMAN 对同一捕获网格与全部人物逐人完全一致。先前9/57/2是另一时刻，只保留 initial-parity 摘要，不与当前快照混用。
-- 证据 `.orca/audits/round24-2026-11-06/`：`gates.json`、`frozen.json`/`frozen-files.json`、`review.md`、`progress.md`；最终 `e-observer-three-desktop.png` / `e-observer-three-orbit.png` / `e-observer-three-1024.png` / `e-observer-default-phaser.png` 已看图，C/D原生操作与进度图保留。设计现状更新于 `docs/arch/world-liveliness-design.md` §7、`voxel-execution-spec.md` §10。
-- 浏览器后端全部显式隔离 world/anchor/profile 三库，providerNone、offline wall0，原 world.db 未读写、无付费模型。临时 backend94559/Vite89397 已 Ctrl-C 停止，8000/5173端口确认关闭；测试浏览器由 finally 关闭。审计目录按交付要求保留，属于 ignored 本地证据。
+### 环境与恢复
 
-### 当前限制与闭合边界
+- 先workflow→完整talking→本节/registry→Git；代码先CodeGraph并传本树projectPath。本轮起点51d1e2f已由主树同步，之后未再merge/rebase main、未push；只写本地Conventional Commits，ignored talking永不add。
+- npm/uv按锁恢复以完成派单；依赖保留供复核，普通uv run会创建.venv。需要重装时根目录uv sync --frozen、client内npm ci；不因旧清理快照再次删除环境。删除依赖需用户当次授权。
+- 我方Vite5173与私库后端18125已结束；浏览器finally关闭，临时私库/构建缓存保留：递归清理命令被自动审批拒绝（blocked by policy，无更具体理由），未重试删除。审计脚本、读数、截图保留。只停验证过命令行身份的我方PID，不动主树/用户服务。三库必须一起隔离；测试结束绝不把单例.__init__重置到相对默认真档。
+- memory仅改本节，§§0–6原字节前缀保留并核验；写后立即-f add+提交。PS用UTF-8，先保存native exit。global memories本轮未写；旧轮细节查Git和既有审计。
 
-- **默认已是 three**（2026-11-07 用户验收后裁定）；`?terrain=phaser` 退回 Phaser。观感/手感由用户实机看过，本线程无参考原图，不声称逐像素对比。
-- DPR 仅创建时读取，跨屏/缩放后清晰度与GPU分配可能沿用旧值；CSS拾取正确。构建大包警告保留：JS2309.34kB/gzip572.25kB。不同硬件FPS、长GPU会话、音频亲听未验收；不将未测性能当通过。
-- 近墙抬高相机、提示置顶是为可读性所作取舍，可能改变临墙构图/产生提示覆盖。房屋仍h2实心块，有简单接触阴影，无动态光照投影、水波或塌落动画。
-- **行走已可按住连续走**（`3b58669`）：斜向被挡会滑到可走的正交格，三个候选全堵才停/报错。仍待用户裁定的是**斜向优先的观感**——225° 下四键全是对角，贴着墙时会走成「先横后纵」的阶梯；若要改成「按住 W 直走」需要单独讨论键位映射，本轮按派单要求未动。
-- 不做E2地形消失、夜间视距修正、听嗅文案；take/give下一轮，离线不演进健康、重症不产失能的裁定仍闭合。
-  **`perception` 出站不是缺口**（`ws-protocol.md:74` 已登记为设计决定，2026-11-07 订正）。
-- 原本树 world.db 有历史唯一创世损坏，继续禁止拿它实验。真实库存档兼容与模型内容质量不在本轮验收范围。
+### 下一步与范围
 
-### 历史指针（旧全文查 Git，不重做）
-
-- Round23 已由主树 `5e4e20b` 收编：B2 `424ec34`、B3/建造安全 `1738e09`。材料按请求：土/石/木=h1/h2/h3且均挡路；挖新放块返原料一份、恢复可走h1。用户已选“土高1仍挡路”，勿改回堆高2才可挖。NPC十地标/九站点/五区、开工预算/防封路及真实SQL三日证据在 `round23-2026-11-05/`；本轮未重复后端功能。
-- Round22 `1fb935d` + `c59cb00`：只有实际height1土坎glyph参与高块排序，旧picker保持；主树已收编。
-- Round20 `bb0647e`/`3012063`（主树 `66637b7`）：三处播种分支过滤、每日健康；离线/失能边界见上。Round18 `8b6b702` 与Round19 `e28e144` 已收编：profile锚点缺副本 fail-closed、有限单步L2，非多步规划；无付费质量验收。
-- Round17 `16b7eae`：物种知识门与名牌避让；Round16/15的详细知识、离线、音效、T5/soak证据及既有限制查 `.orca/audits/round16-2026-11-01/`、`round15-2026-11-01/` 和 `git log -p -- .orca/memory.md`。火声仅客户端映射，真实火场出站仍延后；不得扩成新后端火生产器。
-- 保留主树既有 ensure_schema、转述 speaker 归因、叙事缓存、历史健康分叉、保护锚点等修复；以当前源码为准，dated handoff不是许可。
+- 主树收编2b40a37、2a513a0、0667842及本节提交后独立复核；3D人物见docs/arch/character-model-3d-plan.md，明确NOT IMPLEMENTED，待用户选档。未下载模型/工具/素材、未实施新模型。
+- 相机近墙、DPR、包体、房屋h2块、动态光影/水波/塌落玩法另案；take/give、离线不演进健康、重症不产失能、真实火场出站与perception设计均不扩本轮。未做听感/硬件性能验收，不把自动化证据冒充用户观感认可。

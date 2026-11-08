@@ -209,8 +209,9 @@ it('keeps the walk cycle running across tiles instead of restarting it every gli
   expect(midway).toBeGreaterThanOrEqual(0);
   driver.step(actor, 'y', 4);
   expect(view.motion.animClock).toBeGreaterThan(midway);
-  // 滑行途中必须是走环帧（朝南 row0 × 17 列），不是站立帧 1。
-  expect(view.sprite.setFrame).toHaveBeenLastCalledWith(0);
+  // 连续走环覆盖朝南 row0 的三帧；具体末帧由实际位移决定。
+  const frames = (view.sprite.setFrame.mock.calls as unknown as [number][]).map(([frame]) => frame);
+  expect(new Set(frames)).toEqual(new Set([0, 1, 2]));
 });
 
 it('returns to the standing frame once the actor stops and the buffer drains', () => {
@@ -270,9 +271,9 @@ it('cleans reset views and recreates them directly at the projected surface', ()
 
 describe.each(['flat', 'iso'] as const)('%s interaction and movement', (mode) => {
   it.each([
-    ['hero', 'protagonist', 1, 34],
+    ['hero', 'protagonist', 1, 17],
     ['god', 'god_villager_taocunzhang', 1, 6],
-    ['villager', 'villager', 0, 8],
+    ['villager', 'villager', 0, 4],
     ['animal', 'fauna_deer', 0, 0],
   ] as const)(
     'preserves visible standing and walking frames for %s',
@@ -355,7 +356,7 @@ describe.each(['flat', 'iso'] as const)('%s interaction and movement', (mode) =>
     driver.frames(FRAMES_PER_TILE + 5);
     const view = internal.views.get('hero')!;
     expect(view.motion.facing).toBe('e');
-    expect(view.sprite.setFrame).toHaveBeenCalledWith(34); // 陈默朝东走环首帧：row2 × 17列。
+    expect(view.sprite.setFrame).toHaveBeenCalledWith(17); // 陈默朝东走环首帧：row1 × 17列。
     const target = mode === 'iso' ? isoProject(3, 1, 1, screenBounds(4, 4)) : { sx: 56, sy: 24 };
     expect({ x: view.sprite.x, y: view.sprite.y }).toEqual({ x: target.sx, y: target.sy });
   });

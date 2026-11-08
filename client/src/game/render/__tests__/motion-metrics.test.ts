@@ -13,8 +13,8 @@ const FRAME = 1000 / 60;
  * 复现真实链路：服务端每 250ms（1x）推进一格，渲染 60fps。
  * 返回每帧的渲染位置、动画钟与图集帧号，供下面的指标断言使用。
  */
-function simulate(speed: number, seconds = 12) {
-  const cadence = TILE_CADENCE_MS_1X / speed;
+function simulate(speed: number, seconds = 12, cadenceMs = TILE_CADENCE_MS_1X) {
+  const cadence = cadenceMs / speed;
   const frames = Math.floor((seconds * 1000) / FRAME);
   let target = 0;
   let nextArrival = cadence;
@@ -26,7 +26,7 @@ function simulate(speed: number, seconds = 12) {
       target += 1;
       nextArrival += cadence;
     }
-    state = advanceMotion(state, { x: target, y: 0, height: 0 }, now, FRAME, speed, 1);
+    state = advanceMotion(state, { x: target, y: 0, height: 0, cadenceMs }, now, FRAME, speed, 1);
     rows.push({
       x: state.x,
       clock: state.animClock,
@@ -67,3 +67,31 @@ it.each([1, 4, 16])('keeps %ix motion continuous, correctly paced and fully anim
   expect(m.clockResets).toBe(0);
   expect(m.framesSeen).toBe(CHENMO_SHEET.framesPerRow);
 });
+
+it.each([1, 4, 16])(
+  'ties walk/run stride to displayed distance at %ix without freeze or backwards frames',
+  (speed) => {
+    const clockRates: number[] = [];
+    for (const cadenceMs of [500, 250]) {
+      const { rows, cadence } = simulate(speed, 12, cadenceMs);
+      const settled = rows.slice(Math.ceil(replayDelayMs(speed, cadenceMs) / FRAME) + 3, -1);
+      const steps = settled.slice(1).map((row, i) => row.x - settled[i]!.x);
+      expect(steps.every((step) => step > 1e-9)).toBe(true);
+      expect(Math.max(...steps) / (FRAME / cadence)).toBeLessThanOrEqual(2);
+      for (let i = 1; i < settled.length; i++) {
+        const previous = settled[i - 1]!;
+        const next = settled[i]!;
+        expect(next.clock - previous.clock).toBeCloseTo((next.x - previous.x) * 250, 7);
+      }
+      const first = settled[0]!;
+      const last = settled.at(-1)!;
+      clockRates.push((last.clock - first.clock) / ((settled.length - 1) * FRAME));
+      expect((last.x - first.x) / ((settled.length - 1) * FRAME)).toBeCloseTo(1 / cadence, 3);
+    }
+    expect(clockRates[1]! / clockRates[0]!).toBeCloseTo(2, 2);
+    // Render sampling quantizes the final partial tile at high world speeds;
+    // the exact per-step phase assertions above still allow no stride drift.
+    expect(Math.abs(clockRates[0]! / (speed / 2) - 1)).toBeLessThan(0.002);
+    expect(Math.abs(clockRates[1]! / speed - 1)).toBeLessThan(0.002);
+  },
+);

@@ -1,0 +1,60 @@
+{
+  "baseline": "51d1e2f",
+  "state": {
+    "world_seed": 731,
+    "tick": 17,
+    "entities": {
+      "chenmo": {
+        "entity_id": "chenmo",
+        "pos": [
+          2,
+          3
+        ],
+        "path": [
+          [
+            2,
+            3
+          ],
+          [
+            3,
+            3
+          ]
+        ]
+      },
+      "villager_001": {
+        "entity_id": "villager_001",
+        "pos": [
+          4,
+          5
+        ],
+        "path": []
+      }
+    }
+  },
+  "state_hash": "681129350c6989516fa4205c3f1dda6ef7054d582e42b43a7632593bd56a1379",
+  "movement_reference": {
+    "after_tick": 600,
+    "after_hash": "5612d814bc7d107c2fd2514b98774629f79907ae4af827a51e5152b81963f829",
+    "positions": {
+      "villager_000": [
+        39,
+        0
+      ],
+      "villager_001": [
+        39,
+        1
+      ],
+      "villager_002": [
+        39,
+        2
+      ]
+    },
+    "world_seed": 731,
+    "entity_ids": [
+      "villager_000",
+      "villager_001",
+      "villager_002"
+    ],
+    "path_length": 101
+  }
+}

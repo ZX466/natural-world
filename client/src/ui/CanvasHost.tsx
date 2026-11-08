@@ -47,7 +47,7 @@ export function CanvasHost(): ReactElement {
       <div ref={ref} className="h-full w-full" />
       {terrainFromSearch(globalThis.location?.search ?? '') === 'three' && (
         <p className="pointer-events-none absolute top-2 left-2 rounded bg-[#18211cc9] px-2 py-1 text-xs text-[#f0dfb5]">
-          短按移动 · 长按挖掘 · 右键放置 · 右拖/中拖转视角 · 滚轮缩放
+          短按移动 · Shift 跑 · 空格跳 · 长按挖掘 · 右键放置 · 右拖/中拖转视角 · 滚轮缩放
         </p>
       )}
       <VoxelInventory />

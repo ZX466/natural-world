@@ -10,11 +10,16 @@ M3 通路：事件（tile_changed / MATTER_* 定位 x/y≥0）→ chunk 脏标 �
 from __future__ import annotations
 
 import heapq
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from sim.core.events import EventKind, WorldEvent
 from sim.world.map import TileMap
+from sim.world.surface import standable
+
+type PathKey = (
+    tuple[tuple[int, int], tuple[int, int]] | tuple[tuple[int, int], tuple[int, int], int]
+)
 
 #: 携带地图坐标的事件种类（M3 chunk 失效输入）
 _MATTER_KINDS = frozenset(
@@ -67,7 +72,7 @@ class PathCache:
     """路径缓存：键 (start, goal) → (路径, 途经 chunk 集)。"""
 
     entries: dict[
-        tuple[tuple[int, int], tuple[int, int]],
+        PathKey,
         tuple[tuple[tuple[int, int], ...], frozenset[tuple[int, int]]],
     ] = field(default_factory=dict)
     max_entries: int = 4096
@@ -89,9 +94,48 @@ class PathCache:
 class Pathfinder:
     """A* 寻路器。持有缓存；TileMap 变更（M3）时逐 chunk 调 invalidate。"""
 
-    def __init__(self, tile_map: TileMap, cache: PathCache | None = None) -> None:
+    def __init__(
+        self,
+        tile_map: TileMap,
+        cache: PathCache | None = None,
+        *,
+        height_of: Callable[[int, int], int] | None = None,
+    ) -> None:
         self._tile_map = tile_map
         self.cache = cache if cache is not None else PathCache()
+        self.height_of = height_of
+
+    def height_at(self, x: int, y: int) -> int:
+        if not self._tile_map.in_bounds(x, y):
+            return 0
+        return (
+            self.height_of(x, y)
+            if self.height_of is not None
+            else int(self._tile_map.is_walkable(x, y))
+        )
+
+    def _walkable(self, x: int, y: int, elevation: int | None) -> bool:
+        if elevation is None:
+            return self._tile_map.is_walkable(x, y)
+        return standable(self._tile_map, self.height_at, x, y, elevation)
+
+    def can_step(
+        self, start: tuple[int, int], goal: tuple[int, int], *, elevation: int | None = None
+    ) -> bool:
+        dx, dy = goal[0] - start[0], goal[1] - start[1]
+        return (
+            abs(dx) <= 1
+            and abs(dy) <= 1
+            and self._walkable(*goal, elevation)
+            and (
+                dx == 0
+                or dy == 0
+                or (
+                    self._walkable(start[0] + dx, start[1], elevation)
+                    and self._walkable(start[0], start[1] + dy, elevation)
+                )
+            )
+        )
 
     @property
     def tile_map(self) -> TileMap:
@@ -121,29 +165,32 @@ class Pathfinder:
         self._tile_map = tile_map
         return self.invalidate_dirty()
 
-    def find(self, start: tuple[int, int], goal: tuple[int, int]) -> tuple[tuple[int, int], ...]:
+    def find(
+        self, start: tuple[int, int], goal: tuple[int, int], *, elevation: int | None = None
+    ) -> tuple[tuple[int, int], ...]:
         """返回 start→goal 的完整格路径（含两端）。不可达抛 ValueError。
 
         缓存命中直接返回（途经 chunk 未失效即有效）。
         """
-        key = (start, goal)
+        key: PathKey = (start, goal) if elevation is None else (start, goal, elevation)
         cached = self.cache.entries.get(key)
         if cached is not None:
             return cached[0]
-        if not self._tile_map.is_walkable(goal[0], goal[1]):
+        if not self._walkable(goal[0], goal[1], elevation):
             msg = f"目标不可通行: {goal}"
             raise ValueError(msg)
         if start == goal:
             return (start,)
 
-        path = self._search(start, goal)
+        path = self._search(start, goal, elevation=elevation)
         chunks = frozenset(self._tile_map.chunk_of(x, y) for x, y in path)
         self.cache.entries[key] = (path, chunks)
         self.cache._evict_if_needed()
         return path
 
-    def _search(self, start: tuple[int, int], goal: tuple[int, int]) -> tuple[tuple[int, int], ...]:
-        tm = self._tile_map
+    def _search(
+        self, start: tuple[int, int], goal: tuple[int, int], *, elevation: int | None = None
+    ) -> tuple[tuple[int, int], ...]:
         # open 堆条目：(f, x, y) — 坐标字典序 tie-break 保证确定性
         open_heap: list[tuple[float, int, int]] = [
             (_octile(goal[0] - start[0], goal[1] - start[1]), start[0], start[1])
@@ -163,13 +210,16 @@ class Pathfinder:
             cx, cy = current
             for dx, dy, cost in _NEIGHBORS:
                 nxt = (cx + dx, cy + dy)
-                if nxt in closed or not tm.is_walkable(*nxt):
+                if nxt in closed or not self._walkable(*nxt, elevation):
                     continue
                 # 对角移动禁穿角：两正交邻格必须都可通行
                 if (
                     dx != 0
                     and dy != 0
-                    and not (tm.is_walkable(cx + dx, cy) and tm.is_walkable(cx, cy + dy))
+                    and not (
+                        self._walkable(cx + dx, cy, elevation)
+                        and self._walkable(cx, cy + dy, elevation)
+                    )
                 ):
                     continue
                 tentative = g_score[current] + cost

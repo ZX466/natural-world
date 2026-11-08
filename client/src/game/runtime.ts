@@ -11,8 +11,9 @@ import { fetchWorldMap, assembleCollision, assembleGround } from '../net/worldAp
 import { worldClock } from './clock';
 import { useUiStore, type Speed } from '../store/uiStore';
 import { rendererFromSearch } from './render/presentation';
-import type { VoxelRequestMessage } from '../net/protocol';
+import type { MoveRequestMessage, VoxelRequestMessage } from '../net/protocol';
 import { movementFailure } from './movement';
+import { validElevation } from './locomotion';
 import { worldAudio } from './audio';
 
 export const worldMirror = new WorldMirror();
@@ -62,6 +63,7 @@ class Runtime {
       onDelta: (msg) => {
         // 批次 A：计划看板（delta 即全量替换语义，sim 侧 PlanDelta[] 无增删协议）
         if (msg.plan) useUiStore.getState().setPlans([...msg.plan]);
+        if (msg.structures?.length) void this.loadWorldMap();
         worldAudio.delta(msg, worldMirror);
       },
       onCombatEvent: (msg) => worldAudio.combat(msg, worldMirror),
@@ -112,6 +114,10 @@ class Runtime {
       onError: (msg) => {
         if (msg.ref === 'move_request') {
           useUiStore.getState().setVoxelError('那处走不过去。');
+        }
+        if (msg.ref === 'jump_request') {
+          useUiStore.getState().setVoxelError('那处跳不过去。');
+          worldMirror.locomotionRevision += 1;
         }
         if (msg.ref === 'voxel_request') {
           useUiStore
@@ -236,9 +242,13 @@ class Runtime {
 
   /** WorldScene 点击寻路请求：专用 move_request 消息（TASK-K01；W5 红线——
    *  移动绝不走 impulse 文本旁路，codex C04 抽查记账项）。 */
-  requestMove(x: number, y: number): boolean {
+  requestMove(x: number, y: number, gait?: 'walk' | 'run'): boolean {
     const state = useUiStore.getState();
-    if (state.wsStatus !== 'open' || this.ws === null) {
+    if (
+      state.wsStatus !== 'open' ||
+      this.ws === null ||
+      (gait !== undefined && !this.ws.worldReady)
+    ) {
       state.setVoxelError('这会儿走不了。');
       return false;
     }
@@ -248,19 +258,67 @@ class Runtime {
       state.setVoxelError('这会儿走不了。');
       return false;
     }
-    const failure = movementFailure(map, actor, { x, y });
+    if (actor.jump?.active) return false;
+    const failure =
+      gait === undefined
+        ? movementFailure(map, actor, { x, y })
+        : movementFailure(
+            map,
+            actor,
+            { x, y },
+            (px, py) => worldMirror.heightAt(px, py),
+            actor.elevation ?? worldMirror.heightAt(actor.x, actor.y),
+          );
     if (failure !== null) {
       state.setVoxelError(failure);
       return false;
     }
     state.setVoxelError(null);
-    const move: { type: 'move_request'; channel: 'render'; target_x: number; target_y: number } = {
+    const move: Omit<MoveRequestMessage, 'v' | 'ws_seq'> = {
       type: 'move_request',
       channel: 'render',
       target_x: x,
       target_y: y,
+      ...(gait === undefined ? {} : { gait }),
     };
     this.ws.send(move);
+    return true;
+  }
+
+  /** Only send intent after this connection's authoritative world is ready. */
+  requestJump(x: number, y: number, gait: 'walk' | 'run' = 'walk'): boolean {
+    const state = useUiStore.getState();
+    const map = worldMirror.map;
+    const actor = worldMirror.actors.get(worldMirror.protagonist ?? '');
+    if (state.wsStatus !== 'open' || !this.ws?.worldReady || !map || !actor || actor.jump?.active) {
+      return false;
+    }
+    if (
+      !Number.isInteger(x) ||
+      !Number.isInteger(y) ||
+      x < 0 ||
+      y < 0 ||
+      x >= map.w ||
+      y >= map.h
+    ) {
+      state.setVoxelError('那处跳不过去。');
+      return false;
+    }
+    const startHeight = actor.elevation ?? worldMirror.heightAt(actor.x, actor.y);
+    const height = worldMirror.heightAt(x, y);
+    const reach = gait === 'run' ? 2 : 1;
+    if (
+      !validElevation(startHeight) ||
+      !validElevation(height) ||
+      Math.max(Math.abs(x - actor.x), Math.abs(y - actor.y)) > reach ||
+      height === 0 ||
+      Math.abs(height - startHeight) > 2
+    ) {
+      state.setVoxelError('那处跳不过去。');
+      return false;
+    }
+    state.setVoxelError(null);
+    this.ws.send({ type: 'jump_request', channel: 'render', target_x: x, target_y: y, gait });
     return true;
   }
 
