@@ -3,16 +3,31 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-08 行走修复后 · 主树 HEAD `a69ce9a`）
+## 0. 当前状态（2026-11-08 派单 codex 后 · 主树 HEAD `3bf2704`）
 
-- **2026-11-08 人物朝向 bug 已定位（未修）**：`actors.ts::facingRow` 用**一张表**覆盖
-  三套图集，但逐像素实测行序不同 —— `chenmo.png` / `villager.png` 是 **下/右/上/左**
-  （0/1/2/3），`god_villager_*.png` 是 下/上/右/左。表里写的是后者，所以主角和村民
-  **按 W 时侧身走**（背对镜头用右侧脸）。测法：每行取一帧，比较「皮肤重心 − 头发重心」
-  的横向偏移（正脸 ≈ 0，朝右 > 0，朝左 < 0，背面 = 皮肤像素接近 0）。
-  证据图 `.orca/audits/next-stage-2026-11-08/`。**修法**：`SheetGeometry` 增 `rows`
-  映射，`facingRow(sheet, facing)`，改两个调用点（`three-actors.ts:223`、
-  `WorldScene.ts:1011`）+ `actors.test.ts` 那 4 条断言（现在钉的是错的行序）。
+- **2026-11-08 已派 codex 树四项**（用户裁定「这些问题和跳跃都交给 codex 树」）：
+  ① 人物朝向行号写反（真 bug）② 走/跑分离 ③ 走环与位移速度脱钩
+  ④ **跳跃——用户明确选「可跳上 h2/h3 高块」**（不是纯表现跳跃）。
+  另加 ⑤ **2D billboard → 3D 模型只出方案、不动代码**。
+  派单全文在 codex 树 `.orca/talking.txt` 第二节；主树等回执后独立复跑 + 真机复验 + 收编。
+- **派单前已解决一个阻塞**：codex 树缺 `a74aa1d`（回放缓冲）、`e49b7c1`（three 默认）
+  等主树专有提交，直接派单会基于旧前端实现、收编必冲突且可能回退回放缓冲。
+  已由主树代为 `--no-ff` 同步（codex `51d1e2f`）：`git merge-tree` 预演确认**代码零冲突**，
+  只有 3 个文档冲突，按权威归属解决（`memory.md` §0–6 取主树、§7 保留本树原字节；
+  两份 README 取主树）。同步后 `actors.ts`/`motion-buffer.ts`/`three-actors.ts`/
+  `WorldScene.ts` 与 main **逐字节一致**。
+- **人物朝向 bug（主树 2026-11-08 逐像素独立复测，非采信旧卡）**：
+  `actors.ts::facingRow` 用**一张表**覆盖三套图集，而三套行序实测不同 ——
+  `chenmo.png`（272×256 = **17 列 × 8 行** @16×32）与 `villager.png`（4×4 @16×32）
+  是 **下/右/上/左**（0/1/2/3）；`god_villager_*.png` 是 下/上/右/左。
+  表里写的是后者 ⇒ 主角和村民**按 W 时侧身走**（用右侧脸背对镜头）。
+  测法：逐行 ASCII 渲染 + 眼睛数量/位置（正脸 2 眼对称、侧脸单眼偏一侧、背面 0 眼）
+  + 头部肤色占比（背面 ≈ 0.07）+ 帧与自身水平镜像差异度。
+  **注意**：旧的「皮肤重心 − 头发重心」判据对 villager/god **区分度不够**（头发左右对称），
+  主树第一版探针就因此误判，别再用它。
+  修法：`SheetGeometry` 增 `rows` 映射，`facingRow(sheet, facing)`，改两个调用点
+  （`three-actors.ts:223`、`WorldScene.ts:1011`）+ `actors.test.ts:66-71` 那 4 条断言
+  （现在钉的是错的行序）；顺带订正 `actors.ts:28-30` 的「16 行 @16px」注释。
 - **2026-11-08 行走不连贯已修并收编**（主树 `3b58669`，摘 codex `1bfe956`，2 文件）。
   根因：`three-input.ts::drive()` 只试斜向格，失败就 `stop()` 并把「被挡意图」缓存进
   `keyIntent`；而默认 `azimuth=225` 下 **WASD 四键全映射成对角**，所以一个被挡的斜向
@@ -79,11 +94,17 @@
 - **下一步**：① ~~提交或回退连贯性修复~~ → 已提交（`a74aa1d`）；
   ~~② 切 three 默认~~ → 已切（`e49b7c1`，用户验收通过）；
   ~~③ 行走单步卡住~~ → 已修（`3b58669`）；
-  ④ **在飞：人物朝向 bug（已定位未修，见 §0 首条）**，属用户「走跑要有现实的样子 /
-  人物建模优化」议题的第一项；同议题下还有「走/跑不分」「走环与速度脱钩」
-  「人物是 2D billboard 不是 3D 模型」三件待用户裁定方向；
+  ~~④ 人物朝向 bug 待修~~ → **已派 codex（2026-11-08），连同走跑/走环/跳跃**；
   ⑤ 用户亲验剩余项（见 `talking.txt` 待人工验收表）；⑥ 相机近墙抬高到约 70° 的构图问题
   已记录待用户裁定；⑦ P2 玩家念头回执 `ws.py:1295` 硬编码文案。
+- **⚠ 跳跃的硬前提（派单里已写明，收编时必查）**：`EntityState`
+  （`sim/core/world.py:31-48`）**没有 height 字段**，协议 `Actor`/`ActorDelta`
+  也**没有 height**；可走判据是布尔 `collision`；`rebuild_tile_map`
+  （`sim/api/main.py:140-142`）只允许 `height == 1` 可走。加 height 会改
+  `state_hash`（`world.py:60` 只哈希 `{world_seed,tick,entities}`），
+  影响既有存档与 `test_core_m0.py` 的重放断言——**收编时必须确认 codex 怎么处理**。
+  `terrain_class.py:244-253` 的 `walkable ⇒ HEIGHT_EARTH` **仍是单向不变量**，
+  跳跃**不得**靠把它改成双向来实现（双向 ⇒ earth 无来源 ⇒ 只挖不放）。
 - **2026-11-06 清理轮（`f77fa81`）**：删掉三个零引用依赖（`pydantic-settings`/`tenacity`/
   `hypothesis`，DESIGN §4 同步改写）、`.opencode/`（61M）、`agent-registry.md` 里
   四个已不存在的工作树、`.env.example` 两个死键、两份 331M 备份库、各类缓存/构建产物。
@@ -834,7 +855,14 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-11-06 Round24｜Codex 已交付，待主树收编与用户验收】three.js 自由视角 A–E 已分阶段实现并提交，默认保留 Phaser。实现 HEAD `b7ac220`；文档/本快照提交号看 `git log -1`。当前无在途开发，不重复实现、不开新一轮门禁；收到新派单后再行动。
+【2026-11-08 新派单｜Codex 执行中】已由主树代为同步 main（本树 HEAD `51d1e2f`），
+代码与主树逐字节一致。本轮派单四项 + 一份方案文档：① 人物朝向行号写反
+（`facingRow` 一张表套三套图集，实测行序不同）② 走/跑分离 ③ 走环与位移速度脱钩
+④ **跳跃（用户裁定：可跳上 h2/h3 高块）** ⑤ 2D→3D 模型**只出方案不动代码**。
+派单全文见本树 `.orca/talking.txt` 第二节。注意跳跃的硬前提：`EntityState` 与协议
+都无 height 字段，加字段会改 `state_hash`；`walkable ⇒ HEIGHT_EARTH` 单向不变量
+**不得**双向化。历史 Round24 快照：three.js 自由视角 A–E 已交付并被主树收编
+（`cb820bf`），默认已切 three（`e49b7c1`）。
 
 ### 恢复与协作
 
