@@ -71,9 +71,19 @@
 **门禁（终态全部真跑，EXIT 0）**：pytest `3625P/121S/72D`（427.79s）、vitest `702P/82F`、
 typecheck、lint、prettier、gen:protocol:check、ruff、ruff format、pyright（0 errors）。
 
-**下一步**：① 用户实机验收 3D 主角手感；② 通过后再决定是否铺到 50 NPC（形态已就绪，
-只需把 `createAvatar(preset, atlas)` 从主角扩到全员，并按 `actor.sprite` 取预设）；
-③ 提交本轮改动。
+**下一步（2026-11-09 已派 codex 树）**：**3D 铺开到全部 NPC**。用户明确把「3D 主角
+实机手感验收」**搁置**，不阻塞。派单已写入 codex 树 `.orca/talking.txt` 第二节，要点：
+
+- 形态**不许再改**（1 SkinnedMesh / 共享图集 / 顶点色）——那是 `7279e8a` 刚钉死的结论。
+- 映射两处：服务端 `sprite` 是 `"protagonist"`（**不是** `chenmo`），需映射到 `chenmo`；
+  `god_villager_*` → 同名预设；`fauna_*` **保持 2D**。
+- **最大静默失败面**：`presetFor` 对未知 id 静默回落到 chenmo ⇒ 名字错配不报错，
+  只表现为「全城一个色」。派单要求显式处理未识别值并加测试钉住。
+- 预算 ≤ 2× 当前 draw call（51 人 × 1 mesh ≈ 51 次）。
+- 验收必须真机：≥5 个不同 NPC 配色互不相同、动物仍 2D、关闭开关行为零变化。
+
+**主树代同步**：codex 树原先没有 `avatar3d.ts`（停在 `1dae9f1`），已由主树
+`git merge --no-ff main` 同步到 **`d558800`**（无冲突），否则派单无从下手。
 
 **更早的状态（已收编，留作上下文）**：
 
