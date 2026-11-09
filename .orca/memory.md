@@ -85,6 +85,37 @@ typecheck、lint、prettier、gen:protocol:check、ruff、ruff format、pyright�
 **主树代同步**：codex 树原先没有 `avatar3d.ts`（停在 `1dae9f1`），已由主树
 `git merge --no-ff main` 同步到 **`d558800`**（无冲突），否则派单无从下手。
 
+### 2026-11-09 NPC 3D 铺开：已收编 `2ac5ed2`（codex `968b3e4` 摘入）
+
+**改动只两个文件**：`three-actors.ts`（+34）与其测试（+240）。`avatar3d.ts`、
+`sim/`、`shared/`、依赖锁**一字未动**，协议仍 **1.16**。
+
+**映射**（`avatarPresetForSprite`）：`fauna_*` → `null`（留 billboard）；
+`protagonist` → `chenmo`；其余命中 `AVATAR_PRESET_IDS` 就用自身；**未识别 → 显式
+`villager`**（不靠 `presetFor` 的静默回落）。
+
+**一个必须记住的实现细节**：`avatarPreset` 与 billboard 的 `key` **分开跟踪**。
+两者混用会出 bug——两张缺图的表都回落到 `villager` 纹理键，但预设不同，
+若不单独比 `avatarPreset` 就会留着上一个 NPC 的旧皮不换。
+
+**主树独立真机复验（隔离空库 + 打包 Chromium）**：
+- 51 个 avatar root / 51 个 SkinnedMesh / **1 张共享图集** / 用上 **18 种预设**
+  （chenmo + 17 个 GOD 名，`villager` 未被真实 NPC 命中，符合后端哈希分布）。
+- 关掉 `?avatar3d` 后全员回到 billboard，与 `7279e8a` 一致。
+- 0 页面 / 0 控制台错误。
+
+**踩坑记录（这次差点误判）**：夜色下把地形藏起来之前，NPC 在截图里像一堆巨大黑块。
+实测几何（0.95×1.96×0.66）、骨骼世界坐标、UV 范围、顶点色、贴图（512×256 /
+srgb / flipY=true）、蒙皮半径全部正常；把 `InstancedMesh` 地形临时 `visible=false`
+后两个 NPC 立刻显色且互不相同 ⇒ **黑块是夜色下的建筑遮挡，不是模型问题**。
+教训：**真机判色前先隔离地形**，否则夜色 + 深色建筑会把结论带偏。
+
+**门禁（主树终态真跑）**：pytest `3625P/121S/72D`（470.34s）· vitest `715P/82F` ·
+typecheck / lint / prettier / gen:protocol:check / ruff / ruff format / pyright 全 EXIT 0。
+
+**本轮清理**：临时调试钩子 `window.__probe`（曾加在 `three-world.ts`）与探针测试
+已删除，工作区干净。
+
 **更早的状态（已收编，留作上下文）**：
 
 ## 0b. codex 移动轮派单与收编（2026-11-08 已完成）
