@@ -1,6 +1,6 @@
 """M7 协议 1.3：time 块与 ground_b64。
 
-设计：docs/arch/m7-render-art.md §2.2（R1 地面走 HTTP / R3 时钟权威帧）。
+设计：docs/arch/m7-render-art.md（R1 地面走 HTTP / R3 时钟权威帧）。
 出戏边界：time 只含戏内事实五键；禁键（tick/seed/branch）照旧零出站。
 """
 

@@ -1,6 +1,6 @@
 """M7 小镇地图：尺寸/可走性 + 可加载性 + 结构判据 + 确定性构建。
 
-设计：docs/arch/m7-render-art.md §3（R6 确定性构建）。
+设计：docs/arch/m7-render-art.md（R6 确定性构建；旧 §3 已随管线退役压缩）。
 2026-10-12 D6-D10 换图：真相源 = build_god_town.py（桃花源整图 140×100）。
 Zelda-like 旧图管线（build_town.py / sprout 调色板）已于 2026-10-26 删除，
 完整实现可从 git 历史找回；旧 96×96 断言随图退休。

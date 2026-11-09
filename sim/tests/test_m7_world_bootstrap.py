@@ -1,6 +1,6 @@
 """M7 世界引导：真实地图加载（fail-safe 回退）+ 创世实体落可走格。
 
-设计：docs/arch/m7-render-art.md §2.3 R7（创世村民）；批次 B 扩容：
+设计：docs/arch/m7-render-art.md（R7 创世村民，已被 50 村民名册取代）；批次 B 扩容：
 世界 = chenmo + 50 村民（villagers.py 名册），出生位确定性环形散布。
 出生点搬运走**事件**（move 事件经 issue_move，C4 唯一写路径）——
 创世 (0,0) → SPAWN 的路径段事件在 build_loop 创世后同 tick 入队。

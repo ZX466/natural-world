@@ -46,25 +46,31 @@
 
 ## 4. 请求 / 响应 schema
 
-### 4.1 世界地图碰撞层（`GET /api/world/map`，M0）
+### 4.1 世界地图静态层（`GET /api/world/map`，M0 / 1.3 增地面层）
 
-碰撞层是**静态资产**，走 HTTP 不走 WS（codex 意见⑤）。形状对齐 `sim/api/main.py::world_map` → `map_static_payload`：
+碰撞层与地面层都是**静态资产**，走 HTTP 不走 WS（codex 意见⑤）。形状对齐 `sim/api/main.py::world_map` → `map_static_payload`：
 
 ```jsonc
-// GET /api/world/map → 200
+// GET /api/world/map → 200（真实小镇图；缺图时回退 32×32 占位）
 {
-  "w": 32,
-  "h": 32,
-  "tileset": "grid",
+  "w": 140,
+  "h": 100,
+  "tileset": "god_town_v1",
   "chunks": [
-    { "cx": 0, "cy": 0, "collision_b64": "AQEBAQ…" }   // base64(每格 1 字节 0/1，chunk 内行优先)
+    {
+      "cx": 0, "cy": 0,
+      "collision_b64": "AQEBAQ…",   // base64(每格 1 字节 0/1，chunk 内行优先)
+      "ground_b64": "AQACAA…"       // base64(u16 小端地面 gid，chunk 内行主序)
+    }
   ]
 }
 ```
 
-- `collision_b64` 解码后为可通行位（1=可通行），前端填入 `MapStatic.collision: Uint8Array`，供点击寻路的目标合法性预检（WorldScene）。
+- `collision_b64` 解码后为可通行位（1=可通行），前端填入 `MapStatic.collision: Uint8Array`，供点击寻路的目标合法性预检。
+- `ground_b64`（协议 1.3 加法）解码为 `Uint16Array` 地面 gid，是图块渲染的输入；chunk 边长 16，故每块 16×16×2 = 512 字节。前端 `decodeGroundB64` 与后端 `map_static_payload` 是同一口径的镜像定义。
+- `tileset` 按地图尺寸判定：140×100 → `god_town_v1`（真实图集）；32×32 占位 → `grid`（前端退化为色块）。`96×96` 的 `zelda_like_v1` 只为兼容历史存档产物保留，运行时不再产出。
 - 只读静态资产：**不含** `seed` / `tick` / `entity_id`（出戏边界不变）。
-- `full_snapshot.map` 只带 `{tileset, w, h}`（尺寸/风格），碰撞层不在 WS 流里。
+- `full_snapshot.map` 只带 `{tileset, w, h}`（尺寸/风格），碰撞层与地面层都不在 WS 流里。
 
 ### 4.2 LLM Profile（M1 定稿，codex K 系列）
 
