@@ -29,12 +29,15 @@ logger = structlog.get_logger(__name__)
 #: action 枚举同步收窄到 M1_SUPPORTED_ACTIONS 的闸门口径）。
 _REQUIREMENTS_TEXT = (
     "只输出一个 JSON 对象，字段：action（必须是这些之一：move_to、wait、"
-    "talk_to、investigate、flee、attack、buy、sell、build）、"
+    "talk_to、investigate、flee、attack、buy、sell、take、give、build）、"
     "target_id（可选，要找的人或要买的货，直接说名字或货名：草药/药膏/饭食/米酒）、"
     "target_pos（可选，要去的地点或要施工的地块，格式 [x, y] 的格子坐标；"
     "镇子是 140×100 的格子，路面和空地能走，屋顶、水塘、树林进不去，"
     "坐标要落在能站人的地方）、"
-    "params（可选：交手时 posture 取 attack/defend/withdraw/aim/flee/shout），"
+    "params（可选：交手时 posture 取 attack/defend/withdraw/aim/flee/shout；"
+    "take 是从目标手里取物、give 是给目标物品，这两种动作的 target_id 要填交接对象的名字，"
+    "params 必须有 item（土/石料/木料），quantity 是正整数字符串，不填就是一份，"
+    "只能交接实际持有的材料），"
     "reason（你为什么这么做，用你自己的话，第一人称，一句话）。"
     "不要输出 JSON 以外的任何文字。"
 )

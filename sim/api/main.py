@@ -647,10 +647,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     chat_last: dict[str, int] = {}
     retell_last: dict[str, int] = {}  # 批次 E2：学舌冷却账本（调用方持有）
     # 批次 E3：全镇余额账本（村民工钱 + 陈默买卖共享一份账）。
-    from sim.world.economy import CoinLedger
+    from sim.world.economy import CoinLedger, MaterialLedger
 
     coin_ledger = CoinLedger()
     app.state.coin_ledger = coin_ledger
+    material_ledger = MaterialLedger()
+    app.state.material_ledger = material_ledger
     from sim.npc.errand_runtime import ErrandRuntime
 
     errands = ErrandRuntime(seed=loop.state.world_seed, coin_ledger=coin_ledger)
@@ -898,9 +900,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if current_branch is not None:
         _cold_events = branch_history or []
         coin_ledger.restore_from_events(_cold_events)
+        material_ledger.restore_from_events(_cold_events)
         fire_runtime.restore_from_events(_cold_events)
     else:
         coin_ledger.restore_from_events(event.to_store_dict() for event in loop.pending_events)
+        material_ledger.restore_from_events(event.to_store_dict() for event in loop.pending_events)
+    loop.attach_event_observer(material_ledger.observe)
 
     def _fire_tick_hook(state: Any, tick: int) -> list[Any] | None:
         events: list[Any] = []
@@ -1002,6 +1007,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             language.class_register,
             in_circle=target is None or target in chat_ledger.relations_of(CHENMO_ID),
         ),
+        inventory_provider=lambda: material_ledger,
     )
     app.state.chenmo_driver = driver
     loop.attach_maintenance(lambda state, tick: driver.combat_tick(loop, pathfinder=pathfinder))
@@ -1286,6 +1292,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 driver.reset_combat()
                 combat_ledger.reset()
                 coin_ledger.reset()
+                material_ledger.reset()
                 chat_ledger.reset()
                 fire_runtime.reset()  # P-4
                 reset_structures()
@@ -1325,6 +1332,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 _narration.clear()
                 branch_events = await branch_store.read_branch_history()
                 coin_ledger.restore_from_events(branch_events)
+                material_ledger.restore_from_events(branch_events)
                 fire_runtime.restore_from_events(branch_events)
                 maintenance.ledger = await branch_store.materialize_matter()
                 maintenance.structures = await branch_store.materialize_structures()
@@ -1442,6 +1450,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         height_of=voxel_height,
         ground_gid=lambda x, y: _ground_tile_id(tile_map, x, y),
         occupied=voxel_occupied,
+        stock_available=lambda material: material_ledger.balance_of(CHENMO_ID, material),
     )
     voxel_history = branch_history or [] if current_branch is not None else []
     voxel_runtime.restore_from_events(voxel_history)

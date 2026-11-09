@@ -54,11 +54,13 @@ class VoxelRuntime:
         height_of: Callable[[int, int], int],
         ground_gid: Callable[[int, int], int],
         occupied: Callable[[int, int], bool],
+        stock_available: Callable[[str], float] | None = None,
     ) -> None:
         self._map = tile_map
         self._height = height_of
         self._ground = ground_gid
         self._occupied = occupied
+        self._stock_available = stock_available
         self.reset()
 
     def reset(self) -> None:
@@ -178,7 +180,12 @@ class VoxelRuntime:
         if not isinstance(material, str) or material not in _HEIGHT_BY_MATERIAL:
             raise VoxelRejected("这处材料辨不清。")
         # Read committed stock, excluding earlier unflushed placement reservations.
-        if self._inventory[material] - self._reserved[material] < 1:
+        available = self._inventory[material] - self._reserved[material]
+        if self._stock_available is not None:
+            # Applied gifts can precede SQL/HUD commit. Never spend their stock
+            # again, and never spend an uncommitted incoming credit early.
+            available = min(available, self._stock_available(material))
+        if available < 1:
             raise VoxelRejected(f"行囊里没有{_MATERIAL_LABELS[material]}了。")
         events = self._edit(state.tick, x, y, "place", material)
         self._reserved[material] += 1

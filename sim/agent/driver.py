@@ -41,6 +41,7 @@ from sim.llm.prompts.assembler import (
 from sim.llm.prompts.identity import IdentityAnchor
 from sim.npc.contract import HiddenState
 from sim.npc.speech_register import SpeechContext
+from sim.world.economy import MaterialLedger
 
 logger = structlog.get_logger(__name__)
 
@@ -64,6 +65,7 @@ class ChenmoDriver:
         entropy_provider: Callable[[str, int], WorldEvent] | None = None,
         speech_context_provider: Callable[[str | None], SpeechContext] | None = None,
         hidden_provider: Callable[[], HiddenState] | None = None,
+        inventory_provider: Callable[[], MaterialLedger] | None = None,
     ) -> None:
         self._anchor = anchor
         self._llm = llm
@@ -76,6 +78,7 @@ class ChenmoDriver:
         self._display_name_of = display_name_of or (lambda _eid: None)
         # 批次 E3：经济面注入（() -> (CoinLedger, world_seed)）；None = 无买卖面。
         self._economy = economy_provider
+        self._inventory = inventory_provider
         # 批次 E4：施工面注入（() -> BuildRuntime）；None = 无建造面。
         self._build = build_runtime_provider
         # 批次 E6：战斗面注入（() -> (CombatLedger, world_seed)）；None = 无攻击面。
@@ -345,6 +348,8 @@ class ChenmoDriver:
             elif intent.action in ("buy", "sell") and intent.target_id is not None:
                 if self._economy is not None:
                     self._issue_trade(loop, intent)
+            elif intent.action in ("take", "give"):
+                self._issue_transfer(loop, intent)
             elif intent.action == "build" and intent.target_pos is not None:
                 if self._build is not None and self._economy is not None:
                     self._issue_build(loop, actor_id, intent)
@@ -358,10 +363,10 @@ class ChenmoDriver:
                 self._issue_flee(loop, pathfinder, actor_id, intent.target_id)
             from sim.core.events import npc_monologue_event
 
-            # 批次 E（review M3）：buy/sell/build/attack 的 handler 已出**结果**
+            # buy/sell/take/give/build/attack 的 handler 已出**结果**
             # 独白（买了/没买成/伤了/杀了）——尾部 reason（动机）独白对这四类
             # 不重发（一意图两条 thought 是面板噪声）；其余动作 reason 即独白。
-            if intent.action not in ("buy", "sell", "build", "attack"):
+            if intent.action not in ("buy", "sell", "take", "give", "build", "attack"):
                 loop.enqueue(
                     npc_monologue_event(
                         tick=loop.state.tick + 1,
@@ -542,6 +547,66 @@ class ChenmoDriver:
             content = f"出手一批{good.name}，进账{earned}文。"
         loop.enqueue(
             npc_monologue_event(tick=tick + 1, npc_id=actor_id, form="thought", content=content)
+        )
+
+    def _issue_transfer(self, loop: TickLoop, intent: Intent) -> None:
+        """take/give: one existing stock-transfer fact, then one result thought."""
+        from sim.agent.transfer_exec import (
+            TransferRejected,
+            material_transfer_event,
+            parse_transfer_params,
+        )
+        from sim.agent.voxel_exec import _MATERIAL_LABELS
+        from sim.core.events import npc_monologue_event
+
+        actor_id = self._anchor.entity_id
+        if actor_id not in loop.state.entities or intent.action not in ("take", "give"):
+            return
+        content = "想交接的东西还没弄清，先停一停。"
+        try:
+            if intent.target_id is None or intent.target_id not in loop.state.entities:
+                raise TransferRejected("missing_target")
+            if self._inventory is None:
+                raise TransferRejected("inventory_unavailable")
+            request = parse_transfer_params(intent.params)
+            event = material_transfer_event(
+                tick=loop.state.tick,
+                action=intent.action,
+                actor_id=actor_id,
+                target_id=intent.target_id,
+                request=request,
+                ledger=self._inventory(),
+            )
+        except ValueError as exc:
+            reason = str(exc) if isinstance(exc, TransferRejected) else "invalid_transfer"
+            logger.info(
+                "chenmo.transfer_rejected",
+                tick=loop.state.tick,
+                action=intent.action,
+                reason=reason,
+            )
+            if reason == "insufficient_stock":
+                content = (
+                    "没能拿到想要的材料，先等等吧。"
+                    if intent.action == "take"
+                    else "手里的材料不够，暂时交不了。"
+                )
+        else:
+            # All ownership changes enter apply(event); the ledger only observes.
+            loop.enqueue(event)
+            name = self._display_name_of(intent.target_id) or "对方"
+            if name in loop.state.entities:
+                name = "对方"
+            item = _MATERIAL_LABELS[request.material]
+            content = (
+                f"从{name}手里接过{request.quantity}份{item}。"
+                if intent.action == "take"
+                else f"把{request.quantity}份{item}交给了{name}。"
+            )
+        loop.enqueue(
+            npc_monologue_event(
+                tick=loop.state.tick + 1, npc_id=actor_id, form="thought", content=content
+            )
         )
 
     def _issue_build(self, loop: TickLoop, actor_id: str, intent: Intent) -> None:

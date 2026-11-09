@@ -1,8 +1,9 @@
-"""sim.world.economy — 最小经济（批次 E3）：价目表 + 进程内余额账本。
+"""sim.world.economy — 最小经济：价目表、余额与材料事件投影。
 
 余额是 runtime 内存态（禁第二 SQL 驱动）；**入账/出账结果**经 coin.grant
 事件落流（C4：账单即真相，余额可由事件流重放重建）。定价确定性哈希浮动
 （C5 无 RNG 流）。价目是戏内事实（可出站）；余额数值不出戏内文本。
+材料持有量复用 material.moved 的既有守恒规则，不另建背包或 SQL 写路径。
 """
 
 from __future__ import annotations
@@ -11,6 +12,8 @@ import hashlib
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
+
+from sim.core.events import EventKind, MaterialMovedPayload, WorldEvent
 
 
 @dataclass(frozen=True)
@@ -82,3 +85,51 @@ class CoinLedger:
             return False
         self._balances[owner] = current + delta
         return True
+
+
+class MaterialLedger:
+    """Applied material-event view of the existing material_balances projection.
+
+    This cache never writes SQL or creates stock. Observe only events accepted by
+    the event bus; restoring a branch replaces the entire view atomically.
+    """
+
+    def __init__(self) -> None:
+        self._balances: dict[tuple[str, str], float] = {}
+        self.sequence = 0
+
+    def reset(self) -> None:
+        self._balances = {}
+        self.sequence = 0
+
+    def balance_of(self, owner_id: str, material_id: str) -> float:
+        return self._balances.get((f"npc:{owner_id}", material_id), 0.0)
+
+    def _apply(self, payload: MaterialMovedPayload) -> None:
+        # The runtime and SQL/replay projection use the same conservation rule.
+        from sim.core.persistence.npc_store import NpcStoreError, fold_material_balance
+
+        source = (payload.from_ref, payload.material_id)
+        destination = (payload.to_ref, payload.material_id)
+        try:
+            debit, credit = fold_material_balance(
+                self._balances.get(source, 0.0),
+                self._balances.get(destination, 0.0),
+                quantity=payload.quantity,
+                from_ref=payload.from_ref,
+            )
+        except NpcStoreError as exc:
+            raise ValueError("recorded material transfer would overdraw stock") from exc
+        self._balances[source], self._balances[destination] = debit, credit
+        self.sequence += 1
+
+    def observe(self, event: WorldEvent) -> None:
+        if event.event_type is EventKind.MATERIAL_MOVED:
+            self._apply(MaterialMovedPayload.model_validate(event.payload))
+
+    def restore_from_events(self, events: Iterable[Mapping[str, Any]]) -> None:
+        restored = MaterialLedger()
+        for event in events:
+            if event.get("event_type") == EventKind.MATERIAL_MOVED.value:
+                restored._apply(MaterialMovedPayload.model_validate(event["payload"]))
+        self._balances, self.sequence = restored._balances, restored.sequence

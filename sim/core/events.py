@@ -388,6 +388,8 @@ MaterialMoveReason = Literal[
     "burned",
     "dig_yield",
     "place_consumed",
+    "take",
+    "give",
 ]
 
 #: 火灾熄灭的**物理终止态**（K12 §1.3 逐字；`doused` 只表示「火灭了」，**不记谁灭的**）。
