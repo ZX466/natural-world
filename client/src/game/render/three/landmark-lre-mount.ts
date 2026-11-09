@@ -99,10 +99,22 @@ export function mountLandmark(
   }
   scene.add(building.root);
   // 试车台几乎全是 metalness 0.86~0.92 的 StandardMaterial。金属没有漫反射，
-  // 场景里只有半球光 + 平行光时会渲成近乎全黑。给环境补一张程序化天空贴图，
-  // 金属才有东西可反射。地形是 BasicMaterial 烤死顶点色，不受影响。
+  // 场景里只有半球光 + 平行光时会渲成近乎全黑。给它的材质单独挂一张程序化天空
+  // 反射贴图 —— **不设 `scene.environment`**：那会连带影响已验收的 Lambert
+  // 角色，把它们的观感一起改掉。地形是 BasicMaterial 烤死顶点色，本来就不受影响。
   const environment = renderer === null ? null : skyEnvironment(renderer);
-  if (environment) scene.environment = environment;
+  if (environment) {
+    building.root.traverse((object: THREE.Object3D) => {
+      const material = (object as THREE.Mesh).material;
+      if (!material) return;
+      for (const entry of Array.isArray(material) ? material : [material]) {
+        if (!(entry instanceof THREE.MeshStandardMaterial)) continue;
+        entry.envMap = environment;
+        entry.envMapIntensity = 1;
+        entry.needsUpdate = true;
+      }
+    });
+  }
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
@@ -147,7 +159,6 @@ export function mountLandmark(
     dispose() {
       scene.remove(building.root);
       disposeTree(building.root);
-      if (scene.environment === environment) scene.environment = null;
       environment?.dispose();
     },
   };
