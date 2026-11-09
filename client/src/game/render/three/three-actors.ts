@@ -57,7 +57,7 @@ export interface ActorView {
 }
 
 export interface ActorLayerOptions {
-  /** 人形角色用共享图集的体素模型；动物仍走 billboard。由 `?avatar3d=1` 打开。 */
+  /** 人形角色用共享图集的体素模型；动物仍走 billboard。默认开，`?avatar3d=0` 关。 */
   readonly avatars3d?: boolean;
 }
 

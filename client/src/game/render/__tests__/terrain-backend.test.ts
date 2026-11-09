@@ -33,24 +33,25 @@ it('terrainFromSearch accepts the explicit three word too', () => {
   expect(terrainFromSearch('?renderer=iso&terrain=three')).toBe('three');
 });
 
-it('avatars3dFromSearch is off unless the flag is exactly "1"', () => {
-  // The 3D avatars are opt-in so the shipped 2D sheets stay the default until
-  // the user accepts the look. Only the exact value "1" turns them on.
-  expect(avatars3dFromSearch('')).toBe(false);
-  expect(avatars3dFromSearch('?avatar3d=0')).toBe(false);
-  expect(avatars3dFromSearch('?avatar3d=true')).toBe(false);
+it('avatars3dFromSearch is on by default and rolls back only on exactly "0"', () => {
+  // The user accepted the 3D avatars on 2026-11-09, so they are what the game
+  // boots into. `?avatar3d=0` is the rollback switch, mirroring `?terrain=phaser`.
+  expect(avatars3dFromSearch('')).toBe(true);
   expect(avatars3dFromSearch('?avatar3d=1')).toBe(true);
-  expect(avatars3dFromSearch('?avatar3d=1&terrain=phaser')).toBe(true);
+  expect(avatars3dFromSearch('?avatar3d=true')).toBe(true);
+  expect(avatars3dFromSearch('?avatar3d=0')).toBe(false);
+  expect(avatars3dFromSearch('?avatar3d=false')).toBe(true);
+  expect(avatars3dFromSearch('?avatar3d=0&terrain=phaser')).toBe(false);
 });
 
 it('the avatar switch is independent of the terrain and renderer switches', () => {
-  // `?avatar3d=1` only affects the three path; the parser itself does not care
-  // which terrain is selected, so the two stay separable in tests and in URLs.
+  // The parser does not care which terrain is selected, so the two stay
+  // separable in tests and in URLs; only the three path acts on the result.
   const combos = [
-    ['', 'iso', 'three', false],
-    ['?avatar3d=1', 'iso', 'three', true],
-    ['?renderer=flat&terrain=phaser', 'flat', 'phaser', false],
-    ['?renderer=flat&terrain=phaser&avatar3d=1', 'flat', 'phaser', true],
+    ['', 'iso', 'three', true],
+    ['?avatar3d=0', 'iso', 'three', false],
+    ['?renderer=flat&terrain=phaser', 'flat', 'phaser', true],
+    ['?renderer=flat&terrain=phaser&avatar3d=0', 'flat', 'phaser', false],
   ] as const;
   for (const [search, renderer, terrain, avatars3d] of combos) {
     expect(rendererFromSearch(search)).toBe(renderer);

@@ -25,15 +25,18 @@ export function terrainFromSearch(search: string): TerrainBackend {
   return new URLSearchParams(search).get('terrain') === 'phaser' ? 'phaser' : 'three';
 }
 
-/** 3D 人物开关（`?avatar3d=1`）。默认关，全员保持已验收的 2D 图集。
+/** 3D 人物开关（`?avatar3d=0` 回滚）。**默认开**——2026-11-09 用户验收通过。
  *
  *  开的时候**所有人形角色**都换成分节体素模型（共享一张 512×256 图集、每人一个
  *  `SkinnedMesh`）；`fauna_*` 动物没有 3D 模型，仍走 billboard。
  *
+ *  回滚只认精确值 `"0"`（与 `?terrain=phaser` 同一套「精确词才回滚」口径）；
+ *  其余任何值（含 `?avatar3d=false`、拼写错误）都保持默认的 3D。
+ *
  *  **只在 three 路径生效**：Phaser 回滚路径（`?terrain=phaser`）不认这个参数，
  *  两者的画布与场景互相独立。 */
 export function avatars3dFromSearch(search: string): boolean {
-  return new URLSearchParams(search).get('avatar3d') === '1';
+  return new URLSearchParams(search).get('avatar3d') !== '0';
 }
 
 /**

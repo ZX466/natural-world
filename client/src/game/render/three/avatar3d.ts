@@ -1,5 +1,5 @@
 /**
- * 3D 分节体素角色（`?avatar3d=1` 时全员人形换用；动物仍走 billboard）。
+ * 3D 分节体素角色（**默认全员人形使用**；`?avatar3d=0` 回滚 2D；动物仍走 billboard）。
  *
  * 来源：Gemini 网页端产出的 `linhe_voxel_avatar_3d.js`（r128 预览版）。那个版本
  * 每个角色是 16 个 `Group` + 46 个 `Mesh`（本体 + 描边）**各带自己的材质和贴图**；

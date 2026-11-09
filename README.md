@@ -71,18 +71,18 @@ $env:LZ_OFFLINE_CATCHUP_MAX_TICKS = "7200"    # 补两个游戏小时
 
 ### 2D / 3D 人物切换
 
-人物默认是已验收的 2D 像素图集（主角 `chenmo` 17×8，村民 4×4，古风 NPC 17 张 3×4）。
+人物默认是 **3D 分节体素模型**（2026-11-09 用户验收通过）：共享一张 512×256 图集，每人一个 `SkinnedMesh`（16 骨骼、1 次 draw call）。`fauna_*` 动物没有 3D 模型，仍走 billboard。
 
-加 **`?avatar3d=1`** 把**所有**人形角色换成分节体素模型：共享一张 512×256 图集，每人一个 `SkinnedMesh`（16 骨骼、1 次 draw call）。`fauna_*` 动物没有 3D 模型，仍走 billboard。
+加 **`?avatar3d=0`** 回滚到已验收的 2D 像素图集（主角 `chenmo` 17×8，村民 4×4，古风 NPC 17 张 3×4）。
 
 | URL | 世界 | 人物 |
 |---|---|---|
-| `/` | three.js | 2D 图集（默认） |
-| `/?avatar3d=1` | three.js | **3D 体素**（全部人形） |
+| `/` | three.js | **3D 体素**（全部人形，默认） |
+| `/?avatar3d=0` | three.js | 2D 图集（回滚） |
 | `/?terrain=phaser` | Phaser 等距 | 2D 图集 |
-| `/?terrain=phaser&avatar3d=1` | Phaser 等距 | 2D 图集（**该参数被忽略**） |
+| `/?terrain=phaser&avatar3d=0` | Phaser 等距 | 2D 图集 |
 
-- 判定只认精确值 `"1"`：`?avatar3d=0`、`?avatar3d=true` 都不生效。
+- 回滚只认精确值 `"0"`（与 `?terrain=phaser` 同一口径）；`?avatar3d=1`、`?avatar3d=false` 等都保持默认的 3D。
 - **只在 three 路径生效**。Phaser 回滚路径不读这个参数，两条路径的画布与场景互相独立。
 - 开关是纯 URL 参数，**界面上没有按钮**；改 URL 后刷新即可，不需要重启后端。
 

@@ -13,6 +13,7 @@ afterEach(() => {
     '../three-weather',
     '../three-voxel-cues',
     '../three-input',
+    '../avatar3d',
     '../../../audio',
     '../../../audio/synth',
     '../../../../store/uiStore',
@@ -56,6 +57,9 @@ it('wires gait, authoritative flight and elevated steps into the native controll
     }),
   }));
   vi.doMock('../three-actors', () => ({ createActorLayer: () => ({ overlay: {}, dispose() {} }) }));
+  // 3D is the default now, so the lighting rig is built on every boot; the
+  // mocked scene has no `add`, so stub the rig out with the actor layer.
+  vi.doMock('../avatar3d', () => ({ createAvatarLighting: () => () => {} }));
   vi.doMock('../three-weather', () => ({ createWeatherLayer: () => ({ dispose() {} }) }));
   vi.doMock('../three-voxel-cues', () => ({ createVoxelCues: () => ({ dispose() {} }) }));
   vi.doMock('../three-input', () => ({
