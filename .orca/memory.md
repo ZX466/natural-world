@@ -3,10 +3,22 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-09 · 验收全通过 · 3D 已转默认 · 三波难题已派 codex）
+## 0. 当前状态（2026-11-09 · 验收全通过 · 3D 已转默认 · 波 A/B 已收编 · 波 C 未开始）
 
-**当前在飞**：**codex 三波派单，波 A 已收编（`3dbc0d6`）**；下一波是波 B 真实火场出站，
-再是波 C 渲染三件。详情在 codex `.orca/talking.txt` §二。主树只做收编复核，别自己开工。
+**当前在飞**：**codex 三波派单，波 A（`3dbc0d6`）与波 B（`fb20719`）均已收编**；
+剩波 C 渲染三件（3D 穿墙剪影 / 相机近墙构图 / Phaser 高度通道），纯客户端不碰协议。
+详情在 codex `.orca/talking.txt` §二。主树只做收编复核，别自己开工。
+
+**波 B 收编（`fb20719`，codex `d799fca`）**：真实火场出站 —— `sim/npc/light_view.py`
+把活跃火格投影成既有六键 `Light`（不透明稳定 rtoken、x/y、`kind="fire"`、radius 5、
+flicker 0.4），**不输出** fire_id / 燃料 / tick / 强度 / 归因，无火灾专用路由或帧类型。
+全量带当前光源；增量 add 完整 upsert + remove by rtoken；快照独见 token 单独追踪，
+既不让新连接吃掉别的连接待发的移除，也不漏「只在快照见过就熄灭」的移除。
+**协议 1.16 → 1.17**（两处常量 + live app/info + 快照版本 + 版本登记 + `shared/openapi.json`
+手改 `LightDelta` 可选 op/x/y/kind/radius 后重生成 TS）。`test_m5_fire_outbound.py` 逐字节未改。
+⚠ **部署必须前后端同步 1.17**：1.16 客户端不处理 remove，火声可能滞留到下次全量同步。
+主树独立复跑 pytest `3670P/121S/72D EXIT 0`（490.79s）、vitest `723P/84F`、
+ruff/format/pyright/tsc/lint/prettier/gen:protocol 全 EXIT 0 —— 与 codex 读数一致。
 
 **波 A 收编（`3dbc0d6`，codex `1dc645a`）**：`take`/`give` 补上执行器 —— 各发 1 条
 `material.moved`（`reason=take|give`）+ 1 条结果独白，复用土/石/木库存与
