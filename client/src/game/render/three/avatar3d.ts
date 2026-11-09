@@ -1,5 +1,5 @@
 /**
- * 3D 分节体素角色（主角试水 + 50 人铺开的性能形态）。
+ * 3D 分节体素角色（`?avatar3d=1` 时全员人形换用；动物仍走 billboard）。
  *
  * 来源：Gemini 网页端产出的 `linhe_voxel_avatar_3d.js`（r128 预览版）。那个版本
  * 每个角色是 16 个 `Group` + 46 个 `Mesh`（本体 + 描边）**各带自己的材质和贴图**；
@@ -883,7 +883,7 @@ export function createAvatar(presetOrId: string | AvatarPreset, atlas: AvatarAtl
   const skeleton = new THREE.Skeleton(BONE_NAMES.map((name) => bones.get(name)!));
   mesh.bind(skeleton);
 
-  // 3. 主角描边**暂不提供**（2026-11-08 试水实测结论）。
+  // 3. 3D 描边**暂不提供**（2026-11-08 试水实测结论）。
   //    2D 路径的「穿墙剪影」用同位置 Sprite + `GreaterDepth` 实现：那张 sprite
   //    是平面，深度处处相等，所以只在真正被挡住时才显色。3D 网格自身有前后
   //    深度差——躯干背面比正面深，同样的比较会让被身体挡住的胳膊透出来，真机

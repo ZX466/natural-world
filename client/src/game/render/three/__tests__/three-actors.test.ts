@@ -4,7 +4,7 @@ import { WorldMirror } from '../../../world-mirror';
 import { AVATAR_PRESET_IDS } from '../avatar3d';
 import { createActorLayer } from '../three-actors';
 
-function setup(protagonist3d = false, missingTextures: readonly string[] = []) {
+function setup(avatars3d = false, missingTextures: readonly string[] = []) {
   const mirror = new WorldMirror();
   mirror.setMap({ w: 5, h: 6, tileset: 'grid', collision: new Uint8Array(30).fill(1) });
   mirror.protagonist = 'hero';
@@ -50,7 +50,7 @@ function setup(protagonist3d = false, missingTextures: readonly string[] = []) {
         height: 20,
       }),
     },
-    { protagonist3d },
+    { avatars3d },
   );
   return { mirror, camera, scene, texture, layer };
 }

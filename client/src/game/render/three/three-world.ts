@@ -7,7 +7,7 @@ import { loadTerrainAssets } from './three-assets';
 import { worldOf } from './three-projection';
 import { createActorLayer, type ActorLayer } from './three-actors';
 import { createAvatarLighting } from './avatar3d';
-import { protagonistAvatar3dFromSearch } from '../presentation';
+import { avatars3dFromSearch } from '../presentation';
 import { loadActorAssets } from './three-actor-assets';
 import { useUiStore } from '../../../store/uiStore';
 import { WebAudioSynth } from '../../audio/synth';
@@ -190,18 +190,18 @@ export function createThreeWorld(
       if (disposed) return;
       adapter = createTerrainAdapter({ canvas, mirror, ...assets });
       adapter.resize(size.width, size.height);
-      const protagonist3d = protagonistAvatar3dFromSearch(globalThis.location?.search ?? '');
+      const avatars3d = avatars3dFromSearch(globalThis.location?.search ?? '');
       actors = createActorLayer(
         adapter.scene.scene,
         adapter.scene.camera,
         mirror,
         adapter.heightOf,
         images,
-        { protagonist3d },
+        { avatars3d },
       );
       // Lambert materials need light; the terrain's baked vertex colours do not,
       // so this rig only ever affects the 3D avatars.
-      if (protagonist3d) releaseLighting = createAvatarLighting(adapter.scene.scene);
+      if (avatars3d) releaseLighting = createAvatarLighting(adapter.scene.scene);
       weather = createWeatherLayer(actors.overlay, mirror);
       cues = createVoxelCues(adapter.scene.scene, mirror, adapter.heightOf);
       const baseHeight = adapter.heightOf;

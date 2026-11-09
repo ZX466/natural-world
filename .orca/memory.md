@@ -3,24 +3,28 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-08 · codex 移动轮已收编 `890337e` · 3D 主角试水已改 SkinnedMesh，**未提交**）
+## 0. 当前状态（2026-11-09 · 3D 全员已收编 `2ac5ed2` · 等用户实机验收）
 
-**【2026-11-08 3D 主角试水 —— 工作区有未提交改动，等用户实机验收】**
+**当前在飞**：`?avatar3d=1` 已把**全部人形**换成分节体素模型（`7279e8a` 形态 + `2ac5ed2`
+铺开）；默认仍全员 2D。等用户实机验收手感与观感，通过后才考虑收编 3D 描边等后续。
+开关与 URL 组合见根 `README.md`「2D / 3D 人物切换」。
+
+**【2026-11-08 3D 主角试水（已收编 `7279e8a`，留作上下文）】**
 
 用户指令「1 3 2」：① 收编 codex 移动轮 ② 3D 模型批量化/图集问题 ③ **先只把主角一个人换成 3D 试水**。
 第 ① 步已完成（`890337e`，主树独立复跑 `3625P/121S/72D EXIT 0`）。
-第 ③ 步与第 ② 步已合并实现，**改动仍在工作区，未提交**：
+第 ③ 步与第 ② 步已合并实现并提交为 `7279e8a`：
 
 | 文件 | 状态 | 作用 |
 |---|---|---|
 | `client/src/game/render/three/avatar3d.ts` | 新增 ~1040 行 | Gemini SDK 移植版，**真 `SkinnedMesh`**：16 骨骼 / 1 mesh / 1 图集 |
 | `client/src/game/render/three/__tests__/avatar3d.test.ts` | 新增 14 条 | mesh 数、图集共享、NPC 名字映射、骨骼刚性权重、尺寸、落地、朝向、相位、flipY、顶点色、tint、光照隔离、**无描边**、释放 |
-| `three-actors.ts` | +~80 | `ActorLayerOptions.protagonist3d` 开关 + 建图集 + 每帧驱动 |
+| `three-actors.ts` | +~80 | `ActorLayerOptions.avatars3d` 开关 + 建图集 + 每帧驱动 |
 | `three-world.ts` | +12 | 按 URL 建灯光、随 `releaseWorld` 释放 |
-| `presentation.ts` | +7 | `protagonistAvatar3dFromSearch()` |
-| `__tests__/three-actors.test.ts` | +3 条 | 开关关闭全 2D；开启只换主角且标签锚点仍在；遮挡时标签跟着隐藏 |
+| `presentation.ts` | +7 | `avatars3dFromSearch()` |
+| `__tests__/three-actors.test.ts` | +3 条 | 开关关闭全 2D；开启后标签锚点仍在；遮挡时标签跟着隐藏 |
 
-**开关**：`?avatar3d=1` 才把主角换成 3D；**默认仍全员 2D**，其余 50 NPC 未动。
+**开关**：`?avatar3d=1` 打开 3D；**默认全员 2D**。（当日只换主角，`2ac5ed2` 起覆盖全部人形。）
 
 **形态换掉了（这就是第 ② 步的答案）**。Gemini SDK 原样是 21 个 `Group` + 23 次 `addPart`
 ⇒ **每角色 46 个 mesh**（本体 + 描边各一份），50 人约 **2300 draw call**，且每个角色各自
@@ -71,8 +75,8 @@
 **门禁（终态全部真跑，EXIT 0）**：pytest `3625P/121S/72D`（427.79s）、vitest `702P/82F`、
 typecheck、lint、prettier、gen:protocol:check、ruff、ruff format、pyright（0 errors）。
 
-**下一步（2026-11-09 已派 codex 树）**：**3D 铺开到全部 NPC**。用户明确把「3D 主角
-实机手感验收」**搁置**，不阻塞。派单已写入 codex 树 `.orca/talking.txt` 第二节，要点：
+**下一步（2026-11-09 已派 codex 树，已收编 `2ac5ed2`）**：**3D 铺开到全部 NPC**。用户明确把「3D 主角
+实机手感验收」**搁置**，不阻塞。派单要点：
 
 - 形态**不许再改**（1 SkinnedMesh / 共享图集 / 顶点色）——那是 `7279e8a` 刚钉死的结论。
 - 映射两处：服务端 `sprite` 是 `"protagonist"`（**不是** `chenmo`），需映射到 `chenmo`；

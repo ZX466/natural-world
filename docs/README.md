@@ -35,7 +35,7 @@
 | `arch/voxel-execution-spec.md` | 等距体素 V0–V3 施工规格 + 决策链（**现行唯一真相源**） |
 | `arch/world-liveliness-design.md` | 世界可辨认性与自生长（2026-11-05 用户验收驱动；A 等距烘焙 / B 后端五项 / C three.js 自由视角世界已于 2026-11-06 实现，**2026-11-07 验收后成为默认**，`?terrain=phaser` 回滚） |
 | `arch/m7-render-art.md` | 渲染美术面（星露谷调性落地） |
-| `arch/character-model-3d-plan.md` | 2D billboard → 3D 人物的分档、素材管线与成本方案（待用户裁定，本轮不实施） |
+| `arch/character-model-3d-plan.md` | 2D billboard → 3D 人物的分档、素材管线与成本方案（**B 档已实施**：`?avatar3d=1` 全员体素模型，见 README「2D / 3D 人物切换」；文档正文仍是当时的待决方案，未回写） |
 | `arch/offline-progress.md` | 停服补跑的时间口径、上限、持久化与可复跑证据 |
 | `arch/audio.md` | 世界音效的默认静音、交互解锁、事件映射与亲听入口 |
 

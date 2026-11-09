@@ -57,9 +57,8 @@ export interface ActorView {
 }
 
 export interface ActorLayerOptions {
-  /** Enable shared-atlas voxel avatars for humanoids; animals keep billboards.
-   *  The option name is retained for compatibility with the original trial. */
-  readonly protagonist3d?: boolean;
+  /** 人形角色用共享图集的体素模型；动物仍走 billboard。由 `?avatar3d=1` 打开。 */
+  readonly avatars3d?: boolean;
 }
 
 function avatarPresetForSprite(sprite: string): string | null {
@@ -77,10 +76,10 @@ export function createActorLayer(
   assets: ActorAssets,
   options: ActorLayerOptions = {},
 ) {
-  const protagonist3d = options.protagonist3d === true;
+  const avatars3d = options.avatars3d === true;
   // One atlas for the whole world: 19 presets in a single 512×256 texture, so
   // every 3D actor shares one material map instead of generating its own.
-  const avatarAtlas = protagonist3d ? createAvatarAtlas() : null;
+  const avatarAtlas = avatars3d ? createAvatarAtlas() : null;
   const views = new Map<string, ActorView>();
   const bubbles = new Map<string, THREE.Sprite>();
   const overlay = new THREE.Scene();
