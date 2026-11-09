@@ -3,15 +3,20 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-09 · 用户实机验收**全部通过** · 无在途任务）
+## 0. 当前状态（2026-11-09 · 验收全通过 · 3D 已转默认 · 三波难题已派 codex）
 
-**当前在飞**：**无**。`?avatar3d=1` 已把**全部人形**换成分节体素模型（`7279e8a` 形态 +
-`2ac5ed2` 铺开），用户 2026-11-09 亲口「验收都通过了」——3D 手感/观感、土坎配色、
-按住连续行走全部 PASS。默认仍全员 2D（**是否切默认是待裁定项，不自动做**）。
-开关与 URL 组合见根 `README.md`「2D / 3D 人物切换」。
+**当前在飞**：**codex 树三波派单**（`take`/`give` 执行器 → 真实火场出站 → 渲染三件），
+详情在 codex `.orca/talking.txt` §二。主树只做收编复核，别自己开工。
 
-**验收关闭后剩下的都是「用户裁定项」不是「待做项」**：3D 是否转默认、3D 描边、
-`take`/`give` 处置、相机近墙构图、真实火场出站——全在 §1c / talking 七，别自己开工。
+**本轮已落地**：用户 2026-11-09 亲口「验收都通过了」（3D 手感/观感、土坎配色、按住连续行走）；
+同日裁定 **「3d默认」** → `c8d6c30`：`avatars3dFromSearch` 翻成「非 `0` 即开」，
+`?avatar3d=0` 回滚 2D。codex 树已同步（`c41977a`，冲突全取主树侧），两处历史分叉消解。
+
+**用户同批裁定「m2 t4 不做」**：M2 七日长跑（604,800 tick）与 T4 真模型重跑
+**都不做、不落 artifact**，已写进 §1c 表，别当缺口再提。
+
+**剩下的都是派给 codex 的难题，不是主树待办**：`take`/`give` 执行器、真实火场出站、
+3D 穿墙剪影、相机近墙构图、Phaser 高度通道。开关与 URL 组合见根 `README.md`。
 
 ### 2026-11-09 土块透明修复 + 文档压缩（`a843e3a` / `99b4c9a`）
 
@@ -621,6 +626,8 @@ schema，`sim/api/ws.py:1765` 只发 `posture_visual`，客户端 `client/src/ne
 | **迷雾 / 空间未知** | **2026-10-12 用户裁决**（playtest-4） | `0363769`（协议 1.7→**1.8** 减法变更） | 内核不再产 `fog.reveal`；WS `fog` 键与 `FogState` schema 删；前端 fog 罩全撤；`m3_fog`/`m4d17_fog`/`fix_fog_spawn` 三个测试文件随葬 |
 | **战斗表现层**（弹幕/翻滚/受击） | 用户明确裁定不做 | — | 协议有 `Hit`/`Projectile` schema，只发 `posture_visual`；客户端只计数 |
 | **计划看板**（UI 面板） | 2026-10（第五轮） | `bb871f2` | 面板删除；`PlanDelta` 协议与 `uiStore.plans` **保留**（只是不显示） |
+| **M2 七日长跑取证**（604,800 tick） | **2026-11-09 用户裁定不做** | — | harness 在（`sim/tests/bench/soak.py`、`PI_M2_FULL_SOAK=1`），但**不跑、不落 `docs/perf/soak-windows.jsonl`**。别再把「缺 soak 证据」当缺口提 |
+| **T4 真模型探针重跑** | **2026-11-09 用户裁定不做** | — | 探针集 248 条仍在 `sim/tests/test_t4_probes.py`，缺 `T4_RUN=1` 即 skip（52 条）。唯一记录是 `t4-nightly.yml` 头注「2026-09-28 18 passed」。**不建 artifact、不烧钱重跑** |
 
 **迷雾的残留（合法，不要「清理」）**：
 - `EventKind.FOG_REVEAL` + `FogRevealPayload` + `PAYLOAD_MODELS` 登记 + `_apply_fog_reveal` no-op
