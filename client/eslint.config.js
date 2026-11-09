@@ -33,18 +33,6 @@ export default tseslint.config(
     },
   },
   {
-    // 外部产出的 vendored ES Module（`landmarks/lre-test-stand.js`）。它是
-    // 原样引入的第三方源码，不是本仓风格：只给浏览器 globals，不套 TS 规则，
-    // 也不做 import 限制（它从 'three' 直接取 THREE）。
-    files: ['src/**/*.js'],
-    languageOptions: { globals: { ...globals.browser } },
-    rules: {
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-      '@typescript-eslint/no-unused-vars': 'off',
-      'no-restricted-imports': 'off',
-    },
-  },
-  {
     // 构建脚本跑在 Node 里
     files: ['*.config.ts', '*.config.js'],
     languageOptions: { globals: { ...globals.node } },
