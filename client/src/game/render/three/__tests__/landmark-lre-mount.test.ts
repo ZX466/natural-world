@@ -70,13 +70,17 @@ it('adds one root, forwards hover by partId, and releases the tree on dispose', 
   camera.lookAt(0, 0, 0);
   camera.updateMatrixWorld(true);
   // 屏幕正中射线命中 mesh（mesh 在原点、无变换）。
-  mount!.hover(0, 0, camera);
+  mount!.hover(0, 0, camera, 0);
   expect(hovered).toBe(7);
   expect(highlights).toBeGreaterThan(0);
 
   const before = highlights;
-  mount!.hover(0, 0, camera); // 同一个部件：不重复刷高亮
+  mount!.hover(0, 0, camera, 1000); // 同一个部件：不重复刷高亮
   expect(highlights).toBe(before);
+
+  // NaN 表示指针离开画布 / 开始转视角：必须清掉高亮。
+  mount!.hover(Number.NaN, Number.NaN, camera, 1100);
+  expect(hovered).toBeNull();
 
   mount!.dispose();
   expect(dispose).toHaveBeenCalled();

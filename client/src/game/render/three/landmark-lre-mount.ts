@@ -17,12 +17,16 @@ import * as THREE from 'three';
 import { LRETestStandBuilding } from '@vendor/linhe-lre-sdk/src/buildings/linhe_lre_test_stand_building.js';
 import { findStandPlot, type StandPlot } from './landmark-lre';
 
+/** 悬停射线的最小间隔：与 `three-world.ts` 里体素悬停的 50ms 同一口径。 */
+const HOVER_INTERVAL_MS = 50;
+
 export interface LandmarkMount {
   readonly plot: StandPlot;
   /** 每帧推进：转子自转、TVC 摆动、尾焰与粒子。 */
   update(dtSeconds: number, elapsedSeconds: number): void;
-  /** 指针悬停到某个子部件时高亮它；传 null 清除。 */
-  hover(ndcX: number, ndcY: number, camera: THREE.PerspectiveCamera): void;
+  /** 指针悬停到某个子部件时高亮它；NDC 传 NaN 表示清除高亮。
+   *  `nowMs` 用于节流（与体素悬停的 50ms 同一口径）。 */
+  hover(ndcX: number, ndcY: number, camera: THREE.PerspectiveCamera, nowMs: number): void;
   dispose(): void;
 }
 
@@ -70,8 +74,11 @@ export function mountLandmark(
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   let hovered: number | null = null;
+  let lastProbeAt = -Infinity;
+  let lastKey = '';
 
   const clearHover = (): void => {
+    lastKey = '';
     if (hovered === null) return;
     hovered = null;
     building.hoveredPartId = null;
@@ -83,11 +90,17 @@ export function mountLandmark(
     update(dtSeconds, elapsedSeconds) {
       building.update(dtSeconds, elapsedSeconds);
     },
-    hover(ndcX, ndcY, camera) {
+    hover(ndcX, ndcY, camera, nowMs) {
       if (!Number.isFinite(ndcX) || !Number.isFinite(ndcY)) {
         clearHover();
         return;
       }
+      // 同一个 NDC 格 + 同一帧相机矩阵不重复投射；50ms 下限与体素悬停一致。
+      const key = `${ndcX.toFixed(3)}:${ndcY.toFixed(3)}:${camera.matrixWorld.elements.join(',')}`;
+      if (key === lastKey || nowMs - lastProbeAt < HOVER_INTERVAL_MS) return;
+      lastKey = key;
+      lastProbeAt = nowMs;
+
       pointer.set(ndcX, ndcY);
       raycaster.setFromCamera(pointer, camera);
       const hit = raycaster.intersectObjects(building.interactiveMeshes, false)[0];

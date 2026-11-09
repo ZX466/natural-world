@@ -162,16 +162,18 @@ export function createThreeWorld(
         hoverKey = '';
       }
       if (landmark) {
-        if (pointer) {
+        // 66 个子部件逐帧射线太贵，和上面的体素悬停同一套节流与门控：
+        // 指针离开画布或开始转视角时清掉高亮，否则会一直亮着。
+        if (pointer && !input?.orbiting) {
           const rect = canvas.getBoundingClientRect();
           landmark.hover(
             (2 * (pointer.x - rect.left)) / rect.width - 1,
             1 - (2 * (pointer.y - rect.top)) / rect.height,
             adapter.scene.camera,
+            time,
           );
         } else {
-          // 指针离开画布 / 开始转视角：清掉部件高亮，否则会一直亮着。
-          landmark.hover(Number.NaN, Number.NaN, adapter.scene.camera);
+          landmark.hover(Number.NaN, Number.NaN, adapter.scene.camera, time);
         }
       }
       const ui = useUiStore.getState();
