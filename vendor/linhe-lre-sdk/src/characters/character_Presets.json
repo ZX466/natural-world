@@ -1,0 +1,477 @@
+[
+  {
+    "id": "chenmo",
+    "name": "陈默 (药铺学徒·主角)",
+    "role": "protagonist",
+    "atlasSlot": [
+      0,
+      0
+    ],
+    "palette": {
+      "skin": "#e8d4b2",
+      "hair": "#171717",
+      "robe": "#bfa787",
+      "trim": "#65659b",
+      "belt": "#c43c3c",
+      "pants": "#432e27"
+    },
+    "accessories": {
+      "bun": false,
+      "cap": true,
+      "strawHat": false,
+      "herbBasket": true,
+      "sack": false,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "villager",
+    "name": "普通村民",
+    "role": "villager",
+    "atlasSlot": [
+      1,
+      0
+    ],
+    "palette": {
+      "skin": "#e8d4b2",
+      "hair": "#171717",
+      "robe": "#bfa787",
+      "trim": "#6a4834",
+      "belt": "#432e27",
+      "pants": "#432e27"
+    },
+    "accessories": {
+      "bun": false,
+      "cap": false,
+      "strawHat": false,
+      "herbBasket": false,
+      "sack": false,
+      "robeFlaps": false
+    }
+  },
+  {
+    "id": "god_villager_01",
+    "name": "墨衡 · 钦天监司匠",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      2,
+      0
+    ],
+    "palette": {
+      "skin": "#f6e8dc",
+      "hair": "#171717",
+      "robe": "#65659b",
+      "trim": "#d4c38c",
+      "belt": "#b89052",
+      "pants": "#2f3842"
+    },
+    "accessories": {
+      "bun": true,
+      "cap": false,
+      "strawHat": false,
+      "herbBasket": false,
+      "sack": false,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "god_villager_02",
+    "name": "林采薇 · 采药女",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      3,
+      0
+    ],
+    "palette": {
+      "skin": "#f6e8dc",
+      "hair": "#171717",
+      "robe": "#96b37b",
+      "trim": "#f6e8dc",
+      "belt": "#ffbd7f",
+      "pants": "#5a6b49"
+    },
+    "accessories": {
+      "bun": true,
+      "cap": false,
+      "strawHat": false,
+      "herbBasket": true,
+      "sack": false,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "god_villager_03",
+    "name": "赵掌柜 · 济世堂",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      4,
+      0
+    ],
+    "palette": {
+      "skin": "#e8d4b2",
+      "hair": "#432e27",
+      "robe": "#6d4a2f",
+      "trim": "#b89052",
+      "belt": "#882e2e",
+      "pants": "#2f3842"
+    },
+    "accessories": {
+      "bun": false,
+      "cap": true,
+      "strawHat": false,
+      "herbBasket": false,
+      "sack": false,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "god_villager_04",
+    "name": "沈书生 · 临河书院",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      5,
+      0
+    ],
+    "palette": {
+      "skin": "#f6e8dc",
+      "hair": "#171717",
+      "robe": "#d4c38c",
+      "trim": "#65659b",
+      "belt": "#6a4834",
+      "pants": "#432e27"
+    },
+    "accessories": {
+      "bun": true,
+      "cap": false,
+      "strawHat": false,
+      "herbBasket": false,
+      "sack": false,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "god_villager_05",
+    "name": "周老汉 · 渡口渔夫",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      6,
+      0
+    ],
+    "palette": {
+      "skin": "#e8d4b2",
+      "hair": "#432e27",
+      "robe": "#5a6b49",
+      "trim": "#bfa787",
+      "belt": "#6d4a2f",
+      "pants": "#432e27"
+    },
+    "accessories": {
+      "bun": false,
+      "cap": false,
+      "strawHat": true,
+      "herbBasket": false,
+      "sack": false,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "god_villager_06",
+    "name": "孙货郎 · 走街行商",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      7,
+      0
+    ],
+    "palette": {
+      "skin": "#e8d4b2",
+      "hair": "#171717",
+      "robe": "#b89052",
+      "trim": "#ffbd7f",
+      "belt": "#882e2e",
+      "pants": "#432e27"
+    },
+    "accessories": {
+      "bun": false,
+      "cap": true,
+      "strawHat": false,
+      "herbBasket": false,
+      "sack": true,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "god_villager_07",
+    "name": "苏绣娘 · 锦绣坊",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      0,
+      1
+    ],
+    "palette": {
+      "skin": "#f6e8dc",
+      "hair": "#171717",
+      "robe": "#ffbd7f",
+      "trim": "#c43c3c",
+      "belt": "#882e2e",
+      "pants": "#6d4a2f"
+    },
+    "accessories": {
+      "bun": true,
+      "cap": false,
+      "strawHat": false,
+      "herbBasket": false,
+      "sack": false,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "god_villager_08",
+    "name": "铁匠雷大叔",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      1,
+      1
+    ],
+    "palette": {
+      "skin": "#e8d4b2",
+      "hair": "#171717",
+      "robe": "#432e27",
+      "trim": "#6a4834",
+      "belt": "#c43c3c",
+      "pants": "#171717"
+    },
+    "accessories": {
+      "bun": false,
+      "cap": false,
+      "strawHat": false,
+      "herbBasket": false,
+      "sack": false,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "god_villager_09",
+    "name": "柳先生 · 账房",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      2,
+      1
+    ],
+    "palette": {
+      "skin": "#f6e8dc",
+      "hair": "#432e27",
+      "robe": "#6a4834",
+      "trim": "#d4c38c",
+      "belt": "#432e27",
+      "pants": "#2f3842"
+    },
+    "accessories": {
+      "bun": false,
+      "cap": true,
+      "strawHat": false,
+      "herbBasket": false,
+      "sack": false,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "god_villager_10",
+    "name": "阿竹 · 茶寮小二",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      3,
+      1
+    ],
+    "palette": {
+      "skin": "#e8d4b2",
+      "hair": "#171717",
+      "robe": "#96b37b",
+      "trim": "#bfa787",
+      "belt": "#6d4a2f",
+      "pants": "#432e27"
+    },
+    "accessories": {
+      "bun": false,
+      "cap": true,
+      "strawHat": false,
+      "herbBasket": false,
+      "sack": false,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "god_villager_11",
+    "name": "白发医仙 · 鹤翁",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      4,
+      1
+    ],
+    "palette": {
+      "skin": "#f6e8dc",
+      "hair": "#e8dccb",
+      "robe": "#d4c38c",
+      "trim": "#96b37b",
+      "belt": "#b89052",
+      "pants": "#5a6b49"
+    },
+    "accessories": {
+      "bun": true,
+      "cap": false,
+      "strawHat": false,
+      "herbBasket": true,
+      "sack": false,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "god_villager_12",
+    "name": "吴樵夫 · 北山",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      5,
+      1
+    ],
+    "palette": {
+      "skin": "#e8d4b2",
+      "hair": "#171717",
+      "robe": "#6d4a2f",
+      "trim": "#5a6b49",
+      "belt": "#432e27",
+      "pants": "#432e27"
+    },
+    "accessories": {
+      "bun": false,
+      "cap": false,
+      "strawHat": true,
+      "herbBasket": false,
+      "sack": true,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "god_villager_13",
+    "name": "春桃 · 药铺侍女",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      6,
+      1
+    ],
+    "palette": {
+      "skin": "#f6e8dc",
+      "hair": "#171717",
+      "robe": "#ffbd7f",
+      "trim": "#96b37b",
+      "belt": "#c43c3c",
+      "pants": "#6a4834"
+    },
+    "accessories": {
+      "bun": true,
+      "cap": false,
+      "strawHat": false,
+      "herbBasket": false,
+      "sack": false,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "god_villager_14",
+    "name": "陆捕头 · 巡街",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      7,
+      1
+    ],
+    "palette": {
+      "skin": "#e8d4b2",
+      "hair": "#171717",
+      "robe": "#2f3842",
+      "trim": "#c43c3c",
+      "belt": "#882e2e",
+      "pants": "#171717"
+    },
+    "accessories": {
+      "bun": true,
+      "cap": false,
+      "strawHat": false,
+      "herbBasket": false,
+      "sack": false,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "god_villager_15",
+    "name": "顾娘子 · 豆腐坊",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      0,
+      2
+    ],
+    "palette": {
+      "skin": "#f6e8dc",
+      "hair": "#432e27",
+      "robe": "#bfa787",
+      "trim": "#ffbd7f",
+      "belt": "#6a4834",
+      "pants": "#432e27"
+    },
+    "accessories": {
+      "bun": true,
+      "cap": false,
+      "strawHat": false,
+      "herbBasket": false,
+      "sack": false,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "god_villager_16",
+    "name": "徐道长 · 云游",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      1,
+      2
+    ],
+    "palette": {
+      "skin": "#f6e8dc",
+      "hair": "#171717",
+      "robe": "#65659b",
+      "trim": "#e8dccb",
+      "belt": "#b89052",
+      "pants": "#2f3842"
+    },
+    "accessories": {
+      "bun": true,
+      "cap": false,
+      "strawHat": false,
+      "herbBasket": false,
+      "sack": false,
+      "robeFlaps": true
+    }
+  },
+  {
+    "id": "god_villager_17",
+    "name": "小豆子 · 牧童",
+    "role": "ancient_npc",
+    "atlasSlot": [
+      2,
+      2
+    ],
+    "palette": {
+      "skin": "#e8d4b2",
+      "hair": "#171717",
+      "robe": "#96b37b",
+      "trim": "#d4c38c",
+      "belt": "#ffbd7f",
+      "pants": "#432e27"
+    },
+    "accessories": {
+      "bun": false,
+      "cap": false,
+      "strawHat": true,
+      "herbBasket": false,
+      "sack": false,
+      "robeFlaps": true
+    }
+  }
+]

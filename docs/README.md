@@ -38,6 +38,7 @@
 | `arch/character-model-3d-plan.md` | 人物 3D 化的**实际形态**与后续档位（默认已启用，`?avatar3d=0` 回滚；当初的分档估算已归档） |
 | `arch/offline-progress.md` | 停服补跑的时间口径、上限（默认一游戏小时，`LZ_OFFLINE_CATCHUP_MAX_TICKS` 可调）、持久化与可复跑证据 |
 | `arch/audio.md` | 世界音效的默认静音、交互解锁、事件映射与亲听入口 |
+| `../vendor/linhe-lre-sdk/README.md` | 外部 LRE-DT100 试车台 SDK 原件清单、接线边界与已知不符之处（**接线状态以该文件为准**） |
 
 ### 数据
 

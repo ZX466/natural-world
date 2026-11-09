@@ -10,9 +10,19 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    alias: {
-      '@shared': fileURLToPath(new URL('../shared', import.meta.url)),
-    },
+    alias: [
+      { find: '@shared', replacement: fileURLToPath(new URL('../shared', import.meta.url)) },
+      // 外部产出的 LRE-DT100 SDK 原件只存一份在 vendor/，前端按别名引用。
+      { find: '@vendor', replacement: fileURLToPath(new URL('../vendor', import.meta.url)) },
+      // vendor/ 在 client/ 之外，裸 `three` 从那里解析不到 node_modules。
+      // 只精确匹配裸名，`three/addons/*` 等子路径仍走正常解析。
+      {
+        find: /^three$/,
+        replacement: fileURLToPath(
+          new URL('./node_modules/three/build/three.module.js', import.meta.url),
+        ),
+      },
+    ],
   },
   server: {
     port: 5173,

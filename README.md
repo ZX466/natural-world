@@ -86,6 +86,19 @@ $env:LZ_OFFLINE_CATCHUP_MAX_TICKS = "7200"    # 补两个游戏小时
 - **只在 three 路径生效**。Phaser 回滚路径不读这个参数，两条路径的画布与场景互相独立。
 - 开关是纯 URL 参数，**界面上没有按钮**；改 URL 后刷新即可，不需要重启后端。
 
+### LRE-DT100 试车台地标
+
+three 路径上会自动在地图里找**第一块 17×15 全平的格子**（先北后南、先西后东，确定性扫描），
+在那里立一座 LRE-DT100 液体火箭试车台。鼠标悬停到它的子部件会高亮。
+
+加 **`?landmark=0`** 关掉（精确值才关，与 `?avatar3d=0` 同一口径）。
+
+- **纯表现层，不改世界状态**：占地面**不写进碰撞**，人物仍按服务端权威地形行走。
+  客户端单方面挡路会让前后端永久分叉。
+- 找不到 17×15 平地（地图改动后可能发生）或 shader 不可用时就**不建**，其余世界照常。
+- 源码是外部交付原件，存放在 [`vendor/linhe-lre-sdk/`](vendor/linhe-lre-sdk/README.md)，接线层在
+  `client/src/game/render/three/landmark-lre-mount.ts`。
+
 ## 验证
 
 门禁与 CI 同款（`npm run build` 仅本地；分级测试 T1–T5、bench、T4 探针见[开发流程](docs/dev-workflow.md)）：

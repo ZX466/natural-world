@@ -8,6 +8,8 @@ import { worldOf } from './three-projection';
 import { createActorLayer, type ActorLayer } from './three-actors';
 import { createAvatarLighting } from './avatar3d';
 import { avatars3dFromSearch } from '../presentation';
+import { landmarkFromSearch } from './landmark-lre';
+import { mountLandmark, type LandmarkMount } from './landmark-lre-mount';
 import { loadActorAssets } from './three-actor-assets';
 import { useUiStore } from '../../../store/uiStore';
 import { WebAudioSynth } from '../../audio/synth';
@@ -57,6 +59,7 @@ export function createThreeWorld(
   let actorAssets: Awaited<ReturnType<typeof loadActorAssets>> | null = null;
   let previousTime = 0;
   let releaseLighting: (() => void) | null = null;
+  let landmark: LandmarkMount | null = null;
   let audioContext: AudioContext | null = null;
   const audio = new WebAudioSynth(() => {
     audioContext ??= new AudioContext();
@@ -66,6 +69,8 @@ export function createThreeWorld(
   const releaseWorld = () => {
     releaseLighting?.();
     releaseLighting = null;
+    landmark?.dispose();
+    landmark = null;
     cues?.dispose();
     cues = null;
     input?.dispose();
@@ -117,6 +122,8 @@ export function createThreeWorld(
       const delta = previousTime ? Math.min(100, time - previousTime) : 16;
       previousTime = time;
       actors?.update(time, delta, useUiStore.getState().speed, adapter.orbitPose.azimuth);
+      // 地标用墙钟秒推进 shader 与粒子；它纯表现，不参与世界状态（C5 不受影响）。
+      landmark?.update(delta / 1000, time / 1000);
       const map = mirror.map;
       const actor = mirror.actors.get(mirror.protagonist ?? '');
       if (actor && map) {
@@ -153,6 +160,19 @@ export function createThreeWorld(
       } else {
         hovered = null;
         hoverKey = '';
+      }
+      if (landmark) {
+        if (pointer) {
+          const rect = canvas.getBoundingClientRect();
+          landmark.hover(
+            (2 * (pointer.x - rect.left)) / rect.width - 1,
+            1 - (2 * (pointer.y - rect.top)) / rect.height,
+            adapter.scene.camera,
+          );
+        } else {
+          // 指针离开画布 / 开始转视角：清掉部件高亮，否则会一直亮着。
+          landmark.hover(Number.NaN, Number.NaN, adapter.scene.camera);
+        }
       }
       const ui = useUiStore.getState();
       const goal = input?.goal;
@@ -201,7 +221,13 @@ export function createThreeWorld(
       );
       // Lambert materials need light; the terrain's baked vertex colours do not,
       // so this rig only ever affects the 3D avatars.
-      if (avatars3d) releaseLighting = createAvatarLighting(adapter.scene.scene);
+      // Lambert 角色与地标的 StandardMaterial 都需要光照；地形是 BasicMaterial
+      // 烤死顶点色，不受影响。所以这套灯与 3D 开关无关，一律建。
+      releaseLighting = createAvatarLighting(adapter.scene.scene);
+      if (landmarkFromSearch(globalThis.location?.search ?? '')) {
+        const map = mirror.map;
+        if (map) landmark = mountLandmark(adapter.scene.scene, map.w, map.h, adapter.heightOf);
+      }
       weather = createWeatherLayer(actors.overlay, mirror);
       cues = createVoxelCues(adapter.scene.scene, mirror, adapter.heightOf);
       const baseHeight = adapter.heightOf;
