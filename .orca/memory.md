@@ -46,6 +46,14 @@ h=0 实例 color `#8f8055` + scaleY `0.06` ⇒ 土色水面片，坐实。改后
 **门禁**：pytest `3632P/121S/72D EXIT 0`（472s）· vitest `720P/83F` · ruff / ruff format /
 pyright 0 / typecheck / lint / prettier 全 EXIT 0。
 
+**codex 树分叉（别整树 merge）**：codex `41772de` 独立做了同一件事但结论相反——
+① 删掉 `m7-render-art.md` / `character-model-3d-plan.md`（主树是压缩保留，且
+`docs/README.md`、`docs/api/versioning.md` 仍引用）；② 把 `avatars3dFromSearch`
+写回 `protagonistAvatar3dFromSearch`（主树 `f528f42` 已改名）。
+下次动 codex 先 `git merge --no-ff main`，然后**丢弃这两处**保留主树版本。
+该树另有 209.84 MiB 待清理缓存，删除被自动审批拒绝，需用户手动
+`cleanup-generated.ps1 -Apply`。两树 `talking.txt` 已于 2026-11-09 同步重写。
+
 **【2026-11-08 3D 主角试水（已收编 `7279e8a`，留作上下文）】**
 
 用户指令「1 3 2」：① 收编 codex 移动轮 ② 3D 模型批量化/图集问题 ③ **先只把主角一个人换成 3D 试水**。
