@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { expect, it, vi } from 'vitest';
 import { WorldMirror } from '../../../world-mirror';
+import { AVATAR_PRESET_IDS } from '../avatar3d';
 import { createActorLayer } from '../three-actors';
 
-function setup(protagonist3d = false) {
+function setup(protagonist3d = false, missingTextures: readonly string[] = []) {
   const mirror = new WorldMirror();
   mirror.setMap({ w: 5, h: 6, tileset: 'grid', collision: new Uint8Array(30).fill(1) });
   mirror.protagonist = 'hero';
@@ -42,7 +43,7 @@ function setup(protagonist3d = false) {
     mirror,
     () => 1,
     {
-      texture: () => texture,
+      texture: (key) => (missingTextures.includes(key) ? undefined : texture),
       text: (value: string) => ({
         texture: new THREE.Texture(),
         width: value.length * 12,
@@ -150,24 +151,146 @@ it('leaves every actor on the shipped billboard path when the trial flag is off'
   expect(layer.views.get('hero')!.sprite.visible).toBe(true);
 });
 
-it('swaps only the protagonist for a 3D avatar and keeps the label anchored', () => {
+it('swaps humanoids for 3D avatars and keeps their hidden billboard label anchors', () => {
   const { layer } = setup(true);
   layer.update(0, 16, 1, 0);
   layer.labels(800, 800, 1000);
   const hero = layer.views.get('hero')!;
   const other = layer.views.get('other')!;
   expect(hero.avatar).not.toBeNull();
-  expect(other.avatar).toBeNull();
+  expect(other.avatar).not.toBeNull();
   // The billboard survives as a hidden anchor so the shared screen-space label
   // layout keeps projecting from `sprite.position` + `scale.y`.
   expect(hero.sprite.visible).toBe(false);
   expect(hero.avatar!.root.position.y).toBeCloseTo(hero.sprite.position.y);
   expect(hero.avatar!.root.visible).toBe(true);
   expect(hero.label!.visible).toBe(true);
-  // The 3D hero no longer runs the sheet UV math, but the NPC still does.
-  // repeat.x is one 16px cell over the atlas width, not one over the column count.
-  expect(other.sprite.material.map!.repeat.x).toBeCloseTo(16 / 272);
+  expect(other.sprite.visible).toBe(false);
+  expect(other.sprite.material.visible).toBe(false);
+  expect(other.avatar!.root.position.toArray()).toEqual(other.sprite.position.toArray());
+  expect(other.avatar!.root.visible).toBe(true);
+  expect(other.sprite.material.map!.repeat.x).toBe(1);
 });
+
+function avatarTile(mesh: THREE.SkinnedMesh) {
+  const uv = mesh.geometry.getAttribute('uv');
+  let minU = 1;
+  let maxV = 0;
+  for (let i = 0; i < uv.count; i++) {
+    minU = Math.min(minU, uv.getX(i));
+    maxV = Math.max(maxV, uv.getY(i));
+  }
+  return Math.floor((1 - maxV) * 4) * 8 + Math.floor(minU * 8);
+}
+
+it('selects each humanoid preset from the wire sprite and shares a single atlas', () => {
+  const { layer, mirror } = setup(true);
+  const sprites = ['protagonist', ...AVATAR_PRESET_IDS.slice(1)];
+  mirror.applySnapshot(
+    sprites.map((sprite, i) => ({
+      rtoken: i === 0 ? 'hero' : `npc-${i}`,
+      sprite,
+      x: 2,
+      y: 3,
+      facing: 's' as const,
+      anim: 'idle',
+    })),
+    [],
+  );
+  layer.update(0, 16, 1, 0);
+  const atlas = (layer.views.get('hero')!.avatar!.mesh.material as THREE.MeshLambertMaterial).map;
+  expect(atlas!.image.width).toBe(512);
+  expect(atlas!.image.height).toBe(256);
+  for (const [i, view] of [...layer.views.values()].entries()) {
+    expect(view.avatar, sprites[i]).not.toBeNull();
+    const mesh = view.avatar!.mesh;
+    expect(avatarTile(mesh), sprites[i]).toBe(i);
+    expect((mesh.material as THREE.MeshLambertMaterial).map).toBe(atlas);
+    expect(mesh.skeleton.bones).toHaveLength(16);
+    expect(view.avatar!.root.children.filter((child) => child instanceof THREE.Mesh)).toHaveLength(
+      1,
+    );
+  }
+  const disposeAtlas = vi.spyOn(atlas!, 'dispose');
+  mirror.applyActorDeltas([{ rtoken: 'npc-1', op: 'remove' }]);
+  layer.update(16, 16, 1, 0);
+  expect(disposeAtlas).not.toHaveBeenCalled();
+  layer.dispose();
+  expect(disposeAtlas).toHaveBeenCalledOnce();
+});
+
+it.each(['fauna_cat', 'fauna_dog', 'fauna_raven', 'fauna_future'])(
+  'keeps %s on its billboard even if its sheet is missing',
+  (sprite) => {
+    for (const missing of [[], [sprite]]) {
+      const { layer, mirror } = setup(true, missing);
+      mirror.applyActorDeltas([{ rtoken: 'other', sprite }]);
+      layer.update(0, 16, 1, 0);
+      const animal = layer.views.get('other')!;
+      expect(animal.avatar).toBeNull();
+      expect(animal.sprite.visible).toBe(true);
+      expect(animal.sprite.material.visible).toBe(true);
+      layer.dispose();
+    }
+  },
+);
+
+it.each(['unknown', 'god_villager_typo', '', 'toString'])(
+  'explicitly falls back to villager for unknown wire sprite %j',
+  (sprite) => {
+    const { layer, mirror } = setup(true, [sprite]);
+    mirror.applyActorDeltas([{ rtoken: 'other', sprite }]);
+    layer.update(0, 16, 1, 0);
+    expect(layer.views.get('other')!.avatar).not.toBeNull();
+    expect(avatarTile(layer.views.get('other')!.avatar!.mesh)).toBe(1);
+    layer.dispose();
+  },
+);
+
+it('replaces changed NPC presets even when missing sheets share the villager fallback', () => {
+  const { layer, mirror } = setup(true, ['god_villager_ali', 'god_villager_acheng']);
+  layer.update(0, 16, 1, 0);
+  const original = layer.views.get('other')!;
+  expect(original.avatar).not.toBeNull();
+  const dispose = vi.spyOn(original.avatar!, 'dispose');
+  mirror.applyActorDeltas([{ rtoken: 'other', sprite: 'god_villager_acheng' }]);
+  layer.update(16, 16, 1, 0);
+  const changed = layer.views.get('other')!;
+  expect(changed.key).toBe('villager');
+  expect(changed.avatar).not.toBe(original.avatar);
+  expect(avatarTile(changed.avatar!.mesh)).toBe(3);
+  expect(dispose).toHaveBeenCalledOnce();
+  mirror.applyActorDeltas([{ rtoken: 'other', sprite: 'fauna_cat' }]);
+  layer.update(32, 16, 1, 0);
+  expect(layer.views.get('other')!.avatar).toBeNull();
+  layer.dispose();
+});
+
+it.each([4, 16])(
+  'drives a 3D NPC pose and tint from its displayed motion at %ix speed',
+  (speed) => {
+    const { layer, mirror } = setup(true);
+    layer.update(0, 16, speed, 0);
+    const npc = layer.views.get('other')!;
+    mirror.applyActorDeltas([{ rtoken: 'other', x: 3, gait: 'walk', tint: 0x987654 }]);
+    let movingSamples = 0;
+    for (let time = 100; time < 1000; time += 16) {
+      layer.update(time, 16, speed, 0);
+      expect(npc.avatar!.root.position.toArray()).toEqual(npc.sprite.position.toArray());
+      if (npc.motion.animClock >= 0) {
+        const leg = npc.avatar!.mesh.skeleton.bones.find((bone) => bone.name === 'legUpperL')!;
+        const expected =
+          (-Math.sin((npc.motion.animClock / 250) * Math.PI * 2) * 28 * Math.PI) / 180;
+        expect(leg.rotation.x).toBeCloseTo(expected, 10);
+        movingSamples++;
+      }
+    }
+    expect(movingSamples).toBeGreaterThan(0);
+    expect(npc.avatar!.root.rotation.y).toBeCloseTo(Math.PI / 2, 4);
+    expect((npc.avatar!.mesh.material as THREE.MeshLambertMaterial).color.getHex()).toBe(0x987654);
+    layer.dispose();
+  },
+);
 
 it('hides the 3D protagonist together with its label when it is occluded', () => {
   const { layer, mirror } = setup(true);
@@ -216,51 +339,64 @@ it('projects names and active bubbles with shared screen-space layout', () => {
   expect(layer.bubbles.size).toBe(0);
 });
 
-it('hides a blocked actor, shadow, name and bubble together and refreshes after a wall edit', () => {
-  const { layer, mirror } = setup();
-  const collision = new Uint8Array(400).fill(1);
-  collision[212] = 0;
-  mirror.setMap({ w: 20, h: 20, tileset: 'grid', collision });
-  mirror.applySnapshot(
-    [
-      {
-        rtoken: 'hero',
-        x: 10,
-        y: 10,
-        facing: 's',
-        sprite: 'protagonist',
-        anim: 'idle',
-        name: '陈默',
-      },
-      { rtoken: 'near', x: 11, y: 10, facing: 's', sprite: 'villager', anim: 'idle', name: '近人' },
-      {
-        rtoken: 'hidden',
-        x: 14,
-        y: 10,
-        facing: 's',
-        sprite: 'villager',
-        anim: 'idle',
-        name: '墙后',
-      },
-    ],
-    [],
-  );
-  mirror.setBubble('墙后', '不该显示的墙后话语', 5000, 1000);
-  layer.update(0, 16, 1, 0);
-  layer.labels(800, 800, 1000);
-  expect(layer.views.get('near')!.sprite.visible).toBe(true);
-  const hidden = layer.views.get('hidden')!;
-  expect(hidden.sprite.visible).toBe(false);
-  expect(hidden.shadow.visible).toBe(false);
-  expect(hidden.label!.visible).toBe(false);
-  expect(layer.bubbles.has('墙后')).toBe(false);
-  expect(layer.views.get('hero')!.silhouette?.visible).toBe(true);
-  mirror.applyVoxelEdits([{ x: 12, y: 10, action: 'dig', gid: 7, height: 1, material: 'earth' }]);
-  layer.update(100, 16, 1, 0);
-  layer.labels(800, 800, 1000);
-  expect(hidden.sprite.visible).toBe(true);
-  expect(layer.bubbles.has('墙后')).toBe(true);
-});
+it.each([false, true])(
+  'hides and restores NPC names and bubbles after a wall edit (3D=%s)',
+  (flag) => {
+    const { layer, mirror } = setup(flag);
+    const collision = new Uint8Array(400).fill(1);
+    collision[212] = 0;
+    mirror.setMap({ w: 20, h: 20, tileset: 'grid', collision });
+    mirror.applySnapshot(
+      [
+        {
+          rtoken: 'hero',
+          x: 10,
+          y: 10,
+          facing: 's',
+          sprite: 'protagonist',
+          anim: 'idle',
+          name: '陈默',
+        },
+        {
+          rtoken: 'near',
+          x: 11,
+          y: 10,
+          facing: 's',
+          sprite: 'villager',
+          anim: 'idle',
+          name: '近人',
+        },
+        {
+          rtoken: 'hidden',
+          x: 14,
+          y: 10,
+          facing: 's',
+          sprite: 'villager',
+          anim: 'idle',
+          name: '墙后',
+        },
+      ],
+      [],
+    );
+    mirror.setBubble('墙后', '不该显示的墙后话语', 5000, 1000);
+    layer.update(0, 16, 1, 0);
+    layer.labels(800, 800, 1000);
+    const near = layer.views.get('near')!;
+    expect(near.avatar?.root.visible ?? near.sprite.visible).toBe(true);
+    const hidden = layer.views.get('hidden')!;
+    expect(hidden.sprite.visible).toBe(false);
+    expect(hidden.avatar?.root.visible ?? false).toBe(false);
+    expect(hidden.shadow.visible).toBe(false);
+    expect(hidden.label!.visible).toBe(false);
+    expect(layer.bubbles.has('墙后')).toBe(false);
+    expect(layer.views.get('hero')!.silhouette?.visible ?? false).toBe(!flag);
+    mirror.applyVoxelEdits([{ x: 12, y: 10, action: 'dig', gid: 7, height: 1, material: 'earth' }]);
+    layer.update(100, 16, 1, 0);
+    layer.labels(800, 800, 1000);
+    expect(hidden.avatar?.root.visible ?? hidden.sprite.visible).toBe(true);
+    expect(layer.bubbles.has('墙后')).toBe(true);
+  },
+);
 
 it('does not attribute a hidden speakers bubble to a visible actor with the same name', () => {
   const { layer, mirror } = setup();

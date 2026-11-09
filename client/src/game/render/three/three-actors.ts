@@ -23,7 +23,13 @@ import { placeBubble, selectBubbleNames } from '../bubbles';
 import { worldOf } from './three-projection';
 import { visibleActorTokens } from '../visibility';
 import { flightTarget, gaitCadenceMs } from '../../locomotion';
-import { createAvatar, createAvatarAtlas, phaseFromAnimClock, type Avatar3D } from './avatar3d';
+import {
+  AVATAR_PRESET_IDS,
+  createAvatar,
+  createAvatarAtlas,
+  phaseFromAnimClock,
+  type Avatar3D,
+} from './avatar3d';
 
 export interface TextImage {
   texture: THREE.Texture;
@@ -40,7 +46,9 @@ export interface ActorView {
    *  material is switched off, so every screen-space layout rule keeps working. */
   readonly sprite: THREE.Sprite;
   readonly shadow: THREE.Mesh;
-  /** Present only for the protagonist while the 3D trial flag is on. */
+  /** Resolved independently of the billboard's missing-texture fallback. */
+  readonly avatarPreset: string | null;
+  /** Present for humanoids while the 3D trial flag is on. */
   avatar: Avatar3D | null;
   silhouette: THREE.Sprite | null;
   label: THREE.Sprite | null;
@@ -49,9 +57,16 @@ export interface ActorView {
 }
 
 export interface ActorLayerOptions {
-  /** Swap the protagonist's billboard for a segmented voxel avatar. Trial only:
-   *  everyone else keeps the shipped 2D sheets until the batching work lands. */
+  /** Enable shared-atlas voxel avatars for humanoids; animals keep billboards.
+   *  The option name is retained for compatibility with the original trial. */
   readonly protagonist3d?: boolean;
+}
+
+function avatarPresetForSprite(sprite: string): string | null {
+  if (sprite.startsWith('fauna_')) return null;
+  if (sprite === 'protagonist') return 'chenmo';
+  // Never let createAvatar's silent chenmo fallback turn unknown NPCs into the hero.
+  return AVATAR_PRESET_IDS.includes(sprite) ? sprite : 'villager';
 }
 
 export function createActorLayer(
@@ -133,8 +148,9 @@ export function createActorLayer(
     for (const [rtoken, actor] of mirror.actors) {
       const requested = rtoken === mirror.protagonist ? 'protagonist' : actor.sprite;
       const key = assets.texture(requested) ? requested : 'villager';
+      const avatarPreset = avatarAtlas ? avatarPresetForSprite(actor.sprite) : null;
       let view = views.get(rtoken);
-      if (view && view.key !== key) {
+      if (view && (view.key !== key || view.avatarPreset !== avatarPreset)) {
         destroyView(view);
         views.delete(rtoken);
         view = undefined;
@@ -180,10 +196,7 @@ export function createActorLayer(
         );
         shadow.rotation.x = -Math.PI / 2;
         scene.add(sprite, shadow);
-        // The trial swaps only the protagonist. `key` stays 'protagonist' so the
-        // rest of the layer (labels, silhouette, stack offsets) is untouched.
-        const avatar =
-          avatarAtlas && rtoken === mirror.protagonist ? createAvatar('chenmo', avatarAtlas) : null;
+        const avatar = avatarAtlas && avatarPreset ? createAvatar(avatarPreset, avatarAtlas) : null;
         if (avatar) {
           scene.add(avatar.root);
           // The billboard becomes an invisible anchor: `labels` projects
@@ -195,6 +208,7 @@ export function createActorLayer(
           key,
           sprite,
           shadow,
+          avatarPreset,
           avatar,
           silhouette: null,
           name: undefined,
@@ -256,7 +270,7 @@ export function createActorLayer(
       if (view.avatar) {
         view.avatar.root.visible = shown.has(rtoken);
         // The billboard is the label anchor: it must keep a position but never
-        // paint, so it never draws a second copy of the hero.
+        // paint, so it never draws a second copy of the actor.
         view.sprite.visible = false;
       }
       if (rtoken === mirror.protagonist && !view.silhouette && !view.avatar) {
