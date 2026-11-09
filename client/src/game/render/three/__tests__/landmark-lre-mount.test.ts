@@ -15,7 +15,7 @@ it('does not build anything when no flat plot fits', async () => {
   }));
   const { mountLandmark } = await import('../landmark-lre-mount');
   const scene = new THREE.Scene();
-  const mount = mountLandmark(scene, 8, 8, () => 1);
+  const mount = mountLandmark(scene, null, 8, 8, () => 1);
   expect(mount).toBeNull();
   expect(created).not.toHaveBeenCalled();
   expect(scene.children).toHaveLength(0);
@@ -61,7 +61,7 @@ it('adds one root, forwards hover by partId, and releases the tree on dispose', 
   THREE.BufferGeometry.prototype.dispose = dispose;
 
   const { mountLandmark } = await import('../landmark-lre-mount');
-  const mount = mountLandmark(scene, 40, 40, () => 1);
+  const mount = mountLandmark(scene, null, 40, 40, () => 1);
   expect(mount).not.toBeNull();
   expect(scene.children).toHaveLength(1);
 

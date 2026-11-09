@@ -47,9 +47,37 @@ function disposeTree(root: THREE.Object3D): void {
   });
 }
 
-/** 在 `heightOf` 描述的地形上找一块 17×15 平地并建塔。找不到返回 null。 */
+/** 极简天空环境贴图：上下渐变，靠 PMREM 生成 mip 链供粗糙度采样。
+ *  和 `three-terrain.ts::skyTexture()` 同一组颜色，所以反射色与天空一致。
+ *  返回 null 表示环境不可用（没有 2D 上下文），调用方照常建塔只是金属偏暗。 */
+function skyEnvironment(renderer: THREE.WebGLRenderer): THREE.Texture | null {
+  const canvas = document.createElement('canvas');
+  canvas.width = 2;
+  canvas.height = 128;
+  const context = canvas.getContext('2d');
+  if (context === null) return null;
+  const gradient = context.createLinearGradient(0, 0, 0, 128);
+  gradient.addColorStop(0, '#80b9e7');
+  gradient.addColorStop(0.65, '#c8e0ef');
+  gradient.addColorStop(1, '#e6eef2');
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 2, 128);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.mapping = THREE.EquirectangularReflectionMapping;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const target = pmrem.fromEquirectangular(texture);
+  pmrem.dispose();
+  texture.dispose();
+  return target.texture;
+}
+
+/** 在 `heightOf` 描述的地形上找一块 17×15 平地并建塔。找不到返回 null。
+ *  `renderer` 只用于生成金属反射用的环境贴图；传 null（无 WebGL 的单测）
+ *  就跳过环境，塔照建。 */
 export function mountLandmark(
   scene: THREE.Scene,
+  renderer: THREE.WebGLRenderer | null,
   mapW: number,
   mapH: number,
   heightOf: (x: number, y: number) => number,
@@ -70,6 +98,11 @@ export function mountLandmark(
     return null;
   }
   scene.add(building.root);
+  // 试车台几乎全是 metalness 0.86~0.92 的 StandardMaterial。金属没有漫反射，
+  // 场景里只有半球光 + 平行光时会渲成近乎全黑。给环境补一张程序化天空贴图，
+  // 金属才有东西可反射。地形是 BasicMaterial 烤死顶点色，不受影响。
+  const environment = renderer === null ? null : skyEnvironment(renderer);
+  if (environment) scene.environment = environment;
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
@@ -114,6 +147,8 @@ export function mountLandmark(
     dispose() {
       scene.remove(building.root);
       disposeTree(building.root);
+      if (scene.environment === environment) scene.environment = null;
+      environment?.dispose();
     },
   };
 }

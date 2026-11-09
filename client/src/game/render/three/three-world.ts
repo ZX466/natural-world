@@ -130,7 +130,13 @@ export function createThreeWorld(
     landmark = null;
     landmarkMap = map;
     landmarkAttempted = true;
-    landmark = mountLandmark(adapter.scene.scene, map.w, map.h, adapter.heightOf);
+    landmark = mountLandmark(
+      adapter.scene.scene,
+      adapter.scene.renderer,
+      map.w,
+      map.h,
+      adapter.heightOf,
+    );
   };
   const render = (time: number) => {
     if (disposed) return;

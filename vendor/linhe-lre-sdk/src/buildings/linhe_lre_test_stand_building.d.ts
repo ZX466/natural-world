@@ -1,6 +1,7 @@
-/** `lre-test-stand.js` 是原样引入的外部 ES Module（见该文件头），这里只声明
- *  本项目实际用到的那部分表面，不追求把 1489 行 JS 全量类型化。
- *  改 vendored 文件的接口时**同时改这里**，否则类型与运行时静默脱节。 */
+/** `linhe_lre_test_stand_building.js` 是原样引入的外部 ES Module（见该文件头），
+ *  这里只声明本项目实际用到的那部分表面，不追求把 1489 行 JS 全量类型化。
+ *  改 vendored 文件的接口时**同时改这里**，否则类型与运行时静默脱节。
+ *  文件名必须与 `.js` 同名，TS 才会自动配对。 */
 import type * as THREE from 'three';
 
 export interface StandPartMeta {
