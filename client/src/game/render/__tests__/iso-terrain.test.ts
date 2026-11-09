@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createHeightLookup, depthKey, isoProject, screenBounds } from '../iso';
+import { EDIT_COLORS } from '../cell-appearance';
 import { IsoTerrain } from '../iso-terrain';
 import { sampleTileColor } from '../tile-color';
 import { WorldMirror, type MapStatic } from '../../world-mirror';
@@ -606,7 +607,7 @@ it('includes edits in the surface cache and uses the resulting stone layer for a
   const high = images[1]!;
   edits.set('0,1', { x: 0, y: 1, action: 'dig', gid: 0, height: 2 });
   terrain.sync(map, structures, edits);
-  expect(high.setTint).toHaveBeenLastCalledWith(0x8a8880);
+  expect(high.setTint).toHaveBeenLastCalledWith(EDIT_COLORS[2]);
   expect(high.setDisplaySize).toHaveBeenLastCalledWith(32, 48); // Dig lowers the canopy from 3 to 2.
 });
 
@@ -710,7 +711,7 @@ it('creates a placed height-two block and removes it on an empty restored edit l
   terrain.sync(map, structures, edits);
   const placed = images[1]!;
   expect(placed.setDisplaySize).toHaveBeenLastCalledWith(32, 48);
-  expect(placed.setTint).toHaveBeenLastCalledWith(0x8a8880);
+  expect(placed.setTint).toHaveBeenLastCalledWith(EDIT_COLORS[2]);
   edits.clear();
   terrain.sync(map, structures, edits);
   expect(placed.destroyed).toBe(true);

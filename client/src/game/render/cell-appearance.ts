@@ -19,13 +19,29 @@ export type Structures = ReadonlyMap<
   { readonly phase: string; readonly tiles: readonly (readonly [number, number])[] }
 >;
 
+/** The atlas's `water` role tone, also used for a cell dug down to h=0. */
+export const WATER_COLOR = 0x5b7674;
+
 /** Edited cells are shown in material colours rather than their source tile.
- * Index is the cell height, so a dug-out hole (h=0) keeps the water tone. */
+ *
+ * Index is the cell height, matching `voxel_exec._HEIGHT_BY_MATERIAL`
+ * (1 earth, 2 stone, 3 wood). Digging lowers the height by one, so the colour a
+ * dug cell keeps is the layer it now exposes — wood 3→2 shows stone, stone 2→1
+ * shows earth — which is what the height index already gives us.
+ *
+ * h=0 is water, not a hole in the ground: `blockTransform` draws it as the same
+ * 0.06-thick slab as a lake, and a dig that reaches 0 clears collision. Painting
+ * it earth made a dug-out cell read as untouched ground, so the block looked
+ * like it had gone see-through instead of been dug away.
+ *
+ * Stone is the atlas's `building` role tone. A pale grey here (the old 0x8a8880
+ * sat at luma 136, the 99th percentile of the whole frame) reads as the sky
+ * showing through the terrain rather than as a block. */
 export const EDIT_COLORS: readonly number[] = [
-  0x8f8055,
-  0x8f8055,
-  0x8a8880,
-  FALLBACK_COLOR,
+  WATER_COLOR, // h=0: a dug-out cell becomes water, not a hole
+  0x8f8055, // earth
+  0x5f5c43, // stone, same tone as the atlas building role
+  FALLBACK_COLOR, // wood (timber)
 ] as const;
 
 export interface CellAppearance {
