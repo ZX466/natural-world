@@ -23,12 +23,18 @@
 
 **挖块禁挖**：`TileMap.structure_at()` + `voxel_exec._validate` —— 试车台格高度 1、碰撞 0，
 与「土坎」判定同形，不拦就会被一路挖成坑而模型浮在上面。渲染侧同理：
-`cell-appearance.staticStructureAt` 把这些格排除出土坎斜纹。
+`cell-appearance.staticStructureTiles` 把这些格排除出土坎斜纹。这条判据有钉子：
+`test_voxel_runtime.py::test_static_structure_ground_is_undiggable`（dig/place 各一条，零事件）。
 
 其余边界不变：② **不替换角色系统**（SDK 每角色 46 mesh/2346 draw call，本仓
 `avatar3d.ts` 已验收且是 51 call）；③ 锚点缺失（占位 32×32 图）或 shader 不可用就不建。
 占地面实测 **17×15**（`getOccupiedTiles()` 取 `tileX±8`/`tileZ±7` 闭区间），
 **不是规范文档写的 16×14**。包体 2309→2406 kB（gzip 572→604）。
+
+**试车台收编门禁（`298d037`，41 文件）**：pytest `3675P/121S/72D EXIT 0`（415.97s）、
+vitest `734P/87F`、ruff check+format / pyright / tsc / lint / prettier / gen:protocol:check /
+build 全 EXIT 0；`build_height_map --check`、`build_block_atlas --check` 字节一致。
+⚠ **仍未做真机验收**（悬停手感/面板布局/拆解动画需 WebGL）。
 
 **当前在飞**：**codex 三波派单，波 A（`3dbc0d6`）与波 B（`fb20719`）均已收编**；
 剩波 C 渲染三件（3D 穿墙剪影 / 相机近墙构图 / Phaser 高度通道），纯客户端不碰协议。
