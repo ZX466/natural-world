@@ -49,6 +49,21 @@ SPAWN_LAYER = "Spawning Blocks"  # 1=出生候选格
 #: 地标锚点来源（10 个地点的 anchor_tile；LLM 计划文本直接引用这些坐标）
 PACK_META = "map_pack.json"
 
+# --- LRE-DT100 试车台：世界结构，不是客户端装饰 ------------------------------
+#
+# 用户 2026-11-09 要求试车台「是障碍物实体」。碰撞是世界权威（服务端
+# `linhe-town.json` + `voxel.edited` 事件），客户端单方面挡路会让 NPC 照穿、
+# 前后端判断打架 —— 所以占地面必须写进这张图，而不是渲染层自己加墙。
+#
+# 选点规则（`choose_stand_center`，确定性，无随机）：
+#   1. 17×15 全平（高度 EARTH）且不压地标锚点、不压出生点；
+#   2. 压进去之后可走区**仍是一整块**（不许把地图割裂成两片）；
+#   3. 先北后南、先西后东取第一个 —— 同一份源图永远给同一个点。
+# 实测选点 (82, 41)：可走 3947 → 3692 格，仍是单连通区域。
+STAND_FOOTPRINT_W = 17  # vendored getOccupiedTiles(): tileX-8 .. tileX+8
+STAND_FOOTPRINT_H = 15  # tileZ-7 .. tileZ+7
+STAND_KEY = "lre_test_stand"
+
 
 def load_tiled_map() -> dict:
     """读 Tiled JSON（原件区，只读）。"""
@@ -161,12 +176,86 @@ def tile_samples_from_source() -> dict[int, tuple[float, float, float]]:
     return samples
 
 
+def stand_tiles(cx: int, cy: int) -> list[tuple[int, int]]:
+    """试车台占地面（17×15 闭区间，与 vendored `getOccupiedTiles()` 同形）。"""
+    half_w, half_h = STAND_FOOTPRINT_W // 2, STAND_FOOTPRINT_H // 2
+    return [
+        (x, y)
+        for y in range(cy - half_h, cy + half_h + 1)
+        for x in range(cx - half_w, cx + half_w + 1)
+    ]
+
+
+def _walkable_regions(walkable: list[bool], w: int, h: int) -> list[int]:
+    """4 邻接连通块大小（降序）。只用来判「割不割裂地图」。"""
+    seen = [False] * (w * h)
+    sizes: list[int] = []
+    for start in range(w * h):
+        if not walkable[start] or seen[start]:
+            continue
+        seen[start] = True
+        stack = [start]
+        size = 0
+        while stack:
+            index = stack.pop()
+            size += 1
+            x, y = index % w, index // w
+            for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                if not (0 <= nx < w and 0 <= ny < h):
+                    continue
+                neighbour = ny * w + nx
+                if walkable[neighbour] and not seen[neighbour]:
+                    seen[neighbour] = True
+                    stack.append(neighbour)
+        sizes.append(size)
+    return sorted(sizes, reverse=True)
+
+
+def choose_stand_center(
+    walkable: list[bool],
+    heights: list[int],
+    spawn: list[tuple[int, int]],
+    landmarks: dict[str, tuple[int, int]],
+) -> tuple[int, int] | None:
+    """挑一个不割裂地图的试车台中心（确定性：先北后南、先西后东）。
+
+    条件：占地面全平（`HEIGHT_EARTH`）且原本可走、不压地标锚点/出生点、
+    压进去之后可走区仍是一整块。找不到返回 None —— 调用方据此不建，
+    绝不为了放下建筑去改地形。
+    """
+    from sim.content.terrain_class import HEIGHT_EARTH
+
+    half_w, half_h = STAND_FOOTPRINT_W // 2, STAND_FOOTPRINT_H // 2
+    reserved_boxes = [(x, y) for x, y in (*spawn, *landmarks.values())]
+    for cy in range(half_h, MAP_H - half_h):
+        for cx in range(half_w, MAP_W - half_w):
+            tiles = stand_tiles(cx, cy)
+            if any(abs(rx - cx) <= half_w and abs(ry - cy) <= half_h for rx, ry in reserved_boxes):
+                continue
+            if any(
+                not walkable[y * MAP_W + x] or heights[y * MAP_W + x] != HEIGHT_EARTH
+                for x, y in tiles
+            ):
+                continue
+            blocked = walkable[:]
+            for x, y in tiles:
+                blocked[y * MAP_W + x] = False
+            if len(_walkable_regions(blocked, MAP_W, MAP_H)) != 1:
+                continue
+            return cx, cy
+    return None
+
+
 def derive_terrain(
     ground: list[list[int]],
     spawn: list[tuple[int, int]],
     landmarks: dict[str, tuple[int, int]],
-) -> tuple[list[list[int]], list[int], dict[str, int]]:
-    """单一真相源：一次分类同时产出 collision 与 heights。"""
+) -> tuple[list[list[int]], list[int], dict[str, int], tuple[int, int] | None]:
+    """单一真相源：一次分类同时产出 collision 与 heights，并落定试车台占地面。
+
+    试车台占的格**必须**在这里就变成不可走：它是世界结构，服务端寻路、
+    客户端渲染、玩家点击都读同一份 collision。在渲染层另加墙会立刻分叉。
+    """
     from sim.content.terrain_class import classify
 
     flat_gids = [ground[y][x] for y in range(MAP_H) for x in range(MAP_W)]
@@ -176,7 +265,16 @@ def derive_terrain(
     heights, walkable, stats = classify(
         flat_gids, tile_samples_from_source(), MAP_W, MAP_H, forced_walkable=forced
     )
-    return extract_collision(walkable), heights, stats
+    center = choose_stand_center(walkable, heights, spawn, landmarks)
+    if center is not None:
+        cx, cy = center
+        for x, y in stand_tiles(cx, cy):
+            walkable[y * MAP_W + x] = False
+        stats["stand_blocked"] = STAND_FOOTPRINT_W * STAND_FOOTPRINT_H
+        stats["walkable"] -= STAND_FOOTPRINT_W * STAND_FOOTPRINT_H
+    else:
+        stats["stand_blocked"] = 0
+    return extract_collision(walkable), heights, stats, center
 
 
 def main() -> None:
@@ -187,7 +285,7 @@ def main() -> None:
 
     halve_tileset(PACK_DIR / "assets" / "tileset-0.png", OUT_TILESET)
 
-    collision, heights, stats = derive_terrain(ground, spawn, landmarks)
+    collision, heights, stats, stand = derive_terrain(ground, spawn, landmarks)
     chunks = build_chunks(ground, collision)
     payload = {
         "width": MAP_W,
@@ -197,6 +295,20 @@ def main() -> None:
         "spawn_candidates": [list(p) for p in spawn],
         "chunks": chunks,
         "_landmarks": {name: list(pos) for name, pos in landmarks.items()},
+        # 世界结构锚点：客户端据此把 3D 试车台立在**已经不可走**的格子上。
+        # 缺省（None）表示地图没有合适空地，客户端就不建 —— 绝不凭空造墙。
+        "_structures": (
+            {
+                STAND_KEY: {
+                    "x": stand[0],
+                    "y": stand[1],
+                    "w": STAND_FOOTPRINT_W,
+                    "h": STAND_FOOTPRINT_H,
+                }
+            }
+            if stand is not None
+            else {}
+        ),
     }
     OUT_MAP.write_text(
         json.dumps(payload, ensure_ascii=False, separators=(",", ":")),

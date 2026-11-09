@@ -30,7 +30,7 @@ def scene(request):
 
 def test_voxel_dispatch_and_snapshot_delta_use_protocol_116(scene):
     runtime, loop, pf, maps, commit = scene
-    assert ws._PROTOCOL_VERSION == "1.17"
+    assert ws._PROTOCOL_VERSION == "1.18"
     assert (
         ws.handle_client_message(
             {"type": "voxel_request", "channel": "render", "action": "dig_start", "x": 2, "y": 1},
@@ -243,5 +243,5 @@ async def test_three_material_inventory_is_published_only_to_authenticated_hud_c
     )
     await ws.flush_voxel_updates(manager)
     assert private.frames[-1]["inventory"][material] == 1
-    assert private.frames[-1]["v"] == "1.17"
+    assert private.frames[-1]["v"] == "1.18"
     assert unauthenticated.frames == []

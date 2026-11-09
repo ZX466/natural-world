@@ -12,6 +12,7 @@ const source = JSON.parse(readFileSync(new URL('sim/content/linhe-town.json', ro
   width: number;
   height: number;
   chunks: Record<string, { ground: number[]; collision: boolean[] }>;
+  _structures?: Record<string, { x: number; y: number; w: number; h: number }>;
 };
 const table: unknown = JSON.parse(
   readFileSync(new URL('client/public/assets/tilesets/linhe-height.json', root), 'utf8'),
@@ -22,6 +23,7 @@ const map: MapStatic = {
   tileset: 'linhe-town',
   collision: new Uint8Array(source.width * source.height),
   ground: new Uint16Array(source.width * source.height),
+  structures: source._structures ?? {},
 };
 for (const [key, chunk] of Object.entries(source.chunks)) {
   const [cx, cy] = key.split(',').map(Number);
@@ -46,7 +48,14 @@ const cells = Array.from({ length: map.w * map.h }, (_, index) => {
 type Cell = (typeof cells)[number];
 type Point = { sx: number; sy: number };
 const tall = cells.filter((cell) => cell.height >= 2 && blocked(cell.x, cell.y));
-const banks = cells.filter((cell) => cell.height === 1 && blocked(cell.x, cell.y));
+/** 静态结构占地面：高度 1、碰撞 0，但不是土坎（建筑地基，挖不得）。 */
+const inStructure = (x: number, y: number) =>
+  Object.values(map.structures ?? {}).some(
+    (a) => Math.abs(x - a.x) <= Math.floor(a.w / 2) && Math.abs(y - a.y) <= Math.floor(a.h / 2),
+  );
+const banks = cells.filter(
+  (cell) => cell.height === 1 && blocked(cell.x, cell.y) && !inStructure(cell.x, cell.y),
+);
 
 /** Independent draw oracle: test the six prism outline edges in painter's order.
  * This never calls the picker or copies its search window/priority calculation. */
@@ -112,10 +121,11 @@ it('keeps the visible rear house side outside the real bank glyph strokes pickab
   expect(pick({ sx: top.sx - 8, sy: top.sy + 3 })).toEqual({ x: 19, y: 3 });
 });
 
-it('keeps all 3947 original real-map walking centers on their own cells', () => {
+it('keeps every real-map walking center on its own cell', () => {
   const walkable = (x: number, y: number) => !blocked(x, y);
   const walk = cells.filter((cell) => walkable(cell.x, cell.y));
-  expect(walk).toHaveLength(3947);
+  // 3692 = 3947 原始可走格 − 试车台 17×15 占地面（世界结构，服务端已挡）。
+  expect(walk).toHaveLength(3692);
   for (const cell of walk)
     expect(pickGround(cell.top.sx, cell.top.sy, map.w, map.h, heightAt, walkable)).toEqual({
       x: cell.x,

@@ -222,6 +222,14 @@ def test_autonomous_build_does_not_isolate_a_real_map_dead_end():
         runtime, state, 30_000, pf, seed=42, coin_ledger=ledger, build_runtime=build
     )
     started = any(event.event_type is EventKind.STRUCTURE_STARTED for event in events)
+    # 基数从图上现算，不写死：地图会加静态结构（试车台占 17×15 后是 3692），
+    # 写死 3947 的钉每次改图都得改一次，反而看不出「孤立死胡同」这个真问题。
+    base = sum(
+        1
+        for x in range(build.tile_map.width)
+        for y in range(build.tile_map.height)
+        if build.tile_map.is_walkable(x, y)
+    )
     build.on_tick(30_000 + build.active_duration())
     reached: set[tuple[int, int]] = {pos}
     todo: deque[tuple[int, int]] = deque([pos])
@@ -231,7 +239,8 @@ def test_autonomous_build_does_not_isolate_a_real_map_dead_end():
             if neighbor not in reached and build.tile_map.is_walkable(*neighbor):
                 reached.add(neighbor)
                 todo.append(neighbor)
-    assert len(reached) == 3947 - (4 if started else 0)
+    # 建了房就少 4 格（2×2 占地面）；无论建没建，剩下的必须仍连成一片。
+    assert len(reached) == base - (4 if started else 0)
 
 
 def test_explicit_build_rejects_a_footprint_that_cuts_existing_access():

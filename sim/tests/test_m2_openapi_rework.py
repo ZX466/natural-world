@@ -343,7 +343,8 @@ class TestHttpRoutes:
 
     def test_world_map_endpoint_runtime_shape(self, client: TestClient) -> None:
         body = client.get("/api/world/map").json()
-        assert set(body) == {"w", "h", "tileset", "chunks"}
+        # 1.18：`structures` 静态结构锚点（可选键，恒出现；占位图给空 dict）。
+        assert set(body) == {"w", "h", "tileset", "chunks", "structures"}
         assert set(body["chunks"][0]) == {"cx", "cy", "collision_b64", "ground_b64"}
 
 

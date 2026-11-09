@@ -198,6 +198,9 @@ class Runtime {
         tileset: raw.tileset,
         collision: assembleCollision(raw.w, raw.h, raw.chunks),
         ground: assembleGround(raw.w, raw.h, raw.chunks),
+        // 静态结构锚点随图下发：占地面已在 collision 里不可走，客户端只负责
+        // 把模型立在同一个矩形上，绝不自己扫地形猜位置（那会前后端分叉）。
+        structures: raw.structures ?? {},
       });
     } catch {
       // 后端未起或网络失败：镜像保持 null；WS 指数退避重连由 ws.ts 负责

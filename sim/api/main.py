@@ -1564,7 +1564,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 raise result
 
 
-app = FastAPI(title="临河镇 sim", version="1.17", lifespan=lifespan)
+app = FastAPI(title="临河镇 sim", version="1.18", lifespan=lifespan)
 app.include_router(settings_router)
 app.include_router(anchors_router)  # M5-K7：玩家档读路径（落库 → WS 查表集供数）
 
@@ -1611,6 +1611,21 @@ class MapChunk(BaseModel):
     )
 
 
+class MapStructure(BaseModel):
+    """静态世界结构占地面（构建期写进地图 JSON 的 `_structures`）。
+
+    这些格子在 `chunks[].collision_b64` 里**已经不可走**；本结构只携带锚点，
+    供客户端把 3D 建筑立在同一个矩形上。客户端不得据此另加碰撞。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
+    w: int = Field(gt=0)
+    h: int = Field(gt=0)
+
+
 class WorldMapResponse(BaseModel):
     """/api/world/map 响应：碰撞层静态资产（戏外 meta shell，对齐 sim map_static_payload）"""
 
@@ -1620,6 +1635,7 @@ class WorldMapResponse(BaseModel):
     h: int = Field(ge=0)
     tileset: str
     chunks: list[MapChunk]
+    structures: dict[str, MapStructure] = Field(default_factory=dict)
 
 
 @app.get("/api/health", response_model=HealthStatus)
@@ -1641,6 +1657,7 @@ async def world_map() -> WorldMapResponse:
         h=raw["h"],
         tileset=raw["tileset"],
         chunks=[MapChunk(**c) for c in raw["chunks"]],
+        structures={name: MapStructure(**row) for name, row in raw["structures"].items()},
     )
 
 

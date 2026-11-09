@@ -11,6 +11,9 @@ export interface WorldInputPorts {
   zoom(delta: number): void;
   pickEdit(x: number, y: number): MovePoint | null;
   pickGround(x: number, y: number): MovePoint | null;
+  /** 静态结构（试车台）点击选中。命中返回 true，调用方据此不把这次点击
+   *  当成移动指令。缺省 = 没有可选中结构。 */
+  pickStructure?(x: number, y: number): boolean;
   blocked(point: MovePoint): boolean;
   hero(): MovePoint | null;
   step(point: MovePoint): boolean;
@@ -75,6 +78,8 @@ export function createWorldInput(
     digging: boolean;
     moving: boolean;
     orbiting: boolean;
+    /** 这次按下命中了静态结构：抬起时不再发移动/挖掘意图。 */
+    structure: boolean;
   } | null = null;
 
   const clearTimer = () => {
@@ -197,8 +202,12 @@ export function createWorldInput(
         return;
       release(true);
       pointer = { x: event.clientX, y: event.clientY };
-      const edit = ports.pickEdit(pointer.x, pointer.y);
-      const ground = ports.pickGround(pointer.x, pointer.y);
+      // 静态结构优先：点中试车台就是「选中部件」，绝不同时发一条走到那格
+      // 的移动指令（那格本来也不可走，但会闪一下错误文案）。
+      const structure =
+        event.button === 0 && (ports.pickStructure?.(pointer.x, pointer.y) ?? false);
+      const edit = structure ? null : ports.pickEdit(pointer.x, pointer.y);
+      const ground = structure ? null : ports.pickGround(pointer.x, pointer.y);
       const canDig = edit !== null && ports.blocked(edit);
       const current = {
         id: event.pointerId,
@@ -209,8 +218,9 @@ export function createWorldInput(
         startY: event.clientY,
         edit,
         digging: false,
-        moving: event.button === 0 && !canDig,
+        moving: event.button === 0 && !canDig && !structure,
         orbiting: false,
+        structure,
       };
       press = current;
       canvas.setPointerCapture(event.pointerId);
@@ -218,6 +228,7 @@ export function createWorldInput(
         event.preventDefault();
         return;
       }
+      if (structure) return;
       if (!canDig) {
         pendingDrag = ground;
         flushDrag(true);
@@ -243,7 +254,10 @@ export function createWorldInput(
         if (Math.hypot(event.clientX - press.startX, event.clientY - press.startY) >= 5)
           press.orbiting = true;
         if (press.orbiting) ports.rotate(event.clientX - press.x, event.clientY - press.y);
-      } else if (Math.hypot(event.clientX - press.startX, event.clientY - press.startY) >= 5) {
+      } else if (
+        !press.structure &&
+        Math.hypot(event.clientX - press.startX, event.clientY - press.startY) >= 5
+      ) {
         clearTimer();
         if (press.digging && press.edit) voxel('dig_cancel', press.edit);
         press.digging = false;
@@ -268,7 +282,7 @@ export function createWorldInput(
           stop();
           voxel('place', edit);
         }
-      } else if (current.button === 0 && !current.digging) {
+      } else if (current.button === 0 && !current.digging && !current.structure) {
         if (current.moving) {
           pendingDrag = ports.pickGround(event.clientX, event.clientY);
           flushDrag(true);

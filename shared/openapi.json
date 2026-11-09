@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "临河镇 协议（mock，待 sim 起服务后由 FastAPI /api/openapi.json 取代）",
-    "version": "1.17",
+    "version": "1.18",
     "description": "接口/兼容性域（kilo TASK-002）。WS 消息 + HTTP 端点 schema 一并定义于 components/schemas，经 openapi-typescript 生成 shared/protocol.ts。出戏边界：tick/seed/seq/branch_id/内部 entity_id/source_id/raw 数值属性 一律不出现；render 通道用 rtoken 不透明替身（见 ws-protocol.md §5）。切换点见 docs/api/codegen.md。"
   },
   "paths": {
@@ -539,6 +539,35 @@
         },
         "additionalProperties": false
       },
+      "MapStructure": {
+        "type": "object",
+        "description": "静态世界结构占地面（构建期写进地图 JSON 的 `_structures`）。这些格子在 chunks[].collision_b64 里已经不可走；本结构只携带锚点，供客户端把 3D 建筑立在同一个矩形上。",
+        "required": [
+          "x",
+          "y",
+          "w",
+          "h"
+        ],
+        "properties": {
+          "x": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "w": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "h": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
       "WorldMapResponse": {
         "type": "object",
         "description": "/api/world/map 响应：碰撞层静态资产（戏外 meta shell，对齐 sim map_static_payload）",
@@ -564,6 +593,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/MapChunk"
+            }
+          },
+          "structures": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MapStructure"
             }
           }
         },

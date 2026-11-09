@@ -267,6 +267,7 @@ it('marks every real-map bank, covers both neighborhoods, and does no collision 
     width: number;
     height: number;
     chunks: Record<string, { ground: number[]; collision: boolean[] }>;
+    _structures?: Record<string, { x: number; y: number; w: number; h: number }>;
   };
   const heights = JSON.parse(
     readFileSync(new URL('client/public/assets/tilesets/linhe-height.json', root), 'utf8'),
@@ -276,6 +277,9 @@ it('marks every real-map bank, covers both neighborhoods, and does no collision 
     source.width,
     source.height,
   );
+  // 静态结构锚点必须一起装进来：试车台占地面高度 1、碰撞 0，与土坎同形，
+  // 客户端靠 `map.structures` 才不把它们画成可挖的土坎。
+  map.structures = source._structures ?? {};
   for (const [key, chunk] of Object.entries(source.chunks)) {
     const [cx, cy] = key.split(',').map(Number);
     const side = Math.sqrt(chunk.collision.length);
@@ -301,7 +305,11 @@ it('marks every real-map bank, covers both neighborhoods, and does no collision 
       const i = y * map.w + x;
       const top = isoProject(x, y, 1, screenBounds(map.w, map.h));
       const marked = byPosition.has(`${top.sx},${top.sy}`);
-      const expected = heights.h_values[i] === 1 && map.collision[i] === 0;
+      // 静态结构占地面（试车台地基）高度 1、碰撞 0，但不是土坎。
+      const inStructure = Object.values(map.structures ?? {}).some(
+        (a) => Math.abs(x - a.x) <= Math.floor(a.w / 2) && Math.abs(y - a.y) <= Math.floor(a.h / 2),
+      );
+      const expected = heights.h_values[i] === 1 && map.collision[i] === 0 && !inStructure;
       expect(marked, `${x},${y}`).toBe(expected);
       if (map.collision[i] === 1) walkable++;
       if (!expected) continue;
@@ -325,9 +333,11 @@ it('marks every real-map bank, covers both neighborhoods, and does no collision 
       )
         adjacent++;
     }
+  // 可走面 3692 = 3947 − 试车台 17×15（255 格）。土坎数不变：那 255 格是
+  // **静态结构地基**，不是土坎（`map.structures` 把它们排除在斜纹之外）。
   expect({ banks, walkable, adjacent, requestedArea, currentArea }).toEqual({
     banks: 1568,
-    walkable: 3947,
+    walkable: 3692,
     adjacent: 269,
     requestedArea: 57,
     currentArea: 135,

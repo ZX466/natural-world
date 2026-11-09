@@ -2,9 +2,9 @@ import { expect, it } from 'vitest';
 import {
   STAND_FOOTPRINT_H,
   STAND_FOOTPRINT_W,
-  findStandPlot,
-  landmarkFromSearch,
+  STAND_STRUCTURE_KEY,
   standFootprint,
+  standPlotFrom,
 } from '../landmark-lre';
 
 /** 17×15（x 从 cx-8 到 cx+8，y 从 cy-7 到 cy+7）——与 vendored 模块
@@ -14,45 +14,31 @@ it('footprint constants match the vendored occupied-tile loop', () => {
   expect(STAND_FOOTPRINT_H).toBe(15);
 });
 
-it('finds the northernmost flat plot, deterministically', () => {
-  const w = 40;
-  const h = 40;
-  // 除一块 17×15 的平地（高度 1）外全是高度 2，只有这一块可用。
-  const heights = new Uint8Array(w * h).fill(2);
-  for (let y = 12; y < 27; y++) for (let x = 10; x < 27; x++) heights[y * w + x] = 1;
-  const heightOf = (x: number, y: number): number => heights[y * w + x]!;
-  expect(findStandPlot(w, h, heightOf)).toEqual({
-    tileX: -1.5,
-    tileZ: -0.5,
-    gridX: 18,
-    gridY: 19,
+it('the world anchor becomes a world-space plot, never a grid guess', () => {
+  // 服务端地图 `_structures.lre_test_stand` 的形状：格子中心 + 闭区间跨度。
+  expect(standPlotFrom({ x: 82, y: 41, w: 17, h: 15 }, 140, 100)).toEqual({
+    tileX: 12.5,
+    tileZ: -8.5,
+    gridX: 82,
+    gridY: 41,
     groundY: 1,
   });
-  // 再调用一次必须给出同一个点（确定性，不随 Map 迭代序漂移）。
-  expect(findStandPlot(w, h, heightOf)).toEqual(findStandPlot(w, h, heightOf));
 });
 
-it('returns null when no flat plot fits', () => {
-  const w = 10;
-  const h = 10;
-  const heights = new Uint8Array(w * h).fill(2);
-  const heightOf = (x: number, y: number): number => heights[y * w + x]!;
-  expect(findStandPlot(w, h, heightOf)).toBeNull();
+it('refuses an anchor whose size does not match the vendored footprint', () => {
+  // 规格文档写的 16×14 是错的；拿错尺寸建塔会跟碰撞矩形错位。
+  expect(standPlotFrom({ x: 82, y: 41, w: 16, h: 14 }, 140, 100)).toBeNull();
 });
 
-it('never selects a plot that would hang off the map', () => {
-  const w = 17;
-  const h = 15;
-  const heights = new Uint8Array(w * h).fill(1);
-  const heightOf = (x: number, y: number): number => heights[y * w + x]!;
-  // 只有整张图刚好等于占地面时中心才是 (8,7)；任何偏移都会越界。
-  expect(findStandPlot(w, h, heightOf)).toEqual({
-    tileX: 0,
-    tileZ: 0,
-    gridX: 8,
-    gridY: 7,
-    groundY: 1,
-  });
+it('refuses an anchor that would hang off the map', () => {
+  expect(standPlotFrom({ x: 4, y: 41, w: 17, h: 15 }, 140, 100)).toBeNull();
+  expect(standPlotFrom({ x: 136, y: 41, w: 17, h: 15 }, 140, 100)).toBeNull();
+});
+
+it('builds nothing when the map carries no structure anchor', () => {
+  // 缺锚点 = 这张图没有静态结构（占位 32×32 图就是这样）。绝不自己找位置顶替：
+  // 那样模型会浮在可通行地上，或者站在一堵看不见的墙上。
+  expect(standPlotFrom(undefined, 140, 100)).toBeNull();
 });
 
 it('footprint covers every occupied tile at the concrete deck height', () => {
@@ -63,10 +49,7 @@ it('footprint covers every occupied tile at the concrete deck height', () => {
   expect(new Set(tiles.map((t) => `${t.gx}:${t.gz}`)).size).toBe(tiles.length);
 });
 
-it('is on by default and only an exact "0" rolls it back', () => {
-  expect(landmarkFromSearch('')).toBe(true);
-  expect(landmarkFromSearch('?landmark=0')).toBe(false);
-  expect(landmarkFromSearch('?landmark=false')).toBe(true);
-  expect(landmarkFromSearch('?landmark=1')).toBe(true);
-  expect(landmarkFromSearch('?avatar3d=0&landmark=0')).toBe(false);
+it('the structure key matches the key the world data writes', () => {
+  // 与 sim/content/build_god_town.py::STAND_KEY 逐字一致；改一处必须改两处。
+  expect(STAND_STRUCTURE_KEY).toBe('lre_test_stand');
 });

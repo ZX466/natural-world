@@ -87,7 +87,7 @@ it.each([0, 90, 180, 270])(
   },
 );
 
-it('preserves all 3947 real-map walkable centers without applying terrain occlusion', () => {
+it('preserves every real-map walkable center without applying terrain occlusion', () => {
   const root = new URL('../../../../../../', import.meta.url);
   const town = JSON.parse(readFileSync(new URL('sim/content/linhe-town.json', root), 'utf8')) as {
     width: number;
@@ -128,7 +128,9 @@ it('preserves all 3947 real-map walkable centers without applying terrain occlus
         ).toEqual({ x, y });
         checked++;
       }
-  expect(checked).toBe(3947);
+  // 3692 = 3947 原始可走格减去试车台 17×15 占地面（255 格）。建筑是**世界
+  // 结构**，那 255 格在服务端地图里就不可走，所以这里不该再出现它们。
+  expect(checked).toBe(3692);
   const cells = Array.from({ length: map.w * map.h }, (_, i) => ({
     x: i % map.w,
     y: Math.floor(i / map.w),

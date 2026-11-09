@@ -63,8 +63,8 @@ def _tiled() -> dict:
 
 
 @pytest.fixture(scope="module")
-def terrain() -> tuple[list[list[int]], list[int], dict[str, int]]:
-    """同源推导一次（collision, heights, stats）；缺素材/产物则 skip。"""
+def terrain() -> tuple[list[list[int]], list[int], dict[str, int], tuple[int, int] | None]:
+    """同源推导一次（collision, heights, stats, 试车台中心）；缺素材/产物则 skip。"""
     if not _PACK.is_dir():
         pytest.skip("GOD 素材原件区缺席")
     if not OUT_TILESET.exists():
@@ -86,7 +86,7 @@ def test_ground_layer_full_coverage():
 def test_collision_polarity(terrain):
     """极性钉（施工中抓过反转 bug）：临河镇语义 collision=1 才是可走。
     10 地标 anchor 全可走；可走面远超旧直线带。"""
-    collision, _heights, stats = terrain
+    collision, _heights, stats, _stand = terrain
     for name, (x, y) in LANDMARK_ANCHORS.items():
         assert collision[y][x] == 1, f"{name} anchor 不可走"
     assert stats["walkable"] > LEGACY_BAND_CELLS * 2, f"可走面过小: {stats['walkable']}"
@@ -97,7 +97,7 @@ def test_walkable_is_always_earth_height(terrain):
 
     反向不成立：土坎是阻挡的 EARTH 格（earth 的唯一来源），故不能双向断言。
     """
-    collision, heights, stats = terrain
+    collision, heights, stats, _stand = terrain
     for y in range(MAP_H):
         for x in range(MAP_W):
             if collision[y][x] == 1:
@@ -107,7 +107,7 @@ def test_walkable_is_always_earth_height(terrain):
 
 def test_spawn_candidates(terrain):
     """spawn 候选 90 格且全可走。"""
-    collision, _heights, _stats = terrain
+    collision, _heights, _stats, _stand = terrain
     spawn = extract_spawn(_tiled())
     assert len(spawn) == 90
     assert all(collision[y][x] == 1 for x, y in spawn)
@@ -120,7 +120,7 @@ def test_build_chunks_covers_full_map(terrain):
     """63 chunks（ceil 除法）覆盖 140×100 全图；边缘 chunk 越界格
     ground=0 + collision=0（不可走）。"""
     ground = extract_ground(_tiled())
-    collision, _heights, _stats = terrain
+    collision, _heights, _stats, _stand = terrain
     chunks = build_chunks(ground, collision)
     assert len(chunks) == 63  # ceil(140/16)=9 x ceil(100/16)=7
     assert all(len(c["ground"]) == CHUNK * CHUNK for c in chunks.values())
@@ -181,6 +181,51 @@ def test_spawn_candidates_in_json():
     assert len(data["spawn_candidates"]) == 90
 
 
+# --- 试车台占地面（世界结构，不是客户端装饰） --------------------------------
+
+
+def test_stand_footprint_is_fully_blocked(terrain):
+    """占地面 17×15 全不可走：建筑要挡路，碰撞必须落在世界数据里。
+
+    这条钉的是「客户端单方面加墙」的反面——服务端寻路读的是同一份 collision。
+    """
+    from sim.content.build_god_town import STAND_FOOTPRINT_H, STAND_FOOTPRINT_W, stand_tiles
+
+    collision, _heights, _stats, stand = terrain
+    assert stand is not None, "源图找不到合适空地 —— 试车台不会建，用户要求的障碍物缺失"
+    cx, cy = stand
+    tiles = stand_tiles(cx, cy)
+    assert len(tiles) == STAND_FOOTPRINT_W * STAND_FOOTPRINT_H
+    for x, y in tiles:
+        assert collision[y][x] == 0, f"占地面 ({x},{y}) 仍可走"
+
+
+def test_stand_does_not_split_the_walkable_map(terrain):
+    """压进占地面后可走区仍是一整块（否则村民被永久隔在孤岛）。"""
+    from sim.content.build_god_town import _walkable_regions
+
+    collision, _heights, _stats, _stand = terrain
+    walkable = [collision[y][x] == 1 for y in range(MAP_H) for x in range(MAP_W)]
+    assert len(_walkable_regions(walkable, MAP_W, MAP_H)) == 1
+
+
+def test_stand_anchor_matches_its_blocked_footprint():
+    """`_structures` 锚点 = 真实不可走矩形（客户端据此立模型，不允许自己扫地形）。"""
+    from sim.content.build_god_town import STAND_FOOTPRINT_H, STAND_FOOTPRINT_W, STAND_KEY
+
+    if not _PRODUCED.exists():
+        pytest.skip("产物未生成")
+    data = json.loads(_PRODUCED.read_text(encoding="utf-8"))
+    anchor = data["_structures"][STAND_KEY]
+    assert (anchor["w"], anchor["h"]) == (STAND_FOOTPRINT_W, STAND_FOOTPRINT_H)
+    m = _tilemap()
+    assert m.structures[STAND_KEY].x == anchor["x"]
+    half_w, half_h = STAND_FOOTPRINT_W // 2, STAND_FOOTPRINT_H // 2
+    for y in range(anchor["y"] - half_h, anchor["y"] + half_h + 1):
+        for x in range(anchor["x"] - half_w, anchor["x"] + half_w + 1):
+            assert not m.is_walkable(x, y), f"锚点矩形 ({x},{y}) 可走 —— 模型会浮在可通行地上"
+
+
 def test_tileset_halved():
     """缩半 tileset 产物 2240×1600（IHDR 实读）。"""
     if not OUT_TILESET.exists():
@@ -198,7 +243,7 @@ def test_tileset_halved():
 def test_conversion_deterministic(terrain):
     """同输入重跑 → chunks 逐字节一致（无随机/无时间依赖）。"""
     ground = extract_ground(_tiled())
-    collision, _heights, _stats = terrain
+    collision, _heights, _stats, _stand = terrain
     c1 = build_chunks(ground, collision)
     c2 = build_chunks(ground, collision)
     assert json.dumps(c1, sort_keys=True) == json.dumps(c2, sort_keys=True)

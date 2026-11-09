@@ -89,7 +89,7 @@ logger = structlog.get_logger(__name__)
 #: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
 #: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
 #: PlanDelta 封闭）；1.2 = 批次 E 只读诊断面进协议快照（M6-K2）——登记见 versioning.md §7。
-_PROTOCOL_VERSION = "1.17"
+_PROTOCOL_VERSION = "1.18"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 _VOXEL_RUNTIME: VoxelRuntime | None = None
 _LIGHT_PROVIDER: Callable[[], list[LightRow]] | None = None
@@ -979,6 +979,12 @@ def map_static_payload(tile_map: TileMap) -> dict[str, Any]:
         # 真实图带图集名 → 前端图集渲染）。经 TOWN_MAP_PATH 加载时按尺寸判定，占位恒 grid。
         "tileset": _tileset_name(tile_map),
         "chunks": chunks,
+        # 静态结构锚点：占地面在 collision 里已经不可走，这里只告诉客户端
+        # 「3D 建筑该立在哪」。空 dict = 这张图没有静态结构（占位图即如此）。
+        "structures": {
+            name: {"x": anchor.x, "y": anchor.y, "w": anchor.w, "h": anchor.h}
+            for name, anchor in sorted(tile_map.structures.items())
+        },
     }
 
 

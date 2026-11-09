@@ -136,6 +136,10 @@ class VoxelRuntime:
             raise VoxelRejected("这处材料辨不清。")
         if self._occupied(x, y):
             raise VoxelRejected("这里已有屋舍，不能动土。")
+        # 静态结构（试车台）占的格在碰撞层不可走，但高度仍是 1（平地），
+        # 不拦就会被当成土坎一路挖成坑，模型还浮在上面。
+        if self._map().structure_at(x, y) is not None:
+            raise VoxelRejected("这里立着试车台，动不得。")
         if (x, y) in self._pending:
             raise VoxelRejected("这块地方刚动过，稍等一等。")
         # A block under your own feet buries you: your tile turns unwalkable

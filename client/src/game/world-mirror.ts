@@ -40,6 +40,15 @@ export interface MirrorLight {
   flicker: number;
 }
 
+/** 静态世界结构占地面（服务端地图 JSON 的 `_structures`）。格子已经不可走，
+ *  这里只给 3D 建筑一个锚点；客户端**不得**据此另加碰撞。 */
+export interface MapStructure {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface MapStatic {
   w: number;
   h: number;
@@ -48,6 +57,8 @@ export interface MapStatic {
   collision: Uint8Array;
   /** M7-T6：地面 tile id 网格（u16，调色板值域）；mock 模式无此层（色块渲染回退）。 */
   ground?: Uint16Array;
+  /** 静态结构锚点（键 = 结构名）；空/缺省 = 这张图没有静态结构。 */
+  structures?: Readonly<Record<string, MapStructure>>;
 }
 
 export class WorldMirror {

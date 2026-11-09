@@ -2,7 +2,7 @@
 
 LLM 驱动的像素小镇模拟。玩家通过念头、移动与挖放交互参与世界；世界状态由 sim 的事件流决定。
 
-[![protocol](https://img.shields.io/badge/protocol-1.17-blue)]()
+[![protocol](https://img.shields.io/badge/protocol-1.18-blue)]()
 
 [设计基线](DESIGN.md) · [文档索引](docs/README.md) · [开发流程](docs/dev-workflow.md)
 
@@ -86,18 +86,24 @@ $env:LZ_OFFLINE_CATCHUP_MAX_TICKS = "7200"    # 补两个游戏小时
 - **只在 three 路径生效**。Phaser 回滚路径不读这个参数，两条路径的画布与场景互相独立。
 - 开关是纯 URL 参数，**界面上没有按钮**；改 URL 后刷新即可，不需要重启后端。
 
-### LRE-DT100 试车台地标
+### LRE-DT100 试车台（世界结构）
 
-three 路径上会自动在地图里找**第一块 17×15 全平的格子**（先北后南、先西后东，确定性扫描），
-在那里立一座 LRE-DT100 液体火箭试车台。鼠标悬停到它的子部件会高亮。
+地图上立着一座 17×15 的 LRE-DT100 液体火箭试车台，位置由**世界数据**给出
+（`sim/content/linhe-town.json` 的 `_structures.lre_test_stand`，构建期由
+`build_god_town.derive_terrain` 选出：全平、不压地标/出生点、压进去不把可走区割裂）。
 
-加 **`?landmark=0`** 关掉（精确值才关，与 `?avatar3d=0` 同一口径）。
-
-- **纯表现层，不改世界状态**：占地面**不写进碰撞**，人物仍按服务端权威地形行走。
-  客户端单方面挡路会让前后端永久分叉。
-- 找不到 17×15 平地（地图改动后可能发生）或 shader 不可用时就**不建**，其余世界照常。
-- 源码是外部交付原件，存放在 [`vendor/linhe-lre-sdk/`](vendor/linhe-lre-sdk/README.md)，接线层在
-  `client/src/game/render/three/landmark-lre-mount.ts`。
+- **它是真障碍物。** 那 17×15 格在服务端碰撞层里就是不可走的，NPC 寻路、玩家点击、
+  渲染读同一份数据。挖块也会被拒（`TileMap.structure_at`）。客户端不自己加墙 ——
+  单方面挡路会让前后端分叉。
+- **识别**：鼠标悬停子部件高亮并浮出系统名 + 部件名；点一下选中它，右侧检修面板
+  显示材质、工况与说明。面板里也有 4 系统 / 24 部件的清单，点条目同样能选中。
+- **拆解**：面板上的滑块做四级阶梯爆炸拆解（0–25 一阶、25–50 二阶、50–75 三阶、
+  75–100 四阶），文案与 vendored 的四段 smoothstep 对齐。另有 PBR / HOLO / FLIR
+  三视图与点火开关。
+- 锚点缺失（占位 32×32 图）或 shader 不可用时**不建**，其余世界照常。
+- 源码是外部交付原件，存放在 [`vendor/linhe-lre-sdk/`](vendor/linhe-lre-sdk/README.md)；
+  接线层 `client/src/game/render/three/landmark-lre-mount.ts`，面板
+  `landmark-lre-panel.ts`，放置纯函数 `landmark-lre.ts`。
 
 ## 验证
 

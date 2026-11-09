@@ -28,8 +28,8 @@ WS_TS = REPO_ROOT / "client" / "src" / "net" / "ws.ts"
 SNAPSHOT = REPO_ROOT / "shared" / "openapi.json"
 VERSIONING = REPO_ROOT / "docs" / "api" / "versioning.md"
 
-#: 当前登记版本；1.17 为既有光源增量补齐新增、更新与移除。
-EXPECTED_VERSION = "1.17"
+#: 当前登记版本；1.18 为世界地图静态结构锚点（`_structures` → `structures`）。
+EXPECTED_VERSION = "1.18"
 
 #: 登记在 §7 的 minor 变更关键词（doc 同步钉用，避免「登记与代码各说各话」）。
 REGISTERED_MINOR_KEYWORDS = (
@@ -47,6 +47,7 @@ REGISTERED_MINOR_KEYWORDS = (
     "elevation",
     "JumpVisual",
     "LightDelta",
+    "MapStructure",
 )
 
 

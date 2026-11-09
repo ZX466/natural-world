@@ -10,6 +10,7 @@ from sim.core.persistence.npc_store import NpcStore
 from sim.core.tick import TickLoop
 from sim.core.world import EntityState, WorldState, build_default_bus
 from sim.tests.test_p_rebuild_tile_map_contract import make_open_map
+from sim.world.map import StructureAnchor
 
 
 def setup_runtime(*, heights=None):
@@ -152,6 +153,26 @@ def test_water_structure_and_identical_state_are_rejected(obstruction):
     with pytest.raises(VoxelRejected):
         runtime.request("dig_start", 2, 1, state)
     assert runtime.tick(state, 200) == []
+
+
+@pytest.mark.parametrize("action", ["dig_start", "place"])
+def test_static_structure_ground_is_undiggable(action):
+    """试车台这类静态结构：碰撞层不可走、渲染高度却仍是 1（平地）。
+
+    只靠 `is_walkable` 拦不住 —— 它和「土坎」同形，挖块会一路把台基挖成坑。
+    `TileMap.structure_at` 是那条独立判据；两种动作都必须零事件。"""
+    runtime, state, maps, _, _, _ = setup_runtime()
+    anchor = StructureAnchor(x=2, y=1, w=3, h=3)
+    blocked = maps[0].model_copy(update={"structures": {"lre_test_stand": anchor}})
+    for y in range(anchor.y - anchor.h // 2, anchor.y + anchor.h // 2 + 1):
+        for x in range(anchor.x - anchor.w // 2, anchor.x + anchor.w // 2 + 1):
+            blocked = blocked.with_collision(x, y, walkable=False)
+    maps[0] = blocked
+
+    with pytest.raises(VoxelRejected, match="试车台"):
+        runtime.request(action, 2, 1, state)
+    assert runtime.tick(state, 200) == []
+    assert runtime.snapshot() == {"dig": None, "inventory": {"earth": 0, "stone": 0, "wood": 0}}
 
 
 @pytest.mark.parametrize("change", ["range", "water", "structure", "incapacitated", "dead"])

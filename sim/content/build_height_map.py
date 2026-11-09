@@ -77,7 +77,7 @@ def derive() -> tuple[int, int, list[int]]:
     tiled = load_tiled_map()
     ground = extract_ground(tiled)
     spawn = extract_spawn(tiled)
-    _collision, heights, _stats = derive_terrain(ground, spawn, load_landmarks())
+    _collision, heights, _stats, _stand = derive_terrain(ground, spawn, load_landmarks())
     if (_load_ground()[0], _load_ground()[1]) != (MAP_W, MAP_H):
         msg = "map dimensions disagree between source pack and committed product"
         raise ValueError(msg)

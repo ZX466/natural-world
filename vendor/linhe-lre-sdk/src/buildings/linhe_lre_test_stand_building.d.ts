@@ -13,6 +13,9 @@ export interface StandPartMeta {
   readonly stage: number;
   readonly explodeVec: readonly [number, number, number];
   readonly desc: string;
+  /** 模块加载时回填：所属系统（`SYSTEMS_CATALOG` 里的那一项）。 */
+  readonly sysId?: number;
+  readonly sysName?: string;
 }
 
 export interface StandSystem {

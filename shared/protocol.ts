@@ -443,6 +443,13 @@ export type components = {
       readonly tileset: string;
       readonly w: number;
     };
+    /** @description 静态世界结构占地面（构建期写进地图 JSON 的 `_structures`）。这些格子在 chunks[].collision_b64 里已经不可走；本结构只携带锚点，供客户端把 3D 建筑立在同一个矩形上。 */
+    readonly MapStructure: {
+      readonly h: number;
+      readonly w: number;
+      readonly x: number;
+      readonly y: number;
+    };
     /** @description 拉取模型清单请求（OpenAI 兼容 GET {base_url}/models；api_key 只用于本次请求，不落库） */
     readonly ModelListRequest: {
       readonly api_key: string;
@@ -772,6 +779,9 @@ export type components = {
     readonly WorldMapResponse: {
       readonly chunks: readonly components['schemas']['MapChunk'][];
       readonly h: number;
+      readonly structures?: {
+        readonly [key: string]: components['schemas']['MapStructure'];
+      };
       readonly tileset: string;
       readonly w: number;
     };

@@ -3,16 +3,32 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-09 · 验收全通过 · 3D 已转默认 · 波 A/B 已收编 · 试车台已嵌入 · 波 C 未开始）
+## 0. 当前状态（2026-11-09 · 验收全通过 · 3D 已转默认 · 波 A/B 已收编 · 试车台转世界结构 · 波 C 未开始）
 
-**试车台地标已嵌入（`0af5797`）**：外部 SDK 整包原样入库 `vendor/linhe-lre-sdk/`
-（272K，除一份本仓新增的 `.d.ts` 外一字节未改），只把**建筑模块**接进 three 世界。
-`?landmark=0` 关掉。三条边界：① 占地面**不写碰撞**（碰撞是世界权威，客户端单方面
-挡 17×15 格会让前后端永久分叉）；② **不替换角色系统**（SDK 每角色 46 mesh/2346 draw
-call，本仓 `avatar3d.ts` 已验收且是 51 call）；③ 没平地/无 shader 就不建，世界照常起。
+**试车台 = 世界结构（2026-11-09 用户改口「要和预览一样：可识别拆解，是障碍物实体」）**：
+外部 SDK 整包原样入库 `vendor/linhe-lre-sdk/`（272K，除一份本仓新增的 `.d.ts` 外一字节未改），
+只把**建筑模块**接进 three 世界。与上一版相比的三处改动：
+
+1. **占地面进了世界碰撞。** `build_god_town.derive_terrain` 选出 17×15 矩形（全平、不压
+   地标/出生点、**压进去不把可走区割裂**），把它写成不可走格，并输出
+   `_structures.lre_test_stand`。实测中心 **(82,41)**，可走 3947 → **3692**，仍是单连通。
+   连通性检查是必须的：最初选的 (83,37) 会切出一个 27 格的孤岛。
+2. **客户端不再自己扫地形。** 锚点经 `GET /api/world/map` 的 `structures` 下发
+   （协议 **1.17 → 1.18**），`landmark-lre.ts::standPlotFrom` 只做坐标换算。
+   **`?landmark=0` 已删** —— 建筑是真障碍物，关掉地标会留下一堵看不见的墙。
+3. **识别 / 拆解 / 三视图接了面板。** `landmark-lre-panel.ts`（裸 DOM，不进 React 树）
+   接出 4 系统 24 部件清单、悬停浮签、点选详情、四级爆炸拆解滑块、PBR/HOLO/FLIR、
+   点火开关。画布点击命中部件被 `three-input` 的 `pickStructure` 拦下，不会再发一条
+   走到那格的移动指令。
+
+**挖块禁挖**：`TileMap.structure_at()` + `voxel_exec._validate` —— 试车台格高度 1、碰撞 0，
+与「土坎」判定同形，不拦就会被一路挖成坑而模型浮在上面。渲染侧同理：
+`cell-appearance.staticStructureAt` 把这些格排除出土坎斜纹。
+
+其余边界不变：② **不替换角色系统**（SDK 每角色 46 mesh/2346 draw call，本仓
+`avatar3d.ts` 已验收且是 51 call）；③ 锚点缺失（占位 32×32 图）或 shader 不可用就不建。
 占地面实测 **17×15**（`getOccupiedTiles()` 取 `tileX±8`/`tileZ±7` 闭区间），
-**不是规范文档写的 16×14**。放置点是高度表里最北一块全平地，实测中心 `(83,37)`。
-包体 2309→2406 kB（gzip 572→604）。
+**不是规范文档写的 16×14**。包体 2309→2406 kB（gzip 572→604）。
 
 **当前在飞**：**codex 三波派单，波 A（`3dbc0d6`）与波 B（`fb20719`）均已收编**；
 剩波 C 渲染三件（3D 穿墙剪影 / 相机近墙构图 / Phaser 高度通道），纯客户端不碰协议。
@@ -26,6 +42,8 @@ flicker 0.4），**不输出** fire_id / 燃料 / tick / 强度 / 归因，无�
 **协议 1.16 → 1.17**（两处常量 + live app/info + 快照版本 + 版本登记 + `shared/openapi.json`
 手改 `LightDelta` 可选 op/x/y/kind/radius 后重生成 TS）。`test_m5_fire_outbound.py` 逐字节未改。
 ⚠ **部署必须前后端同步 1.17**：1.16 客户端不处理 remove，火声可能滞留到下次全量同步。
+⚠ **1.18 起同理**：1.17 客户端不读 `/api/world/map` 的 `structures`，试车台模型不建
+（那块地仍然不可走 —— 只是看起来像空地）。
 主树独立复跑 pytest `3670P/121S/72D EXIT 0`（490.79s）、vitest `723P/84F`、
 ruff/format/pyright/tsc/lint/prettier/gen:protocol 全 EXIT 0 —— 与 codex 读数一致。
 

@@ -51,11 +51,11 @@ client ◄──hello_ack── { "v": "1.1", "server_versions": ["1.0","1.1"], 
 - 改 WS 消息集合或字段 → 先定 minor/major → 更新 sim pydantic 模型 → 重新生成 `shared/protocol.ts`。
 - 在 `shared/openapi.json` 的 `info.version` 与 WS 信封 `v` 双处记录版本；CI 漂移闸（codegen.md §5）保证生成物与源同步。
 
-当前 1.17 的服务端信封、客户端 `PROTOCOL_VERSION`、live OpenAPI `info.version` 与 `shared/openapi.json` 版本必须一致。`test_protocol_version.py` 校验精确相等；下方 1.1/1.2 升版说明保留当时的历史状态，不代表仍接受 `info.version` 漂移。
+当前 1.18 的服务端信封、客户端 `PROTOCOL_VERSION`、live OpenAPI `info.version` 与 `shared/openapi.json` 版本必须一致。`test_protocol_version.py` 校验精确相等；下方 1.1/1.2 升版说明保留当时的历史状态，不代表仍接受 `info.version` 漂移。
 
-**1.17 部署要求**：前后端同步更新。1.16 客户端只会更新已有光源的闪烁，不支持新增/移除；
-若从新服务端快照收到火光，熄灭后须等下次全量同步才能清掉，可能保留旧火声。
-保留旧闪烁增量的格式兼容不提供旧客户端的完整生命周期能力，升级服务端时应重新加载 1.17 客户端。
+**1.18 部署要求**：`/api/world/map` 多一个可选 `structures` 键。1.17 客户端不读它，3D 试车台就不会建
+（占地面仍然不可走 —— 只是少了模型，会看到一块空地）。所以要看到建筑，前后端同步加载 1.18。
+1.17 那轮的部署要求仍然成立：1.16 客户端不处理光源移除，旧火声可能持续到下一次全量同步。
 
 ## 6. 回放与确定性不受版本影响
 
@@ -66,6 +66,7 @@ client ◄──hello_ack── { "v": "1.1", "server_versions": ["1.0","1.1"], 
 
 | 版本 | 变更 | 影响端 | 日期 |
 |---|---|---|---|
+| 1.18 | 世界地图静态结构锚点：`GET /api/world/map` 新增可选 `structures`（`{名称 → MapStructure{x,y,w,h}}`，`additionalProperties:false`）。占地面在 `chunks[].collision_b64` 里**已经不可走**（构建期写进 `sim/content/linhe-town.json` 的 `_structures`），本字段只把锚点交给客户端，让它把 3D 建筑立在同一个矩形上，不再自行扫地形选点。无新 WS 帧/路由/事件，世界真相不变。旧客户端忽略该键，前端不读时行为与 1.17 相同。 | sim+client | 2026-11-09 |
 | 1.17 | 既有光源生命周期补齐：`LightDelta` 新增可选 `op`（add/remove）、`x`、`y`、`kind`、`radius`，仍只要求 `rtoken`，保留旧的仅 `flicker` 更新；add 为完整光源 upsert，remove 只需 rtoken。真实活跃火格通过既有 `full_snapshot.lights` / `state_delta.lights` 投影，`Light.kind` 仍为自由 string；无新帧 type、路由、事件或归因字段。静止人物期间也发送光源变化；新连接快照不消费其他连接待发的移除。旧客户端忽略新增字段，旧闪烁增量仍有效。 | sim+client | 2026-11-09 |
 | 1.16 | 角色移动加法契约：`MoveRequestMessage.gait?` 为 walk/run，省略保留旧版移动语义；新增 render 通道 `jump_request{target_x,target_y,gait?}`，目标为非负整数，省略 gait 按 walk；客户端不传实体、高度或时长。`Actor`/`ActorDelta` 新增可选 `elevation`（整数 0..3）、`gait`、`jump`（可为 null）；封闭 `JumpVisual` 只含不透明 rtoken、起落格与高度、进度、active、duration、arc_height，无世界 tick/seq/起始时间戳。完成描述以 active=false/progress=1 保留至下次跳跃或恢复，不能锁住后续地面行走。输入约定 Shift 跑/松开走、Space 请求跳跃；服务端权威。旧快照可缺省新增字段；增量省略表示保持，jump:null 表示清除；旧端忽略新字段及新 type。 | sim+client | 2026-11-08 |
 | 1.15 | 材料闭环：`VoxelRequestMessage.material?` 与 `VoxelEdit.material?` 枚举 earth/stone/wood，缺省 earth。**覆盖 1.13/1.14 的扣料口径**：放置消耗请求指定材料，earth/stone/wood 分别为高度 1/2/3，均阻挡；新放置的一份材料挖一次返还原材料一份，恢复可走高度 1。材料是格子属性，天然多层格降低高度时保留材料，到高度 1 回到 earth 地面。旧事件及材料账不改写；重连/读档/TILE_CHANGED 均保留材料，HUD 可选材并预览挡路。 | sim+client | 2026-11-05 |

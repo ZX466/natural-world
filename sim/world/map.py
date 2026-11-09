@@ -31,6 +31,21 @@ class Chunk(BaseModel):
         return self.collision[ly * CHUNK_SIZE + lx]
 
 
+class StructureAnchor(BaseModel):
+    """静态世界结构占地面（构建期写进地图 JSON 的 `_structures`）。
+
+    碰撞位已经在 `chunks` 里挡好了；这里只多带一份锚点，让客户端把 3D 建筑
+    立在**同一个**矩形上，而不是自己扫地形猜位置。缺省空表示地图没有该结构。
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    x: int
+    y: int
+    w: int = Field(gt=0)
+    h: int = Field(gt=0)
+
+
 class TileMap(BaseModel):
     """整图。M0 单张小镇图。"""
 
@@ -40,6 +55,8 @@ class TileMap(BaseModel):
     height: int
     tile_size: int = 16
     chunks: dict[tuple[int, int], Chunk] = Field(default_factory=dict)
+    #: 静态世界结构（键 = 结构名）。占地面同时体现为不可走格，二者同源产出。
+    structures: dict[str, StructureAnchor] = Field(default_factory=dict)
     #: M3 脏 chunk 集（tile_changed/matter 定位事件标脏 → 寻路缓存失效）。
     #: PrivateAttr：frozen 几何不可变，脏标记是瞬时失效状态、不进世界态快照。
     _dirty: set[tuple[int, int]] = PrivateAttr(default_factory=set)
@@ -66,6 +83,18 @@ class TileMap(BaseModel):
         if chunk is None:
             return False
         return chunk.is_walkable(x % CHUNK_SIZE, y % CHUNK_SIZE)
+
+    def structure_at(self, x: int, y: int) -> str | None:
+        """该格属于哪个静态结构（闭区间矩形，中心 ± w//2 / h//2）。
+
+        试车台这类建筑占的格在碰撞层里本来就是不可走的；但渲染高度是 1（平地），
+        挖块逻辑会把它当成「土坎」继续挖。有结构锚点就必须禁挖 —— 否则玩家
+        一铲一铲把试车台地基挖成坑，模型还浮在上面。
+        """
+        for name, anchor in self.structures.items():
+            if abs(x - anchor.x) <= anchor.w // 2 and abs(y - anchor.y) <= anchor.h // 2:
+                return name
+        return None
 
     def dirty_chunks(self) -> list[tuple[int, int]]:
         """当前脏 chunk 列表（字典序排序，确定性；空 = 无待失效）。"""
@@ -131,4 +160,10 @@ class TileMap(BaseModel):
             height=int(data["height"]),
             tile_size=int(data.get("tile_size", 16)),
             chunks=chunks,
+            structures={
+                str(name): StructureAnchor(
+                    x=int(row["x"]), y=int(row["y"]), w=int(row["w"]), h=int(row["h"])
+                )
+                for name, row in data.get("_structures", {}).items()
+            },
         )

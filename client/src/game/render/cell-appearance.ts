@@ -63,6 +63,24 @@ export interface CellAppearance {
   readonly edited: boolean;
 }
 
+/** 静态结构（服务端地图 `_structures`）的占地面展开成 `"x,y"` 集合。
+ *
+ * 这些格子在碰撞层里不可走、高度却仍是 1 —— 与「土坎」的判定条件完全重合。
+ * 不排除的话，试车台脚下会被画成一片土坎斜纹，看起来像随时能挖。
+ * 动态结构（玩家建的房）走 `structureOverrides`，是另一条路。
+ * 每个结构展开一次，14000 格的循环里只剩一次 Set 查询。 */
+export function staticStructureTiles(map: MapStatic): ReadonlySet<string> {
+  const tiles = new Set<string>();
+  for (const anchor of Object.values(map.structures ?? {})) {
+    // w/h 是闭区间跨度（17 → 中心 ±8），与 `getOccupiedTiles()` 同形。
+    const halfW = Math.floor(anchor.w / 2);
+    const halfH = Math.floor(anchor.h / 2);
+    for (let y = anchor.y - halfH; y <= anchor.y + halfH; y++)
+      for (let x = anchor.x - halfW; x <= anchor.x + halfW; x++) tiles.add(`${x},${y}`);
+  }
+  return tiles;
+}
+
 /** The cells a structure claims, plus the cells that are its rubble.
  *
  * `built` and `collapsing` structures raise the ground to h=2; `rubble` is
@@ -97,13 +115,16 @@ export function cellAppearances(
   sampleColor: (gid: number) => number,
 ): readonly CellAppearance[] {
   const { phases, ruins } = structureOverrides(structures);
+  const staticTiles = staticStructureTiles(map);
   const cells: CellAppearance[] = [];
   for (let y = 0; y < map.h; y++) {
     for (let x = 0; x < map.w; x++) {
       const key = `${x},${y}`;
       const phase = phases.get(key);
       const h = effectiveHeight(x, y, heightOf, structures, edits);
-      const bank = h === 1 && map.collision[y * map.w + x] === 0;
+      // 静态结构占地面不画土坎：它高度 1、碰撞 0，与土坎同形，但那是台体
+      // 地基而不是可挖的土坎。建筑自己的模型由 three 层负责。
+      const bank = h === 1 && map.collision[y * map.w + x] === 0 && !staticTiles.has(key);
       const edited = edits.has(key);
       const color =
         edited && phase === undefined

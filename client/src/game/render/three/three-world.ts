@@ -8,7 +8,7 @@ import { worldOf } from './three-projection';
 import { createActorLayer, type ActorLayer } from './three-actors';
 import { createAvatarLighting } from './avatar3d';
 import { avatars3dFromSearch } from '../presentation';
-import { landmarkFromSearch } from './landmark-lre';
+import { STAND_STRUCTURE_KEY } from './landmark-lre';
 import { mountLandmark, type LandmarkMount } from './landmark-lre-mount';
 import { loadActorAssets } from './three-actor-assets';
 import { useUiStore } from '../../../store/uiStore';
@@ -60,9 +60,8 @@ export function createThreeWorld(
   let previousTime = 0;
   let releaseLighting: (() => void) | null = null;
   let landmark: LandmarkMount | null = null;
-  let wantLandmark = false;
-  /** 已为哪张地图尝试过挂载：没平地/没 shader 就不重试，免得每帧扫高度表；
-   *  换地图（重连/分支切换）时才重算。 */
+  /** 已为哪张地图尝试过挂载：没锚点/没 shader 就不重试；换地图
+   *  （重连/分支切换拿到新 `map` 对象）时才重算。 */
   let landmarkMap: WorldMirror['map'] = null;
   let audioContext: AudioContext | null = null;
   const audio = new WebAudioSynth(() => {
@@ -119,22 +118,24 @@ export function createThreeWorld(
     },
   };
   const ensureLandmark = (): void => {
-    if (!wantLandmark || !adapter) return;
+    if (!adapter) return;
     const map = mirror.map;
     if (map === null) return; // 快照还没到，下一帧再试
-    // 同一张地图只处理一次（挂上了就留着，没平地也不再扫）；换了地图
+    // 同一张地图只处理一次（挂上了就留着，没锚点也不再试）；换了地图
     // （重连/切分支拿到新 `map` 对象）才重算，否则会留在旧坐标。
     if (landmarkMap === map) return;
     landmark?.dispose();
     landmark = null;
     landmarkMap = map;
-    landmark = mountLandmark(
-      adapter.scene.scene,
-      adapter.scene.renderer,
-      map.w,
-      map.h,
-      adapter.heightOf,
-    );
+    // 锚点来自世界数据：占地面在 collision 里已经不可走，模型必须立在同一矩形上。
+    landmark = mountLandmark({
+      scene: adapter.scene.scene,
+      renderer: adapter.scene.renderer,
+      mapW: map.w,
+      mapH: map.h,
+      anchor: map.structures?.[STAND_STRUCTURE_KEY],
+      host: parent,
+    });
   };
   const render = (time: number) => {
     if (disposed) return;
@@ -194,6 +195,7 @@ export function createThreeWorld(
             1 - (2 * (pointer.y - rect.top)) / rect.height,
             adapter.scene.camera,
             time,
+            pointer,
           );
         } else {
           landmark.hover(Number.NaN, Number.NaN, adapter.scene.camera, time);
@@ -249,10 +251,9 @@ export function createThreeWorld(
       // Lambert 角色与地标的 StandardMaterial 都需要光照；地形是 BasicMaterial
       // 烤死顶点色，不受影响。所以这套灯与 3D 开关无关，一律建。
       releaseLighting = createAvatarLighting(adapter.scene.scene);
-      // 地标要读 `mirror.map` 的尺寸与高度表，而世界常在快照之前就 boot 完
-      // （`worldReady` 才发首个快照）。所以这里只记开关，真正挂载交给首帧的
-      // `ensureLandmark()`——否则地标会永远不建，且没有任何报错。
-      wantLandmark = landmarkFromSearch(globalThis.location?.search ?? '');
+      // 地标要读 `mirror.map` 的 `_structures` 锚点，而世界常在快照之前就 boot 完
+      // （`worldReady` 才发首个快照）。所以真正挂载交给首帧的 `ensureLandmark()`
+      // ——否则地标会永远不建，且没有任何报错。
       weather = createWeatherLayer(actors.overlay, mirror);
       cues = createVoxelCues(adapter.scene.scene, mirror, adapter.heightOf);
       const baseHeight = adapter.heightOf;
@@ -290,6 +291,15 @@ export function createThreeWorld(
         pickGround: (x, y) => {
           const ray = screenRay(adapter!.scene.camera, x, y, canvas.getBoundingClientRect());
           return ray && mirror.map ? groundFromRay(ray, mirror.map, getHeight, elevation()) : null;
+        },
+        pickStructure: (x, y) => {
+          if (!landmark) return false;
+          const rect = canvas.getBoundingClientRect();
+          return landmark.pick(
+            (2 * (x - rect.left)) / rect.width - 1,
+            1 - (2 * (y - rect.top)) / rect.height,
+            adapter!.scene.camera,
+          );
         },
         blocked: (point) => mirror.map?.collision[point.y * mirror.map.w + point.x] !== 1,
         hero: () => mirror.actors.get(mirror.protagonist ?? '') ?? null,

@@ -1,21 +1,26 @@
-/** 把 vendored 的 LRE-DT100 试车台挂进 three 世界。
+/** 把 vendored 的 LRE-DT100 试车台挂进 three 世界，并接上检修面板。
  *
  * 三条边界，写在这里免得以后被「顺手优化」掉：
  *
- * 1. **只做表现层，不改世界状态。** 规格文档要求把 `getOccupiedTiles()` 写进
- *    地图高度表，但碰撞是世界权威（服务端 `linhe-town.json` + `voxel.edited`
- *    事件）。客户端单方面加 17×15 格挡路会让前后端永久分叉，而且服务端寻路
- *    仍当那里可走。所以占地面只用来决定「放哪」，绝不写 `collision`。
+ * 1. **碰撞是世界权威，这里一格都不写。** 占地面在服务端地图 JSON 里已经
+ *    变成不可走格（`build_god_town.derive_terrain`），客户端只按 `_structures`
+ *    锚点把模型立在同一个矩形上。客户端单方面加墙会让 NPC 照穿、前后端判断打架。
  * 2. **不替换角色系统。** SDK 的 `linhe_voxel_avatar_3d.js` 是每角色 16 个
- *    Group + 46 个 Mesh、各带材质和贴图；本仓 `avatar3d.ts` 已改成 1 个
- *    SkinnedMesh / 16 骨骼 / 共享图集（51 人 = 51 次 draw call 而不是 2346 次），
- *    且已验收并转默认。替换等于性能倒退，故 SDK 角色模块只入库做参照，不接线。
- * 3. **失败静默降级。** 建不起来（没有平地、WebGL 不支持 shader）就只少一座
+ *    Group + 46 个 Mesh、各带材质和贴图；本仓 `avatar3d.ts` 是 1 个 SkinnedMesh
+ *    / 16 骨骼 / 共享图集（51 人 = 51 次 draw call 而不是 2346 次），且已验收并
+ *    转默认。替换等于性能倒退，故 SDK 角色模块只入库做参照，不接线。
+ * 3. **失败静默降级。** 建不起来（锚点缺失、WebGL 不支持 shader）就只少一座
  *    地标，绝不能让整个世界起不来。
  */
 import * as THREE from 'three';
-import { LRETestStandBuilding } from '@vendor/linhe-lre-sdk/src/buildings/linhe_lre_test_stand_building.js';
-import { findStandPlot, type StandPlot } from './landmark-lre';
+import {
+  LRETestStandBuilding,
+  PARTS_BY_ID,
+  SYSTEMS_CATALOG,
+} from '@vendor/linhe-lre-sdk/src/buildings/linhe_lre_test_stand_building.js';
+import { standPlotFrom, type StandPlot } from './landmark-lre';
+import { createLandmarkPanel, type LandmarkPanel } from './landmark-lre-panel';
+import type { MapStructure } from '../../world-mirror';
 
 /** 悬停射线的最小间隔：与 `three-world.ts` 里体素悬停的 50ms 同一口径。 */
 const HOVER_INTERVAL_MS = 50;
@@ -25,8 +30,17 @@ export interface LandmarkMount {
   /** 每帧推进：转子自转、TVC 摆动、尾焰与粒子。 */
   update(dtSeconds: number, elapsedSeconds: number): void;
   /** 指针悬停到某个子部件时高亮它；NDC 传 NaN 表示清除高亮。
-   *  `nowMs` 用于节流（与体素悬停的 50ms 同一口径）。 */
-  hover(ndcX: number, ndcY: number, camera: THREE.PerspectiveCamera, nowMs: number): void;
+   *  `nowMs` 用于节流（与体素悬停的 50ms 同一口径）。
+   *  `pointer` 为视口坐标（浮签定位用），缺省则不显示浮签。 */
+  hover(
+    ndcX: number,
+    ndcY: number,
+    camera: THREE.PerspectiveCamera,
+    nowMs: number,
+    pointer?: { x: number; y: number },
+  ): void;
+  /** 画布点击：命中部件则选中并返回 true（调用方据此**不**把这次点击当成移动）。 */
+  pick(ndcX: number, ndcY: number, camera: THREE.PerspectiveCamera): boolean;
   dispose(): void;
 }
 
@@ -74,17 +88,23 @@ function skyEnvironment(renderer: THREE.WebGLRenderer): THREE.Texture | null {
   return target.texture;
 }
 
-/** 在 `heightOf` 描述的地形上找一块 17×15 平地并建塔。找不到返回 null。
- *  `renderer` 只用于生成金属反射用的环境贴图；传 null（无 WebGL 的单测）
- *  就跳过环境，塔照建。 */
-export function mountLandmark(
-  scene: THREE.Scene,
-  renderer: THREE.WebGLRenderer | null,
-  mapW: number,
-  mapH: number,
-  heightOf: (x: number, y: number) => number,
-): LandmarkMount | null {
-  const plot = findStandPlot(mapW, mapH, heightOf);
+export interface MountLandmarkOptions {
+  readonly scene: THREE.Scene;
+  /** 只用于生成金属反射用的环境贴图；传 null（无 WebGL 的单测）就跳过环境。 */
+  readonly renderer: THREE.WebGLRenderer | null;
+  readonly mapW: number;
+  readonly mapH: number;
+  /** 服务端地图 `_structures` 的试车台锚点。缺省/不符 → 不建。 */
+  readonly anchor: MapStructure | undefined;
+  /** 面板与浮签的父容器（世界 canvas 的容器）。缺省 = 只要 3D 塔，
+   *  不建检修面板（无 DOM 的单测走这条）。 */
+  readonly host?: HTMLElement;
+}
+
+/** 按世界锚点建塔。锚点缺失或不符 → 返回 null（静默不建）。 */
+export function mountLandmark(options: MountLandmarkOptions): LandmarkMount | null {
+  const { scene, renderer, mapW, mapH, anchor, host } = options;
+  const plot = standPlotFrom(anchor, mapW, mapH);
   if (plot === null) return null;
 
   let building: LRETestStandBuilding;
@@ -124,12 +144,46 @@ export function mountLandmark(
   let lastProbeAt = -Infinity;
   let lastKey = '';
 
-  const clearHover = (): void => {
-    lastKey = '';
-    if (hovered === null) return;
-    hovered = null;
-    building.hoveredPartId = null;
+  const setHover = (partId: number | null): void => {
+    if (partId === hovered) return;
+    hovered = partId;
+    building.hoveredPartId = partId;
     building.applyHighlightStates();
+  };
+
+  // 没有 host = 无 DOM 环境（单测）：只要 3D 塔，面板用一个空实现。
+  const ports = {
+    select(partId: number | null) {
+      // vendored 模块用 0 表示「未选中」，null 只在面板层出现。
+      building.selectedPartId = partId ?? 0;
+      building.applyHighlightStates();
+    },
+    hover(partId: number | null) {
+      setHover(partId);
+    },
+    setExplode(percent: number) {
+      building.setExplodePercentage(percent);
+    },
+    setView(mode: 'pbr' | 'holo' | 'flir') {
+      building.setViewMode(mode);
+    },
+    setFiring(on: boolean) {
+      building.isFiring = on;
+    },
+  };
+  const panel: LandmarkPanel =
+    host === undefined
+      ? { hover() {}, select() {}, dispose() {} }
+      : createLandmarkPanel(host, SYSTEMS_CATALOG, PARTS_BY_ID, ports);
+
+  /** 射线打塔身，返回命中部件 id（没命中 = null）。 */
+  const partAt = (ndcX: number, ndcY: number, camera: THREE.PerspectiveCamera): number | null => {
+    pointer.set(ndcX, ndcY);
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObjects(building.interactiveMeshes, false)[0];
+    return hit && typeof hit.object.userData.partId === 'number'
+      ? hit.object.userData.partId
+      : null;
   };
 
   return {
@@ -137,28 +191,36 @@ export function mountLandmark(
     update(dtSeconds, elapsedSeconds) {
       building.update(dtSeconds, elapsedSeconds);
     },
-    hover(ndcX, ndcY, camera, nowMs) {
+    hover(ndcX, ndcY, camera, nowMs, pointerAt) {
       if (!Number.isFinite(ndcX) || !Number.isFinite(ndcY)) {
-        clearHover();
+        lastKey = '';
+        setHover(null);
+        panel.hover(null, 0, 0);
         return;
       }
       // 同一个 NDC 格 + 同一帧相机矩阵不重复投射；50ms 下限与体素悬停一致。
+      // 节流命中也继续把浮签挪到当前指针（悬停的是面板列表里的部件时，
+      // 指针在动而射线没必要重打）。
       const key = `${ndcX.toFixed(3)}:${ndcY.toFixed(3)}:${camera.matrixWorld.elements.join(',')}`;
-      if (key === lastKey || nowMs - lastProbeAt < HOVER_INTERVAL_MS) return;
+      if (key === lastKey || nowMs - lastProbeAt < HOVER_INTERVAL_MS) {
+        if (pointerAt) panel.hover(hovered, pointerAt.x, pointerAt.y);
+        return;
+      }
       lastKey = key;
       lastProbeAt = nowMs;
-
-      pointer.set(ndcX, ndcY);
-      raycaster.setFromCamera(pointer, camera);
-      const hit = raycaster.intersectObjects(building.interactiveMeshes, false)[0];
-      const partId: number | null =
-        hit && typeof hit.object.userData.partId === 'number' ? hit.object.userData.partId : null;
-      if (partId === hovered) return;
-      hovered = partId;
-      building.hoveredPartId = partId;
+      setHover(partAt(ndcX, ndcY, camera));
+      panel.hover(hovered, pointerAt?.x ?? 0, pointerAt?.y ?? 0);
+    },
+    pick(ndcX, ndcY, camera) {
+      const partId = partAt(ndcX, ndcY, camera);
+      if (partId === null) return false;
+      building.selectedPartId = partId;
       building.applyHighlightStates();
+      panel.select(partId);
+      return true;
     },
     dispose() {
+      panel.dispose();
       scene.remove(building.root);
       disposeTree(building.root);
       environment?.dispose();
