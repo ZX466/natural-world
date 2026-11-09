@@ -117,19 +117,19 @@ describe('world audio presentation', () => {
     expect(backend.play.mock.calls.map((call) => call[0])).toEqual(['combat']);
   });
 
-  it('maps an observable fire light to fire ambience; existing production has no such producer', async () => {
-    mirror.lights.set('flame', {
-      rtoken: 'flame',
-      x: 11,
-      y: 10,
-      kind: 'fire',
-      radius: 3,
-      flicker: 1,
-    });
+  it('starts and stops fire ambience from real light lifecycle deltas', async () => {
     await enable();
+    const born = delta({
+      lights: [{ op: 'add', rtoken: 'flame', x: 11, y: 10, kind: 'fire', radius: 5, flicker: 0.4 }],
+    });
+    mirror.applyLightDeltas(born.lights!);
+    audio.delta(born, mirror);
+    expect(mirror.lights.size).toBe(1);
     expect(backend.setAmbience).toHaveBeenCalledWith('fire', expect.any(Number));
-    mirror.lights.clear();
-    audio.delta(delta(), mirror);
+    const ended = delta({ lights: [{ op: 'remove', rtoken: 'flame' }] });
+    mirror.applyLightDeltas(ended.lights!);
+    audio.delta(ended, mirror);
+    expect(mirror.lights.size).toBe(0);
     expect(backend.setAmbience).toHaveBeenLastCalledWith(null, 0);
   });
 

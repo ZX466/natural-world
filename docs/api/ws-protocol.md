@@ -22,7 +22,8 @@ sim/api/ws  (FastAPI WebSocket 网关)
 
 ## 2. 信封格式
 
-当前协议 **1.16**：人物新增可选 `elevation`/`gait`/`jump` 与 `jump_request`（§4.1），旧快照可继续缺省这些字段。
+当前协议 **1.17**：既有 `LightDelta` 增加可选 `op`（add/remove）、`x`、`y`、`kind`、`radius`，仍只要求 `rtoken`，保留旧的仅 `flicker` 更新。add 完整 upsert，remove 按 rtoken 删除；人物静止也会收到光源变化，快照始终带当前光源全集。`Light.kind` 保持自由 string，不增加专用消息或路由。
+1.16 引入的可选 `elevation`/`gait`/`jump` 与 `jump_request`（§4.1）继续有效，旧快照可缺省这些字段。
 既有 `full_snapshot` / `state_delta` 的可选 `voxel_edits` 行为
 `{x,y,action,gid,height,material?}`；`material` 为 earth/stone/wood，缺省 earth。
 `voxel_request` 的可选 `material` 只在 place 时指定扣料，缺省 earth。
@@ -35,7 +36,7 @@ sim/api/ws  (FastAPI WebSocket 网关)
 
 ```jsonc
 {
-  "v": "1.16",             // 协议版本（见 versioning.md）；协商后全程不变
+  "v": "1.17",             // 协议版本（见 versioning.md）；协商后全程不变
   "ws_seq": 412,           // 传输序号：本端发出帧的递增计数，仅用于丢帧/乱序检测
   "channel": "render",     // render | narrative | control | session | error
   "type": "state_delta",   // 见 §3 消息清单

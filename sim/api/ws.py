@@ -41,7 +41,7 @@ import secrets
 import struct
 import time
 from collections import deque
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -76,6 +76,7 @@ from sim.core.clock import MAX_CATCHUP_REAL_SECONDS
 from sim.core.events import EventKind, Gait, WorldEvent
 from sim.core.tick import TickLoop
 from sim.llm.prompts.banned_words import scan
+from sim.npc.light_view import LightRow
 from sim.world.map import TileMap
 from sim.world.pathfinding import Pathfinder
 from sim.world.structure import StructureSnapshot
@@ -88,9 +89,62 @@ logger = structlog.get_logger(__name__)
 #: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
 #: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
 #: PlanDelta 封闭）；1.2 = 批次 E 只读诊断面进协议快照（M6-K2）——登记见 versioning.md §7。
-_PROTOCOL_VERSION = "1.16"
+_PROTOCOL_VERSION = "1.17"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 _VOXEL_RUNTIME: VoxelRuntime | None = None
+_LIGHT_PROVIDER: Callable[[], list[LightRow]] | None = None
+_LIGHTS_BROADCAST: dict[str, dict[str, Any]] = {}
+_LIGHTS_SNAPSHOT_SEEN: set[str] = set()
+
+
+def reset_light_baseline() -> None:
+    global _LIGHTS_BROADCAST
+    _LIGHTS_BROADCAST = {}
+    _LIGHTS_SNAPSHOT_SEEN.clear()
+
+
+def set_light_provider(provider: Callable[[], list[LightRow]] | None) -> None:
+    """Register the current world's generic light view; world swaps resync fully."""
+    global _LIGHT_PROVIDER
+    _LIGHT_PROVIDER = provider
+    reset_light_baseline()
+
+
+def _light_rows() -> dict[str, dict[str, Any]]:
+    return (
+        {} if _LIGHT_PROVIDER is None else {row["rtoken"]: dict(row) for row in _LIGHT_PROVIDER()}
+    )
+
+
+def _lights_snapshot_rows() -> list[dict[str, Any]]:
+    # A joining client must never consume another client's pending removals.
+    current = _light_rows()
+    # Track exposure separately: snapshots neither consume pending additions nor
+    # pending removals, but snapshot-only lights must also be removed later.
+    _LIGHTS_SNAPSHOT_SEEN.update(current)
+    return [current[token] for token in sorted(current)]
+
+
+def _lights_changed() -> bool:
+    current = _light_rows()
+    return current != _LIGHTS_BROADCAST or bool(_LIGHTS_SNAPSHOT_SEEN - current.keys())
+
+
+def _lights_delta_rows() -> list[dict[str, Any]]:
+    global _LIGHTS_BROADCAST
+    current = _light_rows()
+    rows = [
+        {"op": "remove", "rtoken": token}
+        for token in sorted((_LIGHTS_BROADCAST.keys() | _LIGHTS_SNAPSHOT_SEEN) - current.keys())
+    ]
+    rows.extend(
+        {"op": "add", **current[token]}
+        for token in sorted(current)
+        if _LIGHTS_BROADCAST.get(token) != current[token]
+    )
+    _LIGHTS_BROADCAST = current
+    _LIGHTS_SNAPSHOT_SEEN.clear()
+    return rows
 
 
 def set_voxel_runtime(runtime: VoxelRuntime | None) -> None:
@@ -594,7 +648,7 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
         "ws_seq": 0,
         "actors": actors,
         **({"voxel_edits": voxel_edits} if voxel_edits else {}),
-        "lights": [],
+        "lights": _lights_snapshot_rows(),
         "structures": _structures_snapshot_payload(),  # E7：真实投影（空账本=空数组，同旧形）
         "map": {
             "w": tile_map.width,
@@ -815,6 +869,9 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
     edits = voxel_delta_rows()
     if edits:
         payload["voxel_edits"] = edits
+    lights = _lights_delta_rows()
+    if lights:
+        payload["lights"] = lights
     return payload
 
 
@@ -1741,6 +1798,7 @@ async def run_world_driver(
             moved
             or (loop.fauna_enabled and any(e.event_type is EventKind.FAUNA_TICK for e in events))
             or any(e.event_type is EventKind.TILE_CHANGED for e in events)
+            or (not fast_forwarding and _lights_changed())
         ):
             seq += 1
             payload = delta_payload(loop, moved)

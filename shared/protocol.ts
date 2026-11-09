@@ -409,7 +409,13 @@ export type components = {
     };
     readonly LightDelta: {
       readonly flicker?: number;
+      readonly kind?: string;
+      /** @enum {string} */
+      readonly op?: 'add' | 'remove';
+      readonly radius?: number;
       readonly rtoken: components['schemas']['RToken'];
+      readonly x?: number;
+      readonly y?: number;
     };
     readonly LoadAnchorMessage: {
       readonly anchor_id: string;

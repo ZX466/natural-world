@@ -51,7 +51,11 @@ client ◄──hello_ack── { "v": "1.1", "server_versions": ["1.0","1.1"], 
 - 改 WS 消息集合或字段 → 先定 minor/major → 更新 sim pydantic 模型 → 重新生成 `shared/protocol.ts`。
 - 在 `shared/openapi.json` 的 `info.version` 与 WS 信封 `v` 双处记录版本；CI 漂移闸（codegen.md §5）保证生成物与源同步。
 
-当前 1.16 的服务端信封、客户端 `PROTOCOL_VERSION`、live OpenAPI `info.version` 与 `shared/openapi.json` 版本必须一致。`test_protocol_version.py` 校验精确相等；下方 1.1/1.2 升版说明保留当时的历史状态，不代表仍接受 `info.version` 漂移。
+当前 1.17 的服务端信封、客户端 `PROTOCOL_VERSION`、live OpenAPI `info.version` 与 `shared/openapi.json` 版本必须一致。`test_protocol_version.py` 校验精确相等；下方 1.1/1.2 升版说明保留当时的历史状态，不代表仍接受 `info.version` 漂移。
+
+**1.17 部署要求**：前后端同步更新。1.16 客户端只会更新已有光源的闪烁，不支持新增/移除；
+若从新服务端快照收到火光，熄灭后须等下次全量同步才能清掉，可能保留旧火声。
+保留旧闪烁增量的格式兼容不提供旧客户端的完整生命周期能力，升级服务端时应重新加载 1.17 客户端。
 
 ## 6. 回放与确定性不受版本影响
 
@@ -62,6 +66,7 @@ client ◄──hello_ack── { "v": "1.1", "server_versions": ["1.0","1.1"], 
 
 | 版本 | 变更 | 影响端 | 日期 |
 |---|---|---|---|
+| 1.17 | 既有光源生命周期补齐：`LightDelta` 新增可选 `op`（add/remove）、`x`、`y`、`kind`、`radius`，仍只要求 `rtoken`，保留旧的仅 `flicker` 更新；add 为完整光源 upsert，remove 只需 rtoken。真实活跃火格通过既有 `full_snapshot.lights` / `state_delta.lights` 投影，`Light.kind` 仍为自由 string；无新帧 type、路由、事件或归因字段。静止人物期间也发送光源变化；新连接快照不消费其他连接待发的移除。旧客户端忽略新增字段，旧闪烁增量仍有效。 | sim+client | 2026-11-09 |
 | 1.16 | 角色移动加法契约：`MoveRequestMessage.gait?` 为 walk/run，省略保留旧版移动语义；新增 render 通道 `jump_request{target_x,target_y,gait?}`，目标为非负整数，省略 gait 按 walk；客户端不传实体、高度或时长。`Actor`/`ActorDelta` 新增可选 `elevation`（整数 0..3）、`gait`、`jump`（可为 null）；封闭 `JumpVisual` 只含不透明 rtoken、起落格与高度、进度、active、duration、arc_height，无世界 tick/seq/起始时间戳。完成描述以 active=false/progress=1 保留至下次跳跃或恢复，不能锁住后续地面行走。输入约定 Shift 跑/松开走、Space 请求跳跃；服务端权威。旧快照可缺省新增字段；增量省略表示保持，jump:null 表示清除；旧端忽略新字段及新 type。 | sim+client | 2026-11-08 |
 | 1.15 | 材料闭环：`VoxelRequestMessage.material?` 与 `VoxelEdit.material?` 枚举 earth/stone/wood，缺省 earth。**覆盖 1.13/1.14 的扣料口径**：放置消耗请求指定材料，earth/stone/wood 分别为高度 1/2/3，均阻挡；新放置的一份材料挖一次返还原材料一份，恢复可走高度 1。材料是格子属性，天然多层格降低高度时保留材料，到高度 1 回到 earth 地面。旧事件及材料账不改写；重连/读档/TILE_CHANGED 均保留材料，HUD 可选材并预览挡路。 | sim+client | 2026-11-05 |
 | 1.14 | 逐层挖深：`VoxelEdit.height` 必需，整数 0..3；`voxel.edited` 记录结果高度。挖 3→2 得木、2→1 得石，只有结果高度 1 且 gid 非零才可走；土坎 1→0 得土但仍阻挡，零高度不可再挖。放置仍要求可走目标，按当前高度扣料（高 1 层的可走面扣 earth）。客户端不再按最后动作推算高度；旧无高度事件按分支顺序累计层数，材料账原样保留。 | sim+client | 2026-10-29 |

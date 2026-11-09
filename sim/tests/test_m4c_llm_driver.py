@@ -125,11 +125,19 @@ class _FakeProfile:
 
 
 class TestChenmoDriver:
-    def test_rejected_intent_logs_action_target_and_reason_length(self) -> None:
+    def test_rejected_intent_logs_action_target_and_reason_length(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import json
 
+        import structlog
         from structlog.testing import capture_logs
 
+        from sim.agent import driver as driver_module
+
+        # Earlier real lifespans can cache a proxy against a replaced processor
+        # chain. Bind this assertion to the active capture context, as in DA-04.
+        monkeypatch.setattr(driver_module, "logger", structlog.get_logger())
         reason = "我想问问他今天的事。"
         llm = _FakeLlm(
             json.dumps(

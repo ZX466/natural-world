@@ -28,8 +28,8 @@ WS_TS = REPO_ROOT / "client" / "src" / "net" / "ws.ts"
 SNAPSHOT = REPO_ROOT / "shared" / "openapi.json"
 VERSIONING = REPO_ROOT / "docs" / "api" / "versioning.md"
 
-#: 当前登记版本；1.16 新增可选步态、高度与跳跃表现/请求。
-EXPECTED_VERSION = "1.16"
+#: 当前登记版本；1.17 为既有光源增量补齐新增、更新与移除。
+EXPECTED_VERSION = "1.17"
 
 #: 登记在 §7 的 minor 变更关键词（doc 同步钉用，避免「登记与代码各说各话」）。
 REGISTERED_MINOR_KEYWORDS = (
@@ -46,6 +46,7 @@ REGISTERED_MINOR_KEYWORDS = (
     "gait",
     "elevation",
     "JumpVisual",
+    "LightDelta",
 )
 
 
@@ -66,6 +67,27 @@ def _registration_section() -> str:
 
 
 class TestProtocolVersion:
+    def test_live_light_lifecycle_schema_matches_snapshot_without_new_required_keys(self):
+        from sim.api.main import app
+
+        expected = {
+            "type": "object",
+            "required": ["rtoken"],
+            "properties": {
+                "op": {"type": "string", "enum": ["add", "remove"]},
+                "rtoken": {"$ref": "#/components/schemas/RToken"},
+                "x": {"type": "integer"},
+                "y": {"type": "integer"},
+                "kind": {"type": "string"},
+                "radius": {"type": "number"},
+                "flicker": {"type": "number"},
+            },
+            "additionalProperties": False,
+        }
+        snapshot = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
+        assert app.openapi()["components"]["schemas"]["LightDelta"] == expected
+        assert snapshot["components"]["schemas"]["LightDelta"] == expected
+
     def test_live_openapi_version_matches_the_envelope_version(self):
         from sim.api.main import app
 

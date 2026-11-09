@@ -225,8 +225,33 @@ export class WorldMirror {
 
   applyLightDeltas(deltas: readonly LightDelta[]): void {
     for (const d of deltas) {
+      if (!d || typeof d.rtoken !== 'string' || d.rtoken.length === 0) continue;
+      if (d.op !== undefined && d.op !== 'add' && d.op !== 'remove') continue;
+      if (d.op === 'remove') {
+        this.lights.delete(d.rtoken);
+        continue;
+      }
       const cur = this.lights.get(d.rtoken);
-      if (cur && d.flicker !== undefined) cur.flicker = d.flicker;
+      const x = d.x ?? cur?.x,
+        y = d.y ?? cur?.y,
+        kind = d.kind ?? cur?.kind,
+        radius = d.radius ?? cur?.radius,
+        flicker = d.flicker ?? cur?.flicker;
+      if (
+        typeof x !== 'number' ||
+        !Number.isInteger(x) ||
+        typeof y !== 'number' ||
+        !Number.isInteger(y) ||
+        typeof kind !== 'string' ||
+        typeof radius !== 'number' ||
+        !Number.isFinite(radius) ||
+        typeof flicker !== 'number' ||
+        !Number.isFinite(flicker)
+      )
+        continue;
+      const value: MirrorLight = { rtoken: d.rtoken, x, y, kind, radius, flicker };
+      if (cur) Object.assign(cur, value);
+      else this.lights.set(d.rtoken, value);
     }
   }
 

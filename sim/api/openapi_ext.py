@@ -177,7 +177,12 @@ _SUB_SCHEMAS: dict[str, dict[str, Any]] = {
         "type": "object",
         "required": ["rtoken"],
         "properties": {
+            "op": {"type": "string", "enum": ["add", "remove"]},
             "rtoken": {"$ref": "#/components/schemas/RToken"},
+            "x": {"type": "integer"},
+            "y": {"type": "integer"},
+            "kind": {"type": "string"},
+            "radius": {"type": "number"},
             "flicker": {"type": "number"},
         },
         "additionalProperties": False,
