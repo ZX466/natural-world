@@ -81,7 +81,8 @@ pyright 0 / typecheck / lint / prettier 全 EXIT 0。
 | `presentation.ts` | +7 | `avatars3dFromSearch()` |
 | `__tests__/three-actors.test.ts` | +3 条 | 开关关闭全 2D；开启后标签锚点仍在；遮挡时标签跟着隐藏 |
 
-**开关**：`?avatar3d=1` 打开 3D；**默认全员 2D**。（当日只换主角，`2ac5ed2` 起覆盖全部人形。）
+**开关**（历史记录，已被 `c8d6c30` 取代）：当时 `?avatar3d=1` 打开 3D、默认 2D；
+**2026-11-09 起默认 3D，`?avatar3d=0` 回滚**。当日只换主角，`2ac5ed2` 起覆盖全部人形。
 
 **形态换掉了（这就是第 ② 步的答案）**。Gemini SDK 原样是 21 个 `Group` + 23 次 `addPart`
 ⇒ **每角色 46 个 mesh**（本体 + 描边各一份），50 人约 **2300 draw call**，且每个角色各自
