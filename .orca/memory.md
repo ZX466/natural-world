@@ -35,8 +35,10 @@ h=0 实例 color `#8f8055` + scaleY `0.06` ⇒ 土色水面片，坐实。改后
 - `README.md` 新增「停机补跑」段（默认 1 游戏小时 = 3600 tick ≈ 15s，
   `LZ_OFFLINE_CATCHUP_MAX_TICKS` 取 `(0, 86400]`，非法值启动即失败；**不再需要删库重建**），
   补 `WORLD_DB_PATH` **无效**说明、编辑格配色说明、故障表「启动很慢」一行。
-- `m7-render-art.md` 197→68 行：只剩仍生效的 R2/R3/R8；其余标死。
-- `character-model-3d-plan.md` 117→61 行：从「待决方案」改为「实际形态」。
+- `m7-render-art.md` 197→**35** 行：只剩仍生效的 R2/R3/R8；其余标死。
+- `character-model-3d-plan.md` 117→**48** 行：从「待决方案」改为「实际形态」。
+  （提交信息与本节旧记写的是 68/61，与文件实际行数不符；2026-11-09 按
+  `git show 99b4c9a --numstat` 与 `wc -l` 复核订正。）
 - `openapi.md` §4.1 从 32×32 占位样改为真实 `MapChunk`（140×100 / `god_town_v1` /
   protocol 1.3 的 `ground_b64`）。
 - `docs/README.md` 同步索引，新增纪律「**文档写完即回写**」。
@@ -51,8 +53,9 @@ pyright 0 / typecheck / lint / prettier 全 EXIT 0。
 `docs/README.md`、`docs/api/versioning.md` 仍引用）；② 把 `avatars3dFromSearch`
 写回 `protagonistAvatar3dFromSearch`（主树 `f528f42` 已改名）。
 下次动 codex 先 `git merge --no-ff main`，然后**丢弃这两处**保留主树版本。
-该树另有 209.84 MiB 待清理缓存，删除被自动审批拒绝，需用户手动
-`cleanup-generated.ps1 -Apply`。两树 `talking.txt` 已于 2026-11-09 同步重写。
+该树另有 ~210 MiB 待清理缓存（2026-11-09 记数，别再当成精确值），删除被自动审批
+拒绝，需用户手动执行 `codex/.orca/audits/tidy-2026-11-09/cleanup-generated.ps1 -Apply`
+（脚本已实测存在）。两树 `talking.txt` 已于 2026-11-09 同步重写。
 
 **【2026-11-08 3D 主角试水（已收编 `7279e8a`，留作上下文）】**
 
@@ -190,8 +193,9 @@ typecheck / lint / prettier / gen:protocol:check / ruff / ruff format / pyright 
   **注意**：旧的「皮肤重心 − 头发重心」判据对 villager/god **区分度不够**（头发左右对称），
   主树第一版探针就因此误判，别再用它。
   修法：`SheetGeometry` 增 `rows` 映射，`facingRow(sheet, facing)`，改两个调用点
-  （`three-actors.ts:223`、`WorldScene.ts:1011`）+ `actors.test.ts:66-71` 那 4 条断言
-  （现在钉的是错的行序）；顺带订正 `actors.ts:28-30` 的「16 行 @16px」注释。
+  （2026-11-09 实测位置：`three-actors.ts:307`、`WorldScene.ts:1182`）+
+  `actors.test.ts:67-71` 那 4 条断言（现在钉的是**正确**行序）；顺带订正
+  `actors.ts:28-30` 的「16 行 @16px」注释。
 - **2026-11-08 行走不连贯已修并收编**（主树 `3b58669`，摘 codex `1bfe956`，2 文件）。
   根因：`three-input.ts::drive()` 只试斜向格，失败就 `stop()` 并把「被挡意图」缓存进
   `keyIntent`；而默认 `azimuth=225` 下 **WASD 四键全映射成对角**，所以一个被挡的斜向
@@ -252,7 +256,7 @@ typecheck / lint / prettier / gen:protocol:check / ruff / ruff format / pyright 
 - **第二十四轮遗留（别当已关闭）**：DPR 只在创建时读取（跨屏/缩放不刷新，Minor）·
   构建包 2309kB/gzip 572kB 警告 · 房屋仍 h2 实心块、无动态光照投影/水波/塌落动画 ·
   ~~服务端仍不发 `perception` 帧~~ → **2026-11-07 订正：这是已登记的设计决定**
-  （`docs/api/ws-protocol.md:74`，M5-K6 / 裁 28-C GAP-F），不是缺口，别再提案补出站；
+  （`docs/api/ws-protocol.md:76`，M5-K6 / 裁 28-C GAP-F），不是缺口，别再提案补出站；
   听嗅文案按设计只进 NPC prompt，玩家侧没有它们是对的 ·
   相机默认 yaw225 且近墙会抬高（临墙构图可能高于请求 12°）· 提示置顶可能覆盖前景。
 - **下一步**：① ~~提交或回退连贯性修复~~ → 已提交（`a74aa1d`）；
@@ -260,15 +264,19 @@ typecheck / lint / prettier / gen:protocol:check / ruff / ruff format / pyright 
   ~~③ 行走单步卡住~~ → 已修（`3b58669`）；
   ~~④ 人物朝向 bug 待修~~ → **已派 codex（2026-11-08），连同走跑/走环/跳跃**；
   ⑤ 用户亲验剩余项（见 `talking.txt` 待人工验收表）；⑥ 相机近墙抬高到约 70° 的构图问题
-  已记录待用户裁定；⑦ P2 玩家念头回执 `ws.py:1295` 硬编码文案。
-- **⚠ 跳跃的硬前提（派单里已写明，收编时必查）**：`EntityState`
-  （`sim/core/world.py:31-48`）**没有 height 字段**，协议 `Actor`/`ActorDelta`
-  也**没有 height**；可走判据是布尔 `collision`；`rebuild_tile_map`
-  （`sim/api/main.py:140-142`）只允许 `height == 1` 可走。加 height 会改
-  `state_hash`（`world.py:60` 只哈希 `{world_seed,tick,entities}`），
-  影响既有存档与 `test_core_m0.py` 的重放断言——**收编时必须确认 codex 怎么处理**。
-  `terrain_class.py:244-253` 的 `walkable ⇒ HEIGHT_EARTH` **仍是单向不变量**，
-  跳跃**不得**靠把它改成双向来实现（双向 ⇒ earth 无来源 ⇒ 只挖不放）。
+  已记录待用户裁定；⑦ P2 玩家念头回执 `ws.py:1400` 硬编码文案
+  （旧记 `:1295` 已漂移，2026-11-09 实测订正）。
+- **跳跃的硬前提（2026-11-08 派单时写；已由 `890337e` 收编解决，留作判据）**：
+  当时 `EntityState` 没有 height、协议也没有，可走判据是布尔 `collision`。
+  **落地形态（2026-11-09 实测复核）**：
+  - `EntityState`（`sim/core/world.py:52-63`）只增**可选** `gait` / `jump`
+    （`None` 不序列化），**没有存 height 标量**；站立高度由 `SurfaceMap`
+    事件投影推导（`sim/world/surface.py:41` 仍是 `walkable and height == 1`）。
+  - 协议 `Actor`/`ActorDelta` 增可选 `elevation` / `gait` / `jump`（`shared/protocol.ts:227-246`）。
+  - `state_hash`（`world.py:87-93`）已改成对 `model_dump` 全量哈希，不再是
+    `{world_seed,tick,entities}` 白名单——新增可选字段靠 `None` 省略保旧哈希。
+  - `terrain_class.py:244-253` 的 `walkable ⇒ HEIGHT_EARTH` **仍是单向不变量**，
+    跳跃没有靠把它改成双向来实现（双向 ⇒ earth 无来源 ⇒ 只挖不放）。**别回退这两点**。
 - **2026-11-06 清理轮（`f77fa81`）**：删掉三个零引用依赖（`pydantic-settings`/`tenacity`/
   `hypothesis`，DESIGN §4 同步改写）、`.opencode/`（61M）、`agent-registry.md` 里
   四个已不存在的工作树、`.env.example` 两个死键、两份 331M 备份库、各类缓存/构建产物。
@@ -285,7 +293,7 @@ typecheck / lint / prettier / gen:protocol:check / ruff / ruff format / pyright 
 - **协议 1.15 落点核对**：`sim/api/ws.py::_PROTOCOL_VERSION` 与
   `client/src/net/ws.ts::PROTOCOL_VERSION` 同值；`FastAPI(version=)` / `shared/openapi.json` /
   `shared/protocol.ts` 三处一致，`gen:protocol:check` 通过。
-- **合并后复查（必做）**：`ensure_schema`（`main.py:216`）仍在、`ChatLedger.remember`
+- **合并后复查（必做）**：`ensure_schema`（`main.py:250` 调用点）仍在、`ChatLedger.remember`
   的 `speaker` 必填与 `_heard_mems` 转述归因仍在、`narration_cache.py` 仍在、
   `onMonologueHistory` 整组替换仍在、`voxel-picking.ts` **零改动**（拾取基线不变）。
 - **本轮做了什么**（用户验收驱动，原话：世界空空如也 / npc 只会聚集 / llm 除寻路无法执行 /
@@ -304,7 +312,7 @@ typecheck / lint / prettier / gen:protocol:check / ruff / ruff format / pyright 
   - **门禁**：pytest **3503P/121S** · ruff/format 全过 · pyright **0/0/0** ·
     client typecheck/eslint/prettier EXIT 0 · vitest **423P/56F** · 两资产 byte-identical ·
     协议 **1.14 未动** · 拾取与基线逐项相同（448/448 · 3947/3947 · 7141/7373）。
-- **🚨 本轮事故（已处置）**：`sim/api/main.py:69` 硬编码 `WORLD_DB_PATH = Path("world.db")`，
+- **🚨 本轮事故（已处置）**：`sim/api/main.py:76` 硬编码 `WORLD_DB_PATH = Path("world.db")`，
   **不读同名环境变量**。用 `WORLD_DB_PATH=<临时路径> uv run uvicorn` 起验收后端，实际写的是
   真实档 48 分钟（14:03–14:51，+1,274,454 events、tick 66000→309910、快照 2→12）。
   已按 `seq 341740` 边界回滚：events **341,740** / snapshots 1 / knowledge 62 /
@@ -443,11 +451,12 @@ codex 交付 `820c653`（+886 行，18 条新测试），门禁全绿，但：
 主树真实库副本：        events 187857→191674，relationships 0→37 ✅，knowledge 0→0 ❌
 ```
 
-**根因一条**：`sim/perception/senses.py:271` 把 `Observation.subject` 设成**中文显示名**
+**根因一条**：`sim/perception/senses.py:270-274` 把 `Observation.subject` 设成**中文显示名**
 （同一个 `label` 既作叙事文本又作 subject），而 `witnesses_of_entity_emerge`
-（`evidence.py:157`）拿 `rtoken_of(subject)` 去比 ⇒ **永不匹配** ⇒ `witnesses` 恒空
+（`evidence.py:159`）拿 `rtoken_of(subject)` 去比 ⇒ **永不匹配** ⇒ `witnesses` 恒空
 ⇒ `npc.knowledge_learned` 零产生 ⇒ `knowledge` 表恒 0。`told` 路以 knowledge 行为源，
-同根因被堵死。`frame.py:37` 的 `subject: str  # rtoken` 注释是**过时的**。
+同根因被堵死。`frame.py` 里 `subject: str  # rtoken` 的旧注释是**过时的**
+（现已改为「戏内词面，不是 rtoken」）。
 
 **为什么 18 条测试没抓到**：全部手造 `PerceptionFrame`（`subject=rtoken_of(...)`），
 **没有一条跑真实 `lifespan`**。测试用的帧形态与生产形态不同 ⇒ 测的是另一个世界。
@@ -460,7 +469,7 @@ codex 交付 `820c653`（+886 行，18 条新测试），门禁全绿，但：
 回执里「sound baseline passes」是错的。
 
 **codex 树 `world.db` 是坏的**：有 **83 个 `world.create`**，而 `restore_world`
-（`world_restore.py:166`）要求恰好 1 个 ⇒ 该树真实库**无法恢复**。主树库健康
+（`world_restore.py:179`）要求恰好 1 个 ⇒ 该树真实库**无法恢复**。主树库健康
 （1 genesis / 187857 events / tick 36001 可恢复）。两树库是不同文件，别互用结论。
 
 **✅ 已修（主树 2026-11-01，TDD 红→绿→重构）**：
@@ -468,9 +477,10 @@ codex 交付 `820c653`（+886 行，18 条新测试），门禁全绿，但：
   entity_id→显示名 反查；`Observation.subject` 语义**未动**（叙事仍说人话）。
 - **重名 fail-closed**：显示名不唯一 → 返回 `([], None)`，宁缺勿错；无显示名的
   实体按 rtoken 作词面（`senses` 同一默认分支），不误判歧义。
-- 调用点 `main.py:664` 传入 `_display_names`；`frame.py:37` 过时注释已改正。
+- 调用点 `main.py:787` 传入 `display_name_of=_display_names`；`frame.py:37` 过时注释已改正
+  （现 `frame.py:36-39` 写明「不是 rtoken」）。
 - **真跑 `lifespan` 的集成测试**已补（`test_lifespan_witnesses_knowledge_from_real_perception`），
-  且**照抄生产执行序**（先 `_run_npc_runtime` 后 `_run_perception`，`tick.py:94-96`）
+  且**照抄生产执行序**（先 `_run_npc_runtime` 后 `_run_perception`，`tick.py:95-97`）
   ——我第一版写反了，会把当帧帧喂给 `frame.tick < tick` 过滤器而必然全拒。
 - 实测（零注入，真实地图）：`witnesses` 9 人 / `knowledge` 落库带 `evidence_seq` / `conf=0.9`。
 - 门禁：pytest **3091P/0F/121S**（404.88s）、ruff 0、format 0、pyright 0/0、
@@ -501,7 +511,8 @@ player_anchor` **全为 0** ⇒ **未丢用户操作**。但追加段含我伪�
 **✅ 已修（主树，`02e3b10`，TDD 红→绿）**：`npc_health`。
 
 - RED 实测：锚点 tick=1 处 severity=0.2，父 head（tick=5）处 0.8 ⇒ 子分支拿到 **0.8**。
-- 修法 `_clone_health_at_cursor`（`fork.py:789`）：按 seq 重放 `npc.health_changed`
+- 修法 `_clone_health_at_cursor`（`sim/core/persistence/fork.py:797`，调用点 `:559`）：
+  按 seq 重放 `npc.health_changed`
   （复用 `_project_health`，折叠规则单一来源）+ 补齐无事件源的创世种子行
   （判据 `created_at_tick <= fork_tick`）。
 - **踩到的坑（写进纪律）**：`npc_health` 是**混合表**——创世种子
@@ -520,16 +531,17 @@ B 锚点 tick=1，tick=5 lod 1→2 → child=[('a',2),('d',1)]    ← 'a' 的 lo
 对照（锚点后不推进）        → child=[('a',1),('d',1)]      ← 正确
 ```
 
-**生产可触达**：玩家读档 → `main.py:1056 orchestrate_materialized_load_anchor`
-→ `fork_orchestration.py:228 kind="anchor"`。
+**生产可触达**：玩家读档 → `main.py:1244 orchestrate_materialized_load_anchor`
+→ `sim/core/persistence/fork_orchestration.py`（`kind="anchor"`；模块在
+`sim/core/persistence/`，不在 `sim/world/`）。
 
 `npc_profiles` 写入面（已查实，**只有两条事件**）：`NPC_LOD_CHANGE`（改 `lod`+
 `updated_at_tick`）、`NPC_DEATH`（**删行**）。其余 24 列无运行时写入路径，只由种子直插。
 
 **顺带发现（第二十轮任务 B，已修，主树收编 `66637b7`）**：
-`seed_villagers`（`villagers.py:320`）幂等判据原本是 `select(NpcProfile.id)` **无 branch
-过滤**，`_profile_row` **硬编码 `branch_id="main"`**（`villagers.py:291`、`protagonist.py:37`），
-`seed_animals`（`animals.py:13`）是同一缺陷的**第三处**（复用 `villagers._profile_row`）。
+`seed_villagers`（`villagers.py:327`）幂等判据原本是 `select(NpcProfile.id)` **无 branch
+过滤**，`_profile_row` **硬编码 `branch_id="main"`**（`villagers.py:284`、`protagonist.py:33`），
+`seed_animals`（`animals.py:19`）是同一缺陷的**第三处**（复用 `villagers._profile_row`）。
 主树 5 组临时内存库实测（修前）：**(main0,child0)→main50；(main0,child50)→新增0；
 (main0,child49)→main1/child49；(main50,child49)→新增0；(main50,child50)→新增0**
 ⇒ **只补 main，子分支永远补不上**。
@@ -566,7 +578,7 @@ B 锚点 tick=1，tick=5 lod 1→2 → child=[('a',2),('d',1)]    ← 'a' 的 lo
      `_clone_health_at_cursor`（按 seq 重放事件 + 补无事件源的种子行，`created_at_tick <= fork_tick`），
      不再 `_clone_bounded` 复制父 head。钉子 `test_m5_fork_replay.py::test_A_health_seam_equal`。
   ② **第三方浮现见证链：已通**——真实库 `npc.hidden_emerge` 2 条带完整 `witnesses` 列，
-     `knowledge` 32 行（`witnessed` 18 / `told` 14），`main.py:672` 的
+     `knowledge` 32 行（`witnessed` 18 / `told` 14），`main.py:782` 的
      `witnesses_of_entity_emerge` + 物种知识门在链上。
   ③ **每日严重度演进：已修**（第二十轮 codex，主树收编 `66637b7`）——新增
      `sim/content/health_evolve.py`：同步无 IO 快照适配器，挂在 `main.py` 的
@@ -585,13 +597,14 @@ B 锚点 tick=1，tick=5 lod 1→2 → child=[('a',2),('d',1)]    ← 'a' 的 lo
      替代，**未冒称历史健康锚点端到端验收**（收编后主树版本已在，见 ①）。
   > `anchor_package.CORPUS_TABLES` 仍不含 `npc_health`（设计如此：健康是**可折叠族**，
   > 走 `_clone_health_at_cursor` 重放，不进包——第十八轮也只在包里加了 `npc_profiles`）。 |
-| **`npc.lod_change` 持久化** | **已完成**（`runtime.py:223` 发射 + `npc_store._project_lod_change` 双键投影）。此前记忆卡写「仍未做」是过时记录，2026-11-01 已订正 |
+| **`npc.lod_change` 持久化** | **已完成**（`sim/npc/runtime.py:262` 发射 + `npc_store._project_lod_change` 双键投影）。此前记忆卡写「仍未做」是过时记录，2026-11-01 已订正 |
 | **离线推进** | ~~`sim/world/offline*.py` 不存在~~ → **2026-11-01 第十五轮已收编（`28e8ac9`）**：`sim/world/offline.py::advance_offline` 复用现有 `TickLoop`；墙钟只在启动边界采样一次（`_offline_wall_time`）；水位取 `snapshots/branches.created_at`（控制元数据，不进事件流与 `state_hash` ⇒ **C5 安全**）；批上限 240 tick、`MAX_CATCHUP_REAL_SECONDS=4.0`、上限 1 游戏日（`TICKS_PER_GAME_DAY=86400`，超限记 `offline.capped`）；同墙钟重启零补跑。主树实测：60s→3600 tick、30 天→86400 tick 且丢弃 2590560s、两遍重放 hash 相同、玩家档零写。**仍未做**：真实 `world.db` 上跑一次真实停机补偿（需备份） |
 | **T5 差事完成率** | ~~`errands_rate.py` 明写「本轮不设阈值」~~ → **2026-11-01 已定线（`d64464d`）**：用户裁定 **`ERRAND_COMPLETION_RATE_MIN = 1.0`**。依据实测 40/40（10 seed × 4 链，中位与最差都 1.0，`.orca/audits/t5-baseline-2026-11-01/baseline.json`）。**不留缓冲的理由**：口径是确定性脚本链（零 LLM/网络/随机），无抖动来源，0.95 只会让真实回退静默通过。**不沿用 M1 的 80%**（单决策口径）。**口径边界写死在模块 docstring**：这是脚本完成率，不是生产 NPC 自主完成率 |
 | **soak 实体流失** | ~~`SOAK_ENTITY_LOSS_PER_GAME_DAY = 0`，从未抬高~~ → **2026-11-01 已定线（`d64464d`）**：用户裁定 **良性上界保持 0**，另立契约「**流失须被死亡解释**」（`净流失 - 已记录 npc.death = 无解释流失`，必须为 0）。**为什么不抬到实测的 4.0/游戏日**：那是每小时强制近身互殴的**夹具**，不是自然流失率；现有 soak 用 `make_mock_feeder` **根本没有死亡源**，抬到 4.0 会在 604800 tick 里程碑跑里允许 **28 个实体凭空消失而不报红**，等于把泄漏检测变瞎。契约在 `_assert_entity_stable(..., explained_deaths=...)`，测试 `sim/tests/bench/test_soak_loss_contract.py` |
 
 **另一个口径缺口**（不算未实现，但要注意）：战斗表现层协议有 `Hit`/`Projectile`
-schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数——
+schema，`sim/api/ws.py:1765` 只发 `posture_visual`，客户端 `client/src/net/ws.ts:238`
+只 `recordCombatEvent()` 计数（`world-audio.ts:125` 拿它当音效键）——
 **用户已明确裁定不做**，别再提案。
 
 ## 1c. 用户已裁定**移除**的功能（不是缺口，别再提案）
@@ -608,7 +621,7 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
 **迷雾的残留（合法，不要「清理」）**：
 - `EventKind.FOG_REVEAL` + `FogRevealPayload` + `PAYLOAD_MODELS` 登记 + `_apply_fog_reveal` no-op
   —— **C4 事件不可销毁**：老日志里有 `fog.reveal` 行，删 kind 会让历史流重放直接炸。
-  `sim/core/world.py:269` 的 docstring 已写明「no-op 即重放安全」。
+  `sim/core/world.py:344-347` 的 docstring 已写明「no-op 即重放安全」。
 - `sim/tests/test_m6_content_events.py` 仍锁 `FOG_` 前缀 —— 它锁的是**事件登记存在**，
   不是迷雾功能存在。删掉这条测试才是错的。
 - `DESIGN.md` §13/§17 仍列「空间迷雾」（**冻结基线不回写**，见 §19/§20 的冻结声明）——
@@ -625,16 +638,17 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
 所以「模型只管陈默」在第十九轮之后**不再成立**——3 格内升格的村民也吃模型。
 - 陈默：`main.py::_chenmo_loop` → `driver.decide_once`，`CHENMO_DECIDE_SECONDS`
   默认 **60 秒 1 次**；
-- 50 村民：`npc/runtime.py:150 evaluate_batch`（numpy 效用矩阵），每 10 tick；
+- 50 村民：`sim/npc/runtime.py:156 evaluate_batch`（numpy 效用矩阵，实现在
+  `sim/npc/utility.py`），每 10 tick；
 - 赵铁/小满/苏婉：`npc/roles.py::role_events` 硬编码 f-string，每 600 tick（10 秒）。
 
 **⚠️ 订正（2026-11-04）：本节原写「『升格 L2』是空壳」——已过时。第十九轮就接齐了。**
 
 实测（2026-11-04 复核）：
 - `sim/agent/npc_l2_runtime.py:84` 真的判 `profile.lod == 2`
-- `sim/api/main.py:684`（升格名单）、`:793`（专属角色）都读 `lod == 2`
-- `sim/api/main.py:1003-1024` 装配 `NpcL2Coordinator` + `_npc_l2_loop`；
-  `npc_l2_live` 在离线补跑完成后置 true（`main.py:1405`）
+- `sim/api/main.py:753`（升格名单）、`:862`（专属角色）都读 `lod == 2`
+- `sim/api/main.py:1074` 装配 `NpcL2Coordinator`，`:1097` 定义 `_npc_l2_loop`；
+  `npc_l2_live` 在离线补跑完成后置 true（`main.py:1516`）
 - 有界单步、`L2Policy` 默认 min_interval 60s / max_calls 4 / timeout 8s / max_tokens 192
   （env 覆盖 `NPC_L2_MIN_INTERVAL_SECONDS` / `NPC_L2_CALLS_PER_MINUTE` / `NPC_L2_TIMEOUT_SECONDS`）
 
@@ -645,10 +659,10 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
 
 | 来源 | 代码 | 性质 |
 |---|---|---|
-| 陈默 thought | `driver.py:364-371`，`content=intent.reason` | 真模型，~1 条/分钟 |
-| 村民嘟囔 | `will.py:90 _TEMPLATES`（每档 12 句）+ `:159 _pick_index(npc_name)` | 纯模板 |
-| 三专属角色 | `roles.py:20-27`，三条 f-string | 纯模板 |
-| 玩家念头回执 | `ws.py:1293-1295` | **恒为「这话我记下了。」**（2026-11-04 订正行号；cue 仍是 `ws.py:1319-1326` 的标点启发式，真表 `plan_view.py:159 band_to_cue` 未接线） |
+| 陈默 thought | `sim/agent/driver.py:370`，`content=intent.reason` | 真模型，~1 条/分钟 |
+| 村民嘟囔 | `sim/agent/will.py:90 _TEMPLATES`（每档 12 句）+ `:415 _pick_index(key, pool_size)` | 纯模板 |
+| 三专属角色 | `sim/npc/roles.py:25-42`，三条 f-string | 纯模板 |
+| 玩家念头回执 | `ws.py:1398-1401` | **恒为「这话我记下了。」**（2026-11-09 实测订正行号；cue 仍是 `ws.py:1417-1431` 的标点启发式，真表 `sim/npc/plan_view.py:159 band_to_cue` 未接线） |
 
 `_pick_index(npc_name)` **不含 tick / 动作 / 处境** ⇒ 同一 NPC 同一 band 永远同一句
 （坏掉的唱片；50 人分 12 句）。且 36 句全是「不想干活」口径，**与动作无关**。
@@ -667,10 +681,10 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
 > （「忙着呢，回头再说。」110 次）。见 §0。
 
 > **订正（2026-11-02，我上一轮报错）**：我先前说屏幕上会出现字面量「旁人」——
-> **生产不会**。`sim_exec.py:694` 是 `(display_name_of or {}).get(target_id, target_id)`，
-> 主树 `main.py:649` 实传 `_display_names`（50 村民 + 陈默 + 动物 + 三专属角色全覆盖），
+> **生产不会**。`sim_exec.py:803` 是 `(display_name_of or {}).get(target_id, target_id)`，
+> 主树 `main.py:765` 实传 `_display_names`（50 村民 + 陈默 + 动物 + 三专属角色全覆盖），
 > 所以真机上署名是戏内真名，退化成 `villager_02` 只在**没传映射的测试替身**里发生。
-> 真正的「旁人」兜底在 `driver.py:488`（陈默 L2 侧，`or "眼前的人"`）——那是
+> 真正的「旁人」兜底在 `driver.py:261`（陈默 L2 侧，`or "眼前的人"`）——那是
 > 陈默找不到对方名字时的措辞，属正常兜底，不是缺陷。别照这个去改。
 
 **「乱」的数量根因（3 游戏日 ≈ 72 真实分钟实测）**：
@@ -688,7 +702,7 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
 **根因链（一条解释全部）**：
 `REMEDY_RELIEF` 无 `request_chat` → social 只涨不降 → 第 2 游戏日起恒 1.00 →
 `synthesize_verdict` 需求冲突维 ≥0.8 → 全场 band 3 → 唯一补救动作 `request_chat`
-又被 `sim_exec.py:48` 开口冷却压掉 → 人被逼去 wander/rest/eat（都不 remedy social）
+又被 `sim_exec.py:65-77` 的 `chat_cooldown_until_of` 压掉 → 人被逼去 wander/rest/eat（都不 remedy social）
 → 满屏「这活儿我实在打怵」而人在闲逛。**A 已修**（见 §0），第 0~5 日 band>0 恒 2%。
 
 **A 修后仍存在的残留（4A 已于 2026-11-02 修掉前两条）**：
@@ -740,8 +754,8 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
 - **纯函数单测证明不了接线通**（第十六轮实证）。18 条测试全绿，生产 0 行。
   凡验收面写「实况跑起来后 X 表有行」，必须有一条**真跑 `lifespan`** 的集成测试。
   手造 `PerceptionFrame` 与生产帧形态不同时，测的是另一个世界。
-- **`Observation.subject` 是中文显示名，不是 rtoken**（`senses.py:271`，同一个 `label`
-  既作叙事又作 subject）。`frame.py:37` 的注释是过时的。任何按 rtoken 匹配 subject 的
+- **`Observation.subject` 是中文显示名，不是 rtoken**（`senses.py:270-274`，同一个 `label`
+  既作叙事又作 subject）。`frame.py:36-39` 已写明这一点。任何按 rtoken 匹配 subject 的
   代码都会静默失效——fail-closed，不报错，只是恒空。
 - **`flush_for_anchor()` 读 `loop.pending_events`**：先 `drain_events()` 再调它 = 刷空列表，
   探针会假绿（我第一版就这么写的）。
@@ -774,8 +788,11 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
   是 earth 的唯一来源。**做成双向 ⇒ 阻挡 h==1 归零 ⇒ earth 永不可得 ⇒ 只挖不放**
   （本轮亲自踩过一次并实测复现）。
 - **土坎判据用逐瓦片原始 walk 占比，不平滑**：平滑会把屋顶拉成土色，屋顶与田垄就分不开了。
-- **客户端插值窗口不得等于服务端节拍**：`INTERP_MS` 曾正好 250 = 行走 250±15ms，
+- **客户端插值窗口不得等于服务端节拍**：旧 `INTERP_MS` 曾正好 250 = 行走 250±15ms，
   抖动使滑行永远差一点，逐格累积落后 → 视觉闪现。取节拍的 ~80% 留余量。
+  **现行实现已换成回放缓冲**（`actor-motion.ts`：`TILE_CADENCE_MS_1X=250` +
+  `REPLAY_DELAY_CADENCES=1` + `REPLAY_JITTER_SLACK_MS`，延迟由 `rampDelay` 平滑），
+  `INTERP_MS` 这个名字已不存在——看到旧文引用它时按回放缓冲理解。
 - **移动拾取与编辑拾取必须是两个函数**（`pickGround` vs `pickVoxel`）。等距投影下
   h=3 方块与斜后方 2 格的 h=1 地面顶面**逐像素重合**；用编辑拾取器判移动，真实地图
   19.3% 的可走格会被判成阻挡格（实测 763/3947），出生点邻域 26 格里 21 格如此 →
@@ -861,12 +878,13 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
   **必须经 `display_name_of` 反查**，直接拿 rtoken 比会静默恒空。
 - **重名必须 fail-closed**：显示名不唯一时无法从词面反推是谁，返回 `([], None)`。
   注意区分「**没**显示名」（按 rtoken 词面，天然唯一，**不是**歧义）与「**多个**同显示名」。
-- **手写探针起 `lifespan` 会写真实库**：`conftest.py:15` 的 autouse 夹具只对 pytest 生效。
+- **手写探针起 `lifespan` 会写真实库**：`sim/tests/conftest.py:16-20` 的 autouse 夹具
+  （`isolated_world_database`）只对 pytest 生效。
   脚本里 `import sim.api.main` 直接用默认 `WORLD_DB_PATH=Path("world.db")`，且启动即跑
   `advance_offline`（会补推最多 1 游戏日）。**要么显式改 `main.WORLD_DB_PATH` 到临时库，
   要么写成 pytest 用例。** 2026-11-01 本轮就踩了：真实库 +741567 events / knowledge +27。
 - **集成测试必须照抄生产执行序**：`_tick_once` 是 `npc_runtime → maintenance → perception`
-  （`tick.py:94-96`），emerge 只能拿**上一帧**。先跑 perception 再跑 npc_runtime 的写法
+  （`sim/core/tick.py:95-97`），emerge 只能拿**上一帧**。先跑 perception 再跑 npc_runtime 的写法
   会把当帧帧喂给 `frame.tick < tick` 过滤器 ⇒ 永远 `([], None)`，看着像功能没实现。
 - **`model_copy` 的字段要走 `update={...}`**：`model_copy(pos=(x,y))` 是 TypeError。
 
@@ -887,6 +905,10 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
   （`at_head` 分支直接 return）。
 
 **方法**
+- **本卡里的 `file:line` 会漂移，引用前先实测**（2026-11-09 全卡复核，40+ 处里
+  有 20 处已失效，最大偏移 500 行以上）。权威写法是「文件 + 符号名」，行号只作
+  辅助；引用时用 `grep -n "<符号>"` 现查，别照抄旧行号。反例：`ws.py:1295` 已到
+  1400；`main.py:1056` 已到 1244；`ws.py:1619` 已到 1765。
 - 查符号/调用链/影响面先用 `codegraph_explore`（显式 `projectPath`）。
 - 门禁数字同场实测，不引用旧读数；**收编后主树必须独立复跑**。
 - **删文件/依赖前先查 `DESIGN.md`**：它写死了承诺（`tests/invariants`、`tests/replay`
@@ -912,7 +934,8 @@ schema，`ws.py:1619` 只发 `posture_visual`，客户端 `ws.ts:216` 只计数�
 1. 本卡 §0（当前状态）+ **§1b（已关闭但没做的承诺）** + **§1c（用户裁定移除的功能，
    不是缺口）**——后者防的是「把砍掉的功能当没做完，又去重做一遍」。
 2. `git log --oneline -10` + `git status`，两树各一遍。
-3. 两树 `.orca/talking.txt`（**已精简到 ~70 行，只有当前波**）。
+3. 两树 `.orca/talking.txt`（只留当前波 + 纪律 + 未做；2026-11-09 实测
+   主树 104 行 / codex 树 72 行，**别记死数字**）。
 4. `docs/README.md` + `docs/dev-workflow.md`。
 5. 需要历史细节才查 §2-newest / §3 / `git log`。
 
@@ -960,7 +983,9 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 
 【2026-10-31 第十四轮已派 `671931c`｜历史】用户裁定走 `npc_health` 写入路径、深度端到端，
 已写进 codex 树 talking。**派单前主树实探出三个隐藏事实**（不在 §1b 原表里）：
-① 读链路在生产中断（`main.py:439` 丢弃 `_hidden_states`，`npc_events_for_tick` 无该参数）；
+① 读链路在生产中断（当时 `main.py` 丢弃 `_hidden_states`，`npc_events_for_tick`
+   无该参数）——**已修**：现签名含 `hidden_states=`（`sim/npc/sim_exec.py:609`），
+   `main.py:771` 实传；
 ② `build_default_bus()` 缺 6 个 handler（含 4 个 `matter.*`），接线即崩，主库不炸只因
 `matter_state`/`structures` 均为 0 行；③ `attr_id` 用 DB 自增派生、fork 不克隆 `id` ⇒
 跨分支漂移，而 evidence 按它匹配。派单含 `code` 列（迁移 `0015`）修法。**协议保持 1.14**
