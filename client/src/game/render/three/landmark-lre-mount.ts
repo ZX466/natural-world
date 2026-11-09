@@ -66,6 +66,8 @@ function skyEnvironment(renderer: THREE.WebGLRenderer): THREE.Texture | null {
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.mapping = THREE.EquirectangularReflectionMapping;
   const pmrem = new THREE.PMREMGenerator(renderer);
+  // 注意：不能对 `target` 调 `dispose()` —— 那会连它挂着的 texture 一起删掉，
+  // 我们要的正是那张。只释放 PMREM 的中间资源和源 canvas 贴图。
   const target = pmrem.fromEquirectangular(texture);
   pmrem.dispose();
   texture.dispose();
