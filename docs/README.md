@@ -35,7 +35,7 @@
 | `arch/voxel-execution-spec.md` | 等距体素 V0–V3 施工规格 + 决策链（**已收官**，历史执行真相源；§0 行号已漂移，按符号名 grep） |
 | `arch/world-liveliness-design.md` | 世界可辨认性与自生长（2026-11-05 用户验收驱动；A 等距烘焙 / B 后端五项 / C three.js 自由视角世界已于 2026-11-06 实现，**2026-11-07 验收后成为默认**，`?terrain=phaser` 回滚） |
 | `arch/m7-render-art.md` | M7 渲染面**裁决留档**：只剩仍生效的 R2/R3/R8 三条，施工细节已随管线退役压缩 |
-| `arch/character-model-3d-plan.md` | 人物 3D 化的**实际形态**与后续档位（B 档已实施 `?avatar3d=1`；当初的分档估算已归档） |
+| `arch/character-model-3d-plan.md` | 人物 3D 化的**实际形态**与后续档位（默认已启用，`?avatar3d=0` 回滚；当初的分档估算已归档） |
 | `arch/offline-progress.md` | 停服补跑的时间口径、上限（默认一游戏小时，`LZ_OFFLINE_CATCHUP_MAX_TICKS` 可调）、持久化与可复跑证据 |
 | `arch/audio.md` | 世界音效的默认静音、交互解锁、事件映射与亲听入口 |
 
