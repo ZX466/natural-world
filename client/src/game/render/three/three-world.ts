@@ -63,7 +63,6 @@ export function createThreeWorld(
   let wantLandmark = false;
   /** 已为哪张地图尝试过挂载：没平地/没 shader 就不重试，免得每帧扫高度表；
    *  换地图（重连/分支切换）时才重算。 */
-  let landmarkAttempted = false;
   let landmarkMap: WorldMirror['map'] = null;
   let audioContext: AudioContext | null = null;
   const audio = new WebAudioSynth(() => {
@@ -125,11 +124,10 @@ export function createThreeWorld(
     if (map === null) return; // 快照还没到，下一帧再试
     // 同一张地图只处理一次（挂上了就留着，没平地也不再扫）；换了地图
     // （重连/切分支拿到新 `map` 对象）才重算，否则会留在旧坐标。
-    if (landmarkMap === map && (landmark !== null || landmarkAttempted)) return;
+    if (landmarkMap === map) return;
     landmark?.dispose();
     landmark = null;
     landmarkMap = map;
-    landmarkAttempted = true;
     landmark = mountLandmark(
       adapter.scene.scene,
       adapter.scene.renderer,
