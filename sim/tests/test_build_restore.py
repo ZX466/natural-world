@@ -68,7 +68,7 @@ async def branch_world(monkeypatch):
     )
 
     async def build_loop():
-        return loop, store
+        return loop, store, None
 
     async def idle_driver(*args, **kwargs):
         await asyncio.Event().wait()

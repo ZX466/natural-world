@@ -275,7 +275,7 @@ async def test_historical_load_restores_world_and_activates_child_before_confirm
     assert await app.state.store.read_range(child, 1, 100000)
     parent_rows = await app.state.store.read_range("main", 0, 100000)
     assert parent_rows[-1]["seq"] == parent_head
-    restored, reopened = await main.build_loop()
+    restored, reopened, _ = await main.build_loop()
     try:
         assert restored.state.state_hash() == app.state.loop.state.state_hash()
         assert await reopened.current_branch_id() == child

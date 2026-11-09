@@ -120,8 +120,12 @@ def _default_map() -> TileMap:
     return _fallback_map()
 
 
-async def rebuild_surface(branch_store: Any) -> SurfaceMap:
-    """Rebuild both support heights and ground collision at one bounded cursor."""
+async def rebuild_surface(branch_store: Any, history: Any = None) -> SurfaceMap:
+    """Rebuild both support heights and ground collision at one bounded cursor.
+
+    ``history`` lets a caller that already read the branch log hand it in
+    instead of paying for a second full read (boot used to read it six times).
+    """
     height_of = None
 
     def base_height(x: int, y: int) -> int:
@@ -132,7 +136,8 @@ async def rebuild_surface(branch_store: Any) -> SurfaceMap:
 
     surface = SurfaceMap(_default_map(), base_height)
     if branch_store is not None:
-        for row in await branch_store.read_branch_history():
+        rows = history if history is not None else await branch_store.read_branch_history()
+        for row in rows:
             if row["event_type"] in {EventKind.VOXEL_EDITED.value, EventKind.TILE_CHANGED.value}:
                 surface.apply(
                     WorldEvent(
@@ -223,8 +228,13 @@ def _with_structure_tile_restore(
     return out
 
 
-async def build_loop() -> tuple[TickLoop, Any]:
-    """组装世界：store（建表）+ bus + TickLoop + 创世 + 出生点搬运。返回 (loop, store)。"""
+async def build_loop() -> tuple[TickLoop, Any, list[dict] | None]:
+    """组装世界：store（建表）+ bus + TickLoop + 创世 + 出生点搬运。
+
+    返回 ``(loop, store, history)``：``history`` 是恢复时已读到的分支日志
+    （创世库为 ``None``）。启动装配还有五个面要这份日志，交出免得重读一遍
+    ——真实存档每次全量读约 1.5 秒。
+    """
     from sqlalchemy.ext.asyncio import create_async_engine
 
     # D20：SQLite 写并发止血（用户实测 POST /api/anchors 500 database is locked
@@ -253,8 +263,9 @@ async def build_loop() -> tuple[TickLoop, Any]:
             branch_id = await store.current_branch_id_or_none()
             if branch_id is None:
                 # 留下只读诊断面；lifespan 的 source_ready 闸门禁止驱动/保存。
-                return TickLoop(_make_clock(), build_default_bus(), WorldState()), store
-            return await restore_world(store, branch_id), store
+                return TickLoop(_make_clock(), build_default_bus(), WorldState()), store, None
+            history = await store.read_branch_history(branch_id)
+            return await restore_world(store, branch_id, history=history), store, history
     except Exception:
         await engine.dispose()
         raise
@@ -283,7 +294,7 @@ async def build_loop() -> tuple[TickLoop, Any]:
     for npc_id in roster:
         loop.enqueue(coin_grant_event(0, npc_id, 15, note="genesis:household"))
     loop.advance_frame(1.0)
-    return loop, store
+    return loop, store, None
 
 
 def _make_clock():
@@ -339,7 +350,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sim.perception.senses import run_perception_step
 
     setup_logging()  # K8：redact_sensitive 进全局日志链（第二道防线）
-    loop, store = await build_loop()
+    loop, store, branch_history = await build_loop()
     from sim.content.health_evolve import DailyHealthEvolution, load_health_snapshot
     from sim.core.calendar import game_time
 
@@ -351,6 +362,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sim.core.persistence.npc_store import NpcStore
 
     current_branch = await store.current_branch_id_or_none()
+    # `branch_history` comes from build_loop: the restore already read it, and
+    # every boot-time consumer below (surface, build sites, coin ledger, fire
+    # runtime, voxel edits, death seeding) used to read it again. Nothing writes
+    # events during this assembly window, so one shared copy is exact; on a real
+    # save each redundant read cost ~1.5s.
     from sim.core.persistence.offline_store import checkpoint_epoch, last_recorded_at
 
     offline_now = checkpoint_epoch(_offline_wall_time())
@@ -358,7 +374,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await last_recorded_at(store, current_branch) if current_branch is not None else offline_now
     )
     surface = await rebuild_surface(
-        NpcStore(store, branch_id=current_branch) if current_branch is not None else None
+        NpcStore(store, branch_id=current_branch) if current_branch is not None else None,
+        branch_history,
     )
     tile_map = surface.tile_map
     app.state.surface = surface
@@ -537,7 +554,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     from sim.content.health import seed_health
     from sim.content.protagonist import seed_protagonist
-    from sim.content.seeding import read_branch_death_ids
+    from sim.content.seeding import death_ids_from_history, read_branch_death_ids
     from sim.content.villagers import seed_villagers
     from sim.core.persistence.models import Branch
     from sim.core.persistence.npc_store import NpcStore
@@ -553,7 +570,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # A missing current pointer in an existing world is a fault, not genesis.
         # Otherwise compute the bounded death prefix once for all three seeders.
         seed_branch = current_branch or "main"
-        dead_ids = await read_branch_death_ids(store, branch_id=seed_branch)
+        # Reuse the boot read when it is the same branch; seeding only happens
+        # on an empty/current branch, which is exactly the one already read.
+        dead_ids = (
+            death_ids_from_history(branch_history)
+            if branch_history is not None and seed_branch == current_branch
+            else await read_branch_death_ids(store, branch_id=seed_branch)
+        )
         seeded = await seed_villagers(
             store.session_factory, branch_id=seed_branch, dead_ids=dead_ids
         )
@@ -645,9 +668,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # P-2：重启后在建工地不丢——从当前分支事件流恢复（`_site` 是纯内存态）。
     _start_branch = await store.current_branch_id_or_none()
     if _start_branch is not None:
-        build_runtime.restore_from_events(
-            await NpcStore(store, branch_id=_start_branch).read_branch_history()
-        )
+        build_runtime.restore_from_events(branch_history or [])
     app.state.build_runtime = build_runtime
 
     # 维护快照与 WS 表现共用当前分支真源，重启不能复用 main 或进程旧缓存。
@@ -875,7 +896,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 按**当前分支谱系**重放，否则进程重启后余额归零、`fire_seq` 归零会让下一场
     # 火重发 `fire-1` 撞库里既有主键（`FireWriteError` 打死驱动）。
     if current_branch is not None:
-        _cold_events = await NpcStore(store, branch_id=current_branch).read_branch_history()
+        _cold_events = branch_history or []
         coin_ledger.restore_from_events(_cold_events)
         fire_runtime.restore_from_events(_cold_events)
     else:
@@ -1422,11 +1443,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         ground_gid=lambda x, y: _ground_tile_id(tile_map, x, y),
         occupied=voxel_occupied,
     )
-    voxel_history = (
-        await NpcStore(store, branch_id=current_branch).read_branch_history()
-        if current_branch is not None
-        else []
-    )
+    voxel_history = branch_history or [] if current_branch is not None else []
     voxel_runtime.restore_from_events(voxel_history)
     voxel_gateway.restore_voxel_edits(
         voxel_history,

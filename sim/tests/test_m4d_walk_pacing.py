@@ -97,7 +97,7 @@ class TestBootstrapDrainsPaths:
         monkeypatch.chdir(tmp_path)
 
         async def fresh_world():
-            loop, store = await build_loop()
+            loop, store, _ = await build_loop()
             await store.session_factory.kw["bind"].dispose()
             return loop
 

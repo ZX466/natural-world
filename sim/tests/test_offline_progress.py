@@ -68,6 +68,11 @@ async def test_combat_scale_is_respected_and_no_llm_is_needed():
 
 
 async def test_thirty_days_cap_at_one_game_day_and_log_discarded_seconds():
+    """封顶机制本身：上限一到就停，剩余时长记 `offline.capped` 后丢弃。
+
+    显式给 ``max_ticks`` 而不是靠默认值——默认上限已收敛到一小时（见下一条），
+    这条测试守的是「封顶 + 记日志」这条路径，不是那个数字。
+    """
     from structlog.testing import capture_logs
 
     loop = make_loop()
@@ -77,11 +82,58 @@ async def test_thirty_days_cap_at_one_game_day_and_log_discarded_seconds():
         pass
 
     with capture_logs() as logs:
-        result = await advance_offline()(loop, offline_seconds=30 * 86400, flush=flush)
+        result = await advance_offline()(
+            loop, offline_seconds=30 * 86400, flush=flush, max_ticks=86400
+        )
     assert loop.state.tick == start + 86400
     assert result.advanced_ticks == 86400
     assert result.discarded_seconds == 30 * 86400 - 1440
     assert any(row["event"] == "offline.capped" for row in logs)
+
+
+async def test_default_cap_is_one_game_hour_so_a_long_stop_boots_quickly():
+    """A stop longer than 24 real minutes used to replay a whole game day.
+
+    Every tick costs ~4ms with the live NPC hooks attached, so the one-day cap
+    turned every restart into a ~250s boot. The default is now one game hour:
+    long enough that the world still moves while the server was down, short
+    enough that the boot stays inside the same performance budget.
+    """
+    loop = make_loop()
+    start = loop.state.tick
+
+    async def flush(*args):
+        pass
+
+    result = await advance_offline()(loop, offline_seconds=30 * 86400, flush=flush)
+    assert result.advanced_ticks == 3600
+    assert loop.state.tick == start + 3600
+
+
+async def test_cap_is_configurable_from_the_environment(monkeypatch):
+    """Operators pick how much downtime the world replays."""
+    monkeypatch.setenv("LZ_OFFLINE_CATCHUP_MAX_TICKS", "900")
+    loop = make_loop()
+    start = loop.state.tick
+
+    async def flush(*args):
+        pass
+
+    result = await advance_offline()(loop, offline_seconds=30 * 86400, flush=flush)
+    assert result.advanced_ticks == 900
+    assert loop.state.tick == start + 900
+
+
+@pytest.mark.parametrize("raw", ["0", "-5", "abc", "86401"])
+async def test_invalid_cap_environment_value_is_rejected(monkeypatch, raw):
+    monkeypatch.setenv("LZ_OFFLINE_CATCHUP_MAX_TICKS", raw)
+    loop = make_loop()
+
+    async def flush(*args):
+        raise AssertionError("invalid cap must not flush")
+
+    with pytest.raises(ValueError):
+        await advance_offline()(loop, offline_seconds=60, flush=flush)
 
 
 @pytest.mark.parametrize("seconds", [-1, float("nan"), float("inf"), True, "60"])

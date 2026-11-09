@@ -10,7 +10,7 @@ from sim.core.persistence.npc_store import NpcStore
 @pytest.mark.asyncio
 async def test_restart_restores_saved_world_without_a_second_genesis(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    loop, store = await build_loop()
+    loop, store, _ = await build_loop()
     loop.advance_frame(1.0)
     loop.enqueue(npc_death_event(tick=loop.state.tick, entity_id="villager_01"))
     await NpcStore(store).flush_tick(loop.drain_events())
@@ -21,7 +21,7 @@ async def test_restart_restores_saved_world_without_a_second_genesis(tmp_path, m
     expected = loop.state.state_hash()
     await store.session_factory.kw["bind"].dispose()
 
-    restored, reopened = await build_loop()
+    restored, reopened, _ = await build_loop()
     try:
         assert restored.state.state_hash() == expected
         assert restored.clock.tick == restored.state.tick
@@ -39,7 +39,7 @@ async def test_production_flush_checkpoints_world_and_random_progress(tmp_path, 
     from sim.core.rng import RngRegistry
 
     monkeypatch.chdir(tmp_path)
-    loop, store = await build_loop()
+    loop, store, _ = await build_loop()
     registry = RngRegistry(world_seed=42)
     rng = registry.generator("test.restart", loop.context.rng_cache)
     rng.random(7)
@@ -49,7 +49,7 @@ async def test_production_flush_checkpoints_world_and_random_progress(tmp_path, 
     next_draw = rng.random()
     await store.session_factory.kw["bind"].dispose()
 
-    restored, reopened = await build_loop()
+    restored, reopened, _ = await build_loop()
     try:
         assert restored.state.state_hash() == expected
         assert restored.context.combat_active
@@ -62,7 +62,7 @@ async def test_production_flush_checkpoints_world_and_random_progress(tmp_path, 
 @pytest.mark.asyncio
 async def test_restart_replays_snapshot_tail_without_running_npc_hooks(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    loop, store = await build_loop()
+    loop, store, _ = await build_loop()
     await NpcStore(store).flush_tick(loop.drain_events())
     history = await store.read_branch_history("main")
     await store.write_snapshot(
@@ -74,7 +74,7 @@ async def test_restart_replays_snapshot_tail_without_running_npc_hooks(tmp_path,
     expected = loop.state.state_hash()
     await store.session_factory.kw["bind"].dispose()
 
-    restored, reopened = await build_loop()
+    restored, reopened, _ = await build_loop()
     try:
         assert restored.state.state_hash() == expected
         assert not restored.pending_events
@@ -87,7 +87,7 @@ async def test_restart_refuses_duplicate_genesis_instead_of_appending_more(tmp_p
     from sim.core.events import world_create_event
 
     monkeypatch.chdir(tmp_path)
-    loop, store = await build_loop()
+    loop, store, _ = await build_loop()
     await NpcStore(store).flush_tick(loop.drain_events())
     await NpcStore(store).flush_tick([world_create_event(0, 42, ("chenmo",))])
     await store.session_factory.kw["bind"].dispose()
@@ -102,7 +102,7 @@ async def test_restart_uses_current_child_and_respects_ancestor_cutoff(tmp_path,
     from sim.core.persistence.models import Branch
 
     monkeypatch.chdir(tmp_path)
-    loop, store = await build_loop()
+    loop, store, _ = await build_loop()
     await NpcStore(store).flush_tick(loop.drain_events())
     history = await store.read_branch_history("main")
     cutoff = history[-1]["seq"]
@@ -128,7 +128,7 @@ async def test_restart_uses_current_child_and_respects_ancestor_cutoff(tmp_path,
         )
     await store.session_factory.kw["bind"].dispose()
 
-    restored, reopened = await build_loop()
+    restored, reopened, _ = await build_loop()
     try:
         assert await reopened.current_branch_id() == "child"
         assert restored.state.state_hash() == expected
@@ -145,7 +145,7 @@ async def test_snapshot_and_events_roll_back_together(tmp_path, monkeypatch):
     from sim.core.persistence.world_restore import flush_world
 
     monkeypatch.chdir(tmp_path)
-    loop, store = await build_loop()
+    loop, store, _ = await build_loop()
     # 冲突游标使检查点写入失败，事件也必须回滚，不能留半批。
     await store.write_snapshot("main", 0, len(loop.pending_events), b"{}")
     try:
@@ -181,7 +181,7 @@ async def test_child_initial_checkpoint_does_not_reapply_ancestor_genesis(tmp_pa
     from sim.core.persistence.models import Branch
 
     monkeypatch.chdir(tmp_path)
-    loop, store = await build_loop()
+    loop, store, _ = await build_loop()
     await NpcStore(store).flush_tick(loop.drain_events())
     history = await store.read_branch_history("main")
     async with store.session_factory.begin() as session:
@@ -199,7 +199,7 @@ async def test_child_initial_checkpoint_does_not_reapply_ancestor_genesis(tmp_pa
     await NpcStore(store, branch_id="child").flush_tick(loop.drain_events())
     expected = loop.state.state_hash()
     await store.session_factory.kw["bind"].dispose()
-    restored, reopened = await build_loop()
+    restored, reopened, _ = await build_loop()
     try:
         assert restored.state.state_hash() == expected
     finally:

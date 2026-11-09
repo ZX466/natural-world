@@ -166,9 +166,15 @@ def expand_world(payload: dict[str, Any], window: Sequence[Mapping[str, Any]]) -
     return loop
 
 
-async def restore_world(store: SqlEventStore, branch_id: str) -> TickLoop:
-    """恢复当前分支；沿祖先查检查点时严格遵守每个分叉游标。"""
-    history = await store.read_branch_history(branch_id)
+async def restore_world(
+    store: SqlEventStore, branch_id: str, *, history: Sequence[Mapping[str, Any]] | None = None
+) -> TickLoop:
+    """恢复当前分支；沿祖先查检查点时严格遵守每个分叉游标。
+
+    ``history`` 允许调用方把已读到的分支日志交进来（启动时还要给其他装配面
+    复用同一份），省掉一次全量读取。
+    """
+    history = list(history) if history is not None else await store.read_branch_history(branch_id)
     if sum(row["event_type"] == EventKind.WORLD_CREATE for row in history) != 1:
         raise ValueError("world history must contain exactly one genesis")
     current = branch_id

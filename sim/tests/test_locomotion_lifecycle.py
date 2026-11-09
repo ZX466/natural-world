@@ -71,8 +71,8 @@ async def live_structure(
             loop.enqueue(event)
         await flush_world(store, "main", loop, loop.drain_events())
 
-        async def loaded_loop() -> tuple[TickLoop, SqlEventStore]:
-            return loop, store
+        async def loaded_loop() -> tuple[TickLoop, SqlEventStore, None]:
+            return loop, store, None
 
         async def idle_driver(*args: Any, **kwargs: Any) -> None:
             await asyncio.Event().wait()

@@ -300,7 +300,7 @@ async def test_genesis_funds_are_event_sourced_and_not_regranted_on_restart(tmp_
     from sim.core.persistence.npc_store import NpcStore
 
     monkeypatch.setattr(main, "WORLD_DB_PATH", tmp_path / "world.db")
-    loop, store = await main.build_loop()
+    loop, store, _ = await main.build_loop()
     try:
         events = loop.drain_events()
         grants = [event for event in events if event.event_type is EventKind.COIN_GRANT]
@@ -309,7 +309,7 @@ async def test_genesis_funds_are_event_sourced_and_not_regranted_on_restart(tmp_
         await NpcStore(store).flush_tick(events)
     finally:
         await store.session_factory.kw["bind"].dispose()
-    restored, reopened = await main.build_loop()
+    restored, reopened, _ = await main.build_loop()
     try:
         assert not any(
             event.event_type is EventKind.COIN_GRANT for event in restored.pending_events

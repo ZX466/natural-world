@@ -61,6 +61,36 @@ async def test_one_minute_restart_really_runs_world_and_does_not_repeat(monkeypa
     assert calls == [60]
 
 
+async def test_startup_reads_the_branch_history_once(monkeypatch):
+    """Boot used to pull the whole event log six times, ~1.5s each on a real save.
+
+    Five subsystems (surface rebuild, build sites, coin ledger, fire runtime,
+    voxel edits, death seeding) each re-read the same rows. One shared read is
+    enough: no events are written during that assembly window, so they all see
+    the same prefix.
+    """
+    from sim.api import main
+    from sim.core.persistence.store import SqlEventStore
+
+    monkeypatch.setattr(main, "run_world_driver", idle_driver)
+    # First boot writes genesis; only the restart below has history to read.
+    async with main.lifespan(main.app):
+        await main.app.state.flush_for_anchor()
+    reads = []
+    real = SqlEventStore.read_branch_history
+
+    async def counted(self, branch_id):
+        rows = await real(self, branch_id)
+        reads.append((branch_id, len(rows)))
+        return rows
+
+    monkeypatch.setattr(SqlEventStore, "read_branch_history", counted)
+    async with main.lifespan(main.app):
+        pass
+    assert reads, "the restart must have read the persisted history"
+    assert len(reads) == 1, f"startup read the branch history {len(reads)} times"
+
+
 @pytest.mark.parametrize(
     "value,epoch",
     [
