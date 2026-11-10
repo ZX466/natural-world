@@ -3,7 +3,7 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-09 · 验收全通过 · 3D 已转默认 · 波 A/B 已收编 · 试车台转世界结构 · 波 C 未开始）
+## 0. 当前状态（2026-11-10 · 土坎改 2 格方块待提交 · 3D 默认 · 波 A/B 已收编 · 试车台转世界结构 · 波 C 已派 codex）
 
 **试车台 = 世界结构（2026-11-09 用户改口「要和预览一样：可识别拆解，是障碍物实体」）**：
 外部 SDK 整包原样入库 `vendor/linhe-lre-sdk/`（272K，除一份本仓新增的 `.d.ts` 外一字节未改），
@@ -26,14 +26,29 @@
 `cell-appearance.staticStructureTiles` 把这些格排除出土坎斜纹。这条判据有钉子：
 `test_voxel_runtime.py::test_static_structure_ground_is_undiggable`（dig/place 各一条，零事件）。
 
-**土坎在 three 里补了字形（`6dc5cea`，2026-11-10）**：用户报「土块放置是空白 / 有些空地
-显示无法通过」。两者同一根因 —— **高度 1 但不可走**（天然土坎 1568 格 + 刚放下的土块）
-在 three 路径上什么都没画：`terrainCells` 把 `bank` 字段丢了，而放下的土色与可走地面
-实测色差只有 **2/255**。现在 `TerrainCell.bank` 一路传到 `three-terrain.ts`，画与 Phaser
-`syncBanks` 同形的三道 45° 斜杠（暗杠 + 亮芯，两个 InstancedMesh），土坎格再压 0.85。
-斜杠**必须厚**（0.12）：默认俯仰只有 12°，平贴的记号会被压成一条线。
-钉子：`three-terrain-adapter.test.ts` 用真实地图钉两条路径的 bank 集合完全一致（1568）。
-⚠ 仍未做真机验收（其它机位/距离下的斜杠观感）。
+**土坎抬成 2 格方块（2026-11-10 用户裁定「土坎不要了，都变成方块」）**：
+此前 `6dc5cea` 的做法（three 补三道 45° 斜杠、Phaser `syncBanks` 斜纹）**已被推翻**，
+两处字形全部删除。现在**高度 1 但不可走**的格（天然土坎 1568 格 + 玩家放下的土块）
+一律按 **2 格高实心方块**渲染，与石料/木料方块同形 —— 一眼就是矮墙、过不去。
+
+核心是**渲染高度与逻辑高度拆开**：
+- `cell-appearance.ts` 新增 `BANK_RENDER_HEIGHT = 2`、`isBankCell()`、`drawH` 字段、
+  `renderHeightLookup()` / `cachedRenderHeightLookup()`。`drawH` = 土坎 2，其余 = `h`。
+- **渲染/拾取/脚底/镜头/选框读 `drawH`**；**碰撞/`standable`/跳跃落点/`heightAt` 读 `h`**。
+  `TerrainCell.h` 现在装的就是 `drawH`（字段 `bank` 已删）。
+- `pickVoxel` 的 `isBank` 参数与 `hitsBankGlyph` 已删；`pickGround` / `groundFromRay`
+  仍用**逻辑**高度反投影（土坎不可走，站在旁边时周围地面画在 1，按 2 反投影会整体偏一格）。
+- 静态结构（试车台 17×15）靠 `staticStructureTiles` 排除，**不抬**（那是建筑地基）。
+- `three-actors` 新增可选 `drawHeight`；`three-voxel-cues` 新增第 4 参。
+- Phaser 侧 `syncBanks`/`BANKS` 图元、`iso-terrain` 的 `banks` map 全删，
+  方块视图与脏区判断改读 `drawH`。
+
+钉子：`iso-banks.test.ts` 钉 `{banks:1568, walkable:3692, adjacent:269}` 且逐格验证
+`drawH` 有柱、无柱；`three-terrain-adapter.test.ts` 钉 `cells.h === appearance.drawH`。
+**已提交 `a152796`**（15 文件，+421/−464）。门禁：pytest `3675P/121S/72D EXIT 0`
+（533.18s）、vitest `736P/87F`、ruff/format/pyright/typecheck/lint/prettier/
+gen:protocol/build 全 EXIT 0。协议仍 **1.18**（纯客户端）。
+⚠ **仍未做真机验收**（2 格矮墙在其它机位/距离下的观感需 WebGL）。
 
 其余边界不变：② **不替换角色系统**（SDK 每角色 46 mesh/2346 draw call，本仓
 `avatar3d.ts` 已验收且是 51 call）；③ 锚点缺失（占位 32×32 图）或 shader 不可用就不建。
