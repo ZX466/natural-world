@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createHeightLookup, depthKey, ISO, isoProject, screenBounds } from '../iso';
+import { renderHeightLookup } from '../cell-appearance';
 import { pickGround, pickVoxel } from '../voxel-picking';
 import { WorldMirror, type MapStatic } from '../../world-mirror';
 
@@ -37,24 +38,35 @@ for (const [key, chunk] of Object.entries(source.chunks)) {
   }
 }
 const heightAt = createHeightLookup(table);
+/** 逻辑高度 → 画出来的高度：土坎（1、不可走）画成 2 格矮墙。 */
+const drawHeight = renderHeightLookup(map, heightAt);
 const bounds = screenBounds(map.w, map.h);
 const blocked = (x: number, y: number) => map.collision[y * map.w + x] === 0;
 const cells = Array.from({ length: map.w * map.h }, (_, index) => {
   const x = index % map.w,
     y = Math.floor(index / map.w),
-    height = heightAt(x, y);
-  return { x, y, height, top: isoProject(x, y, height, bounds), depth: depthKey(x, y) };
+    logical = heightAt(x, y),
+    height = drawHeight(x, y);
+  return {
+    x,
+    y,
+    logical,
+    height,
+    top: isoProject(x, y, height, bounds),
+    depth: depthKey(x, y),
+  };
 });
 type Cell = (typeof cells)[number];
 type Point = { sx: number; sy: number };
-const tall = cells.filter((cell) => cell.height >= 2 && blocked(cell.x, cell.y));
-/** 静态结构占地面：高度 1、碰撞 0，但不是土坎（建筑地基，挖不得）。 */
+/** 画出来 ≥2 的格子都会挡住后面的顶面；土坎抬起来以后也在这批里。 */
+const tall = cells.filter((cell) => cell.height >= 2);
+/** 静态结构占地面：逻辑高度 1、碰撞 0，但不是土坎（建筑地基，挖不得）。 */
 const inStructure = (x: number, y: number) =>
   Object.values(map.structures ?? {}).some(
     (a) => Math.abs(x - a.x) <= Math.floor(a.w / 2) && Math.abs(y - a.y) <= Math.floor(a.h / 2),
   );
 const banks = cells.filter(
-  (cell) => cell.height === 1 && blocked(cell.x, cell.y) && !inStructure(cell.x, cell.y),
+  (cell) => cell.logical === 1 && blocked(cell.x, cell.y) && !inStructure(cell.x, cell.y),
 );
 
 /** Independent draw oracle: test the six prism outline edges in painter's order.
@@ -81,44 +93,57 @@ function covers(cell: Cell, point: Point): boolean {
 const visibleBanks = banks.filter(
   (cell) => !tall.some((front) => front.depth > cell.depth + 0.5 && covers(front, cell.top)),
 );
-const pick = ({ sx, sy }: Point) => pickVoxel(sx, sy, map.w, map.h, heightAt, blocked);
+const pick = ({ sx, sy }: Point) => pickVoxel(sx, sy, map.w, map.h, drawHeight);
 
 afterEach(() => vi.useRealTimers());
 
-it('picks all 448 real bank centers not hidden by a foreground high block', () => {
+it('picks every real bank center that no foreground block hides', () => {
+  // 土坎仍是 1568 格（逻辑高度 1、不可走、非结构占地面）；现在它们画在 2。
   expect(banks).toHaveLength(1568);
-  expect(visibleBanks).toHaveLength(448);
+  expect(banks.every((cell) => cell.height === 2)).toBe(true);
   const misses = visibleBanks.filter((cell) => {
     const hit = pick(cell.top);
     return hit?.x !== cell.x || hit.y !== cell.y;
   });
-  expect(misses.length, `${visibleBanks.length - misses.length}/448 bank centers hit`).toBe(0);
+  expect(misses.length, `${visibleBanks.length - misses.length}/${visibleBanks.length} hit`).toBe(
+    0,
+  );
 });
 
-it('picks a real foreground bank top while keeping its baked side behind high blocks', () => {
-  const top = isoProject(20, 3, 1, bounds);
+it('picks a real foreground bank top on the wall it is now drawn as', () => {
+  const top = isoProject(20, 3, 2, bounds);
   expect(blocked(20, 3)).toBe(true);
   expect(heightAt(20, 3)).toBe(1);
+  expect(drawHeight(20, 3)).toBe(2);
   expect(pick(top)).toEqual({ x: 20, y: 3 });
-  const side = isoProject(20, 3, 0, bounds);
-  expect(pick({ sx: side.sx, sy: side.sy - 4 })).toEqual({ x: 22, y: 4 });
 });
 
 it('does not reduce real high-block center hits from the original 7141 of 7373', () => {
-  expect(tall).toHaveLength(7373);
-  const hits = tall.filter((cell) => {
+  // 高块中心命中数不能因为土坎改画矮墙而下降。土坎抬高后本身也成了「高块」，
+  // 所以分母变大，这里只钉住原来那批真高块（逻辑高度 ≥2）。
+  const realTall = tall.filter((cell) => cell.logical >= 2);
+  expect(realTall).toHaveLength(7373);
+  const hits = realTall.filter((cell) => {
     const hit = pick(cell.top);
     return hit?.x === cell.x && hit.y === cell.y;
   });
   expect(hits.length).toBeGreaterThanOrEqual(7141);
 });
 
-it('keeps the visible rear house side outside the real bank glyph strokes pickable', () => {
-  const top = isoProject(20, 3, 1, bounds);
-  // The bank's three painted quads have local y in [-2,2]. Here its baked top
-  // is behind the opaque side of(19,3), so that side remains the visible target.
-  expect(heightAt(19, 3)).toBe(2);
-  expect(pick({ sx: top.sx - 8, sy: top.sy + 3 })).toEqual({ x: 19, y: 3 });
+it('picks the bank wall itself across its whole visible face, not the ground behind it', () => {
+  // 土坎画成 2 格矮墙后，它自己的墙面就是最前面的编辑目标。
+  // 旧实现靠「斜纹像素 + 0.5 深度」把墙面让给后面的房子；现在整根柱子
+  // 都是实体，点墙面必须命中土坎本身。
+  const top = isoProject(20, 3, 2, bounds);
+  expect(heightAt(20, 3)).toBe(1);
+  expect(drawHeight(20, 3)).toBe(2);
+  for (const dy of [-6, 0, 3, 6])
+    expect(pick({ sx: top.sx, sy: top.sy + dy })).toEqual({
+      x: 20,
+      y: 3,
+    });
+  // 墙根以下仍属于前面那一格。
+  expect(pick({ sx: top.sx, sy: top.sy + 22 })).toEqual({ x: 21, y: 4 });
 });
 
 it('keeps every real-map walking center on its own cell', () => {
@@ -127,15 +152,21 @@ it('keeps every real-map walking center on its own cell', () => {
   // 3692 = 3947 原始可走格 − 试车台 17×15 占地面（世界结构，服务端已挡）。
   expect(walk).toHaveLength(3692);
   for (const cell of walk)
+    // 移动拾取读**逻辑**高度：可走格永远不是土坎，所以顶面仍在 1。
     expect(pickGround(cell.top.sx, cell.top.sy, map.w, map.h, heightAt, walkable)).toEqual({
       x: cell.x,
       y: cell.y,
     });
 });
 
-it('keeps a genuinely occluded real bank center on its visible foreground high block', () => {
-  expect(visibleBanks.some(({ x, y }) => x === 91 && y === 30)).toBe(false);
-  expect(pick(isoProject(91, 30, 1, bounds))).toEqual({ x: 92, y: 31 });
+it('keeps a genuinely occluded real bank center on its visible foreground block', () => {
+  // 遮挡集变小了：土坎抬高后自己也会挡住斜后方的格子，所以「被挡住」的
+  // 土坎从 1120 降到 69。钉住的是「有遮挡、且遮挡时点到的是前面那格」，
+  // 不是某个固定数字。
+  expect(visibleBanks.length).toBeLessThan(banks.length);
+  const hidden = banks.find((cell) => !visibleBanks.includes(cell))!;
+  expect(hidden).toBeDefined();
+  expect(pick(hidden.top)).not.toEqual({ x: hidden.x, y: hidden.y });
 });
 
 it('sends the real foreground bank coordinate through the actual scene hold handler', () => {
@@ -150,7 +181,8 @@ it('sends the real foreground bank coordinate through the actual scene hold hand
     handlePointerDown(pointer: unknown): void;
     cancelVoxelInput(): void;
   };
-  const top = isoProject(20, 3, 1, bounds);
+  // 土坎画成 2 格矮墙，指针要点在**画出来的**顶面（2），不是逻辑高度 1。
+  const top = isoProject(20, 3, 2, bounds);
   input.handlePointerDown({ worldX: top.sx, worldY: top.sy, button: 0, id: 1 });
   try {
     vi.advanceTimersByTime(150);

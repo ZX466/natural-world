@@ -59,6 +59,9 @@ export interface ActorView {
 export interface ActorLayerOptions {
   /** 人形角色用共享图集的体素模型；动物仍走 billboard。默认开，`?avatar3d=0` 关。 */
   readonly avatars3d?: boolean;
+  /** 逻辑高度 → **画出来的**高度（土坎 1 画成 2）。角色脚底必须踩在看得见的
+   *  那个面上：跳上土坎后服务端给的高度仍是 1，直接用它会把人物埋进矮墙里。 */
+  readonly drawHeight?: (x: number, y: number, height: number) => number;
 }
 
 function avatarPresetForSprite(sprite: string): string | null {
@@ -77,6 +80,8 @@ export function createActorLayer(
   options: ActorLayerOptions = {},
 ) {
   const avatars3d = options.avatars3d === true;
+  /** 脚底高度：服务端高度 → 渲染高度。缺省不抬（测试与旧调用方）。 */
+  const drawHeight = options.drawHeight ?? ((_x: number, _y: number, height: number) => height);
   // One atlas for the whole world: 19 presets in a single 512×256 texture, so
   // every 3D actor shares one material map instead of generating its own.
   const avatarAtlas = avatars3d ? createAvatarAtlas() : null;
@@ -154,14 +159,22 @@ export function createActorLayer(
         views.delete(rtoken);
         view = undefined;
       }
-      const height =
+      const logical =
         actor.elevation ??
         effectiveHeight(actor.x, actor.y, heightOf, mirror.structures, mirror.voxelEdits);
+      // 土坎逻辑高度 1、画出来 2。脚底踩渲染面，否则人站在矮墙里。
+      const height = drawHeight(actor.x, actor.y, logical);
       // The server always reports facing "s", so it cannot drive the sheet row.
       // This layer feeds `advanceMotion` tile-space coordinates, where a one-tile
       // step dominates any height change — inference from those deltas is correct,
       // so leave `facing` unset and let the buffer derive it.
-      const flight = flightTarget(actor.jump, (x, y, z) => ({ x, y, z }));
+      // 跳跃的起止高度是服务端给的**逻辑**高度；落在土坎上时要把弧线抬到
+      // 看得见的那个面，否则人会从矮墙中间起飞、再陷进墙里。
+      const flight = flightTarget(actor.jump, (x, y, z) => ({
+        x,
+        y,
+        z: drawHeight(x, y, z),
+      }));
       const target = {
         x: actor.x,
         y: actor.y,
@@ -253,12 +266,16 @@ export function createActorLayer(
       view.shadow.position.set(
         view.sprite.position.x,
         (view.motion.airborne
-          ? effectiveHeight(
+          ? drawHeight(
               Math.floor(view.motion.x + 0.5),
               Math.floor(view.motion.y + 0.5),
-              heightOf,
-              mirror.structures,
-              mirror.voxelEdits,
+              effectiveHeight(
+                Math.floor(view.motion.x + 0.5),
+                Math.floor(view.motion.y + 0.5),
+                heightOf,
+                mirror.structures,
+                mirror.voxelEdits,
+              ),
             )
           : view.motion.height) + 0.008,
         view.sprite.position.z,

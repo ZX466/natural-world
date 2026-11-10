@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { pickGround, pickVoxel } from '../../voxel-picking';
 import { isoProject, isoUnproject, screenBounds } from '../../iso';
+import { renderHeightLookup } from '../../cell-appearance';
 import { worldOf, createCamera, defaultOrbit, updateFollowCamera } from '../three-projection';
 import { groundFromRay, editFromRay, screenRay, WALK_HEIGHT } from '../three-picking';
 import type { MapStatic } from '../../../world-mirror';
@@ -131,25 +132,21 @@ it('preserves every real-map walkable center without applying terrain occlusion'
   // 3692 = 3947 原始可走格减去试车台 17×15 占地面（255 格）。建筑是**世界
   // 结构**，那 255 格在服务端地图里就不可走，所以这里不该再出现它们。
   expect(checked).toBe(3692);
-  const cells = Array.from({ length: map.w * map.h }, (_, i) => ({
-    x: i % map.w,
-    y: Math.floor(i / map.w),
-    h: heights.h_values[i] as number,
-  }));
+  // 编辑拾取读**渲染**高度：土坎（逻辑 1、不可走）画成 2 格矮墙。
+  const drawHeight = renderHeightLookup(map, height);
+  const cells = Array.from({ length: map.w * map.h }, (_, i) => {
+    const x = i % map.w,
+      y = Math.floor(i / map.w);
+    return { x, y, h: drawHeight(x, y) };
+  });
   const actualTerrain = mesh(cells, map.w, map.h);
   for (const [x, y] of [
     [20, 3],
     [99, 31],
   ]) {
-    const point = isoProject(x!, y!, 1, screenBounds(map.w, map.h));
-    const legacy = pickVoxel(
-      point.sx,
-      point.sy,
-      map.w,
-      map.h,
-      height,
-      (x, y) => map.collision[y * map.w + x] === 0,
-    );
+    const level = drawHeight(x!, y!);
+    const point = isoProject(x!, y!, level, screenBounds(map.w, map.h));
+    const legacy = pickVoxel(point.sx, point.sy, map.w, map.h, drawHeight);
     expect(legacy).toEqual({ x, y });
     expect(editFromRay(legacyRay(point.sx, point.sy, map.w, map.h), [actualTerrain])).toEqual(
       legacy,

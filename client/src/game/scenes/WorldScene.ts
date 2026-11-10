@@ -18,6 +18,7 @@ import {
   screenBounds,
 } from '../render/iso';
 import { IsoTerrain } from '../render/iso-terrain';
+import { renderHeightLookup, type RenderHeightLookup } from '../render/cell-appearance';
 import { pickGround, pickVoxel } from '../render/voxel-picking';
 import { BLOCK_ATLAS_KEY, BLOCK_ATLAS_META_KEY } from '../render/block-atlas';
 import { placeBubble, selectBubbleNames } from '../render/bubbles';
@@ -132,6 +133,9 @@ export class WorldScene extends Phaser.Scene {
   private renderMode: Renderer;
   private isoTerrain: IsoTerrain | null = null;
   private heightAt = createHeightLookup(null);
+  /** 渲染高度（土坎 1 → 2）的缓存，按 `map` 对象失效。见 `renderHeightAt`。 */
+  private drawHeightMap: WorldMirror['map'] = null;
+  private drawHeightLookup: RenderHeightLookup | null = null;
   private isoCameraTarget = { x: 0, y: 0 };
   private isoFollowToken: string | null = null;
   private voxelPress: {
@@ -391,19 +395,16 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  /** 编辑拾取：按高方块与土坎顶面标记的实际深度选可见块柱。 */
+  /** 编辑拾取：按高方块与土坎矮墙的实际深度选可见块柱。
+   *
+   * 高度传**渲染**高度：土坎画成 2 格矮墙，按逻辑 1 拾取会让点在墙上半截的
+   * 点击穿过墙、命中后面一格。 */
   private voxelTarget(pointer: Phaser.Input.Pointer): { x: number; y: number } | null {
     const map = this.mirror.map;
     if (map === null) return null;
     if (this.renderMode === 'iso')
-      return pickVoxel(
-        pointer.worldX,
-        pointer.worldY,
-        map.w,
-        map.h,
-        (x, y) =>
-          effectiveHeight(x, y, this.heightAt, this.mirror.structures, this.mirror.voxelEdits),
-        (x, y) => map.collision[y * map.w + x] === 0,
+      return pickVoxel(pointer.worldX, pointer.worldY, map.w, map.h, (x, y) =>
+        this.renderHeightAt(x, y),
       );
     const x = Math.floor(pointer.worldX / TILE),
       y = Math.floor(pointer.worldY / TILE);
@@ -426,6 +427,9 @@ export class WorldScene extends Phaser.Scene {
     const elevation = actor ? (actor.elevation ?? heightOf(actor.x, actor.y)) : 1;
     const canStand = (x: number, y: number) => standable(map, { x, y }, heightOf, elevation);
     if (this.renderMode === 'iso') {
+      // 点击平面用**逻辑**高度，不用渲染高度：土坎不可走，站在上面时逻辑
+      // 高度仍是 1，而周围能走的地面也画在 1 —— 按 2 反投影会整体偏一格。
+      // 真正 h≥2 的方块（人能站上去）逻辑高度本来就是 2，这里自然对齐。
       if (elevation > 1) {
         const target = isoUnproject(
           pointer.worldX,
@@ -1305,6 +1309,26 @@ export class WorldScene extends Phaser.Scene {
     return this.projectSurface(x, y, height);
   }
 
+  /** 逻辑高度 → **画出来的**高度。土坎逻辑高度 1、画成 2 格矮墙
+   *  （`cell-appearance.ts::BANK_RENDER_HEIGHT`）。
+   *
+   * 投影、脚底、镜头、拾取都读这个；碰撞、`standable`、跳跃落点读逻辑高度。
+   * 地图换新（重连）时占地面集合要重算，所以按 `map` 对象缓存。 */
+  private renderHeightAt(x: number, y: number, height?: number): number {
+    const map = this.mirror.map;
+    const logical =
+      height ??
+      effectiveHeight(x, y, this.heightAt, this.mirror.structures, this.mirror.voxelEdits);
+    if (map === null) return logical;
+    if (this.drawHeightMap !== map) {
+      this.drawHeightMap = map;
+      this.drawHeightLookup = renderHeightLookup(map, (px, py) =>
+        effectiveHeight(px, py, this.heightAt, this.mirror.structures, this.mirror.voxelEdits),
+      );
+    }
+    return this.drawHeightLookup!(x, y, logical);
+  }
+
   private projectSurface(
     x: number,
     y: number,
@@ -1325,7 +1349,8 @@ export class WorldScene extends Phaser.Scene {
     }
     const map = this.mirror.map;
     const bounds = map === null ? undefined : screenBounds(map.w, map.h);
-    return isoProject(x, y, height, bounds);
+    // 等距投影用渲染高度：土坎画成 2 格矮墙，人/光标都要踩在矮墙顶上。
+    return isoProject(x, y, this.renderHeightAt(x, y, height), bounds);
   }
 
   private syncOverlay(): void {

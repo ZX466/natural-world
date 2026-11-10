@@ -19,6 +19,7 @@ import { avoidCameraBlocks } from './three-camera-collision';
 import { createWorldInput, type WorldInput } from './three-input';
 import { screenRay, editFromRay, groundFromRay, WALK_HEIGHT } from './three-picking';
 import { canStep } from '../../movement';
+import { cachedRenderHeightLookup, type RenderHeightLookup } from '../cell-appearance';
 import type { VoxelRequestMessage } from '../../../net/protocol';
 import { createVoxelCues, type VoxelCues } from './three-voxel-cues';
 import type { MovePoint } from '../../movement';
@@ -57,6 +58,8 @@ export function createThreeWorld(
   let hoverAt = -Infinity;
   let weather: ReturnType<typeof createWeatherLayer> | null = null;
   let actorAssets: Awaited<ReturnType<typeof loadActorAssets>> | null = null;
+  /** 逻辑高度 → 渲染高度（土坎 1 画成 2）。首帧 boot 之后才有值。 */
+  let drawHeight: RenderHeightLookup | null = null;
   let previousTime = 0;
   let releaseLighting: (() => void) | null = null;
   let landmark: LandmarkMount | null = null;
@@ -155,16 +158,25 @@ export function createThreeWorld(
         const target = worldOf(motion?.x ?? actor.x, motion?.y ?? actor.y, map.w, map.h);
         target.y =
           (motion?.height ??
-            effectiveHeight(
+            drawHeight!(
               actor.x,
               actor.y,
-              adapter.heightOf,
-              mirror.structures,
-              mirror.voxelEdits,
+              effectiveHeight(
+                actor.x,
+                actor.y,
+                adapter.heightOf,
+                mirror.structures,
+                mirror.voxelEdits,
+              ),
             )) + 1.3;
         adapter.follow(target);
+        // 相机避让也要用渲染高度：土坎画成 2 格矮墙，按逻辑 1 算会穿进去。
         avoidCameraBlocks(adapter.scene.camera, target, target.y - 1.3, map.w, map.h, (x, y) =>
-          effectiveHeight(x, y, adapter!.heightOf, mirror.structures, mirror.voxelEdits),
+          drawHeight!(
+            x,
+            y,
+            effectiveHeight(x, y, adapter!.heightOf, mirror.structures, mirror.voxelEdits),
+          ),
         );
       }
       const pointer = input?.pointer;
@@ -237,6 +249,13 @@ export function createThreeWorld(
       if (disposed) return;
       adapter = createTerrainAdapter({ canvas, mirror, ...assets });
       adapter.resize(size.width, size.height);
+      // 逻辑高度（服务端权威，土坎=1）与渲染高度（土坎画成 2 格矮墙）是两件事。
+      // 渲染/拾取/脚底一律读 drawHeight；判定（碰撞、跳跃落点、`heightAt`）读 getHeight。
+      const baseHeight = adapter.heightOf;
+      const getHeight = (x: number, y: number) =>
+        effectiveHeight(x, y, baseHeight, mirror.structures, mirror.voxelEdits);
+      drawHeight = cachedRenderHeightLookup(() => mirror.map, getHeight);
+      mirror.setHeightLookup(getHeight);
       const avatars3d = avatars3dFromSearch(globalThis.location?.search ?? '');
       actors = createActorLayer(
         adapter.scene.scene,
@@ -244,7 +263,8 @@ export function createThreeWorld(
         mirror,
         adapter.heightOf,
         images,
-        { avatars3d },
+        // 非空断言：上一行刚赋值。角色层只在 boot 成功后创建。
+        { avatars3d, drawHeight: drawHeight! },
       );
       // Lambert materials need light; the terrain's baked vertex colours do not,
       // so this rig only ever affects the 3D avatars.
@@ -255,11 +275,7 @@ export function createThreeWorld(
       // （`worldReady` 才发首个快照）。所以真正挂载交给首帧的 `ensureLandmark()`
       // ——否则地标会永远不建，且没有任何报错。
       weather = createWeatherLayer(actors.overlay, mirror);
-      cues = createVoxelCues(adapter.scene.scene, mirror, adapter.heightOf);
-      const baseHeight = adapter.heightOf;
-      const getHeight = (x: number, y: number) =>
-        effectiveHeight(x, y, baseHeight, mirror.structures, mirror.voxelEdits);
-      mirror.setHeightLookup(getHeight);
+      cues = createVoxelCues(adapter.scene.scene, mirror, adapter.heightOf, drawHeight!);
       const elevation = () => {
         const actor = mirror.actors.get(mirror.protagonist ?? '');
         return actor?.elevation ?? (actor ? getHeight(actor.x, actor.y) : WALK_HEIGHT);
@@ -290,6 +306,8 @@ export function createThreeWorld(
         },
         pickGround: (x, y) => {
           const ray = screenRay(adapter!.scene.camera, x, y, canvas.getBoundingClientRect());
+          // 平面用**逻辑**高度：土坎不可走，站在旁边时周围地面画在 1，
+          // 按渲染高度反投影会整体偏一格。
           return ray && mirror.map ? groundFromRay(ray, mirror.map, getHeight, elevation()) : null;
         },
         pickStructure: (x, y) => {

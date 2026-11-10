@@ -57,16 +57,77 @@ export interface CellAppearance {
   readonly rubble: boolean;
   /** A dig scar on otherwise open ground. */
   readonly scar: boolean;
-  /** Height-1 but not walkable: the bank glyph at a water edge. */
+  /** Height-1 but not walkable: a bank, or earth the player just placed. */
   readonly bank: boolean;
+  /** Height the renderers draw. Equals `h` except on a bank, which is lifted to
+   * `BANK_RENDER_HEIGHT` so it reads as a wall instead of as open ground. */
+  readonly drawH: number;
   /** The player has edited this cell. */
   readonly edited: boolean;
+}
+
+/** 土坎（高度 1、不可走）的渲染高度。
+ *
+ * 这类格子和可走平地**同高同色**（实测色差仅 2/255），只靠盒子本身分不出来：
+ * 天然土坎看起来像能走的空地，玩家放下的土块看起来像空白。2026-11-10 用户裁定
+ * 不再画斜纹记号，直接把格子抬成 2 格高的实心方块 —— 和石料/木料方块同形，
+ * 一眼就是过不去。
+ *
+ * **逻辑高度仍是 1**：碰撞不可走、跳跃落点是服务端的 `height_at`、土坎 1→0
+ * 仍是 earth 的唯一来源。渲染读 `drawH`，判定一律读 `h`。 */
+export const BANK_RENDER_HEIGHT = 2;
+
+/** 高度 1 且不可走、又不是静态结构占地面 ⇒ 抬成矮墙。
+ *
+ * 静态结构（试车台）占地面高度 1、碰撞 0，与土坎同形，但那是建筑地基：
+ * 模型自己立在上面，抬起来会穿模。 */
+export function isBankCell(
+  map: MapStatic,
+  staticTiles: ReadonlySet<string>,
+  x: number,
+  y: number,
+  height: number,
+): boolean {
+  return height === 1 && map.collision[y * map.w + x] === 0 && !staticTiles.has(`${x},${y}`);
+}
+
+export type RenderHeightLookup = (x: number, y: number, height?: number) => number;
+
+/** 逻辑高度 → 渲染高度。第三参可传已知的逻辑高度（跳跃起止高度来自服务端）。 */
+export function renderHeightLookup(
+  map: MapStatic,
+  heightOf: (x: number, y: number) => number,
+): RenderHeightLookup {
+  const staticTiles = staticStructureTiles(map);
+  return (x, y, height = heightOf(x, y)) =>
+    isBankCell(map, staticTiles, x, y, height) ? BANK_RENDER_HEIGHT : height;
+}
+
+/** 同 `renderHeightLookup`，但按 `mapOf()` 的当前地图缓存占地面集合。
+ *
+ * 世界常在首帧快照之前就建好渲染层，地图会晚到；地图一换（重连取新图）
+ * 缓存自动失效。`map.collision` 是就地改写的，闭包读到的是最新值。 */
+export function cachedRenderHeightLookup(
+  mapOf: () => MapStatic | null,
+  heightOf: (x: number, y: number) => number,
+): RenderHeightLookup {
+  let cachedMap: MapStatic | null = null;
+  let lookup: RenderHeightLookup | null = null;
+  return (x, y, height) => {
+    const map = mapOf();
+    if (map === null) return height ?? heightOf(x, y);
+    if (map !== cachedMap) {
+      cachedMap = map;
+      lookup = renderHeightLookup(map, heightOf);
+    }
+    return lookup!(x, y, height);
+  };
 }
 
 /** 静态结构（服务端地图 `_structures`）的占地面展开成 `"x,y"` 集合。
  *
  * 这些格子在碰撞层里不可走、高度却仍是 1 —— 与「土坎」的判定条件完全重合。
- * 不排除的话，试车台脚下会被画成一片土坎斜纹，看起来像随时能挖。
+ * 不排除的话，试车台脚下会被抬成一片矮墙，把建筑模型整个包住。
  * 动态结构（玩家建的房）走 `structureOverrides`，是另一条路。
  * 每个结构展开一次，14000 格的循环里只剩一次 Set 查询。 */
 export function staticStructureTiles(map: MapStatic): ReadonlySet<string> {
@@ -122,9 +183,9 @@ export function cellAppearances(
       const key = `${x},${y}`;
       const phase = phases.get(key);
       const h = effectiveHeight(x, y, heightOf, structures, edits);
-      // 静态结构占地面不画土坎：它高度 1、碰撞 0，与土坎同形，但那是台体
+      // 静态结构占地面不算土坎：它高度 1、碰撞 0，与土坎同形，但那是台体
       // 地基而不是可挖的土坎。建筑自己的模型由 three 层负责。
-      const bank = h === 1 && map.collision[y * map.w + x] === 0 && !staticTiles.has(key);
+      const bank = isBankCell(map, staticTiles, x, y, h);
       const edited = edits.has(key);
       const color =
         edited && phase === undefined
@@ -139,6 +200,7 @@ export function cellAppearances(
         rubble: phase === undefined && ruins.has(key),
         scar: phase === undefined && h === 1 && !bank && edits.get(key)?.action === 'dig',
         bank,
+        drawH: bank ? BANK_RENDER_HEIGHT : h,
         edited,
       });
     }

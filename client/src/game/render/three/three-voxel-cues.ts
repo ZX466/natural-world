@@ -6,7 +6,15 @@ import type { VoxelStateMessage } from '../../../net/protocol';
 import { effectiveHeight, type HeightLookup } from '../iso';
 import { worldOf } from './three-projection';
 
-export function createVoxelCues(scene: THREE.Scene, mirror: WorldMirror, heightOf: HeightLookup) {
+/** 逻辑高度 → 渲染高度（土坎 1 → 2）。缺省不抬，测试与旧调用方不受影响。 */
+export type CueDrawHeight = (x: number, y: number, height: number) => number;
+
+export function createVoxelCues(
+  scene: THREE.Scene,
+  mirror: WorldMirror,
+  heightOf: HeightLookup,
+  drawHeight: CueDrawHeight = (_x, _y, height) => height,
+) {
   const box = new THREE.BoxGeometry(1, 1, 1);
   const edges = new THREE.EdgesGeometry(box);
   const lineMaterial = new THREE.LineBasicMaterial({
@@ -97,8 +105,13 @@ export function createVoxelCues(scene: THREE.Scene, mirror: WorldMirror, heightO
         point.y >= 0 &&
         point.x < map.w &&
         point.y < map.h;
+      // 选框贴着**画出来的**面：土坎是 2 格矮墙，按逻辑 1 画选框会埋进墙里。
       const height = (point: MovePoint) =>
-        effectiveHeight(point.x, point.y, heightOf, mirror.structures, mirror.voxelEdits);
+        drawHeight(
+          point.x,
+          point.y,
+          effectiveHeight(point.x, point.y, heightOf, mirror.structures, mirror.voxelEdits),
+        );
       const chosen = mirror.voxelDig ?? hover;
       if (valid(chosen)) {
         const h = height(chosen),
@@ -106,12 +119,14 @@ export function createVoxelCues(scene: THREE.Scene, mirror: WorldMirror, heightO
         selection.visible = true;
         selection.position.set(point.x, h / 2, point.z);
         selection.scale.set(1.02, Math.max(0.06, h) + 0.02, 1.02);
-        if (
+        // 放置预览只在**逻辑**高度 1 的可走面上出现（服务端 `_validate` 的判据）。
+        const placeable =
           !mirror.voxelDig &&
           map.collision[chosen.y * map.w + chosen.x] === 1 &&
-          h === 1 &&
-          (inventory?.[material] ?? 0) > 0
-        ) {
+          effectiveHeight(chosen.x, chosen.y, heightOf, mirror.structures, mirror.voxelEdits) ===
+            1 &&
+          (inventory?.[material] ?? 0) > 0;
+        if (placeable) {
           const placedHeight = { earth: 1, stone: 2, wood: 3 }[material];
           preview.visible = blockingCross.visible = true;
           preview.position.set(point.x, placedHeight / 2, point.z);
@@ -132,6 +147,8 @@ export function createVoxelCues(scene: THREE.Scene, mirror: WorldMirror, heightO
           .addScaledVector(new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion), -0.5);
         fill.scale.set(Math.max(0, Math.min(1, dig.progress)), 0.08, 1);
       }
+      // 目标圈只标可走面；`height` 是渲染高度，可走格永远不是土坎，所以这里
+      // 仍是 1。（第二条件本身就是碰撞判据。）
       if (valid(goal) && height(goal) === 1 && map.collision[goal.y * map.w + goal.x] === 1) {
         goalMarker.visible = true;
         goalMarker.position.copy(worldOf(goal.x, goal.y, map.w, map.h)).setY(1.03);

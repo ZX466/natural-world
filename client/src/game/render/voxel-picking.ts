@@ -4,23 +4,16 @@ import { ISO, depthKey, isoProject, isoUnproject, screenBounds, type HeightLooku
  *  单向不变量 `walkable ⇒ h == EARTH` 保证所有可走格的顶面都在这一层。 */
 const WALK_HEIGHT = 1;
 
-/** The frozen dark slat quad is(-3,1),(-1,2),(3,-1),(1,-2), at offsets -7/0/7.
- * Its two pairs of edges are |x-2y|<=5 and |3x+4y|<=5; the light inset is inside it. */
-function hitsBankGlyph(dx: number, dy: number): boolean {
-  return [-7, 0, 7].some((offset) => {
-    const x = dx - offset;
-    return Math.abs(x - 2 * dy) <= 5 + 1e-6 && Math.abs(3 * x + 4 * dy) <= 5 + 1e-6;
-  });
-}
-
-/** Editing follows high Images and bank-top glyph depth above the baked ground. */
+/** 编辑拾取：可见的高方块柱优先，其余按 `depthKey` 取最近。
+ *
+ * `heightAt` 传的是**渲染高度**（`drawH`）：土坎画成 2 格高的矮墙，拾取必须
+ * 跟着 2 走，否则点在矮墙上半截会穿过它命中后面的地面。 */
 export function pickVoxel(
   px: number,
   py: number,
   w: number,
   h: number,
   heightAt: HeightLookup,
-  isBank?: (x: number, y: number) => boolean,
 ): { x: number; y: number } | null {
   if (!Number.isFinite(px) || !Number.isFinite(py)) return null;
   const bounds = screenBounds(w, h),
@@ -44,11 +37,7 @@ export function pickVoxel(
         const slope = (distance * ISO.TH) / ISO.TW;
         if (py < top.sy - ISO.TH / 2 + slope - 1e-6 || py > base.sy + ISO.TH / 2 - slope + 1e-6)
           continue;
-        // Only painted bank strokes are at depthKey + .5. The empty parts of
-        // its baked top/side stay below high Images, preserving house-side editing.
-        const bankTop =
-          height === 1 && isBank?.(x, y) === true && hitsBankGlyph(px - top.sx, py - top.sy);
-        const rank = (height >= 2 || bankTop ? 1000000 : 0) + depthKey(x, y) + (bankTop ? 0.5 : 0);
+        const rank = (height >= 2 ? 1000000 : 0) + depthKey(x, y);
         if (rank > bestRank) {
           bestRank = rank;
           best = { x, y };
@@ -69,6 +58,9 @@ export function pickVoxel(
  * 因此这里**不做遮挡判定**，只做可走面（h=1）的精确反投影：把屏幕 y 下移
  * `WALK_HEIGHT * ISO.HH` 再 `isoUnproject`，得到顶面覆盖该点的格。命中阻挡格
  * 或高度不是可走面则返回 null，由调用方转给编辑路径。
+ *
+ * `heightAt` 是**逻辑**高度：可走面永远在 1，土坎（画成 2 格矮墙）永远不可走，
+ * 所以这里不需要也不应该按渲染高度反投影。
  */
 export function pickGround(
   px: number,

@@ -6,7 +6,6 @@ import { createHeightLookup, depthKey, isoProject, screenBounds, type VoxelEdits
 import { WorldMirror, type MapStatic, type VoxelEdit } from '../../world-mirror';
 
 type Point = { x: number; y: number };
-type Face = { color: number; alpha: number; points: Point[] };
 
 /** Lightweight draw-command adapter: no browser/canvas renderer or per-tile spies. */
 class View {
@@ -15,21 +14,28 @@ class View {
   depth = 0;
   x = 0;
   y = 0;
+  width = 0;
+  height = 0;
+  key = '';
   moves = 0;
   clears = 0;
   color = 0;
   fillAlpha = 1;
-  faces: Face[] = [];
+  faces: { color: number; alpha: number; points: Point[] }[] = [];
   setOrigin() {
     return this;
   }
-  setTexture() {
+  setTexture(key?: string) {
+    if (typeof key === 'string') this.key = key;
     return this;
   }
-  setDisplaySize() {
+  setDisplaySize(width: number, height: number) {
+    this.width = width;
+    this.height = height;
     return this;
   }
-  setTint() {
+  setTint(color: number) {
+    this.color = color;
     return this;
   }
   setDepth(depth: number) {
@@ -70,6 +76,7 @@ class View {
 }
 
 function setup(heights = [1, 1, 2, 0], w = 2, h = 2) {
+  const images: View[] = [];
   const graphics: View[] = [];
   const textures = new Set<string>();
   const noop = () => {};
@@ -100,11 +107,16 @@ function setup(heights = [1, 1, 2, 0], w = 2, h = 2) {
     },
     add: {
       graphics: () => {
-        const marker = new View();
-        graphics.push(marker);
-        return marker;
+        const view = new View();
+        graphics.push(view);
+        return view;
       },
-      image: () => new View(),
+      image: (_x: number, _y: number, key: string) => {
+        const view = new View();
+        view.key = key;
+        images.push(view);
+        return view;
+      },
     },
   };
   const map: MapStatic = {
@@ -121,13 +133,26 @@ function setup(heights = [1, 1, 2, 0], w = 2, h = 2) {
     scene as unknown as Phaser.Scene,
     createHeightLookup({ w, h, h_values: heights }),
   );
-  const markers = () => graphics.filter((marker) => !marker.destroyed);
-  return { terrain, map, structures, edits, graphics, markers };
+  const live = () => images.filter((image) => !image.destroyed);
+  /** 画成 `h` 高的方块柱侧面（高度 h*16+16，纹理 `iso-block-h`）。 */
+  const walls = (h = 2) => live().filter((image) => image.key === `iso-block-${h}`);
+  /** 某格那根柱子（侧面 depth = depthKey - 0.01）。按 depth 建索引并在每次
+   *  terrain 变更后 `rebuild()`：真实地图 14000 格逐格线性扫 3000+ 图会超时。 */
+  const wallIndex = new Map<number, View>();
+  const rebuild = () => {
+    wallIndex.clear();
+    for (const image of live())
+      if (image.key.startsWith('iso-block-')) wallIndex.set(image.depth, image);
+  };
+  const wallAt = (x: number, y: number, h = 2) => {
+    const found = wallIndex.get(depthKey(x, y) - 0.01);
+    return found?.key === `iso-block-${h}` ? found : undefined;
+  };
+  /** 挖疤画在 Graphics 上，不是 Image。 */
+  const scars = () => graphics.filter((view) => !view.destroyed && view.faces.length > 0);
+  return { terrain, map, structures, edits, images, live, walls, wallAt, rebuild, scars, graphics };
 }
 
-const bankFaces = (marker: View) => marker.faces.filter((face) => face.alpha === 1);
-const luma = (color: number) =>
-  0.2126 * (color >> 16) + 0.7152 * ((color >> 8) & 255) + 0.0722 * (color & 255);
 afterEach(() => vi.unstubAllGlobals());
 
 it('shares one protocol-derived readonly height/action type across geometry and terrain', () => {
@@ -137,128 +162,89 @@ it('shares one protocol-derived readonly height/action type across geometry and 
   expectTypeOf<NonNullable<Parameters<IsoTerrain['sync']>[2]>>().toEqualTypeOf<VoxelEdits>();
 });
 
-it('marks only blocked height-one surfaces, with three contrasting slats inside the top face', () => {
-  const { terrain, map, structures, markers } = setup();
+it('draws a blocked height-one cell as a two-high block instead of a flat ground tile', () => {
+  // 2026-11-10 用户裁定：土坎不再画斜纹，直接抬成 2 格高方块。
+  // 逻辑高度仍是 1（碰撞不可走、土坎 1→0 仍是 earth 的唯一来源）。
+  const { terrain, map, structures, walls } = setup();
   map.collision[2] = map.collision[3] = 0;
   const collision = map.collision.slice();
   terrain.redraw(map, structures);
+  // 视觉抬升绝不改碰撞：世界权威在服务端。
   expect(map.collision).toEqual(collision);
-  expect(markers()).toHaveLength(1);
-  const marker = markers()[0]!;
-  const top = isoProject(0, 0, 1, screenBounds(2, 2));
-  expect(marker).toMatchObject({ x: top.sx, y: top.sy, depth: depthKey(0, 0) + 0.5 });
-  expect(bankFaces(marker)).toHaveLength(6); // Three dark slats, each with a light center.
-  const colors = new Set(marker.faces.map((face) => face.color));
-  expect(colors.size).toBe(2);
-  expect(colors.has(0x3f3020)).toBe(false); // Existing inset-diamond scar ink.
-  const luminances = [...colors].map(luma);
-  expect(Math.abs(luminances[0]! - luminances[1]!)).toBeGreaterThan(150);
-  for (const face of marker.faces)
-    for (const point of face.points)
-      expect(Math.abs(point.x) / 16 + Math.abs(point.y) / 8).toBeLessThan(1);
-  const thickness = (face: Face) => {
-    const [a, b, c] = face.points;
-    const dx = c!.x - b!.x,
-      dy = c!.y - b!.y;
-    return Math.abs((b!.x - a!.x) * dy - (b!.y - a!.y) * dx) / Math.hypot(dx, dy);
-  };
-  const darkWidth = thickness(marker.faces[0]!),
-    lightWidth = thickness(marker.faces[1]!);
-  expect(darkWidth * 3.5).toBeGreaterThanOrEqual(7);
-  expect(lightWidth * 3.5).toBeGreaterThanOrEqual(3.5);
-  console.info(
-    'bank-glyph',
-    JSON.stringify({
-      colors: [...colors],
-      luminances,
-      zoom: 3.5,
-      dark_width_px: darkWidth * 3.5,
-      light_width_px: lightWidth * 3.5,
-    }),
-  );
+  // (0,0) 是土坎，(1,1) 高度表就是 2 —— 两根 2 格柱。
+  expect(walls()).toHaveLength(2);
+  const wall = walls().find((image) => Math.abs(image.depth - (depthKey(0, 0) - 0.01)) < 1e-6)!;
+  const base = isoProject(0, 0, 0, screenBounds(2, 2));
+  // 柱子贴在格底，整根高度 = 2*HH + TH。
+  expect(wall).toMatchObject({ x: base.sx, y: base.sy + 8, height: 2 * 16 + 16 });
 });
 
-it('removes and recreates banks when collision alone changes at the same height and color', () => {
-  const { terrain, map, structures, markers } = setup();
+it('removes and recreates the wall when collision alone changes at the same height and color', () => {
+  const { terrain, map, structures, walls, wallAt, rebuild } = setup();
   terrain.redraw(map, structures, undefined, 1);
-  const bank = markers()[0];
-  expect(bank).toBeDefined();
+  rebuild();
+  const wall = wallAt(0, 0)!;
+  expect(wall).toBeDefined();
   map.collision[0] = 1;
   terrain.sync(map, structures, undefined, 2);
-  expect(bank!.destroyed).toBe(true);
-  expect(markers()).toHaveLength(0);
+  rebuild();
+  expect(wall.destroyed).toBe(true);
+  expect(wallAt(0, 0)).toBeUndefined();
   map.collision[0] = 0;
   terrain.sync(map, structures, undefined, 3);
-  expect(markers()).toHaveLength(1);
-  expect(markers()[0]).not.toBe(bank);
+  rebuild();
+  expect(wallAt(0, 0)).toBeDefined();
+  expect(walls().length).toBeGreaterThan(0);
 });
 
-it('uses either a bank or a scar on a dug height-one cell, retaining scar appearance after it opens', () => {
-  const { terrain, map, structures, edits, markers } = setup();
+it('keeps the dug scar on an opened cell and never on a wall', () => {
+  const { terrain, map, structures, edits, scars } = setup();
   edits.set('0,0', { x: 0, y: 0, action: 'dig', gid: 0, height: 1 });
   terrain.redraw(map, structures, edits, 1);
-  expect(markers()).toHaveLength(1);
-  expect(bankFaces(markers()[0]!)).toHaveLength(6);
+  // 土坎上不画挖疤（疤只给可走面）。
+  expect(scars()).toHaveLength(0);
   map.collision[0] = 1;
   edits.set('0,0', { x: 0, y: 0, action: 'dig', gid: 7, height: 1 });
   terrain.sync(map, structures, edits, 2);
-  expect(markers()).toHaveLength(1);
-  expect(markers()[0]!.faces).toMatchObject([{ color: 0x3f3020, alpha: 0.55 }]);
+  expect(scars()).toHaveLength(1);
+  expect(scars()[0]!.faces).toMatchObject([{ color: 0x3f3020, alpha: 0.55 }]);
 });
 
-it('removes a bank when digging reaches zero and restores it with an empty snapshot', () => {
-  const { terrain, map, structures, markers } = setup();
+it('drops the wall when digging reaches zero and restores it with an empty snapshot', () => {
+  const { terrain, map, structures, wallAt, rebuild } = setup();
   const mirror = new WorldMirror();
   mirror.setMap(map);
   terrain.redraw(map, structures, mirror.voxelEdits, mirror.terrainVersion);
-  const bank = markers()[0];
-  expect(bank).toBeDefined();
+  rebuild();
+  expect(wallAt(0, 0)).toBeDefined();
   mirror.applyVoxelEdits([{ x: 0, y: 0, action: 'dig', gid: 0, height: 0 }]);
   terrain.sync(map, structures, mirror.voxelEdits, mirror.terrainVersion);
-  expect(markers()).toHaveLength(0);
-  expect(map.collision[0]).toBe(0); // Visual fix never opens a dug-out bank.
+  rebuild();
+  expect(wallAt(0, 0)).toBeUndefined();
+  expect(map.collision[0]).toBe(0); // 视觉抬升从不改碰撞。
   mirror.applyVoxelEdits([], true);
   terrain.sync(map, structures, mirror.voxelEdits, mirror.terrainVersion);
-  expect(markers()).toHaveLength(1);
+  rebuild();
+  expect(wallAt(0, 0)).toBeDefined();
 });
 
-it('cleans bank overlays for active structures, map replacement and shutdown', () => {
-  const { terrain, map, structures, markers } = setup();
+it('repositions the wall when the map bounds change and clears it on shutdown', () => {
+  const { terrain, map, structures, wallAt, rebuild } = setup();
   terrain.redraw(map, structures);
-  expect(markers()).toHaveLength(1);
-  structures.set('house', { tiles: [[0, 0]], phase: 'built' });
-  terrain.sync(map, structures);
-  expect(markers()).toHaveLength(0);
-  structures.clear();
-  terrain.sync(map, structures);
-  expect(markers()).toHaveLength(1);
   const replacement = { ...map, w: 1, h: 4 };
   terrain.sync(replacement, structures);
-  const top = isoProject(0, 0, 1, screenBounds(1, 4));
-  expect(markers()[0]).toMatchObject({ x: top.sx, y: top.sy });
+  rebuild();
+  const base = isoProject(0, 0, 0, screenBounds(1, 4));
+  expect(wallAt(0, 0)).toMatchObject({ x: base.sx, y: base.sy + 8 });
   terrain.sync(null, structures);
-  expect(markers()).toHaveLength(0);
+  rebuild();
+  expect(wallAt(0, 0)).toBeUndefined();
   terrain.redraw(map, structures);
-  expect(markers()).toHaveLength(1);
+  rebuild();
+  expect(wallAt(0, 0)).toBeDefined();
   terrain.destroy();
-  expect(markers()).toHaveLength(0);
-});
-
-it('reuses bank geometry through changed-false frames and unrelated terrain edits', () => {
-  const { terrain, map, structures, edits, markers, graphics } = setup();
-  terrain.redraw(map, structures, edits, 1);
-  const bank = markers()[0];
-  expect(bank).toBeDefined();
-  const clears = bank!.clears,
-    moves = bank!.moves;
-  terrain.sync(map, structures, edits, 2); // New version, identical surface.
-  expect(bank!.clears).toBe(clears);
-  expect(bank!.moves).toBe(moves);
-  edits.set('0,1', { x: 0, y: 1, action: 'place', gid: 0, height: 3 });
-  terrain.sync(map, structures, edits, 3);
-  expect(markers()[0]).toBe(bank);
-  expect(bank!.clears).toBe(clears);
-  expect(graphics).toHaveLength(1);
+  rebuild();
+  expect(wallAt(0, 0)).toBeUndefined();
 });
 
 it('marks every real-map bank, covers both neighborhoods, and does no collision work for 120 idle frames', () => {
@@ -272,13 +258,15 @@ it('marks every real-map bank, covers both neighborhoods, and does no collision 
   const heights = JSON.parse(
     readFileSync(new URL('client/public/assets/tilesets/linhe-height.json', root), 'utf8'),
   ) as { h_values: number[] };
-  const { terrain, map, structures, markers, graphics } = setup(
+  const { terrain, map, structures, wallAt, walls, rebuild } = setup(
     heights.h_values,
     source.width,
     source.height,
   );
+  // 真实地图 (0,0) 逻辑高度 3 —— 不是土坎，先钉住这个前提。
+  expect(heights.h_values[0]).toBe(3);
   // 静态结构锚点必须一起装进来：试车台占地面高度 1、碰撞 0，与土坎同形，
-  // 客户端靠 `map.structures` 才不把它们画成可挖的土坎。
+  // 客户端靠 `map.structures` 才不把它们抬成矮墙（那是建筑地基）。
   map.structures = source._structures ?? {};
   for (const [key, chunk] of Object.entries(source.chunks)) {
     const [cx, cy] = key.split(',').map(Number);
@@ -294,24 +282,25 @@ it('marks every real-map bank, covers both neighborhoods, and does no collision 
   }
   const original = map.collision.slice();
   terrain.redraw(map, structures, undefined, 1);
-  const byPosition = new Map(markers().map((marker) => [`${marker.x},${marker.y}`, marker]));
+  rebuild();
   let banks = 0,
     walkable = 0,
     adjacent = 0,
     requestedArea = 0,
     currentArea = 0;
+  const inStructure = (x: number, y: number) =>
+    Object.values(map.structures ?? {}).some(
+      (a) => Math.abs(x - a.x) <= Math.floor(a.w / 2) && Math.abs(y - a.y) <= Math.floor(a.h / 2),
+    );
   for (let y = 0; y < map.h; y++)
     for (let x = 0; x < map.w; x++) {
       const i = y * map.w + x;
-      const top = isoProject(x, y, 1, screenBounds(map.w, map.h));
-      const marked = byPosition.has(`${top.sx},${top.sy}`);
-      // 静态结构占地面（试车台地基）高度 1、碰撞 0，但不是土坎。
-      const inStructure = Object.values(map.structures ?? {}).some(
-        (a) => Math.abs(x - a.x) <= Math.floor(a.w / 2) && Math.abs(y - a.y) <= Math.floor(a.h / 2),
-      );
-      const expected = heights.h_values[i] === 1 && map.collision[i] === 0 && !inStructure;
-      expect(marked, `${x},${y}`).toBe(expected);
       if (map.collision[i] === 1) walkable++;
+      const logical = heights.h_values[i]!;
+      const expected = logical === 1 && map.collision[i] === 0 && !inStructure(x, y);
+      // 每格画出来的高度：土坎 2，其余照逻辑高度；≥2 的必须真有一根柱子。
+      const drawH = expected ? 2 : logical;
+      expect(wallAt(x, y, drawH) !== undefined, `${x},${y} h${drawH}`).toBe(drawH >= 2);
       if (!expected) continue;
       banks++;
       if (Math.abs(x - 14) <= 15 && Math.abs(y - 17) <= 15) requestedArea++;
@@ -334,7 +323,7 @@ it('marks every real-map bank, covers both neighborhoods, and does no collision 
         adjacent++;
     }
   // 可走面 3692 = 3947 − 试车台 17×15（255 格）。土坎数不变：那 255 格是
-  // **静态结构地基**，不是土坎（`map.structures` 把它们排除在斜纹之外）。
+  // **静态结构地基**，不是土坎（`map.structures` 把它们排除在矮墙之外）。
   expect({ banks, walkable, adjacent, requestedArea, currentArea }).toEqual({
     banks: 1568,
     walkable: 3692,
@@ -342,7 +331,6 @@ it('marks every real-map bank, covers both neighborhoods, and does no collision 
     requestedArea: 57,
     currentArea: 135,
   });
-  expect(markers()).toHaveLength(banks);
   expect(map.collision).toEqual(original);
   let reads = 0;
   map.collision = new Proxy(map.collision, {
@@ -351,16 +339,14 @@ it('marks every real-map bank, covers both neighborhoods, and does no collision 
       return Reflect.get(target, key, target);
     },
   });
-  const drawCalls = markers().reduce((n, marker) => n + marker.clears, 0);
-  const moves = markers().reduce((n, marker) => n + marker.moves, 0);
+  const snapshot = () =>
+    [2, 3].flatMap((h) => walls(h).map((image) => `${image.depth}:${image.moves}`));
+  const before = snapshot();
   for (let frame = 0; frame < 120; frame++) terrain.sync(map, structures, undefined, 1);
   expect(reads).toBe(0);
-  expect(graphics).toHaveLength(banks);
-  expect(markers().reduce((n, marker) => n + marker.clears, 0)).toBe(drawCalls);
-  expect(markers().reduce((n, marker) => n + marker.moves, 0)).toBe(moves);
+  expect(snapshot()).toEqual(before);
   terrain.sync(map, structures, undefined, 2);
-  expect(markers().reduce((n, marker) => n + marker.clears, 0)).toBe(drawCalls);
-  expect(markers().reduce((n, marker) => n + marker.moves, 0)).toBe(moves);
+  expect(snapshot()).toEqual(before);
   console.info(
     JSON.stringify({
       banks,
@@ -370,9 +356,7 @@ it('marks every real-map bank, covers both neighborhoods, and does no collision 
       currentArea,
       idle_frames: 120,
       idle_collision_reads: 0,
-      idle_marker_creations: 0,
-      idle_marker_redraws: 0,
-      changed_false_marker_updates: 0,
+      idle_block_moves: 0,
     }),
   );
 });

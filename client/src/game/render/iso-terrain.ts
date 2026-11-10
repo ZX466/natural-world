@@ -13,8 +13,6 @@ import {
 
 const GROUND_KEY = 'iso-ground-composite';
 const TILESET_KEY = 'god-town-16';
-const BANK_DARK = 0x2c1b10;
-const BANK_LIGHT = 0xf1d793;
 type Edits = VoxelEdits;
 const NO_EDITS: Edits = new Map();
 type HeightLookup = (x: number, y: number) => number;
@@ -71,7 +69,6 @@ export class IsoTerrain {
   private blocks = new Map<string, BlockView>();
   private rubble = new Map<string, Phaser.GameObjects.Graphics>();
   private scars = new Map<string, Phaser.GameObjects.Graphics>();
-  private banks = new Map<string, Phaser.GameObjects.Graphics>();
   private textureKeys = new Set<string>();
   private colors: ((gid: number) => number) | null = null;
   /** The tileset image itself, kept for the per-cell `drawImage` bake. */
@@ -192,10 +189,12 @@ export class IsoTerrain {
     const cells = cellAppearances(map, structures, edits, this.heightOf, this.colors);
     let dirty: Rect | null = null;
     let changed = full;
+    // `drawH` 而不是 `h`：土坎逻辑高度 1 但画成 2 格矮墙，按逻辑高度算脏区
+    // 会把它的上半截留在旧图里。
     const includeLow = (cell: SurfaceCell) => {
-      if (cell.h >= 2) return;
-      const top = isoProject(cell.x, cell.y, cell.h, bounds);
-      const bottom = top.sy + cell.h * ISO.HH + ISO.TH / 2;
+      if (cell.drawH >= 2) return;
+      const top = isoProject(cell.x, cell.y, cell.drawH, bounds);
+      const bottom = top.sy + cell.drawH * ISO.HH + ISO.TH / 2;
       dirty = {
         left: Math.min(dirty?.left ?? Infinity, top.sx - ISO.TW / 2 - 1),
         top: Math.min(dirty?.top ?? Infinity, top.sy - ISO.TH / 2 - 1),
@@ -206,7 +205,12 @@ export class IsoTerrain {
     for (let index = 0; index < cells.length; index++) {
       const cell = cells[index]!;
       const prior = full ? undefined : previous[index];
-      if (prior?.h !== cell.h || prior.color !== cell.color || prior.edited !== cell.edited) {
+      if (
+        prior?.h !== cell.h ||
+        prior.drawH !== cell.drawH ||
+        prior.color !== cell.color ||
+        prior.edited !== cell.edited
+      ) {
         if (prior) includeLow(prior);
         includeLow(cell);
         changed = true;
@@ -234,11 +238,12 @@ export class IsoTerrain {
     }
     const retained = new Set<string>();
     for (const cell of cells) {
-      if (cell.h < 2) continue;
+      // 土坎按 `drawH`（2）走方块视图：和石料/木料同形，才看得出过不去。
+      if (cell.drawH < 2) continue;
       retained.add(`${cell.x},${cell.y}`);
       const prior = full ? undefined : previous[cell.y * map.w + cell.x];
       if (
-        prior?.h !== cell.h ||
+        prior?.drawH !== cell.drawH ||
         prior.color !== cell.color ||
         prior.phase !== cell.phase ||
         prior.edited !== cell.edited
@@ -253,14 +258,13 @@ export class IsoTerrain {
     }
     this.syncRubble(map, structures, structureOverrides(structures).phases, bounds, edits);
     this.syncScars(cells, bounds);
-    this.syncBanks(cells, bounds);
     this.lastMap = map;
     this.lastWidth = map.w;
     this.lastHeight = map.h;
   }
 
   private syncBlock(
-    { x, y, h, color, phase }: SurfaceCell,
+    { x, y, drawH: h, color, phase }: SurfaceCell,
     map: MapStatic,
     bounds: ReturnType<typeof screenBounds>,
   ) {
@@ -364,13 +368,14 @@ export class IsoTerrain {
       for (let y = minY; y <= maxY; y++) {
         const x = diagonal - y;
         const cell = this.cells[y * map.w + x]!;
-        if (cell.h >= 2) continue;
-        const top = isoProject(x, y, cell.h, bounds);
+        // 土坎按 `drawH` 走方块视图，这里不贴地面图。
+        if (cell.drawH >= 2) continue;
+        const top = isoProject(x, y, cell.drawH, bounds);
         if (dirty) {
           // Diamond bounding box: the top face plus the column below it.
           const left = top.sx - hw,
             right = top.sx + hw;
-          const up = top.sy - hh - cell.h * ISO.HH,
+          const up = top.sy - hh - cell.drawH * ISO.HH,
             down = top.sy + hh;
           if (right < dirty.left || left > dirty.right || down < dirty.top || up > dirty.bottom)
             continue;
@@ -382,8 +387,8 @@ export class IsoTerrain {
           this.sourceSize !== null &&
           paintTile(ctx, this.sourceImage, top.sx, top.sy, gid, this.sourceSize);
         if (!painted) {
-          if (this.atlas) this.atlas.paintBlock(ctx, top.sx, top.sy, cell.h, cell.color);
-          else paintBlock(ctx, top.sx, top.sy, cell.h, cell.color);
+          if (this.atlas) this.atlas.paintBlock(ctx, top.sx, top.sy, cell.drawH, cell.color);
+          else paintBlock(ctx, top.sx, top.sy, cell.drawH, cell.color);
         }
       }
     }
@@ -459,7 +464,7 @@ export class IsoTerrain {
     }
   }
 
-  /** Only walkable dug surfaces get the inset diamond; banks use separate slats.
+  /** Only walkable dug surfaces get the inset diamond; a bank is its own block.
    * A cell lowered to zero has no floating scar; placed cells are their own marker.
    */
   private syncScars(cells: readonly SurfaceCell[], bounds: ReturnType<typeof screenBounds>): void {
@@ -494,53 +499,6 @@ export class IsoTerrain {
       if (retained.has(key)) continue;
       marker.destroy();
       this.scars.delete(key);
-    }
-  }
-
-  /** Three earth-toned slats distinguish low obstructions from the dug diamond.
-   * Retained glyph geometry is immutable; only its anchor can move with map bounds.
-   */
-  private syncBanks(cells: readonly SurfaceCell[], bounds: ReturnType<typeof screenBounds>): void {
-    const retained = new Set<string>();
-    for (const { x, y, bank } of cells) {
-      if (!bank) continue;
-      const key = `${x},${y}`;
-      let marker = this.banks.get(key);
-      if (marker === undefined) {
-        marker = this.scene.add.graphics();
-        marker.clear();
-        for (const offset of [-7, 0, 7]) {
-          marker.fillStyle(BANK_DARK, 1);
-          marker.fillPoints(
-            [
-              { x: offset - 3, y: 1 },
-              { x: offset - 1, y: 2 },
-              { x: offset + 3, y: -1 },
-              { x: offset + 1, y: -2 },
-            ],
-            true,
-          );
-          marker.fillStyle(BANK_LIGHT, 1);
-          marker.fillPoints(
-            [
-              { x: offset - 2.5, y: 1.25 },
-              { x: offset - 1.5, y: 1.75 },
-              { x: offset + 2.5, y: -1.25 },
-              { x: offset + 1.5, y: -1.75 },
-            ],
-            true,
-          );
-        }
-        this.banks.set(key, marker);
-      }
-      const top = isoProject(x, y, 1, bounds);
-      marker.setPosition(top.sx, top.sy).setDepth(depthKey(x, y) + 0.5);
-      retained.add(key);
-    }
-    for (const [key, marker] of this.banks) {
-      if (retained.has(key)) continue;
-      marker.destroy();
-      this.banks.delete(key);
     }
   }
 
@@ -583,8 +541,6 @@ export class IsoTerrain {
     this.rubble.clear();
     for (const marker of this.scars.values()) marker.destroy();
     this.scars.clear();
-    for (const marker of this.banks.values()) marker.destroy();
-    this.banks.clear();
     for (const key of this.textureKeys) this.scene.textures.remove(key);
     this.textureKeys.clear();
     if (this.scene.textures.exists(GROUND_KEY)) this.scene.textures.remove(GROUND_KEY);

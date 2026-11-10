@@ -165,8 +165,14 @@
 
    （变体 d：`.orca/tmp/preview/variant-d.png` — 有立体感且不破图）
 
-4. **保留现有表现**：挖放疤（`syncScars`）、土坎三道斜纹（`syncBanks`）、
-   废墟（`syncRubble`）、结构 phase 淡入（`phase()`）全部不动。
+4. **保留现有表现**：挖放疤（`syncScars`）、废墟（`syncRubble`）、
+   结构 phase 淡入（`phase()`）全部不动。
+
+   > **2026-11-10 用户裁定推翻**：土坎不再画三道斜纹。高度 1 但不可走的格
+   > 一律抬成 2 格高实心方块（`cell-appearance.ts::BANK_RENDER_HEIGHT` /
+   > `drawH`），`syncBanks` 与 three 侧斜杠 `InstancedMesh` 已删。
+   > 碰撞仍不可走、逻辑高度仍 1（土坎 1→0 仍是 earth 的唯一来源）。
+   > 全图 1568 格。
 
 5. **编辑格**：现在 `iso-terrain.ts:242` 用
    `edits.has(key) ? EDIT_COLORS[h] : colors(gid)` 选色，烘焙后 `paintTile`

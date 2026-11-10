@@ -35,9 +35,9 @@ export function terrainCells(
   const cells: TerrainCell[] = new Array(appearance.length);
   for (let i = 0; i < appearance.length; i++) {
     const cell = appearance[i]!;
-    // `bank` 必须一起传：土坎与玩家刚放下的土块都是「高度 1 但不可走」，
-    // 丢掉这个标记，three 里它们和可走平地长得一模一样（放块像空白）。
-    cells[i] = { x: cell.x, y: cell.y, h: cell.h, color: cell.color, bank: cell.bank };
+    // `drawH` 而不是 `h`：土坎（逻辑高度 1、不可走）要画成 2 格高的矮墙，
+    // 否则它和可走平地同高同色 —— 天然土坎像能走的空地，放下的土块像空白。
+    cells[i] = { x: cell.x, y: cell.y, h: cell.drawH, color: cell.color };
   }
   return cells;
 }

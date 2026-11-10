@@ -68,7 +68,7 @@ it('terrainCells maps the shared rule onto the instance list', () => {
     (g) => g,
   );
   expect(cells).toHaveLength(W * H);
-  expect(cells[0]).toEqual({ x: 0, y: 0, h: 2, color: 3, bank: false });
+  expect(cells[0]).toEqual({ x: 0, y: 0, h: 2, color: 3 });
   // Row-major, same as the Phaser painter's cell array.
   expect(cells[1]!.x).toBe(1);
   expect(cells[W]!.y).toBe(1);
@@ -92,23 +92,23 @@ it('sync rebuilds instances once per terrain revision', () => {
   expect(cells[6 * W + 5]!.h).toBe(2);
 });
 
-it('a placed earth block reaches the scene marked as a bank', () => {
-  // 放土后那格是「高度 1、不可走」，与可走平地同高同色（实测色差 2/255）。
-  // 不带 bank 标记，three 里它看起来就是一块空地 —— 用户报的「放置是空白」。
+it('a placed earth block reaches the scene as a two-high wall', () => {
+  // 放土后那格是「逻辑高度 1、不可走」，与可走平地同高同色（实测色差 2/255）。
+  // 只画 h=1 的方块，它看起来就是一块空地 —— 用户报的「放置是空白」。
+  // 现在渲染高度是 2：和石料方块同形，一眼看得出过不去。
   const mirror = mirrorWith();
   const { a, setCells } = adapter(mirror);
   a.sync();
   mirror.applyVoxelEdits([{ x: 5, y: 6, gid: 0, height: 1, action: 'place', material: 'earth' }]);
   a.sync();
   const cells = setCells.mock.calls.at(-1)![0];
-  expect(cells[6 * W + 5]).toMatchObject({ h: 1, bank: true });
-  // 没动过的可走格不能被误标成土坎。
-  expect(cells[6 * W + 4]!.bank).toBe(false);
+  expect(cells[6 * W + 5]).toMatchObject({ h: 2 });
+  // 没动过的可走格不能被抬高。
+  expect(cells[6 * W + 4]!.h).toBe(1);
 });
 
-it('the real map marks every blocked height-one cell, and only those, as a bank', () => {
-  // 这条是两条渲染路径的合同：Phaser 的斜纹字形与 three 的斜杠必须覆盖
-  // **同一批格子**，否则同一座镇子在两个渲染器里读法不同。
+it('the real map draws every blocked height-one cell as a wall, and only those', () => {
+  // 这条是两条渲染路径的合同：Phaser 与 three 必须把**同一批格子**抬成 2。
   // 试车台地基（静态结构，高度 1、碰撞 0）不算土坎 —— 那是建筑占地面。
   // 本文件比 `render/__tests__/iso-banks.test.ts` 深一层（多一个 `three/`）。
   const root = new URL('../../../../../../', import.meta.url);
@@ -146,11 +146,11 @@ it('the real map marks every blocked height-one cell, and only those, as a bank'
     );
   let banks = 0;
   for (const cell of cells) {
+    const logical = heights.h_values[cell.y * map.w + cell.x]!;
     const expected =
-      heights.h_values[cell.y * map.w + cell.x] === 1 &&
-      map.collision[cell.y * map.w + cell.x] === 0 &&
-      !inStructure(cell.x, cell.y);
-    expect(cell.bank, `${cell.x},${cell.y}`).toBe(expected);
+      logical === 1 && map.collision[cell.y * map.w + cell.x] === 0 && !inStructure(cell.x, cell.y);
+    // 土坎画成 2，其余格画成自己的逻辑高度。
+    expect(cell.h, `${cell.x},${cell.y}`).toBe(expected ? 2 : logical);
     if (expected) banks += 1;
   }
   // 与 Phaser 路径的 `iso-banks.test.ts` 同一个数：1568。
@@ -163,7 +163,7 @@ it('the real map marks every blocked height-one cell, and only those, as a bank'
     createHeightLookup(heights),
     (g) => g,
   );
-  expect(cells.map((c) => c.bank)).toEqual(appearance.map((c) => c.bank));
+  expect(cells.map((c) => c.h)).toEqual(appearance.map((c) => c.drawH));
 });
 
 it('sync does nothing without a map', () => {

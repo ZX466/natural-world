@@ -84,36 +84,15 @@ export function blockTransform(
 export interface TerrainCell {
   readonly x: number;
   readonly y: number;
-  /** 0 = water, 1 = walkable earth, 2..3 = stacked blocks. */
+  /** Render height: 0 = water, 1 = walkable earth, 2..3 = stacked blocks.
+   *
+   * 这是**画出来的**高度，不是逻辑高度。土坎（逻辑高度 1、不可走）在这里是 2：
+   * 与可走平地同高同色会读成空地，抬成矮墙才看得出过不去。逻辑高度只留在
+   * `cell-appearance.ts` 与仿真侧，渲染层一律读这个值。 */
   readonly h: number;
   /** 0xRRGGBB, already sampled from the tileset. */
   readonly color: number;
-  /** 高度 1 但不可走：土坎，以及玩家刚放下的土块。
-   *
-   * 它和可走平地**同高**，所以只靠盒子本身根本看不出来 —— 放进世界里的
-   * 土块会像「空白」，天然土坎则像能走的空地。Phaser 路径用三道斜杠字形区分
-   * （`iso-terrain.ts::syncBanks`），这里画同一组斜杠。 */
-  readonly bank?: boolean;
 }
-
-/** 土坎斜纹：与 Phaser 的 `syncBanks` 同形——三道斜杠，一亮一暗。
- *
- * 整块压暗不行：全图 1568 格土坎会连成大片深色斑，可走地面反而像被围住。
- * Phaser 用的是「三道斜杠」字形，两条路径必须给同一个格子同一个读法。 */
-export const BANK_SLATS = 3;
-/** 斜杠在格子内的相对跨度（Phaser 的 ±7px / 32px 菱形宽）。 */
-export const BANK_SLAT_SPAN = 0.42;
-export const BANK_SLAT_DARK = 0x2c1b10;
-export const BANK_SLAT_LIGHT = 0xf1d793;
-/** 斜杠厚度。默认机位俯仰只有 12°，平贴地面的记号会被压成一条线；
- *  0.12 高时斜杠自己的侧面露得出来，任何角度都能看见。 */
-export const BANK_SLAT_THICKNESS = 0.12;
-/** 底面与方块顶面之间的间隙。两者若完全共面，深度相等时的先后就靠
- *  polygonOffset 的舍入运气 —— 抬 4 毫米，任何驱动都不会抖。 */
-export const BANK_SLAT_LIFT = 0.004;
-/** 土坎格整体压暗系数。只压一点点：1568 格若压狠了会连成大片深色斑，
- *  可走地面反而像被围起来。作用是给斜纹一个底色差，不是替代它。 */
-export const BANK_TINT = 0.85;
 
 export interface TerrainScene {
   readonly renderer: THREE.WebGLRenderer;
@@ -166,38 +145,6 @@ function shadedBox(): THREE.BoxGeometry {
 
 export interface BlockInstance extends BlockTransform {
   readonly cell: TerrainCell;
-}
-
-/** 只有土坎格需要斜纹；高度 ≥2 的阻挡格本来就看得见。 */
-export function bankCells(cells: readonly TerrainCell[]): TerrainCell[] {
-  return cells.filter((cell) => cell.bank === true && layerOf(cell.h) === 1);
-}
-
-/** 一条斜杠的世界位姿：三道平行，横跨格子、贴在 h=1 顶面之上。
- *
- * 角度固定 45°（Phaser 字形也是 ±1px/3px 的斜率），不随相机转——
- * 它是画在地面上的记号，不是朝向玩家的贴片。 */
-export function bankSlatTransform(
-  x: number,
-  y: number,
-  slat: number,
-  mapW: number,
-  mapH: number,
-): BlockTransform & { readonly rotationY: number } {
-  const centre = worldOf(x, y, mapW, mapH);
-  // 三道斜杠互相平行（盒子绕 Y 转 45° 后长轴落在 x-z 对角线上），
-  // 所以「垂直于杠」的方向是 x+z：沿它等距铺开，跨度为 ±span/2。
-  const t = (slat / (BANK_SLATS - 1)) * 2 - 1;
-  const offset = t * BANK_SLAT_SPAN * 0.5;
-  return {
-    position: {
-      x: centre.x + offset,
-      y: 1 + BANK_SLAT_LIFT + BANK_SLAT_THICKNESS / 2,
-      z: centre.z + offset,
-    },
-    scaleY: BANK_SLAT_THICKNESS,
-    rotationY: Math.PI / 4,
-  };
 }
 
 export function blockInstances(
@@ -265,24 +212,7 @@ export function createTerrainScene(canvas: HTMLCanvasElement): TerrainScene {
   const texture = blockTexture();
   const geometry = shadedBox();
   const material = new THREE.MeshBasicMaterial({ vertexColors: true, map: texture });
-  // 土坎斜杠：细长盒子，抬到顶面之上。关雾——雾会把远处的斜杠冲淡成一片糊。
-  const slatGeometry = new THREE.BoxGeometry(0.62, 1, 0.12);
-  const slatDarkMaterial = new THREE.MeshBasicMaterial({
-    color: BANK_SLAT_DARK,
-    fog: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1,
-  });
-  const slatLightMaterial = new THREE.MeshBasicMaterial({
-    color: BANK_SLAT_LIGHT,
-    fog: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1,
-  });
 
-  const UP = new THREE.Vector3(0, 1, 0);
   let meshes: THREE.InstancedMesh[] = [];
   let mapW = 1;
   let mapH = 1;
@@ -320,7 +250,6 @@ export function createTerrainScene(canvas: HTMLCanvasElement): TerrainScene {
         matrix.setPosition(t.position.x, t.position.y, t.position.z);
         mesh.setMatrixAt(i, matrix);
         colour.setHex(tinted(cell.color, cell.x, cell.y));
-        if (cell.bank === true) colour.multiplyScalar(BANK_TINT);
         mesh.setColorAt(i, colour);
         i += 1;
       }
@@ -332,48 +261,6 @@ export function createTerrainScene(canvas: HTMLCanvasElement): TerrainScene {
       mesh.frustumCulled = false;
       meshes.push(mesh);
       scene.add(mesh);
-    }
-
-    // 土坎斜纹：两道 InstancedMesh（暗杠 + 亮芯），与 Phaser 的 `syncBanks` 同形。
-    // 不设 `userData.cells` —— `editFromRay` 只认带 cells 的 mesh，
-    // 斜纹不该成为编辑目标（点它应该命中下面的方块）。
-    const banks = bankCells(cells);
-    if (banks.length > 0) {
-      const slatCount = banks.length * BANK_SLATS;
-      const dark = new THREE.InstancedMesh(slatGeometry, slatDarkMaterial, slatCount);
-      const light = new THREE.InstancedMesh(slatGeometry, slatLightMaterial, slatCount);
-      const quaternion = new THREE.Quaternion();
-      let index = 0;
-      for (const cell of banks) {
-        for (let slat = 0; slat < BANK_SLATS; slat++) {
-          const t = bankSlatTransform(cell.x, cell.y, slat, w, h);
-          quaternion.setFromAxisAngle(UP, t.rotationY);
-          matrix.compose(
-            new THREE.Vector3(t.position.x, t.position.y, t.position.z),
-            quaternion,
-            new THREE.Vector3(1, t.scaleY, 1),
-          );
-          dark.setMatrixAt(index, matrix);
-          // 亮芯比暗杠细一档、抬高一丁点，读作「斜杠中间的高光」。
-          matrix.compose(
-            new THREE.Vector3(t.position.x, t.position.y + 0.01, t.position.z),
-            quaternion,
-            new THREE.Vector3(0.55, t.scaleY, 0.45),
-          );
-          light.setMatrixAt(index, matrix);
-          index += 1;
-        }
-      }
-      for (const mesh of [dark, light]) {
-        mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
-        mesh.instanceMatrix.needsUpdate = true;
-        mesh.computeBoundingBox();
-        mesh.computeBoundingSphere();
-        mesh.frustumCulled = false;
-        mesh.renderOrder = 1;
-        meshes.push(mesh);
-        scene.add(mesh);
-      }
     }
   };
 
@@ -397,9 +284,6 @@ export function createTerrainScene(canvas: HTMLCanvasElement): TerrainScene {
       clearMeshes();
       material.dispose();
       geometry.dispose();
-      slatGeometry.dispose();
-      slatDarkMaterial.dispose();
-      slatLightMaterial.dispose();
       texture.dispose();
       sky.dispose();
       renderer.dispose();
