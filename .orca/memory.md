@@ -3,7 +3,7 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-10 · 土坎已改 2 格方块 `a152796` · 3D 默认 · 波 A/B/C 全收编 · 试车台转世界结构）
+## 0. 当前状态（2026-11-10 · 波 A/B/C/D 全收编 · 协议 1.19 · 3D 默认 · 土坎 2 格方块 `a152796`）
 
 **试车台 = 世界结构（2026-11-09 用户改口「要和预览一样：可识别拆解，是障碍物实体」）**：
 外部 SDK 整包原样入库 `vendor/linhe-lre-sdk/`（272K，除一份本仓新增的 `.d.ts` 外一字节未改），
@@ -82,27 +82,50 @@ vitest 比 codex 的 747 少 1 是预期的：主树 `a152796` 重写了土坎�
 （`iso-banks` 8→7、`three-terrain` 11→10），波 C 在 adapter 补 1 条（9→10），净 −1。
 ⚠ **仍未做真机验收**：剪影浓淡、侧移舒适度、实际帧耗归用户（codex 只做了 SwiftShader 技术读数）。
 
-**波 D 已派 codex（2026-11-10，主树不开工）**：用户实测「后端功能体现不出来」。
-派单正文在 codex 树 `.orca/talking.txt` §二。范围 **D-1 + D-2**，
-**#1 明确排除**（用户「1 先不填写」= 不给陈默配 LLM profile）。
+**波 D 收编（2026-11-10，codex `17f4d26` → 主树 `ec4a020`）**：协议 **1.18 → 1.19**。
+用户实测原话「后端功能体现不出来」——世界在跑、库里有货，但画面看不出 NPC 在干什么、
+谁身体不好、谁跟谁有交情、谁知道了什么。**#1 仍排除**（用户「1 先不填写」= 不给陈默配 LLM profile）。
 
-- **D-1 动作可见**：`sim/api/main.py::_npc_tick_hook` 把 `npc.act` 写进
-  `sim/api/ws.py::_ACTION_ANIMS`，snapshot/delta 都带 `anim`（`idle|walk|work|eat|rest|chat`）；
-  但客户端**只把它用于 fauna 透明度**（`three-actors.ts:284`、`WorldScene.ts:1188`），
-  `avatar3d.ts::AvatarAnim` 只有 `idle|walk|run|jump`。要在现有 16 骨骼上摆站姿，
-  **不加网格/图集格/draw call**。2D 回滚路径：chenmo 图集有 R4–7 姿势行（逐格实测），
-  villager 图集 4×4 没有 —— 本波 2D 保持现状。
-  ⚠ `_ACTION_ANIMS` 只写不清，旧姿势最多留到下一次决策（实测 10 tick）——可接受。
-  ⚠ 更实的漏项：`npc.act` **不进 `pending_delta_entity_ids`** ⇒ 站定原地切动作时没有 delta 帧，
-  姿势传不到客户端。派单要求一并修（只在 anim 真变时标）。
-- **D-2 健康/关系/知识出站**：`ws.py` 对三表**零引用**；真库 `npc_health` 6 行（4 行 hidden）、
-  `relationships` 526 行（陈默 9 行）、`knowledge` 230 行（陈默 2 行）。加可选键 `npc_views`
-  （**叙事串**，不出数值——ws-protocol §5 禁出 `hp/trust/affection/fear/debt/face` 原值），
-  delta 要自带变更账本 + 广播判据补一条（现有 `moved/fauna/tile/lights` 不含关系变化）。
-  `npc_health.hidden=1` 未触发**绝不外发**（self-unknown，按 `HiddenState.triggered` 过滤；
-  他人的隐藏属性仅在陈默持有关联 `knowledge` 行时可见）。协议 **1.18 → 1.19**，
-  五处联动 + `test_ws_gateway` 两个白名单钉子。面板加第三块「人物」（列表式或点选式，codex 定）。
-- 顺带发现、**未修未派**：起火实测 **9.13%/日**（设计 34%；`main.py::_fire_tick_hook` 还要求落点
+- **D-1 动作可见**：`avatar3d.ts::AvatarAnim` 加 `work|eat|rest|chat`，**只用原 16 骨骼**摆姿势，
+  不加网格/图集格/draw call（仍 1 SkinnedMesh/人、共享 512×256 图集）。
+  `three-actors.ts` 的优先级是**位移优先**：airborne → 移动中的 `animClock` → 站定才读 `actor.anim`
+  （`anim==='walk'` 的站定仍画 idle）。站定相位按**未暂停**的 `delta×speed` 推进，
+  暂停冻结、恢复不补跑（`three-world.ts` 传 `ui.paused`）。**2D 回滚路径未接**：
+  chenmo 图集有 R4–7 姿势行（逐格实测）、villager 4×4 没有，本波保持现状。
+- **D-1 两处必须修的都修了**（这是派单里点名的）：
+  ① `npc.act` 原本**不进** `pending_delta_entity_ids` ⇒ 站定原地切动作没有 delta 帧，
+  姿势永远传不到客户端。现在 `_npc_tick_hook` 只在 `_anim_of` 前后值**真变**时标脏，
+  钉子在 `test_npc_view_live.py::test_stationary_changed_action_marks_delta_once…`。
+  ② `_ACTION_ANIMS` 原本只写不清 ⇒ 读档继承旧分支姿势。现在 startup/读档成功块/shutdown
+  三处都调 `clear_action_anims()`（读档块与 `clear_npc_views()` 并排）。
+- **D-2 健康/关系/知识出站**：新模块 `sim/api/npc_view.py`（SQL 只在这里读，且只在启动、
+  读档、以及提交了 health/death/chat/retell/knowledge 批次之后），WS 侧 `npc_views` 账本
+  只存**预构造好的叙事行**。`NpcView` 封闭四键+可选名：`{rtoken, name?, health[], bond, knows[]}`；
+  `NpcViewDelta` 另允许 `{rtoken, op:"remove"}`。**快照发全集、delta 发变化**，
+  广播判据补 `or _npc_views_changed()`（否则静止世界里关系变了永远不发帧）。
+- **自我未知在构造期落地**（不是靠下游拦）：陈默自己的 `hidden=1` 只在
+  `HiddenState.triggered` 命中时出；别人的隐藏健康必须陈默持有**双列对齐**的
+  `(subject_npc_id, subject_attr_id)` 有效 knowledge 行。每句出站文字再用本分支隐藏元数据
+  跑一次 `hidden_leak_scan`——已入册的旧 fact 也不能夹带**已消退的自身词面**或**无关隐藏项**，
+  命中则整句不发（不改写、不发暗示）。**真库实测**：无触发时面板 10 行（陈默 + 9 名有过
+  交谈的村民），只有陈默 1 条公开健康（`wrist_strain`）；`night_unease` 未触发不外发。
+  刻意用假关系探针验过：villager_01 的 `shoulder_injury` 在无 knowledge 时**整行为空**，
+  补一条对齐 knowledge 后才同时出现 health 与 knows。
+- **账本学的是 lights 那套**：新连接不会吃掉别的连接待发的变更；只在快照见过的行
+  仍会在之后发 remove；`A→B→A` 会补发（`_NPC_VIEWS_SNAPSHOT_DIRTY`）。
+- **客户端**：`ws.ts → runtime.ts → uiStore → NpcPanel`（`PanelHost` 第三块「人物」）。
+  快照**整组替换**（缺键=清空，防重连残留），delta 按 rtoken 合并/移除，输入去重复制。
+  面板只渲染字符串，**不做数值→文案映射**（`narrate_health`/`narrate_bond` 在
+  `sim/perception/narrate.py` 一处维护）。
+- ⚠ **面板会显得空，这是真相不是 bug**：陈默 `knowledge` 只有 2 条，指向 `villager_02`/`villager_03`，
+  而这两个人**不在** `relationships` 的 9 人里（真库 `owner_id='chenmo'` 是 0 行，
+  印象只落在承受方）⇒ 面板里 `knows` 恒为空、`bond` 一律是「见面会同你搭句话」级别。
+  别为好看补造数据、别放宽「认识」的判据。
+- **门禁（主树独立复跑，`ec4a020` 树态）**：pytest `3696P/121S/72D EXIT 0`（539.74s）·
+  vitest `792P/92F EXIT 0` · ruff check+format / pyright / gen:protocol:check / typecheck /
+  lint / prettier / build 全 EXIT 0。⚠ **真机验收归用户**：姿势辨识度、面板观感、实际帧耗
+  （codex 只有 SwiftShader 技术读数）。
+- 顺带发现、**仍未修未派**：起火实测 **9.13%/日**（设计 34%；`main.py::_fire_tick_hook` 还要求落点
   `is_walkable`，可走格仅 **26.4%**；500 seed × 200 日：抽中 33,907、落地 9,127）。
   seed=42 第 2/3/5 日抽中火，落点 `(138,89)`/`(5,32)`/`(139,48)` **三格全不可走**，静默丢弃。
   `npc.lod_change` 零事件但库内 `chenmo` 已是 `lod=2`、50 名村民 `lod=1`（L2 从未真正升格）。
@@ -1176,7 +1199,7 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-11-10 波 D｜技术交付，待主树收编】3D站定work/eat/rest/chat已接，健康/关系/知识经npc_views叙事出站到人物列表；协议1.19。pytest3696P/121S/72D、Vitest792P/92files及全部门禁EXIT0，原生浏览器技术取证完成。已写唯一talking回执，本地提交见Git；停下等主树收编。
+【2026-11-10 波 D｜已由主树收编 `ec4a020`】3D站定work/eat/rest/chat已接，健康/关系/知识经npc_views叙事出站到人物列表；协议1.19。主树独立复跑 pytest3696P/121S/72D（539.74s）/Vitest792P/92files及全部门禁EXIT0；另用真实库只读采样独立验了隐藏边界（未触发不外发、双列知识才解锁）。真机验收归用户。**已同步回本树**，两树读数一致，本树停等下一波。
 
 ### 当前状态与恢复入口
 
