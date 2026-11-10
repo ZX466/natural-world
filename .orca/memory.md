@@ -82,6 +82,26 @@ vitest 比 codex 的 747 少 1 是预期的：主树 `a152796` 重写了土坎�
 （`iso-banks` 8→7、`three-terrain` 11→10），波 C 在 adapter 补 1 条（9→10），净 −1。
 ⚠ **仍未做真机验收**：剪影浓淡、侧移舒适度、实际帧耗归用户（codex 只做了 SwiftShader 技术读数）。
 
+**波 D 已派 codex（2026-11-10，主树不开工）**：用户实测「后端功能体现不出来」。
+派单正文在 codex 树 `.orca/talking.txt` §二。范围 **D-1 + D-2**，
+**#1 明确排除**（用户「1 先不填写」= 不给陈默配 LLM profile）。
+
+- **D-1 动作可见**：`sim/api/main.py::_npc_tick_hook` 把 `npc.act` 写进
+  `sim/api/ws.py::_ACTION_ANIMS`，snapshot/delta 都带 `anim`（`idle|walk|work|eat|rest|chat`）；
+  但客户端**只把它用于 fauna 透明度**（`three-actors.ts:284`、`WorldScene.ts:1188`），
+  `avatar3d.ts::AvatarAnim` 只有 `idle|walk|run|jump`。要在现有 16 骨骼上摆站姿，
+  **不加网格/图集格/draw call**。2D 回滚路径无劳作素材（`VILLAGER_SHEET` 是 4×4），保持现状。
+  ⚠ `_ACTION_ANIMS` 只写不清，旧姿势最多留到下一次决策（10 tick）——可接受，别当前端 bug 修。
+- **D-2 健康/关系/知识出站**：`ws.py` 对三表**零引用**；真库 `npc_health` 6 行（4 行 hidden）、
+  `relationships` 526 行（陈默 9 行）、`knowledge` 230 行（陈默 2 行）。加可选键 `npc_view`
+  （**叙事串**，不出数值——ws-protocol §5 禁出 `hp/trust/affection/fear/debt/face` 原值），
+  delta 要自带变更账本 + 广播判据补一条（现有 `moved/fauna/tile/lights` 不含关系变化）。
+  `npc_health.hidden=1` 未触发**绝不外发**（self-unknown，按 `HiddenState.triggered` 过滤；
+  他人的隐藏属性仅在陈默持有关联 `knowledge` 行时可见）。协议 **1.18 → 1.19**，
+  五处联动 + `test_ws_gateway` 两个白名单钉子。面板加第三块「人物」（列表式或点选式，codex 定）。
+- 顺带发现、**未修未派**：起火实测约 11.5%/日（设计 34%，可走格仅约 26% 且抽中格还要求可走）；
+  `npc.lod_change` 零事件但库内 `chenmo` 已是 `lod=2`（L2 从未真正升格）。
+
 **波 B 收编（`fb20719`，codex `d799fca`）**：真实火场出站 —— `sim/npc/light_view.py`
 把活跃火格投影成既有六键 `Light`（不透明稳定 rtoken、x/y、`kind="fire"`、radius 5、
 flicker 0.4），**不输出** fire_id / 燃料 / tick / 强度 / 归因，无火灾专用路由或帧类型。
