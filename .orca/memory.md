@@ -3,7 +3,7 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-10 · 土坎改 2 格方块待提交 · 3D 默认 · 波 A/B 已收编 · 试车台转世界结构 · 波 C 已派 codex）
+## 0. 当前状态（2026-11-10 · 土坎已改 2 格方块 `a152796` · 3D 默认 · 波 A/B 已收编 · 试车台转世界结构 · 波 C 在 codex 手里）
 
 **试车台 = 世界结构（2026-11-09 用户改口「要和预览一样：可识别拆解，是障碍物实体」）**：
 外部 SDK 整包原样入库 `vendor/linhe-lre-sdk/`（272K，除一份本仓新增的 `.d.ts` 外一字节未改），
@@ -23,7 +23,7 @@
 
 **挖块禁挖**：`TileMap.structure_at()` + `voxel_exec._validate` —— 试车台格高度 1、碰撞 0，
 与「土坎」判定同形，不拦就会被一路挖成坑而模型浮在上面。渲染侧同理：
-`cell-appearance.staticStructureTiles` 把这些格排除出土坎斜纹。这条判据有钉子：
+`cell-appearance.staticStructureTiles` 把这些格排除出「土坎矮墙」（否则建筑被墙包住）。这条判据有钉子：
 `test_voxel_runtime.py::test_static_structure_ground_is_undiggable`（dig/place 各一条，零事件）。
 
 **土坎抬成 2 格方块（2026-11-10 用户裁定「土坎不要了，都变成方块」）**：
@@ -60,15 +60,11 @@ vitest `734P/87F`、ruff check+format / pyright / tsc / lint / prettier / gen:pr
 build 全 EXIT 0；`build_height_map --check`、`build_block_atlas --check` 字节一致。
 ⚠ **仍未做真机验收**（悬停手感/面板布局/拆解动画需 WebGL）。
 
-**土坎字形门禁（`6dc5cea`，4 文件）**：pytest `3675P/121S/72D EXIT 0`（499.07s）、
-vitest `738P/87F`、tsc / eslint / prettier / gen:protocol:check / build 全 EXIT 0。
-⚠ 斜杠在其它机位/距离下的观感未验收。
-
-**当前在飞（2026-11-10）**：**波 C 渲染三件已派 codex**（3D 穿墙剪影 / 相机近墙构图 /
-Phaser 高度通道），纯客户端不碰协议。codex 树已同步到 `d78e5e0`（= 主树 `81d183c`，
-含协议 1.18 与土坎字形），同步后两树门禁读数一致：pytest `3675P/121S/72D` EXIT 0
-（520.80s）、vitest `738P/87F` EXIT 0。派单全文在 codex `.orca/talking.txt` §二。
-**主树只做收编复核，别自己开工。**
+**当前在飞（2026-11-10）**：**波 C 渲染三件在 codex 手里**（3D 穿墙剪影 / 相机近墙构图 /
+Phaser 高度通道），纯客户端不碰协议。codex 树停在 `d78e5e0`（= 主树 `81d183c`，
+**不含 `a152796`**），同步时门禁一致：pytest `3675P/121S/72D` EXIT 0（520.80s）、
+vitest `738P/87F` EXIT 0。派单全文在 codex `.orca/talking.txt` §二。
+**主树只做收编复核，别自己开工；收编时一并把 `a152796` 同步过去。**
 
 **波 B 收编（`fb20719`，codex `d799fca`）**：真实火场出站 —— `sim/npc/light_view.py`
 把活跃火格投影成既有六键 `Light`（不透明稳定 rtoken、x/y、`kind="fire"`、radius 5、
