@@ -30,7 +30,7 @@
 import * as THREE from 'three';
 
 export type AvatarFacing = 'n' | 'e' | 's' | 'w';
-export type AvatarAnim = 'idle' | 'walk' | 'run' | 'jump';
+export type AvatarAnim = 'idle' | 'walk' | 'run' | 'jump' | 'work' | 'eat' | 'rest' | 'chat';
 
 /** 世界方向 → root.rotation.y。tile 的 +x 是东、+y 是南，与 `worldOf` 的
  *  x→x / y→z 映射一致，所以可以直接用世界朝向，不需要相机相对换算。 */
@@ -820,7 +820,7 @@ export interface Avatar3D {
   setPosition(x: number, y: number, z: number): void;
   setFacing(facing: AvatarFacing): void;
   setAnim(anim: AvatarAnim): void;
-  /** 走环相位（秒）。由调用方按**实际显示位移**推进，见模块头注释。 */
+  /** 相位（秒）：走环按实际显示位移推进，静止姿势按未暂停的模拟时间推进。 */
   setPhase(seconds: number): void;
   /** 跳跃进度 0..1；null 表示不在空中。 */
   setJumpProgress(progress: number | null): void;
@@ -913,6 +913,58 @@ export function createAvatar(presetOrId: string | AvatarPreset, atlas: AvatarAtl
       set('armUpperR', 0, 0, -(3 + breathe * 1.5) * DEG);
       set('armLowerL', -10 * DEG);
       set('armLowerR', -10 * DEG);
+      return;
+    }
+    if (anim === 'work') {
+      const s = Math.sin((phase / 1.1) * Math.PI * 2);
+      const c = Math.cos((phase / 1.1) * Math.PI * 2);
+      set('spine', (24 + s * 5) * DEG);
+      set('head', -12 * DEG);
+      set('armUpperL', (-55 - s * 25) * DEG, 0, 8 * DEG);
+      set('armUpperR', (-55 + s * 25) * DEG, 0, -8 * DEG);
+      set('armLowerL', (-35 - c * 10) * DEG);
+      set('armLowerR', (-35 + c * 10) * DEG);
+      set('robeFront', -15 * DEG);
+      return;
+    }
+    if (anim === 'eat') {
+      const s = Math.sin((phase / 1.4) * Math.PI * 2);
+      set('spine', 2 * DEG);
+      set('head', (7 + s * 3) * DEG);
+      // 右手到嘴边，左手托在胸前；只转已有手臂，不额外造食物/道具网格。
+      set('armUpperR', (-95 + s * 5) * DEG, 40 * DEG);
+      set('armLowerR', (-105 - s * 4) * DEG);
+      set('armUpperL', -40 * DEG, -15 * DEG, 5 * DEG);
+      set('armLowerL', -80 * DEG);
+      return;
+    }
+    if (anim === 'rest') {
+      const s = Math.sin((phase / 2.8) * Math.PI * 2);
+      const crouch = (58 + s * 1.5) * DEG;
+      // 两段腿各 .29；加上小腿半厚 .11 的转角补偿，蹲下后靴底仍贴支撑面。
+      b('hips').position.y = 0.58 * Math.cos(crouch) + 0.11 * Math.sin(crouch);
+      set('spine', (12 + s * 1.5) * DEG);
+      set('head', (-10 - s * 1.5) * DEG);
+      set('legUpperL', -crouch);
+      set('legUpperR', -crouch);
+      set('legLowerL', crouch * 2);
+      set('legLowerR', crouch * 2);
+      set('armUpperL', -35 * DEG, 0, 8 * DEG);
+      set('armUpperR', -35 * DEG, 0, -8 * DEG);
+      set('armLowerL', -75 * DEG);
+      set('armLowerR', -75 * DEG);
+      set('robeFront', -crouch * 0.9);
+      set('robeBack', crouch * 0.7);
+      return;
+    }
+    if (anim === 'chat') {
+      const s = Math.sin((phase / 1.2) * Math.PI * 2);
+      set('spine', 3 * DEG, (24 + s * 4) * DEG);
+      set('head', -2 * DEG, (-16 - s * 3) * DEG);
+      set('armUpperL', (-35 - s * 8) * DEG, 0, (48 + s * 8) * DEG);
+      set('armLowerL', (-70 - s * 12) * DEG);
+      set('armUpperR', 0, 0, -7 * DEG);
+      set('armLowerR', -20 * DEG);
       return;
     }
     if (anim === 'walk') {

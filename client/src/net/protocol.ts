@@ -31,6 +31,8 @@ export type SyncRequestMessage = Schemas['SyncRequestMessage'];
 // ── sim → client ───────────────────────────────────────────────
 export type FullSnapshotMessage = Schemas['FullSnapshotMessage'];
 export type StateDeltaMessage = Schemas['StateDeltaMessage'];
+export type NpcView = Schemas['NpcView'];
+export type NpcViewDelta = Schemas['NpcViewDelta'];
 export type VoxelStateMessage = Schemas['VoxelStateMessage'];
 export type VoxelEdit = Schemas['VoxelEdit'];
 export type PerceptionMessage = Schemas['PerceptionMessage'];

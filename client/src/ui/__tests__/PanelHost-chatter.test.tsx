@@ -14,6 +14,7 @@ const storeState = vi.hoisted(() => ({
   monologues: [] as { form: 'thought' | 'bubble' | 'plan'; content: string }[],
   chatter: [] as { name: string | null; content: string }[],
   plans: [] as { rtoken: string; text: string }[],
+  npcViews: [],
 }));
 
 vi.mock('../../store/uiStore', () => ({
@@ -33,10 +34,11 @@ describe('PanelHost 街谈巷议（批次 D10）', () => {
     storeState.plans = [];
   });
 
-  it('空态：心之声与街谈巷议两块面板可见（计划看板已退役）', () => {
+  it('空态：心之声、街谈巷议与人物可见（计划看板已退役）', () => {
     const html = renderPanel();
     expect(html).toContain('心之声');
     expect(html).toContain('街谈巷议');
+    expect(html).toContain('aria-label="人物"');
     expect(html).not.toContain('od-panel--plan');
   });
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { expect, it, vi } from 'vitest';
 import { WorldMirror } from '../../../world-mirror';
-import { AVATAR_PRESET_IDS } from '../avatar3d';
+import { AVATAR_PRESET_IDS, type Avatar3D } from '../avatar3d';
 import { createActorLayer } from '../three-actors';
 
 function setup(avatars3d = false, missingTextures: readonly string[] = []) {
@@ -54,6 +54,146 @@ function setup(avatars3d = false, missingTextures: readonly string[] = []) {
   );
   return { mirror, camera, scene, texture, layer };
 }
+
+const ACTION_ANIMS = ['work', 'eat', 'rest', 'chat'] as const;
+
+function bone(avatar: Avatar3D, name: string): THREE.Bone {
+  return avatar.mesh.skeleton.bones.find((item) => item.name === name)!;
+}
+
+function pose(avatar: Avatar3D): number[] {
+  return avatar.mesh.skeleton.bones.flatMap((item) => [...item.position, ...item.quaternion]);
+}
+
+it.each([
+  ['work', 'spine', 'x', 0.25],
+  ['eat', 'armUpperR', 'x', 1.2],
+  ['rest', 'legLowerL', 'x', 1.5],
+  ['chat', 'spine', 'y', 0.2],
+] as const)('routes stationary %s to its 3D pose', (anim, name, axis, minimum) => {
+  const { layer, mirror } = setup(true);
+  mirror.applyActorDeltas([{ rtoken: 'other', anim }]);
+  layer.update(0, 0, 1, 0);
+  const view = layer.views.get('other')!;
+  expect(view.motion.animClock).toBe(-1);
+  expect(Math.abs(bone(view.avatar!, name).rotation[axis])).toBeGreaterThan(minimum);
+  expect(mirror.actors.get('other')!.anim).toBe(anim);
+  layer.dispose();
+});
+
+it('treats stationary wire walk as idle', () => {
+  const { layer, mirror } = setup(true);
+  mirror.applyActorDeltas([{ rtoken: 'other', anim: 'walk' }]);
+  layer.update(0, 0, 1, 0);
+  const avatar = layer.views.get('other')!.avatar!;
+  expect(Math.abs(bone(avatar, 'spine').rotation.x)).toBeLessThan(0.1);
+  expect(bone(avatar, 'legLowerL').rotation.x).toBe(0);
+  expect(mirror.actors.get('other')!.anim).toBe('walk');
+  layer.dispose();
+});
+
+it.each(ACTION_ANIMS)(
+  'plays the displayed gait before %s and resumes the retained action',
+  (anim) => {
+    for (const gait of ['walk', 'run'] as const) {
+      const { layer, mirror } = setup(true);
+      mirror.applyActorDeltas([{ rtoken: 'other', anim }]);
+      layer.update(0, 0, 1, 0);
+      mirror.applyActorDeltas([{ rtoken: 'other', x: 3, gait }]);
+      layer.update(250, 250, 1, 0);
+      layer.update(600, 350, 1, 0);
+      const view = layer.views.get('other')!;
+      expect(view.motion.animClock).toBeGreaterThan(0);
+      const elbow = bone(view.avatar!, 'armLowerL').rotation.x;
+      if (gait === 'walk') expect(elbow).toBeCloseTo((-15 * Math.PI) / 180);
+      else {
+        expect(elbow).toBeLessThan(-1.2);
+        expect(bone(view.avatar!, 'spine').rotation.x).toBeGreaterThan(0.28);
+        expect(bone(view.avatar!, 'spine').rotation.x).toBeLessThan(0.35);
+      }
+      layer.update(1000, 600, 1, 0);
+      layer.update(1100, 100, 1, 0);
+      expect(view.motion.animClock).toBe(-1);
+      expect(mirror.actors.get('other')!.anim).toBe(anim);
+      const standing = pose(view.avatar!);
+      mirror.applyActorDeltas([{ rtoken: 'other', anim: 'idle' }]);
+      layer.update(1100, 0, 1, 0);
+      expect(pose(view.avatar!)).not.toEqual(standing);
+      layer.dispose();
+    }
+  },
+);
+
+it.each(ACTION_ANIMS)('plays an airborne jump before %s', (anim) => {
+  const { layer, mirror } = setup(true);
+  mirror.applyActorDeltas([
+    {
+      rtoken: 'other',
+      anim,
+      jump: {
+        rtoken: 'flight',
+        start_x: 2,
+        start_y: 0,
+        goal_x: 3,
+        goal_y: 0,
+        start_height: 1,
+        target_height: 1,
+        progress: 0.5,
+        active: true,
+        duration: 0.6,
+        arc_height: 1.5,
+      },
+    },
+  ]);
+  layer.update(0, 0, 1, 0);
+  const view = layer.views.get('other')!;
+  expect(view.motion.airborne).toBe(true);
+  expect(bone(view.avatar!, 'armUpperL').rotation.x).toBeLessThan(-0.9);
+  expect(bone(view.avatar!, 'armUpperL').rotation.z).toBeGreaterThan(0.3);
+  expect(mirror.actors.get('other')!.anim).toBe(anim);
+  layer.dispose();
+});
+
+it.each(ACTION_ANIMS)('advances stationary %s at simulation speed', (anim) => {
+  const slow = setup(true),
+    fast = setup(true),
+    elapsed = setup(true);
+  for (const { layer, mirror } of [slow, fast, elapsed]) {
+    mirror.applyActorDeltas([{ rtoken: 'other', anim }]);
+    layer.update(0, 0, 1, 0);
+  }
+  slow.layer.update(64, 64, 1, 0);
+  fast.layer.update(64, 64, 4, 0);
+  elapsed.layer.update(256, 256, 1, 0);
+  const fastPose = pose(fast.layer.views.get('other')!.avatar!);
+  expect(fastPose).toEqual(pose(elapsed.layer.views.get('other')!.avatar!));
+  expect(fastPose).not.toEqual(pose(slow.layer.views.get('other')!.avatar!));
+  for (const { layer } of [slow, fast, elapsed]) layer.dispose();
+});
+
+it.each(ACTION_ANIMS)(
+  'freezes stationary %s while paused and resumes without catching up',
+  (anim) => {
+    const { layer, mirror } = setup(true);
+    mirror.applyActorDeltas([{ rtoken: 'other', anim }]);
+    layer.update(0, 0, 1, 0);
+    layer.update(100, 100, 1, 0);
+    const avatar = layer.views.get('other')!.avatar!;
+    const before = pose(avatar);
+    layer.update(1100, 1000, 16, 0, true);
+    layer.update(2100, 1000, 16, 0, true);
+    expect(pose(avatar)).toEqual(before);
+    expect(mirror.actors.get('other')!.anim).toBe(anim);
+    layer.update(2200, 100, 1, 0, false);
+    const control = setup(true);
+    control.mirror.applyActorDeltas([{ rtoken: 'other', anim }]);
+    control.layer.update(200, 200, 1, 0);
+    expect(pose(avatar)).toEqual(pose(control.layer.views.get('other')!.avatar!));
+    expect(pose(avatar)).not.toEqual(before);
+    layer.dispose();
+    control.layer.dispose();
+  },
+);
 
 it('uses billboards with feet on world height and projection-dependent apparent size', () => {
   const { layer, camera } = setup();

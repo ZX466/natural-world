@@ -275,6 +275,7 @@ class TestOutOfCharacterBoundary:
             # 2026-10-11：心声历史（重连/重启面板重同步；内容=既有 monologue 帧
             # 形，词面已过 banned 面——历史是事件投影非新表达面，白名单随 CR 扩键）。
             "monologue_history",
+            "npc_views",
         }
         for actor in payload["actors"]:
             # D10（1.4）：`name` 可选（戏内显示名，装配了映射才带；entity_id 仍禁出）
@@ -285,13 +286,31 @@ class TestOutOfCharacterBoundary:
 
     def test_delta_key_whitelist(self, loop: TickLoop):
         """delta 键白名单同口径（D10：可选 name；D14：anim 动作姿势供数）。"""
-        loop.issue_move("chenmo", [(1, 0), (2, 0)])
-        loop.advance_frame(1.0)
-        payload = delta_payload(loop, loop.drain_delta())
-        assert set(payload.keys()) == {"type", "channel", "v", "ws_seq", "actors", "time"}
-        for actor in payload["actors"]:
-            assert set(actor.keys()) <= {"rtoken", "x", "y", "name", "anim"}
-            assert actor.get("anim", "idle") in {"idle", "walk", "work", "eat", "rest", "chat"}
+        from sim.api import ws as ws_module
+
+        ws_module.clear_npc_views()
+        ws_module.set_npc_views(
+            [{"rtoken": "rt-friend", "health": [], "bond": "点头之交。", "knows": []}]
+        )
+        try:
+            loop.issue_move("chenmo", [(1, 0), (2, 0)])
+            loop.advance_frame(1.0)
+            payload = delta_payload(loop, loop.drain_delta())
+            assert set(payload.keys()) == {
+                "type",
+                "channel",
+                "v",
+                "ws_seq",
+                "actors",
+                "time",
+                "npc_views",
+            }
+            assert set(payload["npc_views"][0]) == {"rtoken", "health", "bond", "knows"}
+            for actor in payload["actors"]:
+                assert set(actor.keys()) <= {"rtoken", "x", "y", "name", "anim"}
+                assert actor.get("anim", "idle") in {"idle", "walk", "work", "eat", "rest", "chat"}
+        finally:
+            ws_module.clear_npc_views()
 
     def test_delta_clean(self, loop: TickLoop):
         loop.issue_move("chenmo", [(1, 0), (2, 0)])

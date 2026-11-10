@@ -71,7 +71,7 @@ it('keeps commands unsent when token retrieval fails', async () => {
 });
 
 it.each(['move_request', 'jump_request'])(
-  '%s waits for auth and sends the 1.18 envelope',
+  '%s waits for auth and sends the 1.19 envelope',
   async (type) => {
     vi.stubGlobal('WebSocket', Socket);
     vi.stubGlobal(
@@ -92,7 +92,7 @@ it.each(['move_request', 'jump_request'])(
     expect(socket.sent.map((frame) => frame.type)).toEqual(['hello', 'sync_request', type]);
     expect(socket.sent.at(-1)).toMatchObject({
       type,
-      v: '1.18',
+      v: '1.19',
       target_x: 1,
       target_y: 2,
       gait: 'run',

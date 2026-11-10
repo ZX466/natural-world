@@ -66,6 +66,7 @@ client ◄──hello_ack── { "v": "1.1", "server_versions": ["1.0","1.1"], 
 
 | 版本 | 变更 | 影响端 | 日期 |
 |---|---|---|---|
+| 1.19 | `full_snapshot.npc_views?` / `state_delta.npc_views?` 增加认识的人的叙事投影。封闭 `NpcView` 只含 rtoken、可选显示名、health/knows 叙事串数组与 bond 叙事串；`NpcViewDelta` 另允许只含 rtoken/op:remove 的移除。快照整组替换、增量按替身更新，静止的关系/知识变化也可发送；不出原始属性、内部标识或未获知的隐藏属性。无新帧 type/HTTP 查询面，旧端忽略可选字段。 | sim+client | 2026-11-10 |
 | 1.18 | 世界地图静态结构锚点：`GET /api/world/map` 新增可选 `structures`（`{名称 → MapStructure{x,y,w,h}}`，`additionalProperties:false`）。占地面在 `chunks[].collision_b64` 里**已经不可走**（构建期写进 `sim/content/linhe-town.json` 的 `_structures`），本字段只把锚点交给客户端，让它把 3D 建筑立在同一个矩形上，不再自行扫地形选点。无新 WS 帧/路由/事件，世界真相不变。旧客户端忽略该键，前端不读时行为与 1.17 相同。 | sim+client | 2026-11-09 |
 | 1.17 | 既有光源生命周期补齐：`LightDelta` 新增可选 `op`（add/remove）、`x`、`y`、`kind`、`radius`，仍只要求 `rtoken`，保留旧的仅 `flicker` 更新；add 为完整光源 upsert，remove 只需 rtoken。真实活跃火格通过既有 `full_snapshot.lights` / `state_delta.lights` 投影，`Light.kind` 仍为自由 string；无新帧 type、路由、事件或归因字段。静止人物期间也发送光源变化；新连接快照不消费其他连接待发的移除。旧客户端忽略新增字段，旧闪烁增量仍有效。 | sim+client | 2026-11-09 |
 | 1.16 | 角色移动加法契约：`MoveRequestMessage.gait?` 为 walk/run，省略保留旧版移动语义；新增 render 通道 `jump_request{target_x,target_y,gait?}`，目标为非负整数，省略 gait 按 walk；客户端不传实体、高度或时长。`Actor`/`ActorDelta` 新增可选 `elevation`（整数 0..3）、`gait`、`jump`（可为 null）；封闭 `JumpVisual` 只含不透明 rtoken、起落格与高度、进度、active、duration、arc_height，无世界 tick/seq/起始时间戳。完成描述以 active=false/progress=1 保留至下次跳跃或恢复，不能锁住后续地面行走。输入约定 Shift 跑/松开走、Space 请求跳跃；服务端权威。旧快照可缺省新增字段；增量省略表示保持，jump:null 表示清除；旧端忽略新字段及新 type。 | sim+client | 2026-11-08 |

@@ -346,10 +346,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     from sim.agent.voxel_exec import VoxelRuntime
     from sim.api import ws as voxel_gateway
+    from sim.api.npc_view import NpcViewInputs, load_npc_view_inputs
     from sim.core.logsetup import setup_logging
     from sim.perception.senses import run_perception_step
 
     setup_logging()  # K8：redact_sensitive 进全局日志链（第二道防线）
+    voxel_gateway.clear_action_anims()
+    voxel_gateway.clear_npc_views()
     loop, store, branch_history = await build_loop()
     from sim.content.health_evolve import DailyHealthEvolution, load_health_snapshot
     from sim.core.calendar import game_time
@@ -486,6 +489,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             refresh_hidden_states(
                 hidden_states, await NpcStore(store, branch_id=branch_id).materialize_hidden()
             )
+        if any(
+            event.event_type
+            in {
+                EventKind.NPC_HEALTH_CHANGED,
+                EventKind.NPC_DEATH,
+                EventKind.NPC_CHAT,
+                EventKind.NPC_RELATIONSHIP_RETELL,
+                EventKind.NPC_KNOWLEDGE_LEARNED,
+            }
+            for event in events
+        ):
+            await _refresh_npc_views(branch_id)
         # Terrain already follows enqueued facts; inventory still commits below.
         voxel_runtime.observe(events)
         voxel_gateway.apply_voxel_events(
@@ -598,6 +613,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     hidden_states.update(await npc_store.materialize_hidden([CHENMO_ID]))
     app.state.hidden_states = hidden_states
+    npc_view_inputs = NpcViewInputs()
+    npc_view_triggered: frozenset[str] = frozenset()
+
+    def _publish_npc_views() -> None:
+        nonlocal npc_view_triggered
+        npc_view_triggered = hidden_states.get(CHENMO_ID, HiddenState.empty()).triggered
+        voxel_gateway.set_npc_views(
+            npc_view_inputs.rows(
+                triggered=npc_view_triggered,
+                live_ids=loop.state.entities,
+                display_names=_display_names,
+                rtoken_of=voxel_gateway._rtoken,
+            )
+        )
+
+    async def _refresh_npc_views(branch_id: str) -> None:
+        nonlocal npc_view_inputs
+        async with store.session_factory() as session:
+            npc_view_inputs = await load_npc_view_inputs(session, branch_id)
+        _publish_npc_views()
+
+    await _refresh_npc_views(current_branch or "main")
     _narration = NarratedCache()
 
     def _hidden_context(npc_id: str) -> str:
@@ -736,6 +773,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             if event is not None:
                 emerged.append(event)
         chenmo = state.entities.get(CHENMO_ID)
+        # Leaving a trigger window may emit no event, but must retract the
+        # protagonist's previously visible hidden health on the next delta.
+        if hidden_states.get(CHENMO_ID, HiddenState.empty()).triggered != npc_view_triggered:
+            _publish_npc_views()
         l2_controlled: set[str] = set()
         if chenmo is not None:
             for npc_id, _profile in npc_runtime.profiles.items():
@@ -795,7 +836,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     }
                 )
         # 批次 D14：npc.act → 动作姿势账本（快照/delta 的 anim 字段供数）。
-        from sim.api.ws import set_action_anim
+        from sim.api.ws import _anim_of, set_action_anim
         from sim.npc.sim_exec import anim_of_action
 
         for event in batch or []:
@@ -805,7 +846,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             ):
                 npc_id = str(event.payload.get("npc_id", ""))
                 if npc_id:
-                    set_action_anim(npc_id, anim_of_action(str(event.payload.get("action", ""))))
+                    anim = anim_of_action(str(event.payload.get("action", "")))
+                    if _anim_of(npc_id) != anim:
+                        set_action_anim(npc_id, anim)
+                        loop.pending_delta_entity_ids.add(npc_id)
         from sim.core.events import HiddenEmergePayload, KnowledgeLearnedPayload, WorldEvent
         from sim.llm.memory_scan import MemoryWritePipeline
         from sim.npc.evidence import can_hold_knowledge
@@ -1275,6 +1319,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 # 不清则旧分支最近 20 条随快照灌进新分支的心之声面板
                 # （bubble 面全过投递面过滤，旧线嘟囔会整批出现在新世界）。
                 _ws_mod.monologue_history_clear()
+                _ws_mod.clear_action_anims()
+                _ws_mod.clear_npc_views()
                 for control in manager.controls():
                     control.cancel_fast_forward()
                 changed = True
@@ -1322,6 +1368,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 refresh_hidden_states(
                     hidden_states, await branch_store.materialize_hidden(), reset=True
                 )
+                await _refresh_npc_views(branch_id)
                 snapshot = await load_health_snapshot(store.session_factory, branch_id=branch_id)
                 health_snapshot_day = game_time(loop.state.tick).day
                 if health_evolution is None:
@@ -1546,6 +1593,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         voxel_gateway.set_light_provider(None)
+        voxel_gateway.clear_action_anims()
+        voxel_gateway.clear_npc_views()
         npc_l2_live = False
         app.state.health_evolution = None
         app.state.flush_for_anchor = None
@@ -1564,7 +1613,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 raise result
 
 
-app = FastAPI(title="临河镇 sim", version="1.18", lifespan=lifespan)
+app = FastAPI(title="临河镇 sim", version="1.19", lifespan=lifespan)
 app.include_router(settings_router)
 app.include_router(anchors_router)  # M5-K7：玩家档读路径（落库 → WS 查表集供数）
 

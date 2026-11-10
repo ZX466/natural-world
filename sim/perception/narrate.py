@@ -27,6 +27,34 @@ def narrate_hp(fraction: float) -> str:
     return "身子已经不听使唤了。"
 
 
+def narrate_health(label: str, severity: float) -> str:
+    """A permitted health attribute → world-language, never a raw severity."""
+    if severity >= 0.7:
+        return f"{label}发作得厉害。"
+    if severity >= 0.3:
+        return f"{label}时常让人难受。"
+    if severity > 0:
+        return f"{label}偶尔让人不舒服。"
+    return f"{label}眼下还算安稳。"
+
+
+def narrate_bond(trust: float, affection: float, fear: float) -> str:
+    """The other person's directed impression of Chenmo, described as behavior."""
+    if fear >= 0.6:
+        return "和你说话时总有些躲闪。"
+    if affection >= 0.6:
+        return "见到你会亲热地招呼。"
+    if trust >= 0.6:
+        return "和你说话时显得很放心。"
+    if fear >= 0.25:
+        return "和你说话时有些拘谨。"
+    if trust >= 0.2 or affection >= 0.2:
+        return "愿意和你多说几句。"
+    if trust > 0 or affection > 0:
+        return "见面会同你搭句话。"
+    return "与你还只是点头之交。"
+
+
 def narrate_hunger(fraction: float) -> str:
     """饥饿 0..1（1=极饿）→ 内感受。"""
     if fraction >= 0.8:

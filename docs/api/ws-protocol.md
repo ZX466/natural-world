@@ -37,7 +37,7 @@ sim/api/ws  (FastAPI WebSocket 网关)
 
 ```jsonc
 {
-  "v": "1.18",             // 协议版本（见 versioning.md）；协商后全程不变
+  "v": "1.19",             // 协议版本（见 versioning.md）；协商后全程不变
   "ws_seq": 412,           // 传输序号：本端发出帧的递增计数，仅用于丢帧/乱序检测
   "channel": "render",     // render | narrative | control | session | error
   "type": "state_delta",   // 见 §3 消息清单
@@ -168,6 +168,23 @@ sim/api/ws  (FastAPI WebSocket 网关)
 
 - 结算公式（技能 × 姿态 × 距离 / 熵注入）永不出现；客户端只拿表现数据画弹幕与翻滚。
 - `exchange` 是战斗内局部序号，不是世界 seq，不影响回放因果。
+
+#### 人物叙事（1.19）
+
+`full_snapshot.npc_views?` 为 `NpcView[]`，`state_delta.npc_views?` 为 `NpcViewDelta[]`。
+每条只含不透明 `rtoken`、可选显示名 `name`、`health:string[]`、`bond:string`、`knows:string[]`；
+增量移除为 `{rtoken, op:"remove"}`。快照整组替换（缺省视为空组），增量按替身更新完整条目，
+空的健康或知识数组会撤下此前可见的文字；重连和读档不得把旧条目追加回来。
+
+内容由服务端统一叙事化。仅关系表与陈默有行且仍在世界中的人有档案；陈默自身只有实际可见内容时出现。
+`bond` 描述对方怎样对待陈默，有向关系不反读；只有陈默→对方的行时仅说明曾相识。
+`knows` 是陈默持有、双列指向该人物属性的有效知识原文，不是旁观者读取那个人的私有知识。
+自身隐藏健康及相关知识必须命中当前触发窗口；他人隐藏健康须有陈默持有的对应双列知识。
+未获知项不出站，也不生成任何暗示或默认健康档。数值、内部标识、证据链、见证人、时间游标均不入条目。
+
+同步快照/增量仅读内存账本，启动/读档与已提交的相关事件批次在其外部装配；无 SQL 查询或新 HTTP 查询面。
+站定动作、关系/知识变化可独立于位移发送。3D 人形站定时消费 work/eat/rest/chat，位移与跳跃优先；
+2D 回退路径本波未接劳作姿势。
 
 ### 4.2 narrative 通道（喂 React，戏内）
 

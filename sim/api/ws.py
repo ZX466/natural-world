@@ -42,6 +42,7 @@ import struct
 import time
 from collections import deque
 from collections.abc import Callable, Mapping
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -51,6 +52,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from sim.agent.impulse_gate import impulse_gate
 from sim.agent.voxel_exec import VoxelRejected, VoxelRuntime
+from sim.api.npc_view import NpcViewRow
 from sim.api.outbound_guard import record_outbound_leak, strip_outbound_forbidden
 from sim.api.voxel_view import (
     _VOXEL_EDITS as _VOXEL_EDITS,
@@ -89,12 +91,65 @@ logger = structlog.get_logger(__name__)
 #: `sim/tests/test_protocol_version.py` 的跨树钉锁死。**改一处必改另一处。**
 #: 1.1 = M5 三个 minor 级变更（fast_forward / anchors current+SessionAnchor / GET /{id} /
 #: PlanDelta 封闭）；1.2 = 批次 E 只读诊断面进协议快照（M6-K2）——登记见 versioning.md §7。
-_PROTOCOL_VERSION = "1.18"
+_PROTOCOL_VERSION = "1.19"
 FRAME_BUDGET_SECONDS = 1 / 60  # 1x 驱动节拍；真实倍率由 GameClock.advance 换算
 _VOXEL_RUNTIME: VoxelRuntime | None = None
 _LIGHT_PROVIDER: Callable[[], list[LightRow]] | None = None
 _LIGHTS_BROADCAST: dict[str, dict[str, Any]] = {}
 _LIGHTS_SNAPSHOT_SEEN: set[str] = set()
+_NPC_VIEWS: dict[str, NpcViewRow] = {}
+_NPC_VIEWS_BROADCAST: dict[str, NpcViewRow] = {}
+_NPC_VIEWS_SNAPSHOT_SEEN: set[str] = set()
+_NPC_VIEWS_SNAPSHOT_DIRTY: set[str] = set()
+
+
+def clear_npc_views() -> None:
+    """World/branch resets are followed by full snapshots for all observers."""
+    _NPC_VIEWS.clear()
+    _NPC_VIEWS_BROADCAST.clear()
+    _NPC_VIEWS_SNAPSHOT_SEEN.clear()
+    _NPC_VIEWS_SNAPSHOT_DIRTY.clear()
+
+
+def set_npc_views(rows: list[NpcViewRow]) -> None:
+    """Accept only preconstructed narrative rows, never database attributes."""
+    _NPC_VIEWS.clear()
+    _NPC_VIEWS.update({row["rtoken"]: deepcopy(row) for row in rows})
+
+
+def _npc_views_snapshot_rows() -> list[NpcViewRow]:
+    # A new connection cannot consume another observer's pending changes.
+    _NPC_VIEWS_SNAPSHOT_SEEN.update(_NPC_VIEWS)
+    _NPC_VIEWS_SNAPSHOT_DIRTY.update(
+        token
+        for token in _NPC_VIEWS.keys() | _NPC_VIEWS_BROADCAST.keys()
+        if _NPC_VIEWS_BROADCAST.get(token) != _NPC_VIEWS.get(token)
+    )
+    return [deepcopy(_NPC_VIEWS[token]) for token in sorted(_NPC_VIEWS)]
+
+
+def _npc_views_changed() -> bool:
+    return (
+        bool(_NPC_VIEWS_SNAPSHOT_DIRTY)
+        or _NPC_VIEWS != _NPC_VIEWS_BROADCAST
+        or bool(_NPC_VIEWS_SNAPSHOT_SEEN - _NPC_VIEWS.keys())
+    )
+
+
+def _npc_views_delta_rows() -> list[dict[str, Any]]:
+    removed = (_NPC_VIEWS_BROADCAST.keys() | _NPC_VIEWS_SNAPSHOT_SEEN) - _NPC_VIEWS.keys()
+    rows: list[dict[str, Any]] = [{"op": "remove", "rtoken": token} for token in sorted(removed)]
+    rows.extend(
+        dict(deepcopy(_NPC_VIEWS[token]))
+        for token in sorted(_NPC_VIEWS)
+        if token in _NPC_VIEWS_SNAPSHOT_DIRTY
+        or _NPC_VIEWS_BROADCAST.get(token) != _NPC_VIEWS[token]
+    )
+    _NPC_VIEWS_BROADCAST.clear()
+    _NPC_VIEWS_BROADCAST.update(deepcopy(_NPC_VIEWS))
+    _NPC_VIEWS_SNAPSHOT_SEEN.clear()
+    _NPC_VIEWS_SNAPSHOT_DIRTY.clear()
+    return rows
 
 
 def reset_light_baseline() -> None:
@@ -397,6 +452,10 @@ def set_action_anim(entity_id: str, anim: str) -> None:
     _ACTION_ANIMS[entity_id] = anim
 
 
+def clear_action_anims() -> None:
+    _ACTION_ANIMS.clear()
+
+
 def _anim_of(entity_id: str) -> str:
     return _ACTION_ANIMS.get(entity_id, "idle")
 
@@ -661,6 +720,7 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
         "time": _time_payload(loop.state.tick),
         # 2026-10-11 心声历史：重启/重连面板不空（可选键——查询失败=无键/空表）。
         "monologue_history": monologue_history_payload(loop),
+        "npc_views": _npc_views_snapshot_rows(),
     }
 
 
@@ -872,6 +932,9 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
     lights = _lights_delta_rows()
     if lights:
         payload["lights"] = lights
+    views = _npc_views_delta_rows()
+    if views:
+        payload["npc_views"] = views
     return payload
 
 
@@ -1805,6 +1868,7 @@ async def run_world_driver(
             or (loop.fauna_enabled and any(e.event_type is EventKind.FAUNA_TICK for e in events))
             or any(e.event_type is EventKind.TILE_CHANGED for e in events)
             or (not fast_forwarding and _lights_changed())
+            or (not fast_forwarding and _npc_views_changed())
         ):
             seq += 1
             payload = delta_payload(loop, moved)

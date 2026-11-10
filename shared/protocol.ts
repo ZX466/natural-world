@@ -323,6 +323,7 @@ export type components = {
       readonly lights: readonly components['schemas']['Light'][];
       readonly map: components['schemas']['MapInfo'];
       readonly monologue_history?: readonly components['schemas']['MonologueMessage'][];
+      readonly npc_views?: readonly components['schemas']['NpcView'][];
       readonly structures: readonly components['schemas']['Structure'][];
       readonly time: components['schemas']['TimeInfo'];
       /**
@@ -505,6 +506,20 @@ export type components = {
       readonly v: string;
       readonly ws_seq: number;
     };
+    readonly NpcView: {
+      readonly bond: string;
+      readonly health: readonly string[];
+      readonly knows: readonly string[];
+      readonly name?: string;
+      readonly rtoken: components['schemas']['RToken'];
+    };
+    readonly NpcViewDelta:
+      | components['schemas']['NpcView']
+      | {
+          /** @enum {string} */
+          readonly op: 'remove';
+          readonly rtoken: components['schemas']['RToken'];
+        };
     readonly PerceptionMessage: {
       /** @enum {string} */
       readonly channel: 'narrative';
@@ -639,6 +654,7 @@ export type components = {
       /** @enum {string} */
       readonly channel: 'render';
       readonly lights?: readonly components['schemas']['LightDelta'][];
+      readonly npc_views?: readonly components['schemas']['NpcViewDelta'][];
       readonly plan?: readonly components['schemas']['PlanDelta'][];
       readonly structures?: readonly components['schemas']['StructureDelta'][];
       readonly time: components['schemas']['TimeInfo'];

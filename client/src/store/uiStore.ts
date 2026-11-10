@@ -7,6 +7,8 @@
  */
 import { create } from 'zustand';
 import type {
+  NpcView,
+  NpcViewDelta,
   PlanDelta,
   SessionAnchor,
   VoxelRequestMessage,
@@ -46,6 +48,28 @@ export interface InGameTime {
 export type Speed = 1 | 4 | 16;
 export type VoxelMaterial = NonNullable<VoxelRequestMessage['material']>;
 
+/** 每个 upsert 都是该人物的完整叙事投影；空数组会撤下此前可见的文字。 */
+function applyNpcViewDeltas(
+  current: readonly NpcView[],
+  changes: readonly NpcViewDelta[],
+): NpcView[] {
+  const rows = new Map(current.map((view) => [view.rtoken, view]));
+  for (const view of changes) {
+    if ('op' in view) {
+      if (view.op === 'remove') rows.delete(view.rtoken);
+    } else {
+      rows.set(view.rtoken, {
+        rtoken: view.rtoken,
+        ...(view.name === undefined ? {} : { name: view.name }),
+        health: [...new Set(view.health)],
+        bond: view.bond,
+        knows: [...new Set(view.knows)],
+      });
+    }
+  }
+  return [...rows.values()];
+}
+
 interface UiState {
   voxelMaterial: VoxelMaterial;
   setVoxelMaterial: (material: VoxelMaterial) => void;
@@ -68,6 +92,8 @@ interface UiState {
    *  是镇上的公开声音，不是陈默的内心活动；与 monologues 分流防刷屏。
    *  D12：条目带署名） */
   chatter: ChatterEntry[];
+  /** 服务端筛选过的低频人物叙事；没有健康/关系原始数值和实体位置。 */
+  npcViews: NpcView[];
   /** state_delta.plan 数据面（整组替换）。计划看板 UI 已于 2026-10-26 退役，
    *  字段保留供其他消费者；不要再接回面板。 */
   plans: PlanDelta[];
@@ -102,6 +128,8 @@ interface UiState {
   pushChatter: (name: string | null, content: string) => void;
   /** 同上，街谈巷议面。 */
   replaceChatter: (entries: readonly ChatterEntry[]) => void;
+  replaceNpcViews: (entries: readonly NpcView[]) => void;
+  mergeNpcViews: (entries: readonly NpcViewDelta[]) => void;
   setPlans: (plans: PlanDelta[]) => void;
   setImpulseError: (e: string | null) => void;
   setLoadError: (e: string | null) => void;
@@ -133,6 +161,7 @@ export const useUiStore = create<UiState>((set) => ({
   lastImpulseCue: null,
   monologues: [],
   chatter: [],
+  npcViews: [],
   plans: [],
   impulseError: null,
   loadError: null,
@@ -153,6 +182,9 @@ export const useUiStore = create<UiState>((set) => ({
   pushChatter: (name, content) =>
     set((s) => ({ chatter: [...s.chatter, { name, content }].slice(-CHATTER_CAP) })),
   replaceChatter: (entries) => set(() => ({ chatter: [...entries].slice(-CHATTER_CAP) })),
+  replaceNpcViews: (entries) => set({ npcViews: applyNpcViewDeltas([], entries) }),
+  mergeNpcViews: (entries) =>
+    set((state) => ({ npcViews: applyNpcViewDeltas(state.npcViews, entries) })),
   setPlans: (plans) => set({ plans }),
   setImpulseError: (impulseError) => set({ impulseError }),
   setLoadError: (loadError) => set({ loadError }),

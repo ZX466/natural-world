@@ -151,7 +151,8 @@ export function createThreeWorld(
       input?.tick();
       const delta = previousTime ? Math.min(100, time - previousTime) : 16;
       previousTime = time;
-      actors?.update(time, delta, useUiStore.getState().speed, cameraAzimuth(adapter.scene.camera));
+      const ui = useUiStore.getState();
+      actors?.update(time, delta, ui.speed, cameraAzimuth(adapter.scene.camera), ui.paused);
       ensureLandmark();
       // 地标用墙钟秒推进 shader 与粒子；它纯表现，不参与世界状态（C5 不受影响）。
       landmark?.update(delta / 1000, time / 1000);
@@ -220,7 +221,6 @@ export function createThreeWorld(
           landmark.hover(Number.NaN, Number.NaN, adapter.scene.camera, time);
         }
       }
-      const ui = useUiStore.getState();
       const goal = input?.goal;
       const visibleGoal = goal && map && actor && pointVisible(map, actor, goal) ? goal : null;
       cues?.update(

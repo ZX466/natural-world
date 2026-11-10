@@ -28,8 +28,8 @@ WS_TS = REPO_ROOT / "client" / "src" / "net" / "ws.ts"
 SNAPSHOT = REPO_ROOT / "shared" / "openapi.json"
 VERSIONING = REPO_ROOT / "docs" / "api" / "versioning.md"
 
-#: 当前登记版本；1.18 为世界地图静态结构锚点（`_structures` → `structures`）。
-EXPECTED_VERSION = "1.18"
+#: 当前登记版本；1.19 为认识的人的叙事投影（npc_views）。
+EXPECTED_VERSION = "1.19"
 
 #: 登记在 §7 的 minor 变更关键词（doc 同步钉用，避免「登记与代码各说各话」）。
 REGISTERED_MINOR_KEYWORDS = (
@@ -48,6 +48,7 @@ REGISTERED_MINOR_KEYWORDS = (
     "JumpVisual",
     "LightDelta",
     "MapStructure",
+    "npc_views",
 )
 
 
@@ -68,6 +69,28 @@ def _registration_section() -> str:
 
 
 class TestProtocolVersion:
+    def test_npc_narratives_are_closed_optional_and_only_contain_narrative_strings(self):
+        from sim.api.main import app
+
+        snapshot = json.loads(SNAPSHOT.read_text(encoding="utf-8"))["components"]["schemas"]
+        live = app.openapi()["components"]["schemas"]
+        for schemas in (snapshot, live):
+            view = schemas["NpcView"]
+            assert view["additionalProperties"] is False
+            assert set(view["properties"]) == {"rtoken", "name", "health", "bond", "knows"}
+            assert set(view["required"]) == {"rtoken", "health", "bond", "knows"}
+            for message, subtype in (
+                ("FullSnapshotMessage", "NpcView"),
+                ("StateDeltaMessage", "NpcViewDelta"),
+            ):
+                assert "npc_views" not in schemas[message]["required"]
+                assert schemas[message]["properties"]["npc_views"] == {
+                    "type": "array",
+                    "items": {"$ref": f"#/components/schemas/{subtype}"},
+                }
+        assert live["NpcView"] == snapshot["NpcView"]
+        assert live["NpcViewDelta"] == snapshot["NpcViewDelta"]
+
     def test_live_light_lifecycle_schema_matches_snapshot_without_new_required_keys(self):
         from sim.api.main import app
 

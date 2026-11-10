@@ -1176,29 +1176,36 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-11-10 波 C｜已由主树收编】3D 主角环境遮挡剪影、近墙侧移/自动抬角≤35°已落地；Phaser 高度误播走环未复现，未改架构。主树收编时修掉一条空转的相机 padding 测试（方位角 225°→90°，先红后绿）并独立 fuzz 54,000 例零违规。codex 本地提交 a8ec73f；主树门禁见 §0。**已同步回本树 `78a51d2`**（含 a152796 土坎 drawH），两树读数一致，本树已停等下一波。
+【2026-11-10 波 D｜技术交付，待主树收编】3D站定work/eat/rest/chat已接，健康/关系/知识经npc_views叙事出站到人物列表；协议1.19。pytest3696P/121S/72D、Vitest792P/92files及全部门禁EXIT0，原生浏览器技术取证完成。已写唯一talking回执，本地提交见Git；停下等主树收编。
 
-### 最新交付与证据
+### 当前状态与恢复入口
 
-- 基线d78e5e0，已含NPC3D/走跑跳跃/波A/波B及试车台世界结构；波B主树fb20719已收编，勿重做。协议当前1.18，本轮未改sim/协议/地图/素材。
-- 恢复顺序workflow→完整talking→本节→registry→Git；代码先CodeGraph，projectPath=E:/zxdevelop/.orca/worktrees/project7/codex。只本地Conventional Commit，不push、不编辑主树、不自行merge/rebase，不联系其他树/终端；talking不入Git。
-- 主树a152796的土坎2格drawH本轮尚未同步到本树（合并时一并带入）：保留主树删bank的版本及drawH测试，勿回退。新renderHeightOf从实际传入scene的TerrainCell.h取得，同步后自动读2格。
-- 默认Three全人形3D、51人形视图共用1张512×256图集、一人1 SkinnedMesh/16骨；精确?avatar3d=0回退，fauna仍2D。试车台17×15占地和(82,41)锚点由世界数据下发，客户端不写碰撞。
+- 基线ac1494c，含主树b18d574/波C95a0cd8与a152796土坎drawH；A/B/C全已收编，勿重做。主树后续三笔纯文档不必先同步，本波未自行merge/rebase/push。恢复workflow→完整talking→本节→registry→Git；代码先CodeGraph，projectPath=E:/zxdevelop/.orca/worktrees/project7/codex。
+- 只本树Conventional Commit，不编辑主树、不联系其他树/终端，talking永不入Git。只更新本节，§§0–6原始字节前缀保持；prefix读数见本轮审计memory-prefix.json。
+- 当前协议1.19，两版本常量、live app.info、shared/openapi.json、生成shared/protocol.ts、版本登记与README徽章及既有版本钉一起升；NpcView名称不与HTTP HealthStatus冲突。
 
-### 波 C 的实际契约
+### 波 D 实际契约
 
-- three-avatar-occlusion在正常世界颜色之后：清深度、仅渲染实心环境深度，再用GreaterDepth画主角原网格。全部角色、影子、billboard剪影、透明/裁切特效排除在环境深度外；NPC不透视，无遮挡不染色。不复制角色网格或图集，不换地形Basic/FACE_SHADE材质。
-- 两次额外pass临时关闭autoClear/背景；try/finally恢复原可见性、背景、overrideMaterial、autoClear。自有两材质随世界销毁；2D回退不建此pass。屏幕标签最后绘制。
-- 相机近墙优先横向寻找安全轨道，再适度抬角，自动不超过35°；用户主动高角度保留，围合空间缩短boom。控制/朝向依据实际camera azimuth。避碰使用实际绘制高度，不改逻辑支撑/移动/拾取。
-- Important已修复：脚点插值进入墙体padding时，intersectBox返回出口，旧裁短可能把相机放进真墙。现在允许逃离padding、对真墙检测入口并拒绝留在padding的终点；不再强制不安全的.02下限。两条失败回归已红→绿，另432例组合/审查3000例无入柱或无效视点。
-- Phaser先用原生浏览器测iso与flat，真实私库事件经surface/WS改变原地支撑1→2→1；四段animClock增量0、非airborne，iso脚点y确实上下16px。已有isoDistanceInTiles扣除高度投影，本轮不改WorldScene/actor-motion。
+- D1：avatar3d仅用原16骨骼摆work前倾挥臂/eat手抬嘴/rest半蹲/chat侧身抬手，仍每人1 SkinnedMesh/共享512×256图集，不加角色drawcall。three-actors位移/airborne优先；站定才读actor.anim，wire walk站定为idle。独立动作相位按未暂停delta×speed推进，暂停冻结/恢复不补跑；three-world传paused。2D/Phaser未接劳作姿势，素材未改。
+- main._npc_tick_hook仅在_anim_of前后值变化时标记pending_delta_entity_ids，站定动作也能发delta；不改core.tick.enqueue、不在客户端猜动作过期。startup/load/shutdown清_ACTION_ANIMS，读档不带旧分支动作。内部交谈action是request_chat，wire anim才叫chat。
+- sim/api/npc_view.py批量读取当前分支健康、与chenmo相关有向关系、chenmo有效双列知识；启动/读档/提交的health/death/chat/retell/knowledge批次刷新。WS同步snapshot/delta只读预构造叙事账本，无SQL。self triggered窗口消退即使无emerge事件也重投影。
+- 出站NpcView只含rtoken/name?/health:string[]/bond:string/knows:string[]。只给仍在世界中的相识者条目，陈默自身有实际可见内容才出现；无默认健康档/造数据。bond按NPC→陈默的态度叙述；仅有陈默→NPC行时只说曾打过照面。knows为陈默持有且双列对齐该人物属性的有效fact原文，不读取旁人的私有知识。
+- 自身hidden健康/自身相关知识须当前triggered，其他人hidden健康须陈默有效(subject_npc_id,subject_attr_id)知识。构造时另用本分支隐藏元数据与当前允许集合扫描整句fact/health文字，夹带其他未授权项或已消退自身词面则整句不发，不改写、不发暗示。扫描器是构造前校验，未改outbound_guard；数值/内部id/tick/seq/branch/witnesses不出条目。
+- snapshot发全集、数组深拷贝且不消耗其他连接待发变化；delta完整upsert或{rtoken,op:remove}，只有变化才发，独立_npc_views_changed可触发静止世界广播。快照按current|broadcast键并集记录SNAPSHOT_DIRTY（含缺席），直到delta重发当前态/移除；保证A→B→A及A→空→A不漏纠正。
+- 客户端ws→runtime→uiStore→NpcPanel：快照整组替换（缺字段清空），delta按rtoken完整覆盖/移除，去重/复制输入；React普通文字节点，只存白名单低频叙事，无坐标/数值映射。第三块人物列表，复用纸面样式独立滚动，不改拾取优先级，无新增HTTP查询或调试覆盖层。
 
-### 验证与边界
+### 证据与排障
 
-- 证据.orca/audits/wave-c-2026-11-10/：plan/review/gates、原生.exit与日志、私库脚本及截图。pytest3675P/121S/72D，517.74s；Vitest747P/88files；ruff/check+format、pyright、TS类型/lint/格式、build全EXIT0。构建仍有已知大chunk提示，不扩包体优化。
-- ms-playwright打包Chromium1252独立profile、ANGLE SwiftShader：真实地图(99,53)相机从基线70°变为27°/距离8、不入墙；世界draw calls23→31（51人形视图/1图集，有正常裁剪，不代表51人全入镜）。独立真实骨骼模型像素：无遮挡/NPC遮挡新增染色0，墙遮挡9957像素，主角投影外0。浏览器错误0。
-- 独立只读审查1个Important已修复，当前无开放Critical/Important。SwiftShader技术验证不等于主观真机验收；剪影浓淡、侧移舒适度、实际帧耗由主树/用户验收。试车台复杂构件精确避碰仍是原高度列模型的限制。
-- world/anchor/profile私库一起隔离；pytest根库connect guard、T4_RUN=0。原库SHA256前后不变。memory§§0–6原始字节前缀未改。测试服务仅自己的15140/18140，收尾停止；未动其他树服务。
-- Python必须uv；删包/venv需另行授权；浏览器仅明确授权时用ms-playwright打包Chromium，不用系统Chrome/用户profile。main硬编码world.db，必须三store隔离，不能__init__回相对真库。
-- 后续不扩DPR/包体/离线健康/perception出站/M2七日/T4真模型。波A仍仅土石木复用material.moved；波B通用lights快照/增删规则保留，旧1.16不消费remove的兼容限制见历史Git/审计。
-- 旧清理blocked by policy，勿换shell/工具或重试；待用户手动执行tidy-2026-11-09清单。保留真档、备份、素材、依赖与必要agent/CodeGraph配置。
+- .orca/audits/wave-d-2026-11-10/含plan/progress、pose-report/panel-report、review/gates、RED→GREEN日志与原生.exit、私库脚本/浏览器JSON/截图。D1客户端67 focused、面板25 focused；新增后端隐私/同步/分支/刷新测试21条。最终pytest3696P/121S/72D，509.23s；Vitest792P/92files；ruff/check+format、pyright、TS类型/lint/格式、gen:protocol:check、build均EXIT0。
+- 独立审查2 Important均先RED后修复：旧知识整句夹带已隐藏词面；快照只记token导致临时可见/缺席回到广播基准后漏撤回。构造整句校验与snapshot-dirty并集已补；审查者独立6561种两token/三观察者历史均收敛，当前无开放Critical/Important。
+- 首轮全量12F/3683P：9个旧版本/字段徽章钉同步补1.19，另3个inspect白盒因执行中修改ws.py使已加载函数行号与磁盘不一致。未改安全断言，冻结源码新进程定向146P、最终全量3696P；以后别在运行含inspect.getsource的门禁时改被读文件。
+- 打包Chromium1252、独立profile、ANGLE SwiftShader：私库真实事件→WS→mirror→骨骼四姿势切换、暂停冻结，已相识/获知/自身触发/消退、重连替换、1440与1024布局通过，浏览器错误0。原生姿势读取等待两次RAF，150ms在软件GPU下不足；不得把旧骨骼读数当成产品失效。
+- native-pose-comparison.png直观对照；browser-poses.json中每角色1 draw/mesh/16骨，51人idle/work/eat/rest/chat均51角色draw、1图集（技术模型场景，不含正常世界其他通道）。真实硬件帧耗/姿势主观辨识度留主树/用户验收，未自称真机验收通过。构建保留既有大chunk提示。
+- world/anchor/profile全私库，pytest根库connect guard、T4_RUN=0；原库SHA256前后不变。自己的15150/18150测试服务已停，未动其他树服务。未配LLM profile、未动driver无profile分支、core.tick/outbound_guard、地图/素材、土坎或90°相机回归。
+
+### 仍有效的边界
+
+- 默认Three全人形3D，精确?avatar3d=0回退，fauna仍2D；土坎逻辑1/绘制2，保留TerrainCell.bank已删与drawH语义，90°padding测试勿回225°。试车台17×15世界碰撞/中心(82,41)锚点来自世界数据。
+- 波C剪影只用环境深度、仅主角，近墙侧移自动抬角≤35°/手动高角保留；Phaser高度误走未复现，无架构改动。历史细节走Git与wave-c审计，不重复实现。
+- Python用uv。main硬编码world.db，测试三store必须一起隔离，不能__init__还原真库。浏览器仅明确授权时用ms-playwright打包Chromium/独立profile，不用系统Chrome；删包/venv需另行授权。
+- 不扩DPR/包体/离线健康/perception出站/M2七日/T4真模型或陈默LLM profile。旧清理blocked by policy勿换shell/工具或重试；需用户手动执行tidy-2026-11-09清单，保留真档/备份/素材/依赖/必要agent配置。

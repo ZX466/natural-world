@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { afterEach, expect, it, vi } from 'vitest';
 import { WorldMirror } from '../../../world-mirror';
 import type { WorldInputPorts } from '../three-input';
@@ -13,6 +14,8 @@ afterEach(() => {
     '../three-weather',
     '../three-voxel-cues',
     '../three-input',
+    '../three-avatar-occlusion',
+    '../landmark-lre-mount',
     '../avatar3d',
     '../../../audio',
     '../../../audio/synth',
@@ -131,6 +134,94 @@ it('wires gait, authoritative flight and elevated steps into the native controll
   game.destroy(true);
   expect(controller.dispose).toHaveBeenCalledTimes(1);
   expect(mirror.heightAt(1, 1)).toBe(2);
+});
+
+it('freezes real stationary action bones from the world pause state', async () => {
+  vi.resetModules();
+  const mirror = new WorldMirror();
+  mirror.setMap({ w: 1, h: 1, tileset: 'grid', collision: new Uint8Array([1]) });
+  mirror.applySnapshot(
+    [{ rtoken: 'npc', x: 0, y: 0, facing: 's', sprite: 'villager', anim: 'work' }],
+    [],
+  );
+  mirror.protagonist = null;
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera();
+  const texture = new THREE.DataTexture(new Uint8Array(64 * 128 * 4), 64, 128);
+  const ui = { speed: 4, paused: false, wsStatus: 'open' };
+  vi.doMock('../three-assets', () => ({ loadTerrainAssets: () => Promise.resolve({}) }));
+  vi.doMock('../three-actor-assets', () => ({
+    loadActorAssets: () => Promise.resolve({ texture: () => texture, dispose() {} }),
+  }));
+  vi.doMock('../three-terrain-adapter', () => ({
+    createTerrainAdapter: () => ({
+      heightOf: () => 1,
+      sync() {},
+      resize() {},
+      dispose() {},
+      scene: {
+        scene,
+        camera,
+        renderer: { autoClear: true, clearDepth() {}, render() {} },
+        render() {},
+      },
+    }),
+  }));
+  vi.doMock('../three-avatar-occlusion', () => ({
+    createAvatarOcclusion: () => ({ render() {}, dispose() {} }),
+  }));
+  vi.doMock('../landmark-lre-mount', () => ({ mountLandmark: () => null }));
+  vi.doMock('../three-weather', () => ({
+    createWeatherLayer: () => ({ update() {}, dispose() {} }),
+  }));
+  vi.doMock('../three-voxel-cues', () => ({
+    createVoxelCues: () => ({ update() {}, dispose() {} }),
+  }));
+  vi.doMock('../three-input', () => ({
+    createWorldInput: () => ({ tick() {}, dispose() {} }),
+  }));
+  vi.doMock('../../../audio', () => ({ worldAudio: { attach() {}, detach() {} } }));
+  vi.doMock('../../../audio/synth', () => ({ WebAudioSynth: class {} }));
+  vi.doMock('../../../../store/uiStore', () => ({ useUiStore: { getState: () => ui } }));
+  class Canvas extends EventTarget {
+    dataset = {};
+    style = {};
+    remove() {}
+  }
+  let frame!: FrameRequestCallback;
+  vi.stubGlobal('document', { createElement: () => new Canvas(), activeElement: null });
+  vi.stubGlobal('window', new EventTarget());
+  vi.stubGlobal('location', { search: '' });
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    frame = callback;
+    return 1;
+  });
+  vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  const { createThreeWorld } = await import('../three-world');
+  const game = createThreeWorld(
+    { append() {}, clientWidth: 800, clientHeight: 600 } as unknown as HTMLElement,
+    mirror,
+    { requestMove: () => false, requestJump: () => false, requestVoxel() {} },
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(game.isBooted).toBe(true);
+  frame(100);
+  const spine = scene.getObjectByName('spine')!;
+  expect(spine).toBeDefined();
+  const initial = spine.rotation.toArray();
+  frame(200);
+  expect(spine.rotation.toArray()).not.toEqual(initial);
+  const before = spine.rotation.toArray();
+  ui.paused = true;
+  frame(300);
+  frame(400);
+  expect(spine.rotation.toArray()).toEqual(before);
+  ui.paused = false;
+  frame(500);
+  expect(spine.rotation.toArray()).not.toEqual(before);
+  expect(mirror.actors.get('npc')!.anim).toBe('work');
+  game.destroy(true);
+  texture.dispose();
 });
 
 it.each(['failure', 'cancel'])('disposes ready actor textures once on %s', async (mode) => {

@@ -1,7 +1,7 @@
 /**
  * client/src/ui/__tests__/PanelHost.test.tsx — 批次 A UI 钉（SSR 断言，无 jsdom）。
  *
- * PanelHost：右侧竖栏两块面板——心之声（陈默独白流）+ 街谈巷议（村民嘟囔）。
+ * PanelHost：心之声（陈默独白流）+ 街谈巷议（村民嘟囔）+ 人物近况。
  * 计划看板已于 2026-10-26 退役（NPC defers 文本，行为已可见）。
  * zustand v5 SSR 取 getInitialState（setState 不可见）→ store 整体 mock 成
  * vi.hoisted 可变状态。
@@ -14,6 +14,7 @@ const storeState = vi.hoisted(() => ({
   monologues: [] as { form: 'thought' | 'bubble' | 'plan'; content: string }[],
   chatter: [] as { name: string | null; content: string }[],
   plans: [] as { rtoken: string; text: string }[],
+  npcViews: [],
 }));
 
 vi.mock('../../store/uiStore', () => ({
@@ -33,10 +34,11 @@ describe('PanelHost', () => {
     storeState.plans = [];
   });
 
-  it('空态：只剩心之声与街谈巷议两块面板', () => {
+  it('空态：心之声、街谈巷议与人物三块面板', () => {
     const html = renderPanel();
     expect(html).toContain('心之声');
     expect(html).toContain('街谈巷议');
+    expect(html).toContain('aria-label="人物"');
     // 计划看板已退役：计划文本本来就在心之声里以「打算」出现，独立看板是重复面。
     expect(html).not.toContain('od-panel--plan');
   });

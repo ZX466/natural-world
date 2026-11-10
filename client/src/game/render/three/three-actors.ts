@@ -91,6 +91,7 @@ export function createActorLayer(
   const overlayCamera = new THREE.OrthographicCamera(0, 1, 1, 0, -10, 10);
   const shadowGeometry = new THREE.CircleGeometry(0.28, 16);
   let reset = '';
+  let actionPhase = 0;
 
   const destroyText = (sprite: THREE.Sprite) => {
     overlay.remove(sprite);
@@ -134,9 +135,10 @@ export function createActorLayer(
     views.clear();
     for (const bubble of bubbles.values()) destroyText(bubble);
     bubbles.clear();
+    actionPhase = 0;
   };
 
-  const update = (time: number, delta: number, speed: number, azimuth: number) => {
+  const update = (time: number, delta: number, speed: number, azimuth: number, paused = false) => {
     const map = mirror.map;
     if (!map) {
       clear();
@@ -147,6 +149,8 @@ export function createActorLayer(
       clear();
       reset = token;
     }
+    // 静止动作没有位移时钟。只累计未暂停的模拟时间，恢复时不追赶暂停期间的墙钟。
+    if (!paused) actionPhase += (Math.max(0, delta) * Math.max(0, speed)) / 1000;
     const stacks = assignStackOffsets(mirror.actors.values());
     const shown = visibleActorTokens(mirror);
     for (const [rtoken, actor] of mirror.actors) {
@@ -251,13 +255,19 @@ export function createActorLayer(
           view.sprite.position.z,
         );
         view.avatar.setFacing(view.motion.facing);
-        view.avatar.setPhase(phaseFromAnimClock(view.motion.animClock));
+        const moving = view.motion.animClock >= 0;
+        const action =
+          actor.anim === 'work' ||
+          actor.anim === 'eat' ||
+          actor.anim === 'rest' ||
+          actor.anim === 'chat'
+            ? actor.anim
+            : 'idle';
+        view.avatar.setPhase(
+          moving || view.motion.airborne ? phaseFromAnimClock(view.motion.animClock) : actionPhase,
+        );
         view.avatar.setAnim(
-          view.motion.airborne
-            ? 'jump'
-            : view.motion.animClock >= 0
-              ? (actor.gait ?? 'walk')
-              : 'idle',
+          view.motion.airborne ? 'jump' : moving ? (actor.gait ?? 'walk') : action,
         );
         view.avatar.setJumpProgress(actor.jump?.active ? actor.jump.progress : null);
         view.avatar.setTint(actor.tint ?? 0xffffff);

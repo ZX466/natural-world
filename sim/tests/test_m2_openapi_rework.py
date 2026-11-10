@@ -378,4 +378,5 @@ class TestRegression:
             "combat",
             "time",  # M7（1.3）
             "monologue_history",  # 既有可选心声历史，与快照源/生产者对齐
+            "npc_views",  # 1.19: optional, prefiltered narrative views.
         }

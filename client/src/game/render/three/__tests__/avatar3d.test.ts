@@ -6,6 +6,7 @@ import {
   createAvatarAtlas,
   createAvatarLighting,
   phaseFromAnimClock,
+  type Avatar3D,
   type AvatarAtlas,
 } from '../avatar3d';
 
@@ -29,6 +30,86 @@ function visibleBox(root: THREE.Object3D): THREE.Box3 {
   });
   return box;
 }
+
+function bone(avatar: Avatar3D, name: string): THREE.Bone {
+  return avatar.mesh.skeleton.bones.find((item) => item.name === name)!;
+}
+
+it('leans forward and swings its arms while working', () => {
+  const avatar = createAvatar('villager', sharedAtlas());
+  avatar.setAnim('work');
+  avatar.setPhase(0);
+  avatar.update(0);
+  expect(bone(avatar, 'spine').rotation.x).toBeGreaterThan(0.25);
+  const arm = bone(avatar, 'armUpperR').rotation.x;
+  avatar.setPhase(0.23);
+  avatar.update(0);
+  expect(Math.abs(bone(avatar, 'armUpperR').rotation.x - arm)).toBeGreaterThan(0.2);
+  avatar.dispose();
+});
+
+it('brings the right hand to its mouth while eating', () => {
+  const avatar = createAvatar('villager', sharedAtlas());
+  avatar.setAnim('eat');
+  avatar.setPhase(0);
+  avatar.update(0);
+  avatar.root.updateMatrixWorld(true);
+  const hand = new THREE.Vector3(0, -0.29, 0).applyMatrix4(bone(avatar, 'armLowerR').matrixWorld);
+  const mouth = new THREE.Vector3(0, 0.16, 0.32).applyMatrix4(bone(avatar, 'head').matrixWorld);
+  expect(hand.distanceTo(mouth)).toBeLessThan(0.28);
+  expect(hand.y).toBeGreaterThan(bone(avatar, 'armUpperR').getWorldPosition(new THREE.Vector3()).y);
+  avatar.dispose();
+});
+
+it('crouches with bent knees and grounded feet while resting', () => {
+  const avatar = createAvatar('villager', sharedAtlas());
+  avatar.setAnim('rest');
+  avatar.setPhase(0);
+  avatar.update(0);
+  expect(bone(avatar, 'hips').position.y).toBeLessThan(0.46);
+  expect(bone(avatar, 'legLowerL').rotation.x).toBeGreaterThan(1.5);
+  expect(bone(avatar, 'legLowerR').rotation.x).toBeGreaterThan(1.5);
+  expect(visibleBox(avatar.root).min.y).toBeCloseTo(0, 3);
+  avatar.dispose();
+});
+
+it('turns its torso and raises an arm while chatting', () => {
+  const avatar = createAvatar('villager', sharedAtlas());
+  avatar.setAnim('chat');
+  avatar.setPhase(0);
+  avatar.update(0);
+  expect(bone(avatar, 'spine').rotation.y).toBeGreaterThan(0.2);
+  expect(bone(avatar, 'armUpperL').rotation.z).toBeGreaterThan(0.5);
+  avatar.dispose();
+});
+
+it('keeps four distinct action poses on the same mesh, geometry, material and atlas', () => {
+  const shared = sharedAtlas();
+  const avatar = createAvatar('chenmo', shared);
+  const { mesh } = avatar;
+  const { geometry, material, skeleton } = mesh;
+  const poses = new Set<string>();
+  for (const anim of ['work', 'eat', 'rest', 'chat'] as const) {
+    avatar.setAnim(anim);
+    avatar.setPhase(0.17);
+    avatar.update(0);
+    poses.add(JSON.stringify(skeleton.bones.map((item) => [...item.position, ...item.quaternion])));
+    const meshes: THREE.Mesh[] = [];
+    avatar.root.traverse((node) => {
+      if (node instanceof THREE.Mesh) meshes.push(node);
+    });
+    expect(meshes).toEqual([mesh]);
+    expect(mesh.geometry).toBe(geometry);
+    expect(mesh.material).toBe(material);
+    expect(mesh.skeleton).toBe(skeleton);
+    expect(skeleton.bones).toHaveLength(16);
+    expect((material as THREE.MeshLambertMaterial).map).toBe(shared.texture);
+  }
+  expect(poses.size).toBe(4);
+  expect(shared.texture.image.width).toBe(512);
+  expect(shared.texture.image.height).toBe(256);
+  avatar.dispose();
+});
 
 it('draws one skinned mesh per avatar, not one per body part', () => {
   // The source SDK emitted 46 meshes (body + outline per part), i.e. ~2346 draw

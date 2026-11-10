@@ -47,6 +47,7 @@ STATE_DELTA_WHITELIST: frozenset[str] = frozenset(
         "plan",
         "weather",
         "time",
+        "npc_views",  # 1.19: prefiltered narrative rows, no raw attributes.
     }
 )
 

@@ -11,6 +11,7 @@ import type {
   FullSnapshotMessage,
   ImpulseFeedbackMessage,
   MonologueMessage,
+  NpcView,
   SessionStateMessage,
   StateDeltaMessage,
   WsErrorMessage,
@@ -49,7 +50,7 @@ function useControlState(speed: number, paused: boolean): void {
  * `sim/tests/test_protocol_version.py` 的跨树钉锁死
  * （本文件是**第二落点**，真相源在 ws.py；改一处必改另一处）。
  */
-const PROTOCOL_VERSION = '1.18';
+const PROTOCOL_VERSION = '1.19';
 
 export type WsStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
 
@@ -65,6 +66,8 @@ export interface WsCallbacks {
    *  的完整投影，不是增量——逐条喂 onMonologue 会让面板每重连一次整屏重复
    *  （2026-11-05 实机实证：两条一模一样的心声）。 */
   onMonologueHistory?: (history: readonly MonologueMessage[]) => void;
+  /** 人物近况的完整快照；缺省字段也以空组替换，避免重连/读档残留旧档案。 */
+  onNpcViews?: (items: NpcView[]) => void;
   /** 批次 A：impulse 乐观反馈（入网即回） */
   onImpulseFeedback?: (msg: ImpulseFeedbackMessage) => void;
   /** 批次 A：协议 error 帧（ref 定位来源；player_impulse 由 runtime 消费） */
@@ -196,6 +199,7 @@ export class WsClient {
         if (msg.monologue_history) {
           this.cb.onMonologueHistory?.(msg.monologue_history as readonly MonologueMessage[]);
         }
+        this.cb.onNpcViews?.(Array.isArray(msg.npc_views) ? msg.npc_views : []);
         this.snapshotReady = true;
         this.cb.onSnapshot(msg);
         break;

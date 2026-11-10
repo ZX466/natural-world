@@ -1,9 +1,9 @@
 /**
  * client/src/ui/PanelHost.tsx — 右侧竖栏面板（批次 A UI；D10 分流）。
  *
- * 两块面板：心之声（陈默独白流：thought/plan 入流，环形缓冲
+ * 三块面板：心之声（陈默独白流：thought/plan 入流，环形缓冲
  * 最近 MONOLOGUE_CAP 条）+ 街谈巷议（批次 D10：村民 bubble 公开嘟囔，
- * CHATTER_CAP 条）。
+ * CHATTER_CAP 条）+ 人物（服务端已筛选的相识之人叙事）。
  *
  * 「计划看板」已退役（2026-10-26 用户裁定删废话面板）：state_delta.plan
  * 的条目全部来自 NPC 的 defers 决定（sim/npc/runtime.py），内容恒为
@@ -14,6 +14,7 @@
  */
 import type { ReactElement } from 'react';
 import { useUiStore, type MonologueEntry } from '../store/uiStore';
+import { NpcPanel } from './NpcPanel';
 
 const FORM_LABEL: Record<MonologueEntry['form'], string> = {
   thought: '心想',
@@ -65,6 +66,7 @@ export function PanelHost(): ReactElement {
           </ul>
         )}
       </section>
+      <NpcPanel />
     </aside>
   );
 }

@@ -63,10 +63,12 @@ class Runtime {
       onDelta: (msg) => {
         // 批次 A：计划看板（delta 即全量替换语义，sim 侧 PlanDelta[] 无增删协议）
         if (msg.plan) useUiStore.getState().setPlans([...msg.plan]);
+        if (msg.npc_views?.length) useUiStore.getState().mergeNpcViews(msg.npc_views);
         if (msg.structures?.length) void this.loadWorldMap();
         worldAudio.delta(msg, worldMirror);
       },
       onCombatEvent: (msg) => worldAudio.combat(msg, worldMirror),
+      onNpcViews: (items) => useUiStore.getState().replaceNpcViews(items),
       onMonologue: (msg) => {
         // 批次 D10 分流：bubble = 村民的公开嘟囔 → 街谈巷议 + 头顶气泡（D14）；
         // thought/plan = 陈默的心声 → 心之声面板。

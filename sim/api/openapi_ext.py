@@ -70,6 +70,32 @@ def _member(
 
 #: 公共子 schema（K3 §2.1 #1-#14）——与 shared/openapi.json 逐字段一致。
 _SUB_SCHEMAS: dict[str, dict[str, Any]] = {
+    "NpcView": {
+        "type": "object",
+        "required": ["rtoken", "health", "bond", "knows"],
+        "properties": {
+            "rtoken": {"$ref": "#/components/schemas/RToken"},
+            "name": {"type": "string"},
+            "health": {"type": "array", "items": {"type": "string"}},
+            "bond": {"type": "string"},
+            "knows": {"type": "array", "items": {"type": "string"}},
+        },
+        "additionalProperties": False,
+    },
+    "NpcViewDelta": {
+        "oneOf": [
+            {"$ref": "#/components/schemas/NpcView"},
+            {
+                "type": "object",
+                "required": ["rtoken", "op"],
+                "properties": {
+                    "rtoken": {"$ref": "#/components/schemas/RToken"},
+                    "op": {"type": "string", "enum": ["remove"]},
+                },
+                "additionalProperties": False,
+            },
+        ],
+    },
     # 裁 21-A / M5-K2（D-8 口径订正，实现不动）：rtoken 是**稳定派生**
     # （ws.py::_rtoken = sha256(entity_id)[:12]），跨连接与跨分支都不变——
     # 早期描述写「连接生命周期内有效、重连由 full_snapshot 重分配」与实现相悖。
@@ -426,6 +452,7 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
                 "type": "array",
                 "items": {"$ref": "#/components/schemas/MonologueMessage"},
             },
+            "npc_views": {"type": "array", "items": {"$ref": "#/components/schemas/NpcView"}},
         },
         # 快照口径：combat optional（可为 null=无战斗）
         ["map", "lights", "actors", "structures", "weather", "time"],
@@ -448,6 +475,10 @@ _WS_SCHEMAS: dict[str, dict[str, Any]] = {
             # **顶层**而非塞 ActorDelta：改计划不必伴随移动，塞 ActorDelta 会被
             # driver 的 moved 过滤漏掉。可选（不进 required）：账本空则不发该键。
             "plan": {"type": "array", "items": {"$ref": "#/components/schemas/PlanDelta"}},
+            "npc_views": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/NpcViewDelta"},
+            },
             "weather": {"$ref": "#/components/schemas/Weather"},
             # M7（1.3）：time 权威帧（R3）——delta 必带（每帧重同步）
             "time": {"$ref": "#/components/schemas/TimeInfo"},
