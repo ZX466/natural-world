@@ -26,6 +26,15 @@
 `cell-appearance.staticStructureTiles` 把这些格排除出土坎斜纹。这条判据有钉子：
 `test_voxel_runtime.py::test_static_structure_ground_is_undiggable`（dig/place 各一条，零事件）。
 
+**土坎在 three 里补了字形（`6dc5cea`，2026-11-10）**：用户报「土块放置是空白 / 有些空地
+显示无法通过」。两者同一根因 —— **高度 1 但不可走**（天然土坎 1568 格 + 刚放下的土块）
+在 three 路径上什么都没画：`terrainCells` 把 `bank` 字段丢了，而放下的土色与可走地面
+实测色差只有 **2/255**。现在 `TerrainCell.bank` 一路传到 `three-terrain.ts`，画与 Phaser
+`syncBanks` 同形的三道 45° 斜杠（暗杠 + 亮芯，两个 InstancedMesh），土坎格再压 0.85。
+斜杠**必须厚**（0.12）：默认俯仰只有 12°，平贴的记号会被压成一条线。
+钉子：`three-terrain-adapter.test.ts` 用真实地图钉两条路径的 bank 集合完全一致（1568）。
+⚠ 仍未做真机验收（其它机位/距离下的斜杠观感）。
+
 其余边界不变：② **不替换角色系统**（SDK 每角色 46 mesh/2346 draw call，本仓
 `avatar3d.ts` 已验收且是 51 call）；③ 锚点缺失（占位 32×32 图）或 shader 不可用就不建。
 占地面实测 **17×15**（`getOccupiedTiles()` 取 `tileX±8`/`tileZ±7` 闭区间），
@@ -35,6 +44,10 @@
 vitest `734P/87F`、ruff check+format / pyright / tsc / lint / prettier / gen:protocol:check /
 build 全 EXIT 0；`build_height_map --check`、`build_block_atlas --check` 字节一致。
 ⚠ **仍未做真机验收**（悬停手感/面板布局/拆解动画需 WebGL）。
+
+**土坎字形门禁（`6dc5cea`，4 文件）**：pytest `3675P/121S/72D EXIT 0`（499.07s）、
+vitest `738P/87F`、tsc / eslint / prettier / gen:protocol:check / build 全 EXIT 0。
+⚠ 斜杠在其它机位/距离下的观感未验收。
 
 **当前在飞**：**codex 三波派单，波 A（`3dbc0d6`）与波 B（`fb20719`）均已收编**；
 剩波 C 渲染三件（3D 穿墙剪影 / 相机近墙构图 / Phaser 高度通道），纯客户端不碰协议。
