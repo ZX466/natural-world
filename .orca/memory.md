@@ -49,9 +49,11 @@ build 全 EXIT 0；`build_height_map --check`、`build_block_atlas --check` 字�
 vitest `738P/87F`、tsc / eslint / prettier / gen:protocol:check / build 全 EXIT 0。
 ⚠ 斜杠在其它机位/距离下的观感未验收。
 
-**当前在飞**：**codex 三波派单，波 A（`3dbc0d6`）与波 B（`fb20719`）均已收编**；
-剩波 C 渲染三件（3D 穿墙剪影 / 相机近墙构图 / Phaser 高度通道），纯客户端不碰协议。
-详情在 codex `.orca/talking.txt` §二。主树只做收编复核，别自己开工。
+**当前在飞（2026-11-10）**：**波 C 渲染三件已派 codex**（3D 穿墙剪影 / 相机近墙构图 /
+Phaser 高度通道），纯客户端不碰协议。codex 树已同步到 `d78e5e0`（= 主树 `81d183c`，
+含协议 1.18 与土坎字形），同步后两树门禁读数一致：pytest `3675P/121S/72D` EXIT 0
+（520.80s）、vitest `738P/87F` EXIT 0。派单全文在 codex `.orca/talking.txt` §二。
+**主树只做收编复核，别自己开工。**
 
 **波 B 收编（`fb20719`，codex `d799fca`）**：真实火场出站 —— `sim/npc/light_view.py`
 把活跃火格投影成既有六键 `Light`（不透明稳定 rtoken、x/y、`kind="fire"`、radius 5、
