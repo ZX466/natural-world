@@ -35,7 +35,9 @@ export function terrainCells(
   const cells: TerrainCell[] = new Array(appearance.length);
   for (let i = 0; i < appearance.length; i++) {
     const cell = appearance[i]!;
-    cells[i] = { x: cell.x, y: cell.y, h: cell.h, color: cell.color };
+    // `bank` 必须一起传：土坎与玩家刚放下的土块都是「高度 1 但不可走」，
+    // 丢掉这个标记，three 里它们和可走平地长得一模一样（放块像空白）。
+    cells[i] = { x: cell.x, y: cell.y, h: cell.h, color: cell.color, bank: cell.bank };
   }
   return cells;
 }

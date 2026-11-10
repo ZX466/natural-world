@@ -1,8 +1,12 @@
 import { expect, it } from 'vitest';
 import { worldOf } from '../three-projection';
 import {
+  BANK_SLATS,
+  BANK_SLAT_SPAN,
   FACE_SHADE,
   WATER_THICKNESS,
+  bankCells,
+  bankSlatTransform,
   blockTransform,
   blockInstances,
   grainOf,
@@ -149,6 +153,45 @@ it('the block geometry bakes the same face shading as the Phaser painter', () =>
   expect(seen.get('-1,0,0')!.size).toBe(1);
   expect(seen.get('0,-1,0')!.size).toBe(1);
   expect(seen.get('0,0,-1')!.size).toBe(1);
+});
+
+it('marks exactly the height-one bank cells, never taller blocks', () => {
+  const cells = [
+    { x: 0, y: 0, h: 1, color: 0x808080, bank: true },
+    { x: 1, y: 0, h: 1, color: 0x808080, bank: false },
+    { x: 2, y: 0, h: 1, color: 0x808080 },
+    // A blocked h=2 column is visible on its own; a cap would be noise.
+    { x: 3, y: 0, h: 2, color: 0x808080, bank: true },
+    { x: 4, y: 0, h: 0, color: 0x808080, bank: true },
+  ];
+  expect(bankCells(cells).map((cell) => cell.x)).toEqual([0]);
+});
+
+it('bank slats sit on the top face, spread across the cell and never below it', () => {
+  const centre = worldOf(10, 20, W, H);
+  const slats = Array.from({ length: BANK_SLATS }, (_, i) => bankSlatTransform(10, 20, i, W, H));
+  for (const t of slats) {
+    // Bottom face just above y=1: a slat never sinks into the block, and the
+    // few-millimetre gap keeps it from z-fighting with the top face.
+    expect(t.position.y - t.scaleY / 2).toBeGreaterThan(1);
+    expect(t.position.y - t.scaleY / 2).toBeLessThan(1.05);
+    // Thick enough to show its own side face at the 12° default elevation —
+    // a flat decal would collapse to a line from the usual camera angle.
+    expect(t.scaleY).toBeGreaterThanOrEqual(0.1);
+    // 45°, the same slope the Phaser glyph uses.
+    expect(t.rotationY).toBeCloseTo(Math.PI / 4, 10);
+  }
+  // The first and last slat are symmetric about the cell centre, so the glyph
+  // reads as one centred mark rather than drifting to a corner.
+  const first = slats[0]!,
+    last = slats.at(-1)!;
+  expect(first.position.x - centre.x).toBeCloseTo(-(last.position.x - centre.x), 10);
+  expect(first.position.z - centre.z).toBeCloseTo(-(last.position.z - centre.z), 10);
+  // All slats stay inside the cell's footprint.
+  for (const t of slats) {
+    expect(Math.abs(t.position.x - centre.x)).toBeLessThanOrEqual(BANK_SLAT_SPAN / 2 + 1e-9);
+    expect(Math.abs(t.position.z - centre.z)).toBeLessThanOrEqual(BANK_SLAT_SPAN / 2 + 1e-9);
+  }
 });
 
 it('a block is placed on the projection module’s cell centre', () => {
