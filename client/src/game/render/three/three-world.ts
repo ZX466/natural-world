@@ -15,7 +15,8 @@ import { useUiStore } from '../../../store/uiStore';
 import { WebAudioSynth } from '../../audio/synth';
 import { worldAudio } from '../../audio';
 import { createWeatherLayer } from './three-weather';
-import { avoidCameraBlocks } from './three-camera-collision';
+import { avoidCameraBlocks, cameraAzimuth } from './three-camera-collision';
+import { createAvatarOcclusion } from './three-avatar-occlusion';
 import { createWorldInput, type WorldInput } from './three-input';
 import { screenRay, editFromRay, groundFromRay, WALK_HEIGHT } from './three-picking';
 import { canStep } from '../../movement';
@@ -51,6 +52,7 @@ export function createThreeWorld(
   let booted = false;
   let adapter: TerrainAdapter | null = null;
   let actors: ActorLayer | null = null;
+  let occlusion: ReturnType<typeof createAvatarOcclusion> | null = null;
   let input: WorldInput | null = null;
   let cues: VoxelCues | null = null;
   let hovered: MovePoint | null = null;
@@ -73,6 +75,8 @@ export function createThreeWorld(
   });
   worldAudio.attach(audio);
   const releaseWorld = () => {
+    occlusion?.dispose();
+    occlusion = null;
     releaseLighting?.();
     releaseLighting = null;
     landmark?.dispose();
@@ -147,7 +151,7 @@ export function createThreeWorld(
       input?.tick();
       const delta = previousTime ? Math.min(100, time - previousTime) : 16;
       previousTime = time;
-      actors?.update(time, delta, useUiStore.getState().speed, adapter.orbitPose.azimuth);
+      actors?.update(time, delta, useUiStore.getState().speed, cameraAzimuth(adapter.scene.camera));
       ensureLandmark();
       // 地标用墙钟秒推进 shader 与粒子；它纯表现，不参与世界状态（C5 不受影响）。
       landmark?.update(delta / 1000, time / 1000);
@@ -170,13 +174,16 @@ export function createThreeWorld(
               ),
             )) + 1.3;
         adapter.follow(target);
-        // 相机避让也要用渲染高度：土坎画成 2 格矮墙，按逻辑 1 算会穿进去。
-        avoidCameraBlocks(adapter.scene.camera, target, target.y - 1.3, map.w, map.h, (x, y) =>
-          drawHeight!(
-            x,
-            y,
-            effectiveHeight(x, y, adapter!.heightOf, mirror.structures, mirror.voxelEdits),
-          ),
+        // 相机避让用**实际渲染高度**：土坎画成 2 格矮墙，按逻辑 1 算会穿进去。
+        // `renderHeightOf` 直接读这一帧交给场景的 `TerrainCell.h`（= `drawH`），
+        // 所以新增任何「只抬高渲染」的格子都自动跟上，不必在这里再列一遍。
+        avoidCameraBlocks(
+          adapter.scene.camera,
+          target,
+          target.y - 1.3,
+          map.w,
+          map.h,
+          adapter.renderHeightOf,
         );
       }
       const pointer = input?.pointer;
@@ -225,6 +232,14 @@ export function createThreeWorld(
         ui.wsStatus === 'open',
       );
       adapter.scene.render();
+      if (actors)
+        occlusion?.render(
+          adapter.scene.renderer,
+          adapter.scene.scene,
+          adapter.scene.camera,
+          actors.views,
+          mirror.protagonist,
+        );
       actors?.labels(size.width, size.height, Date.now());
       weather?.update(
         size.width,
@@ -257,6 +272,7 @@ export function createThreeWorld(
       drawHeight = cachedRenderHeightLookup(() => mirror.map, getHeight);
       mirror.setHeightLookup(getHeight);
       const avatars3d = avatars3dFromSearch(globalThis.location?.search ?? '');
+      occlusion = avatars3d ? createAvatarOcclusion() : null;
       actors = createActorLayer(
         adapter.scene.scene,
         adapter.scene.camera,
@@ -336,7 +352,7 @@ export function createThreeWorld(
         typing,
         epoch: () => `${mirror.resetCount}:${mirror.voxelSnapshotVersion}`,
         revision: () => mirror.terrainVersion + mirror.locomotionRevision,
-        azimuth: () => adapter!.orbitPose.azimuth,
+        azimuth: () => cameraAzimuth(adapter!.scene.camera),
         rotate: (dx, dy) => adapter!.rotate(dx, dy),
         zoom: (delta) => adapter!.zoom(delta),
         error: (message) => useUiStore.getState().setVoxelError(message),

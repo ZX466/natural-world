@@ -3,7 +3,7 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-10 · 土坎已改 2 格方块 `a152796` · 3D 默认 · 波 A/B 已收编 · 试车台转世界结构 · 波 C 在 codex 手里）
+## 0. 当前状态（2026-11-10 · 土坎已改 2 格方块 `a152796` · 3D 默认 · 波 A/B/C 全收编 · 试车台转世界结构）
 
 **试车台 = 世界结构（2026-11-09 用户改口「要和预览一样：可识别拆解，是障碍物实体」）**：
 外部 SDK 整包原样入库 `vendor/linhe-lre-sdk/`（272K，除一份本仓新增的 `.d.ts` 外一字节未改），
@@ -60,11 +60,27 @@ vitest `734P/87F`、ruff check+format / pyright / tsc / lint / prettier / gen:pr
 build 全 EXIT 0；`build_height_map --check`、`build_block_atlas --check` 字节一致。
 ⚠ **仍未做真机验收**（悬停手感/面板布局/拆解动画需 WebGL）。
 
-**当前在飞（2026-11-10）**：**波 C 渲染三件在 codex 手里**（3D 穿墙剪影 / 相机近墙构图 /
-Phaser 高度通道），纯客户端不碰协议。codex 树停在 `d78e5e0`（= 主树 `81d183c`，
-**不含 `a152796`**），同步时门禁一致：pytest `3675P/121S/72D` EXIT 0（520.80s）、
-vitest `738P/87F` EXIT 0。派单全文在 codex `.orca/talking.txt` §二。
-**主树只做收编复核，别自己开工；收编时一并把 `a152796` 同步过去。**
+**波 C 收编（2026-11-10，codex `a8ec73f`）**：渲染三件，纯客户端不碰协议（仍 **1.18**）。
+① **3D 主角穿墙剪影**：`three-avatar-occlusion.ts` 在世界正常颜色之后单独跑两遍 ——
+清深度、只渲染**实心环境**深度（角色/影子/billboard 剪影/透明与裁切特效全部排除），
+再用 `GreaterDepth` 画主角原 `SkinnedMesh`。NPC 不透视、无遮挡不染色、不复制网格或图集、
+不换地形材质；`?avatar3d=0` 不建此 pass。② **近墙相机**：先横向搜索安全轨道再适度抬角，
+**自动抬角 ≤35°**（用户主动高角度保留），围合空间改为缩短 boom；控制/朝向改读
+`cameraAzimuth(实际相机)` 而不是 `orbitPose.azimuth`。避碰改用
+`TerrainAdapter.renderHeightOf` —— 它读本帧交给场景的 `TerrainCell.h`（= `drawH`），
+所以土坎抬成 2 格后**自动**跟随，不必在调用点再包一层。③ **Phaser 高度通道未复现**，
+codex 用真实私库事件实测四段 `animClock` 增量均 0、非 airborne，故未改架构（符合派单）。
+
+**收编时主树修的一处**：`lets a requested orbit escape padding…` 原用默认方位角 225°，
+射线根本不碰那堵墙，新旧实现都会通过 —— **空转断言**。改为方位角 90°（脚点在 padding 内、
+相机在墙另一侧、射线真穿实心柱）后旧实现确实把相机裁进柱体 `(0.65, 2.33, 0)`，
+新实现绕开；已先红后绿。另用 54,000 个随机场景独立 fuzz 相机避让不变量，**零违规**。
+
+**门禁**：pytest `3675P/121S/72D EXIT 0`（550.45s）· vitest `746P/88F` ·
+ruff check+format / pyright / typecheck / lint / prettier / gen:protocol:check / build 全 EXIT 0。
+vitest 比 codex 的 747 少 1 是预期的：主树 `a152796` 重写了土坎用例
+（`iso-banks` 8→7、`three-terrain` 11→10），波 C 在 adapter 补 1 条（9→10），净 −1。
+⚠ **仍未做真机验收**：剪影浓淡、侧移舒适度、实际帧耗归用户（codex 只做了 SwiftShader 技术读数）。
 
 **波 B 收编（`fb20719`，codex `d799fca`）**：真实火场出站 —— `sim/npc/light_view.py`
 把活跃火格投影成既有六键 `Light`（不透明稳定 rtoken、x/y、`kind="fire"`、radius 5、
@@ -94,8 +110,8 @@ ruff/format/pyright/tsc/lint/prettier/gen:protocol 全 EXIT 0 —— 与 codex �
 **用户同批裁定「m2 t4 不做」**：M2 七日长跑（604,800 tick）与 T4 真模型重跑
 **都不做、不落 artifact**，已写进 §1c 表，别当缺口再提。
 
-**剩下的都是派给 codex 的难题，不是主树待办**：真实火场出站（波 B）、
-3D 穿墙剪影 / 相机近墙构图 / Phaser 高度通道（波 C）。开关与 URL 组合见根 `README.md`。
+**三波已全部收编**：波 A（`3dbc0d6`）/ 波 B（`fb20719`）/ 波 C（见 §0）。
+开关与 URL 组合见根 `README.md`。codex 树已无待收编内容。
 
 ### 2026-11-09 土块透明修复 + 文档压缩（`a843e3a` / `99b4c9a`）
 
@@ -1135,33 +1151,29 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-11-08 走跑/跳跃｜已交付待主树收编】朝向2b40a37；跨层实现2a513a0；3D人物待决方案0667842。本轮派单五项均已交付，模型只出文档。本节提交号看Git；下一步由主树复核收编，勿再次同步main或重做实现。
-历史 Round24 快照：three.js 自由视角 A–E 已交付并被主树收编（`cb820bf`），默认已切 three（`e49b7c1`）。
+【2026-11-10 波 C｜已由主树收编】3D 主角环境遮挡剪影、近墙侧移/自动抬角≤35°已落地；Phaser 高度误播走环未复现，未改架构。主树收编时修掉一条空转的相机 padding 测试（方位角 225°→90°，先红后绿）并独立 fuzz 54,000 例零违规。codex 本地提交 a8ec73f；主树门禁见 §0。下一步：同步主树回本树（含 a152796 土坎 drawH）。
 
 ### 最新交付与证据
 
-- 按图集映射朝向；Three原生W显示chenmo背面第2行。Shift跑、松开走，玩家walk30/run15tick每格；NPC/legacy仍15，60tick/s与离线/战斗时间尺未改。
-- Space无方向原地跳、有方向walk1/run2格；最大升降2高度，36逻辑tick，弧高1.5。真实Three地图h1→h2/h3→站稳→h1四段通过；Phaser iso/flat两路径各上/下两段通过。全程打包Chromium、原生键、真实WS和私库，无镜像手改/假回包，0页面/控制台错误。flat保留旧2D脚位，用相对高度画弧。
-- 走环仅按回放缓冲实际显示位移推进，walk500/run250ms逻辑节拍；4x/16x四种走跑各至少8个真实移动渲染帧，步相增量/(显示距离×250)均约1。稀疏帧从idle开始也计入完整首段距离，避免反复停在首帧。此为功能证据，不是硬件FPS或网络丢包验收。
-- 自跑最终pytest 3625P/121S/72D、561既有警告，EXIT0（474.94s）；Vitest685P/81files，EXIT0；ruff/check+format、pyright、codegen、typecheck、eslint、prettier、build均0。两项terrain --check逐字节0。独立审查最终0Critical/0Important/0Minor；两项Important已先RED再修复。
-- 证据`.orca/audits/locomotion-2026-11-08/{gates.json,review.md,browser.json,browser-fast.json,browser-phaser.json,private-event-counts.json}`及截图/原生退出码。最终全量pytest使用pytest_private保护插件：拒开根world.db，fallback anchor/profile也在本轮私目录。原库哈希同protected-before.json；未改锁文件、原图或地形产物。
+- 基线d78e5e0，已含NPC3D/走跑跳跃/波A/波B及试车台世界结构；波B主树fb20719已收编，勿重做。协议当前1.18，本轮未改sim/协议/地图/素材。
+- 恢复顺序workflow→完整talking→本节→registry→Git；代码先CodeGraph，projectPath=E:/zxdevelop/.orca/worktrees/project7/codex。只本地Conventional Commit，不push、不编辑主树、不自行merge/rebase，不联系其他树/终端；talking不入Git。
+- 主树a152796的土坎2格drawH本轮尚未同步到本树（合并时一并带入）：保留主树删bank的版本及drawH测试，勿回退。新renderHeightOf从实际传入scene的TerrainCell.h取得，同步后自动读2格。
+- 默认Three全人形3D、51人形视图共用1张512×256图集、一人1 SkinnedMesh/16骨；精确?avatar3d=0回退，fauna仍2D。试车台17×15占地和(82,41)锚点由世界数据下发，客户端不写碰撞。
 
-### 关键设计与不可回退的修复
+### 波 C 的实际契约
 
-1. 一列一表面：standing elevation由SurfaceMap事件投影推导，不另存易与地形分叉的height标量。EntityState只增可选gait/jump，None不序列化，旧JSON/hash夹具与NPC600tick哈希原样通过；新运动状态有意进入hash，无SQL列迁移。完成的jump描述保留给延迟回放，active=false才是真落地，不可每帧重播旧goal。
-2. C4事件：actor.jump_started/landed记录权威结果，起跳取消地面path，空中不被MOVE打断，落地重验当前轨迹/支撑。高块仍collision=false，仅显式同高度路径能站走；h1土坎仍不可步行、可挖、可跳上其顶，不把单向不变量改成双向。材料土/石/木=h1/h2/h3且均阻挡，新放块一挖还原材料/可走h1。
-3. 新gait MOVE去掉冗余当前格头；legacy路径头/相位不改。新gait MOVE与JUMP_STARTED/LANDED记完成frontier，expand_world只对它们回放至event.tick，legacy仍tick-1；不可撤回这项分派。真实迈步后再次move/stop/jump的三条SQL冷尾回放回归已覆盖；LAND在_tick_once递增state.tick后发出。
-4. SurfaceMap即时观察未flush事件，重建/寻路/落点/Actor高度同源。结构终态即时派生恢复tile并缓存同一对象，flush复用identity，提交成功才释放；否则会晚一拍落地，或覆盖同帧后续voxel编辑。已测终态t35/落地t36、后续h3编辑、失败重试、历史一致、无重复与对象释放。恢复tile显式携带高度，水面不误变h2。
-5. 协议1.16双版本常量+FastAPI info+OpenAPI快照/生成类型一致；move.gait可选、jump_request及Actor elevation/gait/jump可选。公开跳跃只含可观察端点/高度/进度/时长/opaque token，不出tick/seed/entity_id。新请求由this-connection full_snapshot后的worldReady门控；live schema补齐已有monologue_history，40份WS schema逐字段一致。
+- three-avatar-occlusion在正常世界颜色之后：清深度、仅渲染实心环境深度，再用GreaterDepth画主角原网格。全部角色、影子、billboard剪影、透明/裁切特效排除在环境深度外；NPC不透视，无遮挡不染色。不复制角色网格或图集，不换地形Basic/FACE_SHADE材质。
+- 两次额外pass临时关闭autoClear/背景；try/finally恢复原可见性、背景、overrideMaterial、autoClear。自有两材质随世界销毁；2D回退不建此pass。屏幕标签最后绘制。
+- 相机近墙优先横向寻找安全轨道，再适度抬角，自动不超过35°；用户主动高角度保留，围合空间缩短boom。控制/朝向依据实际camera azimuth。避碰使用实际绘制高度，不改逻辑支撑/移动/拾取。
+- Important已修复：脚点插值进入墙体padding时，intersectBox返回出口，旧裁短可能把相机放进真墙。现在允许逃离padding、对真墙检测入口并拒绝留在padding的终点；不再强制不安全的.02下限。两条失败回归已红→绿，另432例组合/审查3000例无入柱或无效视点。
+- Phaser先用原生浏览器测iso与flat，真实私库事件经surface/WS改变原地支撑1→2→1；四段animClock增量0、非airborne，iso脚点y确实上下16px。已有isoDistanceInTiles扣除高度投影，本轮不改WorldScene/actor-motion。
 
-### 环境与恢复
+### 验证与边界
 
-- 先workflow→完整talking→本节/registry→Git；代码先CodeGraph并传本树projectPath。本轮起点51d1e2f已由主树同步，之后未再merge/rebase main、未push；只写本地Conventional Commits，ignored talking永不add。
-- npm/uv按锁恢复以完成派单；依赖保留供复核，普通uv run会创建.venv。需要重装时根目录uv sync --frozen、client内npm ci；不因旧清理快照再次删除环境。删除依赖需用户当次授权。
-- 我方Vite5173与私库后端18125已结束；浏览器finally关闭，临时私库/构建缓存保留：递归清理命令被自动审批拒绝（blocked by policy，无更具体理由），未重试删除。审计脚本、读数、截图保留。只停验证过命令行身份的我方PID，不动主树/用户服务。三库必须一起隔离；测试结束绝不把单例.__init__重置到相对默认真档。
-- memory仅改本节，§§0–6原字节前缀保留并核验；写后立即-f add+提交。PS用UTF-8，先保存native exit。global memories本轮未写；旧轮细节查Git和既有审计。
-
-### 下一步与范围
-
-- 主树收编2b40a37、2a513a0、0667842及本节提交后独立复核；3D人物见docs/arch/character-model-3d-plan.md，明确NOT IMPLEMENTED，待用户选档。未下载模型/工具/素材、未实施新模型。
-- 相机近墙、DPR、包体、房屋h2块、动态光影/水波/塌落玩法另案；take/give、离线不演进健康、重症不产失能、真实火场出站与perception设计均不扩本轮。未做听感/硬件性能验收，不把自动化证据冒充用户观感认可。
+- 证据.orca/audits/wave-c-2026-11-10/：plan/review/gates、原生.exit与日志、私库脚本及截图。pytest3675P/121S/72D，517.74s；Vitest747P/88files；ruff/check+format、pyright、TS类型/lint/格式、build全EXIT0。构建仍有已知大chunk提示，不扩包体优化。
+- ms-playwright打包Chromium1252独立profile、ANGLE SwiftShader：真实地图(99,53)相机从基线70°变为27°/距离8、不入墙；世界draw calls23→31（51人形视图/1图集，有正常裁剪，不代表51人全入镜）。独立真实骨骼模型像素：无遮挡/NPC遮挡新增染色0，墙遮挡9957像素，主角投影外0。浏览器错误0。
+- 独立只读审查1个Important已修复，当前无开放Critical/Important。SwiftShader技术验证不等于主观真机验收；剪影浓淡、侧移舒适度、实际帧耗由主树/用户验收。试车台复杂构件精确避碰仍是原高度列模型的限制。
+- world/anchor/profile私库一起隔离；pytest根库connect guard、T4_RUN=0。原库SHA256前后不变。memory§§0–6原始字节前缀未改。测试服务仅自己的15140/18140，收尾停止；未动其他树服务。
+- Python必须uv；删包/venv需另行授权；浏览器仅明确授权时用ms-playwright打包Chromium，不用系统Chrome/用户profile。main硬编码world.db，必须三store隔离，不能__init__回相对真库。
+- 后续不扩DPR/包体/离线健康/perception出站/M2七日/T4真模型。波A仍仅土石木复用material.moved；波B通用lights快照/增删规则保留，旧1.16不消费remove的兼容限制见历史Git/审计。
+- 旧清理blocked by policy，勿换shell/工具或重试；待用户手动执行tidy-2026-11-09清单。保留真档、备份、素材、依赖与必要agent/CodeGraph配置。

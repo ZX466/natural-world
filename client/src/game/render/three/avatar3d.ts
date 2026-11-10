@@ -883,13 +883,10 @@ export function createAvatar(presetOrId: string | AvatarPreset, atlas: AvatarAtl
   const skeleton = new THREE.Skeleton(BONE_NAMES.map((name) => bones.get(name)!));
   mesh.bind(skeleton);
 
-  // 3. 3D 描边**暂不提供**（2026-11-08 试水实测结论）。
-  //    2D 路径的「穿墙剪影」用同位置 Sprite + `GreaterDepth` 实现：那张 sprite
-  //    是平面，深度处处相等，所以只在真正被挡住时才显色。3D 网格自身有前后
-  //    深度差——躯干背面比正面深，同样的比较会让被身体挡住的胳膊透出来，真机
-  //    上就是整个人套了个黄罩子；改成外扩则会在零件交界处露出一圈黄边。
-  //    要做对需要模板缓冲 + 严格的两遍渲染顺序，属于独立一轮的活。
-  //    这里宁可没有，也不留一个错的视觉。
+  // 3. 网格自己不挂 GreaterDepth 副本：背面/胳膊会被身体的深度误判成遮挡，
+  //    整个人套上黄罩子；外扩壳则会在零件交界处漏黄边。
+  //    three-avatar-occlusion 在世界正常渲染后仅重建环境深度，再画主角剪影。
+  //    角色自身不参与那张深度，因此这里仍保持一人一个 SkinnedMesh。
   const root = new THREE.Group();
   root.name = 'avatar-root';
   root.add(mesh);

@@ -46,6 +46,8 @@ export interface TerrainAdapter {
   readonly scene: TerrainScene;
   readonly heightOf: HeightLookup;
   readonly orbitPose: OrbitPose;
+  /** Actual instance tops, including any presentation-only height adjustment. */
+  readonly renderHeightOf: HeightLookup;
   sync(): void;
   follow(target: THREE.Vector3): void;
   rotate(dx: number, dy: number): void;
@@ -59,6 +61,7 @@ export function createTerrainAdapter(options: TerrainAdapterOptions): TerrainAda
   const scene = (options.createScene ?? createTerrainScene)(canvas);
   let lastTerrainVersion = -1;
   let lastMap: MapStatic | null = null;
+  let renderHeights = new Float32Array(0);
   let pose = defaultOrbit();
   const target = new THREE.Vector3(0, 2.3, 0);
 
@@ -69,11 +72,10 @@ export function createTerrainAdapter(options: TerrainAdapterOptions): TerrainAda
     if (!changedMap && mirror.terrainVersion === lastTerrainVersion) return;
     lastMap = map;
     lastTerrainVersion = mirror.terrainVersion;
-    scene.setCells(
-      terrainCells(map, mirror.structures, mirror.voxelEdits, heightOf, sampleColor),
-      map.w,
-      map.h,
-    );
+    const cells = terrainCells(map, mirror.structures, mirror.voxelEdits, heightOf, sampleColor);
+    renderHeights = new Float32Array(map.w * map.h);
+    for (const cell of cells) renderHeights[cell.y * map.w + cell.x] = cell.h;
+    scene.setCells(cells, map.w, map.h);
   };
 
   const follow = (point: THREE.Vector3): void => {
@@ -99,6 +101,10 @@ export function createTerrainAdapter(options: TerrainAdapterOptions): TerrainAda
     scene,
     sync,
     heightOf,
+    renderHeightOf: (x, y) =>
+      lastMap && x >= 0 && y >= 0 && x < lastMap.w && y < lastMap.h
+        ? (renderHeights[y * lastMap.w + x] ?? 0)
+        : 0,
     get orbitPose() {
       return pose;
     },

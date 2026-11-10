@@ -92,6 +92,31 @@ it('sync rebuilds instances once per terrain revision', () => {
   expect(cells[6 * W + 5]!.h).toBe(2);
 });
 
+it('camera height lookup follows the exact cells sent to the renderer', () => {
+  const mirror = mirrorWith();
+  const { a, setCells } = adapter(mirror, () => 2);
+  a.sync();
+  for (const cell of setCells.mock.calls.at(-1)![0]) {
+    expect(a.renderHeightOf(cell.x, cell.y)).toBe(cell.h);
+  }
+  mirror.applyVoxelEdits([{ x: 5, y: 6, gid: 3, height: 3, action: 'place' }]);
+  a.sync();
+  expect(a.renderHeightOf(5, 6)).toBe(3);
+  expect(a.heightOf(5, 6)).toBe(2);
+  expect(a.renderHeightOf(-1, 0)).toBe(0);
+});
+
+it('camera height lookup reads the bank draw height, not the logical one', () => {
+  // 土坎逻辑高度 1、渲染高度 2：相机避让必须拿到 2，否则镜头会穿进矮墙。
+  const mirror = mirrorWith();
+  const { a } = adapter(mirror);
+  a.sync();
+  mirror.applyVoxelEdits([{ x: 5, y: 6, gid: 0, height: 1, action: 'place', material: 'earth' }]);
+  a.sync();
+  expect(a.renderHeightOf(5, 6)).toBe(2);
+  expect(a.heightOf(5, 6)).toBe(1);
+});
+
 it('a placed earth block reaches the scene as a two-high wall', () => {
   // 放土后那格是「逻辑高度 1、不可走」，与可走平地同高同色（实测色差 2/255）。
   // 只画 h=1 的方块，它看起来就是一块空地 —— 用户报的「放置是空白」。
