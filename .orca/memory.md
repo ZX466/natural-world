@@ -99,8 +99,10 @@ vitest 比 codex 的 747 少 1 是预期的：主树 `a152796` 重写了土坎�
   `npc_health.hidden=1` 未触发**绝不外发**（self-unknown，按 `HiddenState.triggered` 过滤；
   他人的隐藏属性仅在陈默持有关联 `knowledge` 行时可见）。协议 **1.18 → 1.19**，
   五处联动 + `test_ws_gateway` 两个白名单钉子。面板加第三块「人物」（列表式或点选式，codex 定）。
-- 顺带发现、**未修未派**：起火实测约 11.5%/日（设计 34%，可走格仅约 26% 且抽中格还要求可走）；
-  `npc.lod_change` 零事件但库内 `chenmo` 已是 `lod=2`（L2 从未真正升格）。
+- 顺带发现、**未修未派**：起火实测 **9.13%/日**（设计 34%；`main.py::_fire_tick_hook` 还要求落点
+  `is_walkable`，可走格仅 **26.4%**；500 seed × 200 日：抽中 33,907、落地 9,127）。
+  seed=42 第 2/3/5 日抽中火，落点 `(138,89)`/`(5,32)`/`(139,48)` **三格全不可走**，静默丢弃。
+  `npc.lod_change` 零事件但库内 `chenmo` 已是 `lod=2`、50 名村民 `lod=1`（L2 从未真正升格）。
 
 **波 B 收编（`fb20719`，codex `d799fca`）**：真实火场出站 —— `sim/npc/light_view.py`
 把活跃火格投影成既有六键 `Light`（不透明稳定 rtoken、x/y、`kind="fire"`、radius 5、
