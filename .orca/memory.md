@@ -90,10 +90,13 @@ vitest 比 codex 的 747 少 1 是预期的：主树 `a152796` 重写了土坎�
   `sim/api/ws.py::_ACTION_ANIMS`，snapshot/delta 都带 `anim`（`idle|walk|work|eat|rest|chat`）；
   但客户端**只把它用于 fauna 透明度**（`three-actors.ts:284`、`WorldScene.ts:1188`），
   `avatar3d.ts::AvatarAnim` 只有 `idle|walk|run|jump`。要在现有 16 骨骼上摆站姿，
-  **不加网格/图集格/draw call**。2D 回滚路径无劳作素材（`VILLAGER_SHEET` 是 4×4），保持现状。
-  ⚠ `_ACTION_ANIMS` 只写不清，旧姿势最多留到下一次决策（10 tick）——可接受，别当前端 bug 修。
+  **不加网格/图集格/draw call**。2D 回滚路径：chenmo 图集有 R4–7 姿势行（逐格实测），
+  villager 图集 4×4 没有 —— 本波 2D 保持现状。
+  ⚠ `_ACTION_ANIMS` 只写不清，旧姿势最多留到下一次决策（实测 10 tick）——可接受。
+  ⚠ 更实的漏项：`npc.act` **不进 `pending_delta_entity_ids`** ⇒ 站定原地切动作时没有 delta 帧，
+  姿势传不到客户端。派单要求一并修（只在 anim 真变时标）。
 - **D-2 健康/关系/知识出站**：`ws.py` 对三表**零引用**；真库 `npc_health` 6 行（4 行 hidden）、
-  `relationships` 526 行（陈默 9 行）、`knowledge` 230 行（陈默 2 行）。加可选键 `npc_view`
+  `relationships` 526 行（陈默 9 行）、`knowledge` 230 行（陈默 2 行）。加可选键 `npc_views`
   （**叙事串**，不出数值——ws-protocol §5 禁出 `hp/trust/affection/fear/debt/face` 原值），
   delta 要自带变更账本 + 广播判据补一条（现有 `moved/fauna/tile/lights` 不含关系变化）。
   `npc_health.hidden=1` 未触发**绝不外发**（self-unknown，按 `HiddenState.triggered` 过滤；
