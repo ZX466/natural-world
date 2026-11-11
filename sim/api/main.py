@@ -10,8 +10,10 @@ import contextlib
 import ipaddress
 import json
 import uuid
+import zlib
 from collections import deque
 from collections.abc import AsyncIterator, Callable
+from collections.abc import Set as AbstractSet
 from pathlib import Path
 from typing import Any
 
@@ -172,6 +174,47 @@ def _ground_tile_id(tile_map: TileMap, x: int, y: int) -> int:
     chunk = tile_map.chunks[tile_map.chunk_of(x, y)]
     lx, ly = x % CHUNK_SIZE, y % CHUNK_SIZE
     return int(chunk.ground[ly * CHUNK_SIZE + lx])
+
+
+def _ignition_spot(
+    seed: int,
+    tick: int,
+    tile_map: TileMap,
+    *,
+    avoid: AbstractSet[tuple[int, int]] = frozenset(),
+) -> tuple[int, int] | None:
+    """起火落点：哈希给出的格可走就用它，否则取最近的可走格（C5 确定性）。
+
+    原实现只在哈希格恰好可走时点火，其余整天静默丢弃——真实地图可走格约
+    26%，把设计 34%/日 砍成实测 9%/日。火是机制事实，落点抽到屋顶/水塘时
+    应改投，而不是不烧。
+    """
+    width, height = tile_map.width, tile_map.height
+    h = zlib.crc32(f"fire-spot:{seed}:{tick}".encode())
+    gx, gy = h % width, (h // width) % height
+    if tile_map.is_walkable(gx, gy) and (gx, gy) not in avoid:
+        return (gx, gy)
+    # 环状外扩找最近可走格；同距离按 (y, x) 定序，保证 C5 同输入同输出。
+    limit = max(width, height)
+    for radius in range(1, limit + 1):
+        candidates = sorted(
+            {
+                (gx + dx, gy + dy)
+                for dx in range(-radius, radius + 1)
+                for dy in range(-radius, radius + 1)
+                if max(abs(dx), abs(dy)) == radius
+            },
+            key=lambda p: (p[1], p[0]),
+        )
+        for x, y in candidates:
+            if (
+                0 <= x < width
+                and 0 <= y < height
+                and tile_map.is_walkable(x, y)
+                and (x, y) not in avoid
+            ):
+                return (x, y)
+    return None
 
 
 def _with_structure_tile_restore(
@@ -955,13 +998,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     def _fire_tick_hook(state: Any, tick: int) -> list[Any] | None:
         events: list[Any] = []
         if ignite_due(loop.state.world_seed, tick):
-            # 确定性落点：药铺前空地东南的草地（seed+tick 哈希散布可走格）
-            import zlib
-
-            h = zlib.crc32(f"fire-spot:{loop.state.world_seed}:{tick}".encode())
-            gx, gy = h % tile_map.width, (h // tile_map.width) % tile_map.height
-            if tile_map.is_walkable(gx, gy):
-                events.extend(fire_runtime.ignite_at(tick=tick, x=gx, y=gy))
+            # 确定性落点：哈希给出的格若不可走，改投最近可走格——火是机制事实，
+            # 不能因为落点抽到屋顶/水塘就整天不烧（实测曾把 34%/日 砍到 9%）。
+            burning = {(c.x, c.y) for c in fire_runtime.cells}
+            spot = _ignition_spot(loop.state.world_seed, tick, tile_map, avoid=burning)
+            if spot is not None:
+                events.extend(fire_runtime.ignite_at(tick=tick, x=spot[0], y=spot[1]))
         if fire_runtime.cells:
             walkable = {
                 (x, y)

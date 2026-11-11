@@ -48,6 +48,10 @@ _MONOLOGUE_COOLDOWN_SPAN_TICKS = 7200
 #: 50 人同拍开口最多放行 2 条，其余静默丢——表现面节流，非世界真相）。
 _MONOLOGUE_QUOTA_PER_BEAT = 2
 
+#: 非 act/monologue 但必须原样出流的本拍真相（runtime 侧已改内存档，事件是
+#: 唯一落库路径——静默丢弃会让库里的 lod 永远停在旧值、浮现证据链断根）。
+_PASSTHROUGH_KINDS = frozenset({"npc.lod_change", "npc.hidden_emerge"})
+
 #: E1 聊天冷却（D10 同手法：按 NPC 散布防齐射）。[1800, 7200) tick =
 #: 30~120 游戏分——同 NPC 两次面对面聊天最小间隔。
 _CHAT_COOLDOWN_MIN_TICKS = 1800
@@ -684,7 +688,9 @@ def npc_events_for_tick(
             events.append(event)
             continue
         if event.event_type.value != "npc.act":
-            if event.event_type.value == "npc.hidden_emerge":
+            # LOD 升降与隐藏浮现都是本拍真相：丢弃等于库里的 lod 永不更新、
+            # 浮现证据链断根（runtime 侧已写内存档，事件是唯一落库路径）。
+            if event.event_type.value in _PASSTHROUGH_KINDS:
                 events.append(event)
             continue
         if event.payload.get("action") == "build" and event.payload.get("npc_id") in build_sites:
