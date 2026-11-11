@@ -446,18 +446,63 @@ def sprite_name_of(entity_id: str) -> str:
 #: 模块级（同 _DISPLAY_NAMES 模式）；快照/delta 出站时携带，缺省 idle。
 _ACTION_ANIMS: dict[str, str] = {}
 
+#: 姿势登记时刻（tick）。**必须有**：账本只写不清时，一次 rest 会挂到世界结束
+#: （2026-11-11 真机实测：陈默 tick 506345 歇了一下，到 555080 仍在蹲）。
+#: 村民每 10 tick 重发 npc.act 会持续刷新，所以只有 LLM 决策的稀疏主角会露馅。
+_ACTION_ANIM_TICKS: dict[str, int] = {}
 
-def set_action_anim(entity_id: str, anim: str) -> None:
-    """登记实体当前动作姿势（sim_exec 执行面调用）。"""
+#: 姿势有效期（tick）。1 tick = 1 游戏秒，所以 300 tick = **5 游戏分钟**。
+#: 口径取自村民的动作重发间隔（实测 10 tick）：只要动作还在继续，下一次
+#: npc.act 就会把时刻推到当下，动作停了就自然过期。5 分钟足够覆盖一个
+#: 完整动作，又短到玩家能察觉姿势回到站姿而不是「一直蹲着」。
+ACTION_ANIM_TTL_TICKS = 300
+
+
+def set_action_anim(entity_id: str, anim: str, *, tick: int | None = None) -> None:
+    """登记实体当前动作姿势（sim_exec 执行面调用）。
+
+    `tick` 是登记时刻，用于过期判定；缺省（None）表示调用方没有时钟
+    （测试/旧调用点），此时不参与过期——与引入 TTL 之前的行为一致。
+    """
     _ACTION_ANIMS[entity_id] = anim
+    if tick is None:
+        _ACTION_ANIM_TICKS.pop(entity_id, None)
+    else:
+        _ACTION_ANIM_TICKS[entity_id] = tick
 
 
 def clear_action_anims() -> None:
     _ACTION_ANIMS.clear()
+    _ACTION_ANIM_TICKS.clear()
 
 
-def _anim_of(entity_id: str) -> str:
-    return _ACTION_ANIMS.get(entity_id, "idle")
+def _anim_of(entity_id: str, *, tick: int | None = None) -> str:
+    """当前姿势词。带 `tick` 时按 TTL 判过期，过期即回 idle。"""
+    anim = _ACTION_ANIMS.get(entity_id)
+    if anim is None:
+        return "idle"
+    if tick is not None:
+        stamped = _ACTION_ANIM_TICKS.get(entity_id)
+        if stamped is not None and tick - stamped > ACTION_ANIM_TTL_TICKS:
+            return "idle"
+    return anim
+
+
+def expire_action_anims(tick: int) -> list[str]:
+    """清掉过期姿势并返回这些实体 id（调用方负责标脏以推送 idle）。
+
+    **只读判据不够**：静止实体不产生 delta 帧，若不在过期时主动标脏，
+    客户端会一直画着最后收到的姿势——那正是这个缺陷在真机上的表现。
+    """
+    expired = [
+        entity_id
+        for entity_id, stamped in _ACTION_ANIM_TICKS.items()
+        if tick - stamped > ACTION_ANIM_TTL_TICKS and entity_id in _ACTION_ANIMS
+    ]
+    for entity_id in expired:
+        _ACTION_ANIMS.pop(entity_id, None)
+        _ACTION_ANIM_TICKS.pop(entity_id, None)
+    return expired
 
 
 #: 批次 D7：天气日级视觉状态（确定性哈希抽签，同 fire 模式——无 RNG 流）。
@@ -691,7 +736,8 @@ def snapshot_payload(loop: TickLoop, tile_map: TileMap) -> dict[str, Any]:
             "y": entity.pos[1],
             "facing": "s",
             "sprite": sprite_name_of(entity_id),
-            "anim": _anim_of(entity_id),  # D14：动作姿势账本（缺省 idle）
+            # D14：动作姿势账本（缺省 idle；过 TTL 的旧姿势按 idle 出）
+            "anim": _anim_of(entity_id, tick=loop.state.tick),
             **_locomotion_fields(loop, entity_id),
         }
         name = _display_name_of(entity_id)
@@ -903,7 +949,7 @@ def delta_payload(loop: TickLoop, moved_entity_ids: set[str]) -> dict[str, Any]:
             actor["name"] = name
         # D14：anim 变化随行（walk↔work/eat/rest 切换前端姿势）；账本缺省
         # idle 与旧快照一致——只在非 idle 或曾非 idle 时携带（增量不制造噪声）。
-        anim = _anim_of(entity_id)
+        anim = _anim_of(entity_id, tick=loop.state.tick)
         actor["anim"] = anim
         actors.append(actor)
     payload: dict[str, Any] = {
@@ -1834,6 +1880,10 @@ async def run_world_driver(
                     requests = [recovery_control, *requests]
                 step_fast_forward(loop, requests)
             moved = set() if fast_forwarding else loop.drain_delta()
+            if not fast_forwarding:
+                # 静止实体不产生 delta 帧：姿势过期必须在这里主动标脏，否则
+                # 客户端会一直画着最后收到的姿势（陈默蹲 4.8 万 tick 的成因）。
+                moved.update(expire_action_anims(loop.state.tick))
             events = loop.drain_events()
             if events and on_flush is not None:
                 await on_flush(events)

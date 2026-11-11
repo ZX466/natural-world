@@ -815,9 +815,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         npc_id = str(event.payload.get("npc_id", ""))
         if npc_id:
             anim = anim_of_action(str(event.payload.get("action", "")))
-            if _anim_of(npc_id) != anim:
-                set_action_anim(npc_id, anim)
+            # 每次都刷新登记时刻：村民每 10 tick 重发动作，靠这个把姿势续命；
+            # 只有「同姿势且未过期」才算无变化，不必造 delta。
+            if _anim_of(npc_id, tick=event.tick) != anim:
                 loop.pending_delta_entity_ids.add(npc_id)
+            set_action_anim(npc_id, anim, tick=event.tick)
 
     loop.attach_event_observer(_observe_action_anim)
 

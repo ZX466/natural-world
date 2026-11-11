@@ -437,6 +437,55 @@ class TestAnimLedger:
         assert actor.get("anim") == "work"
 
 
+class TestAnimLedgerExpiry:
+    """动作姿势必须自己过期，否则一次 rest 会蹲到世界结束。
+
+    2026-11-11 真机验收发现：陈默 tick 506345 做了一次 `rest`，世界跑到 555080
+    （4.8 万 tick ≈ 13 游戏小时）他还在蹲着。原因是 `_ACTION_ANIMS` 只写不清。
+
+    为什么 NPC 没暴露这个问题：村民每 10 tick 重发一次 npc.act（实测
+    villager_32 连续 25 条 rest），姿势被持续刷新。陈默走 LLM 决策、间隔以
+    千 tick 计，账本里的旧值就一直挂着。
+    """
+
+    def test_action_anim_expires_after_its_window(self) -> None:
+        import sim.api.ws as ws_mod
+
+        saved = dict(ws_mod._ACTION_ANIMS)
+        saved_tick = dict(ws_mod._ACTION_ANIM_TICKS)
+        try:
+            ws_mod.clear_action_anims()
+            ws_mod.set_action_anim("chenmo", "rest", tick=1000)
+            assert ws_mod._anim_of("chenmo", tick=1000) == "rest"
+            # 窗口内仍算数
+            assert ws_mod._anim_of("chenmo", tick=1000 + ws_mod.ACTION_ANIM_TTL_TICKS) == "rest"
+            # 越过窗口就该回到 idle —— 不然「歇了一会儿」会变成永远蹲着
+            assert ws_mod._anim_of("chenmo", tick=1000 + ws_mod.ACTION_ANIM_TTL_TICKS + 1) == "idle"
+        finally:
+            ws_mod._ACTION_ANIMS.clear()
+            ws_mod._ACTION_ANIMS.update(saved)
+            ws_mod._ACTION_ANIM_TICKS.clear()
+            ws_mod._ACTION_ANIM_TICKS.update(saved_tick)
+
+    def test_npc_refresh_keeps_the_pose_alive(self) -> None:
+        """村民每 10 tick 重发 npc.act —— 刷新后姿势必须继续有效。"""
+        import sim.api.ws as ws_mod
+
+        saved = dict(ws_mod._ACTION_ANIMS)
+        saved_tick = dict(ws_mod._ACTION_ANIM_TICKS)
+        try:
+            ws_mod.clear_action_anims()
+            ws_mod.set_action_anim("villager_32", "rest", tick=1000)
+            ws_mod.set_action_anim("villager_32", "rest", tick=1500)
+            later = 1500 + ws_mod.ACTION_ANIM_TTL_TICKS
+            assert ws_mod._anim_of("villager_32", tick=later) == "rest"
+        finally:
+            ws_mod._ACTION_ANIMS.clear()
+            ws_mod._ACTION_ANIMS.update(saved)
+            ws_mod._ACTION_ANIM_TICKS.clear()
+            ws_mod._ACTION_ANIM_TICKS.update(saved_tick)
+
+
 class TestWanderUnreachableRetry:
     """2026-10-12 换图补：wander 目标孤立（可走但不可达）→ 确定性重挑不空转。
 
