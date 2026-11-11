@@ -171,6 +171,7 @@ vitest 比 codex 的 747 少 1 是预期的：主树 `a152796` 重写了土坎�
 4. **门禁**：pytest 全量 `3862P/126S/2F`（608.95s）。两个 F 都是 bench 阈值边缘
    （`test_retrieval_full_scan_degraded_sentinel` 实测中位 2.017ms vs 红线 2.000ms、
    `test_perception_sound_50npc`），**复跑均绿**，且本次改动未触及检索/感知路径。
+   另跑 `-m "not bench"` 收尾确认：**`3797P/121S/72D EXIT 0`（497.77s）**。
 
 **波 E 收编（2026-11-11，codex `5a85afc`）**：陈默动作面闭环，详见本节开头。
 - **门禁（主树独立复跑，`5a85afc` + 本树修复树态）**：pytest `3786P/121S/72D EXIT 0`（496.06s）·
