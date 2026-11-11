@@ -105,6 +105,11 @@ export function createLandmarkPanel(
   root.append(modes);
 
   // --- 点火开关 ---------------------------------------------------------------
+  // 必须包在 `.od-lre-row` 里：`.od-lre-btn` 带 `flex: 1`，而面板是纵向 flex
+  // 容器 —— 直接把按钮挂到 root 上，它会被拉伸成整条面板高（实测 285px），
+  // 把部件树挤到只剩一条缝。横排容器里 `flex: 1` 才是「占满这一行」的本意。
+  const fireRow = document.createElement('div');
+  fireRow.className = 'od-lre-row';
   const fire = button('点火试车：开', 'od-lre-btn od-lre-btn--fire');
   fire.setAttribute('aria-pressed', 'true');
   let firing = true;
@@ -114,7 +119,8 @@ export function createLandmarkPanel(
     fire.setAttribute('aria-pressed', String(firing));
     ports.setFiring(firing);
   });
-  root.append(fire);
+  fireRow.append(fire);
+  root.append(fireRow);
 
   // --- 分级拆解 ---------------------------------------------------------------
   const sliderLabel = document.createElement('label');
