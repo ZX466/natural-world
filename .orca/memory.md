@@ -3,7 +3,7 @@
 > 2026-10-25/26 多轮大整理：历史正文已删除，考古用 git history。
 > 文档入口 `docs/README.md`；命令 `docs/dev-workflow.md`。
 
-## 0. 当前状态（2026-11-11 · 波 A/B/C/D 全收编 · **波 E 在飞** · 协议 1.19 · 3D 默认 · 土坎 2 格方块 `a152796`）
+## 0. 当前状态（2026-11-11 · 波 A/B/C/D/E 全收编 · 协议 1.19 · 3D 默认 · 土坎 2 格方块 `a152796`）
 
 **波 E 派单（2026-11-11，codex 树 `.orca/talking.txt` §九）**：陈默动作面闭环
 （work/eat/rest 进决策面 + 执行面 + 内感受 hunger + needs 推进 + PlanSlice）。
@@ -15,6 +15,24 @@
 不存在的东西写代码；③ `decide_once` 的 `assemble_prompt` **不在 try 内**且 `_chenmo_loop`
 无异常兜底 ⇒ 任何一条带禁词的文本会让决策任务**永久静默死亡**（实测确认），本波必须先堵。
 另删掉一条零区分度验收（「心声不重复」——29 条全不重复）。
+
+**波 E 收编（2026-11-11，codex `5a85afc`）**：陈默 work/eat/rest 闭环。
+`IntentAction` / `M1_SUPPORTED_ACTIONS` / prompt 枚举三处同步；三动作不填 target，
+执行当拍结算（npc.act + 一条**结果** thought，不再重发 reason）。work 只在药铺
+`PHARMACY_POS=(100,53)` 曼哈顿 ≤ `_SITE_ARRIVAL_RADIUS=4` 且冷却过才付 `_WAGE_AMOUNT=5`，
+`wage_last` 与 main 同一个 dict；eat 按 `buy_price(meal)` 扣款、买成才 `apply_remedy`；
+rest 免费补救 energy。`ProtagonistNeeds` 纯内存（不落库），main 每轮决策前推进并只把
+`narrate_hunger` 送进 interoception。`PlanSlice.last_intent_result` 只取本意图事件窗口里
+本人新发的 thought。`npc.act → anim` 改为 accepted-event 观察器（NPC 与陈默共用）。
+四个移动臂统一拦 start==goal / 空路径 / 单点 / 回到起点，不发原地 MOVE。
+
+**收编时主树独立抓到一处能永久冻住陈默的缺陷（codex 回执未提）**：`last_intent_result`
+进 `[计划]` 段是**持久** prompt 状态，而闸门用 `quoted_echo_scan`（句首反问/引号转译**豁免**）、
+装配器用不豁免的 `scan()`。一句能过闸门、过不了装配的 reason（实测 `"游戏？我不过是个学徒。"`）
+会让此后**每一轮** `assemble_prompt` 抛 `PromptAssemblyError`，异常兜底只让循环活着、
+`llm_calls` 恒 0 —— 陈默静默。修法在**写入侧**：`ChenmoDriver._record_result()` 按装配口径
+`scan()` 预筛，过不了就存空串。钉子 `test_gate_exempted_reason_cannot_freeze_every_later_decision`
+（闸门先断言 accepted，再断言三轮都真到 LLM）+ `test_banned_handler_thought_is_dropped_…`。
 
 **试车台 = 世界结构（2026-11-09 用户改口「要和预览一样：可识别拆解，是障碍物实体」）**：
 外部 SDK 整包原样入库 `vendor/linhe-lre-sdk/`（272K，除一份本仓新增的 `.d.ts` 外一字节未改），
@@ -140,6 +158,17 @@ vitest 比 codex 的 747 少 1 是预期的：主树 `a152796` 重写了土坎�
   `is_walkable`，可走格仅 **26.4%**；500 seed × 200 日：抽中 33,907、落地 9,127）。
   seed=42 第 2/3/5 日抽中火，落点 `(138,89)`/`(5,32)`/`(139,48)` **三格全不可走**，静默丢弃。
   `npc.lod_change` 零事件但库内 `chenmo` 已是 `lod=2`、50 名村民 `lod=1`（L2 从未真正升格）。
+
+**波 E 收编（2026-11-11，codex `5a85afc`）**：陈默动作面闭环，详见本节开头。
+- **门禁（主树独立复跑，`5a85afc` + 本树修复树态）**：pytest `3786P/121S/72D EXIT 0`（496.06s）·
+  vitest `792P/92F EXIT 0` · ruff check+format / pyright / gen:protocol:check / typecheck /
+  lint / prettier / build / `build_height_map --check` / `build_block_atlas --check` 全 EXIT 0。
+  比 codex 的 3785P 多 1：主树新增 2 条冻结缺陷钉子、替换掉 1 条旧的「装配必抛」断言
+  （那条把缺陷**写成了期望行为**）。
+- **未收 codex 的 `c3a382d`**（本树 voxel-execution-spec §10.5 订正）：主树该文件无 §10.5，
+  且历史五份文档与主树分叉，**不要整树 merge**。
+- ⚠ **真机验收归用户**：work/eat/rest 姿势辨识度、hunger 文案观感、实际帧耗。
+- **仍排除**：不给陈默补启动金、不改 genesis 50 户各 15 文、不把 needs 落库。
 
 **波 B 收编（`fb20719`，codex `d799fca`）**：真实火场出站 —— `sim/npc/light_view.py`
 把活跃火格投影成既有六键 `Light`（不透明稳定 rtoken、x/y、`kind="fire"`、radius 5、
@@ -1210,36 +1239,36 @@ upgrade、有版本直接 upgrade；`script_location` 覆盖绝对路径以抗 `
 
 ## 7. ④ codex｜新对话恢复快照
 
-【2026-11-10 波 D｜已由主树收编 `ec4a020`】3D站定work/eat/rest/chat已接，健康/关系/知识经npc_views叙事出站到人物列表；协议1.19。主树独立复跑 pytest3696P/121S/72D（539.74s）/Vitest792P/92files及全部门禁EXIT0；另用真实库只读采样独立验了隐藏边界（未触发不外发、双列知识才解锁）。真机验收归用户。**已同步回本树**，两树读数一致，本树停等下一波。
+【2026-11-11 波 E｜技术交付，待主树收编】陈默work/eat/rest、hunger与上次结果闭环，装配异常不杀决策任务。真实库副本30轮成功主决策：work22/eat6，npc.act28；3笔工资共15文、两顿饭花14文，余额0→1，原地MOVE0。pytest3785P/121S/72D、Vitest792P/92files及全部门禁EXIT0。协议仍1.19；本地提交见Git，唯一talking回执后停等收编。
 
 ### 当前状态与恢复入口
 
-- 基线ac1494c，含主树b18d574/波C95a0cd8与a152796土坎drawH；A/B/C全已收编，勿重做。主树后续三笔纯文档不必先同步，本波未自行merge/rebase/push。恢复workflow→完整talking→本节→registry→Git；代码先CodeGraph，projectPath=E:/zxdevelop/.orca/worktrees/project7/codex。
-- 只本树Conventional Commit，不编辑主树、不联系其他树/终端，talking永不入Git。只更新本节，§§0–6原始字节前缀保持；prefix读数见本轮审计memory-prefix.json。
-- 当前协议1.19，两版本常量、live app.info、shared/openapi.json、生成shared/protocol.ts、版本登记与README徽章及既有版本钉一起升；NpcView名称不与HTTP HealthStatus冲突。
+- 基线cb4338f，已同步主树e7858c0/波Dec4a020，A/B/C/D已收编，勿重做。恢复workflow→完整talking→本节→registry→Git；代码先CodeGraph(projectPath=E:/zxdevelop/.orca/worktrees/project7/codex)。只本树Conventional Commit，不push/不改主树/不自行merge或rebase/不联系其他树终端；talking永不入Git。
+- 历史5份文档与主树分叉，别整树merge回去。本轮顺手订正voxel-execution-spec§10.5的过期剪影句，独立docs提交；主树该文件无§10.5，可只收波E实现提交。
+- 用户本轮补充确认：读档重建主角内存投影、不写库。实际assemble_runtime完全排除chenmo，不会自动重建；main成功载档块新建ProtagonistNeeds并清旧结果，按最新裁定执行，勿再照派单D段的旧假设去删除这处接线。
 
-### 波 D 实际契约
+### 波 E 的实际契约
 
-- D1：avatar3d仅用原16骨骼摆work前倾挥臂/eat手抬嘴/rest半蹲/chat侧身抬手，仍每人1 SkinnedMesh/共享512×256图集，不加角色drawcall。three-actors位移/airborne优先；站定才读actor.anim，wire walk站定为idle。独立动作相位按未暂停delta×speed推进，暂停冻结/恢复不补跑；three-world传paused。2D/Phaser未接劳作姿势，素材未改。
-- main._npc_tick_hook仅在_anim_of前后值变化时标记pending_delta_entity_ids，站定动作也能发delta；不改core.tick.enqueue、不在客户端猜动作过期。startup/load/shutdown清_ACTION_ANIMS，读档不带旧分支动作。内部交谈action是request_chat，wire anim才叫chat。
-- sim/api/npc_view.py批量读取当前分支健康、与chenmo相关有向关系、chenmo有效双列知识；启动/读档/提交的health/death/chat/retell/knowledge批次刷新。WS同步snapshot/delta只读预构造叙事账本，无SQL。self triggered窗口消退即使无emerge事件也重投影。
-- 出站NpcView只含rtoken/name?/health:string[]/bond:string/knows:string[]。只给仍在世界中的相识者条目，陈默自身有实际可见内容才出现；无默认健康档/造数据。bond按NPC→陈默的态度叙述；仅有陈默→NPC行时只说曾打过照面。knows为陈默持有且双列对齐该人物属性的有效fact原文，不读取旁人的私有知识。
-- 自身hidden健康/自身相关知识须当前triggered，其他人hidden健康须陈默有效(subject_npc_id,subject_attr_id)知识。构造时另用本分支隐藏元数据与当前允许集合扫描整句fact/health文字，夹带其他未授权项或已消退自身词面则整句不发，不改写、不发暗示。扫描器是构造前校验，未改outbound_guard；数值/内部id/tick/seq/branch/witnesses不出条目。
-- snapshot发全集、数组深拷贝且不消耗其他连接待发变化；delta完整upsert或{rtoken,op:remove}，只有变化才发，独立_npc_views_changed可触发静止世界广播。快照按current|broadcast键并集记录SNAPSHOT_DIRTY（含缺席），直到delta重发当前态/移除；保证A→B→A及A→空→A不漏纠正。
-- 客户端ws→runtime→uiStore→NpcPanel：快照整组替换（缺字段清空），delta按rtoken完整覆盖/移除，去重/复制输入；React普通文字节点，只存白名单低频叙事，无坐标/数值映射。第三块人物列表，复用纸面样式独立滚动，不改拾取优先级，无新增HTTP查询或调试覆盖层。
+- IntentAction、M1_SUPPORTED_ACTIONS、prompt同一对全角括号枚举同步work/eat/rest；不要求target，prompt明确三者不填target_id/target_pos，原地干活/吃饭/歇息不要反复move_to。unsupported gap仍{demolish,use}，不绕banned/hidden闸门，profile None仍0调用。
+- driver三动作在执行当拍结算，各有npc.act+一条结果thought，不再重发动机reason。work只在PHARMACY_POS=(100,53)曼哈顿≤既有_SITE_ARRIVAL_RADIUS=4且冷却已过时+既有_WAGE_AMOUNT=5，note=wage:work；远处只摆姿势/「这儿没活可干」且不付钱。wage_last复用main同一dict，既有载档clear仍生效。药铺常量在protagonist.py，不增LANDMARKS或genesis。
+- eat按buy_price(meal,tick,seed)扣款，成功后apply_remedy(eat)缓解hunger.3/energy.15，余额不足零扣款/零补救；rest免费apply_remedy(rest)缓解energy.3。即时结算是陈默LLM意图路径的明确取舍，不改村民到站/wage/errand链。可选经济/needs依赖缺席时fail-soft，尤其eat不会付钱却无补救。
+- build_needs()与档案JSON复用原0.3/.2/.4种子；ProtagonistNeeds只按正向tick差复用DEFAULT_DECAYS/advance_needs，补救复用apply_remedy，不写SQL/WorldState/state_hash，不进NpcRuntime效用。main每轮决策前推进并只传narrate_hunger到interoception_text；hp/时辰既有感知链不重接，不用BodyState重复伤情。
+- PlanSlice.last_intent_result记本意图实际新发的本人结果thought原文（buy/sell/take/give/build/attack/三动作）；其他动作记reason。只取本意图事件窗口，旧事件/对手/bubble不混入，下一prompt按当前HiddenState过滤后仍终扫；成功载档清旧结果。
+- _chenmo_loop每轮Exception记录chenmo.decision_failed后继续，保留原sleep/节拍；CancelledError继续传播。PromptAssemblyError及一般临时故障均先红后绿证明任务存活/后轮可执行/可取消。别把坏装配当作任务可以静默死亡的理由。
+- 既有npc.act→anim块移为accepted-event观察器，NPC与陈默共享同一桥；只在anim变化时标pending_delta_entity_ids，站定切换可见。未改ws.py/协议/其他出站面。driver四个移动臂统一保护start==goal与空/单点/终点回到起点路径，不发原地MOVE，也不用原地MOVE停旧路径；原聊天/独白fail-soft保留。
 
-### 证据与排障
+### 真实副本验收与经济核算
 
-- .orca/audits/wave-d-2026-11-10/含plan/progress、pose-report/panel-report、review/gates、RED→GREEN日志与原生.exit、私库脚本/浏览器JSON/截图。D1客户端67 focused、面板25 focused；新增后端隐私/同步/分支/刷新测试21条。最终pytest3696P/121S/72D，509.23s；Vitest792P/92files；ruff/check+format、pyright、TS类型/lint/格式、gen:protocol:check、build均EXIT0。
-- 独立审查2 Important均先RED后修复：旧知识整句夹带已隐藏词面；快照只记token导致临时可见/缺席回到广播基准后漏撤回。构造整句校验与snapshot-dirty并集已补；审查者独立6561种两token/三观察者历史均收敛，当前无开放Critical/Important。
-- 首轮全量12F/3683P：9个旧版本/字段徽章钉同步补1.19，另3个inspect白盒因执行中修改ws.py使已加载函数行号与磁盘不一致。未改安全断言，冻结源码新进程定向146P、最终全量3696P；以后别在运行含inspect.getsource的门禁时改被读文件。
-- 打包Chromium1252、独立profile、ANGLE SwiftShader：私库真实事件→WS→mirror→骨骼四姿势切换、暂停冻结，已相识/获知/自身触发/消退、重连替换、1440与1024布局通过，浏览器错误0。原生姿势读取等待两次RAF，150ms在软件GPU下不足；不得把旧骨骼读数当成产品失效。
-- native-pose-comparison.png直观对照；browser-poses.json中每角色1 draw/mesh/16骨，51人idle/work/eat/rest/chat均51角色draw、1图集（技术模型场景，不含正常世界其他通道）。真实硬件帧耗/姿势主观辨识度留主树/用户验收，未自称真机验收通过。构建保留既有大chunk提示。
-- world/anchor/profile全私库，pytest根库connect guard、T4_RUN=0；原库SHA256前后不变。自己的15150/18150测试服务已停，未动其他树服务。未配LLM profile、未动driver无profile分支、core.tick/outbound_guard、地图/素材、土坎或90°相机回归。
+- 真正源库是E:/zxdevelop/project7/world.db（约500MB，2317894events/tick450740/1加密profile/29陈默心声）；本树world.db是Oct21旧档，不能拿它充当带profile的验收世界。SQLite mode=ro在线backup含WAL复制到审计live-copy；chdir后才import后端，world/anchor/profile全指副本，SQL guard拒绝副本外连接。现有加密profile用已有主密钥正常解密，未造/改profile行，不打印或复制明文凭证/主密钥。
+- CHENMO_DECIDE_SECONDS=5，LZ_OFFLINE_CATCHUP_MAX_TICKS=1；0会ValueError，offline.py注释说0关闭是旧错误，本轮未改该模块。仅取消副本NPC L2模型后台worker以隔离额外成本，真实世界driver/L1/工资/errand照跑；没有脚本替代陈默主决策。
+- 同一30轮真实成功主响应：queued work22/eat6/talk_to1，一轮未入队；实际npc.act work22/eat6；wage:+5三笔共15，buy:meal -8/-6两顿共14，初始0→最终1。原地MOVE事件/提案均0，站定work/eat动作delta12条，hunger文本全无数字；tick450742→475584。真实网络过程约454秒，额外既有聊天调用不计主决策轮数。
+- 首次验收统计错把npc.act归属查为envelope.actor_id（工厂该字段为空，归属是payload.npc_id），因此runner跑完30轮后断言失败。未改生产代码或付费重跑；对同一已提交窗口按正确字段只读重统计通过，原JSON/log/exit1保留；live-recount.exit0、最终live-acceptance.json passed=true，finalize另用SQL JSON字段独立交叉核验28动作/3工资/0原地MOVE。
+- 可行性：hunger.3→.7需34560tick；工钱冷却[3600,10800)，陈默实值7344；meal基准8、实际浮动6–9，两笔5文=10已够，保守两工资周期≤21600tick仍早于需求增量.4窗口。不是靠补启动金；新旧世界均不改50户各15文的genesis。
 
-### 仍有效的边界
+### 验证与后续边界
 
-- 默认Three全人形3D，精确?avatar3d=0回退，fauna仍2D；土坎逻辑1/绘制2，保留TerrainCell.bank已删与drawH语义，90°padding测试勿回225°。试车台17×15世界碰撞/中心(82,41)锚点来自世界数据。
-- 波C剪影只用环境深度、仅主角，近墙侧移自动抬角≤35°/手动高角保留；Phaser高度误走未复现，无架构改动。历史细节走Git与wave-c审计，不重复实现。
-- Python用uv。main硬编码world.db，测试三store必须一起隔离，不能__init__还原真库。浏览器仅明确授权时用ms-playwright打包Chromium/独立profile，不用系统Chrome；删包/venv需另行授权。
-- 不扩DPR/包体/离线健康/perception出站/M2七日/T4真模型或陈默LLM profile。旧清理blocked by policy勿换shell/工具或重试；需用户手动执行tidy-2026-11-09清单，保留真档/备份/素材/依赖/必要agent配置。
+- .orca/audits/wave-e-2026-11-11/含plan/progress、surface/needs/driver/review报告、各RED→GREEN日志与.exit、gates、私库脚本/副本和30轮元数据。独立审查无已证实Critical/Important/Minor，另在SQL受限/模型禁用的隔离环境独立跑57P。最终pytest3785P/121S/72D，503.40s；Vitest792P/92files；ruff/check+format、pyright、TS类型/lint/格式、gen:protocol:check、build均EXIT0。构建保留既有大chunk提示，不扩优化。
+- 原主树源库、源WAL及本树旧库hash前后不变；未操作其他树服务，无新监听端口/服务器，副本验收任务已退出。未改协议1.19、客户端/素材/地图、NpcRuntime/sim_exec工资链、core.tick、offline模块、outbound_guard或genesis。
+- Needs纯内存，重启/按用户最新裁定读档回种子，不补持久化；周期内只主角投影推进。姿势辨识度/硬件帧耗与主观观感仍归主树/用户，事件/WS观察证据不冒充WebGL主观验收。
+- 波D人物叙事仍须self触发/他人双列知识、整句过滤；snapshot-dirty按current|broadcast并集含缺席，防A→B→A漏撤回。波C仅主角环境深度剪影与近墙≤35°自动抬角保留，90°padding测试勿回225°；土坎逻辑1/绘制2与试车台世界锚点保留。
+- Python用uv，三store一起隔离，不能__init__还原真库。浏览器仅明确授权时用ms-playwright打包Chromium/独立profile；删包/venv需另行授权。旧清理blocked by policy勿重试/绕工具；DPR/包体/离线健康/perception出站/M2七日/T4真模型不扩。

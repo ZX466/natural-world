@@ -762,6 +762,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     loop.attach_maintenance(_maintenance_tick_hook)
 
+    def _observe_action_anim(event: WorldEvent) -> None:
+        """Existing animation bridge, shared by accepted NPC and Chenmo facts."""
+        if event.event_type is not EventKind.NPC_ACT:
+            return
+        from sim.api.ws import _anim_of, set_action_anim
+        from sim.npc.sim_exec import anim_of_action
+
+        npc_id = str(event.payload.get("npc_id", ""))
+        if npc_id:
+            anim = anim_of_action(str(event.payload.get("action", "")))
+            if _anim_of(npc_id) != anim:
+                set_action_anim(npc_id, anim)
+                loop.pending_delta_entity_ids.add(npc_id)
+
+    loop.attach_event_observer(_observe_action_anim)
+
     def _npc_tick_hook(state: Any, tick: int) -> list[Any] | None:
         # 降格会同步写回记忆：先更新本拍窗口，再调用 update_lod 的回调。
         # runtime 随后重估是幂等的，感知文本由帧身份缓存，narrated 每人只算一次。
@@ -835,21 +851,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         "payload": {**event.payload, "observed_tick": observed_tick},
                     }
                 )
-        # 批次 D14：npc.act → 动作姿势账本（快照/delta 的 anim 字段供数）。
-        from sim.api.ws import _anim_of, set_action_anim
-        from sim.npc.sim_exec import anim_of_action
-
-        for event in batch or []:
-            if (
-                getattr(event, "event_type", None) is not None
-                and getattr(event.event_type, "value", "") == "npc.act"
-            ):
-                npc_id = str(event.payload.get("npc_id", ""))
-                if npc_id:
-                    anim = anim_of_action(str(event.payload.get("action", "")))
-                    if _anim_of(npc_id) != anim:
-                        set_action_anim(npc_id, anim)
-                        loop.pending_delta_entity_ids.add(npc_id)
         from sim.core.events import HiddenEmergePayload, KnowledgeLearnedPayload, WorldEvent
         from sim.llm.memory_scan import MemoryWritePipeline
         from sim.npc.evidence import can_hold_knowledge
@@ -979,10 +980,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 播种主角档案 → 组 ChenmoDriver → impulse 钩子 + 节拍任务随 lifespan。
     # LLM 调用全异步、失败降级（driver 内）；世界照常运转不因 LLM 阻塞。
     from sim.agent.driver import ChenmoDriver
+    from sim.agent.self_needs import ProtagonistNeeds
     from sim.api.ws import set_impulse_trigger
     from sim.llm.client import LlmClient
 
     llm_client = LlmClient()
+    chenmo_needs = ProtagonistNeeds(loop.state.tick)
+    app.state.chenmo_needs = chenmo_needs
 
     # 批次 D6：感知帧 → 叙事文本投影（chenmo 的 prompt [处境] 段供数）。
     # run_perception_step 每 tick 为全员装帧（键=rtoken）；取不到/空感知 →
@@ -1052,6 +1056,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             in_circle=target is None or target in chat_ledger.relations_of(CHENMO_ID),
         ),
         inventory_provider=lambda: material_ledger,
+        wage_last=wage_last,
+        needs_provider=lambda: chenmo_needs,
     )
     app.state.chenmo_driver = driver
     loop.attach_maintenance(lambda state, tick: driver.combat_tick(loop, pathfinder=pathfinder))
@@ -1170,66 +1176,70 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         last = _time.monotonic()
         while True:
             await asyncio.sleep(0.5)
-            if not getattr(app.state, "world_source_ready", True):
-                continue
-            now = _time.monotonic()
-            due = (now - last) >= interval
-            if not driver.take_requested() and not due:
-                continue
-            last = now
-            # D15：先记后忆——感知叙述过闸门入记忆，检索 top-k 进决策 prompt
-            # （感知文本同轮复用，不二次投影）。
-            _perception_text = _chenmo_perception()
-            if _perception_text:
-                _mem_observe(
-                    memory_pipeline,
-                    _perception_text,
-                    tick=loop.state.tick,
-                    **hidden_states.get(CHENMO_ID, HiddenState.empty()).memory_kwargs(),
-                )
-            # 批次 E2：[记忆] 段双源——检索 top-k 为主，当日对话记忆（ledger
-            # 最新 3 条）排前（最新鲜的社交事实优先）。
-            from sim.agent.chenmo_memory import merge_ledger_entries
-
-            _ledger_texts = tuple(
-                text for _, text, _speaker in chat_ledger.memories_of(CHENMO_ID)[-3:]
-            )
-            # 2026-10-12「只心声不动」修复：[处境] 附可去地标表——模型此前
-            # 不知道任何坐标（[计划] 恒空、target_pos 无从填起），输出收敛
-            # wait/短移=行动面空转。地标=戏内地点名+坐标（戏内事实可出站）。
-            from sim.content.landmarks import landmarks_text
-
-            _landmarks = landmarks_text()
-            from sim.core.persistence.knowledge_store import KnowledgeStore
-            from sim.npc.norms import select_norms
-
-            branch = await store.current_branch_id_or_none() or "main"
-            norm_rows = await KnowledgeStore(store.session_factory, branch_id=branch).iter_valid(
-                CHENMO_ID
-            )
-            norm_entries = tuple(row.fact for row in select_norms(norm_rows, holder_id=CHENMO_ID))
-            decision_revision = world_revision
-            await driver.decide_once(
-                loop.state,
-                loop.state.tick,
-                norms_entries=norm_entries,
-                memory_entries=merge_ledger_entries(
-                    _mem_recall(
-                        memory_pipeline,
-                        now_tick=loop.state.tick,
-                        params=cognition.params_at(loop.state.tick),
-                    ),
-                    _ledger_texts,
-                    top_k=3,
-                ),
-                perception_text=_perception_text,
-                landmarks_text=_landmarks,
-            )
-            async with world_write_lock:
-                if decision_revision != world_revision:
-                    driver.reset_combat()
+            try:
+                if not getattr(app.state, "world_source_ready", True):
                     continue
-                driver.execute_pending(loop, pathfinder=pathfinder)
+                now = _time.monotonic()
+                due = (now - last) >= interval
+                if not driver.take_requested() and not due:
+                    continue
+                last = now
+                # D15：先记后忆；感知文本同轮复用，不二次投影。
+                _perception_text = _chenmo_perception()
+                if _perception_text:
+                    _mem_observe(
+                        memory_pipeline,
+                        _perception_text,
+                        tick=loop.state.tick,
+                        **hidden_states.get(CHENMO_ID, HiddenState.empty()).memory_kwargs(),
+                    )
+                from sim.agent.chenmo_memory import merge_ledger_entries
+
+                _ledger_texts = tuple(
+                    text for _, text, _speaker in chat_ledger.memories_of(CHENMO_ID)[-3:]
+                )
+                from sim.content.landmarks import landmarks_text
+                from sim.core.persistence.knowledge_store import KnowledgeStore
+                from sim.npc.norms import select_norms
+
+                _landmarks = landmarks_text()
+                branch = await store.current_branch_id_or_none() or "main"
+                norm_rows = await KnowledgeStore(
+                    store.session_factory, branch_id=branch
+                ).iter_valid(CHENMO_ID)
+                norm_entries = tuple(
+                    row.fact for row in select_norms(norm_rows, holder_id=CHENMO_ID)
+                )
+                decision_revision = world_revision
+                chenmo_needs.advance_to(loop.state.tick)
+                from sim.perception.narrate import narrate_hunger
+
+                await driver.decide_once(
+                    loop.state,
+                    loop.state.tick,
+                    norms_entries=norm_entries,
+                    memory_entries=merge_ledger_entries(
+                        _mem_recall(
+                            memory_pipeline,
+                            now_tick=loop.state.tick,
+                            params=cognition.params_at(loop.state.tick),
+                        ),
+                        _ledger_texts,
+                        top_k=3,
+                    ),
+                    perception_text=_perception_text,
+                    interoception_text=narrate_hunger(chenmo_needs.hunger),
+                    landmarks_text=_landmarks,
+                )
+                async with world_write_lock:
+                    if decision_revision != world_revision:
+                        driver.reset_combat()
+                        continue
+                    driver.execute_pending(loop, pathfinder=pathfinder)
+            except Exception as exc:
+                # A single failed round must not end the task. Cancellation is
+                # a BaseException and deliberately propagates to lifespan.
+                logger.exception("chenmo.decision_failed", error_kind=type(exc).__name__)
 
     # 批次 A 接线（M6 补施工）：rng 状态捕获缝——锚点存档时 capture_rng_state 的
     # 真实实现（registry 由 world_seed 纯函数重建 + 抽签 cache 在 TickContext）。
@@ -1273,6 +1283,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async def _drain_loads() -> bool:
         nonlocal demography, tile_map, surface, world_revision, npc_runtime
         nonlocal health_evolution, health_snapshot_day
+        nonlocal chenmo_needs
         """driver 每帧调用：执行 pending fork（事件循环内，可 await）。
 
         失败帧（案 B 最小形，K16 审计稿 §3.2）：失败走既有 `_error_frame` +
@@ -1336,6 +1347,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 cognition.reset()
                 role_last.clear()
                 driver.reset_combat()
+                driver.clear_last_result()
+                chenmo_needs = ProtagonistNeeds(loop.state.tick)
+                app.state.chenmo_needs = chenmo_needs
                 combat_ledger.reset()
                 coin_ledger.reset()
                 material_ledger.reset()

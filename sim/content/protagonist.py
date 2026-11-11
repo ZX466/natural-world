@@ -10,9 +10,11 @@ from __future__ import annotations
 import json
 
 from sim.llm.prompts.identity import IdentityAnchor
+from sim.npc.model import Need
 
 #: 主角实体 id（GENESIS_ENTITIES[0] 同源；ws.py 主角寻址用）
 CHENMO_ID = "chenmo"
+PHARMACY_POS = (100, 53)
 
 #: 药铺学徒人设（第一人称；禁词表口径下的世界内语言）
 _SELF_NARRATIVE = "我叫陈默，是临河镇药铺的学徒。"
@@ -27,6 +29,15 @@ def build_anchor() -> IdentityAnchor:
         self_narrative=_SELF_NARRATIVE,
         persona_summary=_PERSONA,
         long_term_goal=_GOAL,
+    )
+
+
+def build_needs() -> tuple[Need, ...]:
+    """主角需求种子（档案播种与纯内存投影共用）。"""
+    return (
+        Need("hunger", 0.3, 1.0),
+        Need("energy", 0.2, 0.8),
+        Need("social", 0.4, 0.6),
     )
 
 
@@ -51,11 +62,7 @@ def _profile_row(*, branch_id: str = "main") -> dict[str, object]:
         "pad_dominance": -0.2,
         "emotion_updated_tick": 0,
         "needs": json.dumps(
-            [
-                {"name": "hunger", "value": 0.3, "weight": 1.0},
-                {"name": "energy", "value": 0.2, "weight": 0.8},
-                {"name": "social", "value": 0.4, "weight": 0.6},
-            ]
+            [{"name": n.name, "value": n.value, "weight": n.weight} for n in build_needs()]
         ),
         "skills": json.dumps({"药理": 4, "抓药": 3}),
         "goals": json.dumps({}),

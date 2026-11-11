@@ -28,8 +28,8 @@ from sim.npc.hidden import HiddenProfile, hidden_leak_scan
 
 logger = structlog.get_logger(__name__)
 
-#: 支持动作白名单（批次 E 收口：buy/sell/build 执行面已就位——E3 买卖、
-#: E4 建造；demolish/use 仍无引擎支撑，一律拒绝）。
+#: 支持动作白名单（买卖、建造与主角 work/eat/rest；
+#: demolish/use 仍无引擎支撑，一律拒绝）。
 M1_SUPPORTED_ACTIONS = frozenset(
     {
         "move_to",
@@ -43,6 +43,9 @@ M1_SUPPORTED_ACTIONS = frozenset(
         "buy",
         "sell",
         "build",
+        "work",
+        "eat",
+        "rest",
     }
 )
 
