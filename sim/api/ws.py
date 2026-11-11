@@ -1560,18 +1560,31 @@ def _handle_player_impulse(
     # 钩子 None = driver 未装配，静默跳过）。乐观反馈语义不变（§2.5 异步）。
     if _IMPULSE_TRIGGER is not None:
         _IMPULSE_TRIGGER(cleaned + build_hint)
+    cue = _impulse_cue(cleaned)
     return {
         "type": "impulse_feedback",
         "channel": "control",
         "v": _PROTOCOL_VERSION,
         "ws_seq": 0,
         "injected": True,  # §2.5：已接受并投递（不保证 LLM 已处理——异步）
-        "cue": _impulse_cue(cleaned),
+        "cue": cue,
         "reaction_monologue": {
             "form": "thought",
-            "content": "这话我记下了。",
+            "content": _IMPULSE_REACTION[cue],
         },
     }
+
+
+#: 念头回执词面（按 `cue` 分档）。此前三档共用一句「这话我记下了。」——
+#: 玩家问「去河边？」和喊「去河边！」收到一字不差的回执，读起来像界面敷衍。
+#: **文风红线（ws-protocol §10）**：抱怨只能是自我怀疑（「我干嘛要干这个」），
+#: 绝不能是被操纵感（「谁在指使我」）——后者即出戏。
+_IMPULSE_REACTION: dict[str, str] = {
+    "accepted": "嗯，那就这么办。",
+    "hesitation": "……真要这么做？先想想。",
+    "complaint": "唉，我这又是何苦。",
+    "resistance": "这话听着别扭，我再琢磨琢磨。",
+}
 
 
 #: 批次 C：impulse → chenmo 即时决策的触发钩子（main.py lifespan 装配；

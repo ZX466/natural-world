@@ -264,6 +264,39 @@ class TestImpulseFeedbackUsesHook:
             "reaction_monologue",
         }
 
+    def test_reaction_follows_the_cue_instead_of_one_fixed_line(self) -> None:
+        """回执必须随 cue 变化。
+
+        修前是写死的「这话我记下了。」—— 玩家问「去河边？」和「去河边！」
+        收到一字不差的回执，读起来像界面在敷衍。cue 本来就分了三档
+        （accepted / hesitation / complaint），回执跟着分档即可，不需要
+        新的冲突度规则（那是 LLM 域的活，仍是占位）。
+        """
+        from sim.api.ws import _handle_player_impulse
+
+        lines = {}
+        for text in ("去河边", "去河边？", "去河边！"):
+            reply = _handle_player_impulse({"text": text})
+            assert reply is not None
+            lines[reply["cue"]] = reply["reaction_monologue"]["content"]
+        assert len(set(lines.values())) == 3, f"三档回执必须各不相同，实际：{lines}"
+
+    def test_reaction_stays_self_doubt_never_manipulation(self) -> None:
+        """§10 文风红线：抱怨只能是自我怀疑，不能是被操纵感。
+
+        协议层不承载操纵感语义，但回执是 sim 生成的词面——写错了就是
+        把「谁在指使我」直接送到玩家眼前。这里钉住禁词，防以后改文案时踩线。
+        """
+        from sim.api.ws import _handle_player_impulse
+
+        banned = ("指使", "命令", "控制", "操纵", "摆布", "听命")
+        for text in ("去河边", "去河边？", "去河边！"):
+            reply = _handle_player_impulse({"text": text})
+            assert reply is not None
+            content = reply["reaction_monologue"]["content"]
+            hits = [w for w in banned if w in content]
+            assert not hits, f"回执出现操纵感词面 {hits}：{content}"
+
 
 class TestPlanDeltaSchema:
     """M5-K10（裁 19 CRITICAL 修复）：plan 项引**真实** `PlanDelta` 组件。
