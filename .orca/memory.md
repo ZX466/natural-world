@@ -154,10 +154,23 @@ vitest 比 codex 的 747 少 1 是预期的：主树 `a152796` 重写了土坎�
   vitest `792P/92F EXIT 0` · ruff check+format / pyright / gen:protocol:check / typecheck /
   lint / prettier / build 全 EXIT 0。⚠ **真机验收归用户**：姿势辨识度、面板观感、实际帧耗
   （codex 只有 SwiftShader 技术读数）。
-- 顺带发现、**仍未修未派**：起火实测 **9.13%/日**（设计 34%；`main.py::_fire_tick_hook` 还要求落点
-  `is_walkable`，可走格仅 **26.4%**；500 seed × 200 日：抽中 33,907、落地 9,127）。
-  seed=42 第 2/3/5 日抽中火，落点 `(138,89)`/`(5,32)`/`(139,48)` **三格全不可走**，静默丢弃。
-  `npc.lod_change` 零事件但库内 `chenmo` 已是 `lod=2`、50 名村民 `lod=1`（L2 从未真正升格）。
+- ~~顺带发现、仍未修未派~~ → **已于 `510e618` 修复**（见下方「事件静默丢弃」段）。
+
+**事件静默丢弃两处修复（2026-11-11，主树 `510e618`）**：两处都是「事件面看着有、实际不落地」。
+1. **起火落点**（`sim/api/main.py::_ignition_spot`）：哈希格不可走时环状外扩取最近可走格，
+   同距离按 `(y, x)` 定序保 C5；新增 `avoid` 参数避开已在燃格。原实现只在哈希格恰好可走时点火，
+   而真实地图可走格仅 **26.4%** ⇒ 设计 34%/日 被砍到实测 **9.13%/日**（500 seed × 200 日：
+   抽中 33,907、落地 9,127）。`zlib` 已提到模块顶部。
+2. **LOD 升降 / 隐藏浮现**（`sim/npc/sim_exec.py::_PASSTHROUGH_KINDS`）：`npc.lod_change` 与
+   `npc.hidden_emerge` 走直通集合，不再被 `npc.act` 过滤丢弃。runtime 侧已改内存档、
+   事件是**唯一落库路径** ⇒ 否则库里 `lod` 永远停在旧值（`chenmo` 库内 `lod=2` 但零 `npc.lod_change`
+   事件，L2 从未真正升格）、浮现证据链断根。
+3. 新增 11 条回归钉子：`sim/tests/test_fire_ignition_reachability.py`（可走落点 / 确定性 / `avoid`
+   生效 / 抽签率仍在 28–44%）、`sim/tests/test_lod_event_flow.py`（升格与降格真出流 / 不挤掉同拍
+   `npc.act` / 无升降不造事件 / 事件是合法存储行）。
+4. **门禁**：pytest 全量 `3862P/126S/2F`（608.95s）。两个 F 都是 bench 阈值边缘
+   （`test_retrieval_full_scan_degraded_sentinel` 实测中位 2.017ms vs 红线 2.000ms、
+   `test_perception_sound_50npc`），**复跑均绿**，且本次改动未触及检索/感知路径。
 
 **波 E 收编（2026-11-11，codex `5a85afc`）**：陈默动作面闭环，详见本节开头。
 - **门禁（主树独立复跑，`5a85afc` + 本树修复树态）**：pytest `3786P/121S/72D EXIT 0`（496.06s）·
@@ -790,7 +803,7 @@ B 锚点 tick=1，tick=5 lod 1→2 → child=[('a',2),('d',1)]    ← 'a' 的 lo
      替代，**未冒称历史健康锚点端到端验收**（收编后主树版本已在，见 ①）。
   > `anchor_package.CORPUS_TABLES` 仍不含 `npc_health`（设计如此：健康是**可折叠族**，
   > 走 `_clone_health_at_cursor` 重放，不进包——第十八轮也只在包里加了 `npc_profiles`）。 |
-| **`npc.lod_change` 持久化** | **已完成**（`sim/npc/runtime.py:262` 发射 + `npc_store._project_lod_change` 双键投影）。此前记忆卡写「仍未做」是过时记录，2026-11-01 已订正 |
+| **`npc.lod_change` 持久化** | **已完成**（`sim/npc/runtime.py` 发射 + `npc_store._project_lod_change` 双键投影）。此前记忆卡写「仍未做」是过时记录，2026-11-01 已订正。⚠ **2026-11-11 `510e618` 补修**：发射与投影都在，但 `sim_exec.npc_events_for_tick` 的 `npc.act` 过滤把 `npc.lod_change` / `npc.hidden_emerge` **静默丢掉**，事件从未到落库层——库里 `lod` 永远停在旧值（`chenmo` 库内 `lod=2` 却零 `npc.lod_change` 事件）。现走 `_PASSTHROUGH_KINDS` 直通 |
 | **离线推进** | ~~`sim/world/offline*.py` 不存在~~ → **2026-11-01 第十五轮已收编（`28e8ac9`）**：`sim/world/offline.py::advance_offline` 复用现有 `TickLoop`；墙钟只在启动边界采样一次（`_offline_wall_time`）；水位取 `snapshots/branches.created_at`（控制元数据，不进事件流与 `state_hash` ⇒ **C5 安全**）；批上限 240 tick、`MAX_CATCHUP_REAL_SECONDS=4.0`、上限 1 游戏日（`TICKS_PER_GAME_DAY=86400`，超限记 `offline.capped`）；同墙钟重启零补跑。主树实测：60s→3600 tick、30 天→86400 tick 且丢弃 2590560s、两遍重放 hash 相同、玩家档零写。**仍未做**：真实 `world.db` 上跑一次真实停机补偿（需备份） |
 | **T5 差事完成率** | ~~`errands_rate.py` 明写「本轮不设阈值」~~ → **2026-11-01 已定线（`d64464d`）**：用户裁定 **`ERRAND_COMPLETION_RATE_MIN = 1.0`**。依据实测 40/40（10 seed × 4 链，中位与最差都 1.0，`.orca/audits/t5-baseline-2026-11-01/baseline.json`）。**不留缓冲的理由**：口径是确定性脚本链（零 LLM/网络/随机），无抖动来源，0.95 只会让真实回退静默通过。**不沿用 M1 的 80%**（单决策口径）。**口径边界写死在模块 docstring**：这是脚本完成率，不是生产 NPC 自主完成率 |
 | **soak 实体流失** | ~~`SOAK_ENTITY_LOSS_PER_GAME_DAY = 0`，从未抬高~~ → **2026-11-01 已定线（`d64464d`）**：用户裁定 **良性上界保持 0**，另立契约「**流失须被死亡解释**」（`净流失 - 已记录 npc.death = 无解释流失`，必须为 0）。**为什么不抬到实测的 4.0/游戏日**：那是每小时强制近身互殴的**夹具**，不是自然流失率；现有 soak 用 `make_mock_feeder` **根本没有死亡源**，抬到 4.0 会在 604800 tick 里程碑跑里允许 **28 个实体凭空消失而不报红**，等于把泄漏检测变瞎。契约在 `_assert_entity_stable(..., explained_deaths=...)`，测试 `sim/tests/bench/test_soak_loss_contract.py` |
@@ -1142,7 +1155,18 @@ schema，`sim/api/ws.py:1765` 只发 `posture_visual`，客户端 `client/src/ne
 
 ## 6. ① Claude｜新对话恢复快照
 
-【2026-11-01 定线与真实库迁移 `d64464d`｜无在途任务】用户裁定三项并已落地：
+【2026-11-11 波 E 收编 + 事件静默丢弃修复｜无在途任务】主树 `510e618`。
+① 收编 codex 波 E `5a85afc`（陈默 work/eat/rest 闭环，`8b483db`），**未收** `c3a382d`
+（本树无 §10.5）。② 收编时独立抓到并修复一处能**永久冻住陈默**的缺陷：`last_intent_result`
+是持久 prompt 状态，闸门 `quoted_echo_scan` 豁免、装配器 `scan()` 不豁免 ⇒ 一句能过闸门
+过不了装配的 reason 让此后每轮 `assemble_prompt` 抛错，`llm_calls` 恒 0。修在写入侧
+`ChenmoDriver._record_result()`。③ 本轮新修两处**事件静默丢弃**（`510e618`）：起火落点
+不可走时改投最近可走格（实测 9.13%/日 → 设计 34%/日）、`npc.lod_change`/`npc.hidden_emerge`
+走 `_PASSTHROUGH_KINDS` 直通。④ 两树 `talking.txt` 已精简重写（主树 9KB、codex 7.7KB），
+codex 树残留临时日志已清。门禁：pytest 全量 `3862P/126S/2F`（2F 均为 bench 阈值边缘，
+复跑绿）、ruff/format/pyright 全绿。**当前无在飞**；两树 `talking.txt` 均指向「下一波先 merge」。
+
+【2026-11-01 定线与真实库迁移 `d64464d`｜历史】用户裁定三项并已落地：
 ① T5 完成率 **1.0** 硬阈值（依据实测 40/40，确定性脚本链无抖动故不留缓冲）；
 ② soak **良性保 0** + 新契约「流失须被死亡解释」（不抬到夹具实测的 4.0——
 现有 soak 无死亡源，抬线会把泄漏检测变瞎）；
